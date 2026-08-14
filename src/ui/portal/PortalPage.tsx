@@ -17,6 +17,8 @@ import { MAP_HEIGHT, VenueMap } from "../venues/VenueMap";
 import { FileVersions } from "../files/FileVersions";
 import type { FileVersion, FileVersionList } from "../../lib/files/versions";
 import { FileComments } from "./FileComments";
+import { SocialBadges, SocialMark } from "../social/SocialBadges";
+import { composeSocialLinks, normalizeHandle, socialPlatform, splitSocialLinks, SOCIAL_PLATFORM_IDS, type SocialPlatformId } from "../../lib/social-links";
 import "./portal.css";
 
 type PortalField = {
@@ -143,7 +145,7 @@ type PortalPerson = {
 
 type PortalSnapshot = {
   seat: "speaker";
-  event: { id: string; name: string; slug: string; timezone: string; status: string };
+  event: { id: string; name: string; slug: string; timezone: string; status: string; social_platforms?: SocialPlatformId[] };
   venue: { pinned_building_count: number };
   person: PortalPerson;
   submissions: PortalSubmission[];
@@ -486,8 +488,37 @@ function TalkTaskSurface({ task, submission, onComplete }: { task: PortalTask; s
   </div>;
 }
 
-function ProfileForm({ eventId, person, onSaved, compact = false }: { eventId: string; person: PortalPerson; onSaved: () => Promise<void>; compact?: boolean }): JSX.Element {
-  const [draft, setDraft] = useState({ title: person.title ?? "", company: person.company ?? "", bio: person.bio ?? "", social_links: person.social_links.join("\n") });
+/**
+ * A speaker's handle on one platform. The prefix is fixed chrome rather than
+ * placeholder text, so what the speaker types is a handle and what the record
+ * stores is a canonical URL — and pasting a whole profile link still works,
+ * because that is what people actually do.
+ */
+function SocialHandleField({ platformId, value, error, onChange }: { platformId: SocialPlatformId; value: string; error: string | null; onChange: (value: string) => void }): JSX.Element | null {
+  const platform = socialPlatform(platformId);
+  if (!platform) return null;
+  const id = `profile-social-${platform.id}`;
+  return <div class="social-field">
+    <label for={id}><SocialMark platform={platform} />{platform.label}{platform.alsoKnownAs ? ` (${platform.alsoKnownAs})` : ""}</label>
+    <div class="social-field-input">
+      <span class="social-field-prefix" aria-hidden="true">{platform.inputPrefix}</span>
+      <input id={id} type="text" autocomplete="off" spellcheck={false} placeholder={platform.placeholder} value={value} aria-invalid={error ? "true" : undefined} aria-describedby={`${id}-note`} onInput={(event) => onChange((event.currentTarget as HTMLInputElement).value)} />
+    </div>
+    <small id={`${id}-note`} class="social-field-error" aria-live="polite">{error ?? ""}</small>
+  </div>;
+}
+
+function initialSocialDraft(links: readonly string[]): { handles: Record<string, string>; other: string } {
+  const { profiles, other } = splitSocialLinks(links);
+  return {
+    handles: Object.fromEntries(profiles.map(({ platform, handle }) => [platform.id, handle])),
+    other: other.join("\n"),
+  };
+}
+
+function ProfileForm({ eventId, person, platforms, onSaved, compact = false }: { eventId: string; person: PortalPerson; platforms: SocialPlatformId[]; onSaved: () => Promise<void>; compact?: boolean }): JSX.Element {
+  const [draft, setDraft] = useState({ title: person.title ?? "", company: person.company ?? "", bio: person.bio ?? "", ...initialSocialDraft(person.social_links) });
+  const [socialErrors, setSocialErrors] = useState<Record<string, string>>({});
   const [headshot, setHeadshot] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -496,7 +527,8 @@ function ProfileForm({ eventId, person, onSaved, compact = false }: { eventId: s
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   useEffect(() => {
-    setDraft({ title: person.title ?? "", company: person.company ?? "", bio: person.bio ?? "", social_links: person.social_links.join("\n") });
+    setDraft({ title: person.title ?? "", company: person.company ?? "", bio: person.bio ?? "", ...initialSocialDraft(person.social_links) });
+    setSocialErrors({});
     setHeadshot(null);
     setPreview(null);
   }, [person.id, person.title, person.company, person.bio, person.social_links.join("\n"), person.headshot_attachment_id]);
@@ -528,9 +560,36 @@ function ProfileForm({ eventId, person, onSaved, compact = false }: { eventId: s
         if (dimensions.width < 256 || dimensions.height < 256) throw new Error("Headshots must be at least 256 × 256 pixels.");
         headshotAttachmentId = await uploadFile(headshot, "person_headshot", person.id);
       }
-      const body = compact
-        ? { bio: draft.bio || null, headshot_attachment_id: headshotAttachmentId }
-        : { title: draft.title || null, company: draft.company || null, bio: draft.bio || null, social_links: draft.social_links.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean), headshot_attachment_id: headshotAttachmentId };
+      let body: Record<string, unknown>;
+      if (compact) {
+        body = { bio: draft.bio || null, headshot_attachment_id: headshotAttachmentId };
+      } else {
+        // Handles are read as generously as possible, but a handle we cannot
+        // read is never silently dropped: the speaker is told which one and why.
+        const handles = new Map<SocialPlatformId, string>();
+        const errors: Record<string, string> = {};
+        for (const id of SOCIAL_PLATFORM_IDS) {
+          const platform = socialPlatform(id);
+          if (!platform) continue;
+          const stored = draft.handles[id] ?? "";
+          // A platform the conference stopped asking about still has a field's
+          // worth of the speaker's data behind it. It is carried through
+          // untouched rather than validated against a form nobody rendered —
+          // and never dropped, which is what turning a setting off would
+          // otherwise quietly do to someone else's profile.
+          if (!platforms.includes(id)) {
+            if (stored) handles.set(id, stored);
+            continue;
+          }
+          const result = normalizeHandle(platform, stored);
+          if (result.error) errors[id] = result.error;
+          else if (result.handle) handles.set(id, result.handle);
+        }
+        setSocialErrors(errors);
+        if (Object.keys(errors).length > 0) throw new Error("Check the social profiles marked below.");
+        const other = draft.other.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean);
+        body = { title: draft.title || null, company: draft.company || null, bio: draft.bio || null, social_links: composeSocialLinks(handles, other), headshot_attachment_id: headshotAttachmentId };
+      }
       await requestJson("/api/v1/me/profile", { method: "PATCH", body: JSON.stringify(body) });
       setHeadshot(null);
       setPreview(null);
@@ -545,11 +604,25 @@ function ProfileForm({ eventId, person, onSaved, compact = false }: { eventId: s
   const bioId = compact ? `task-profile-bio-${person.id}` : "profile-bio";
   const headshotId = compact ? `task-profile-headshot-${person.id}` : "profile-headshot";
   return <form class={`portal-profile${compact ? " portal-profile-compact" : ""}`} onSubmit={save}>
-    {!compact ? <div class="portal-avatar-line"><HeadshotAvatar eventId={eventId} person={person} /><div class="portal-avatar-copy"><strong title={person.name}>{person.name}</strong><span>{person.email}</span></div></div> : null}
+    {/* What the conference will publish, drawn by the same component the public
+        page uses — so the speaker approves the badges they will actually get. */}
+    {!compact ? <div class="portal-avatar-line"><HeadshotAvatar eventId={eventId} person={person} /><div class="portal-avatar-copy"><strong title={person.name}>{person.name}</strong><span>{person.email}</span><SocialBadges links={person.social_links} ownerName={person.name} size="compact" /></div></div> : null}
     <div class="portal-profile-grid">
       {!compact ? <><div class="portal-field"><label for="profile-title">Title</label><input id="profile-title" value={draft.title} onInput={(event) => setDraft({ ...draft, title: (event.currentTarget as HTMLInputElement).value })} /></div><div class="portal-field"><label for="profile-company">Company</label><input id="profile-company" value={draft.company} onInput={(event) => setDraft({ ...draft, company: (event.currentTarget as HTMLInputElement).value })} /></div></> : null}
       <div class="portal-field full"><label for={bioId}>Bio</label><textarea id={bioId} value={draft.bio} onInput={(event) => setDraft({ ...draft, bio: (event.currentTarget as HTMLTextAreaElement).value })} /></div>
-      {!compact ? <div class="portal-field full"><label for="profile-links">Social links</label><textarea id="profile-links" value={draft.social_links} onInput={(event) => setDraft({ ...draft, social_links: (event.currentTarget as HTMLTextAreaElement).value })} /></div> : null}
+      {!compact ? <div class="portal-field full portal-social-field">
+        <label>Social profiles</label>
+        {/* The conference chooses which platforms it asks for. Links a speaker
+            already gave on a platform it no longer asks about are still kept
+            and still shown — the setting governs the question, not the record. */}
+        <div class="social-fields">
+          {platforms.map((id) => <SocialHandleField key={id} platformId={id} value={draft.handles[id] ?? ""} error={socialErrors[id] ?? null} onChange={(value) => { setDraft({ ...draft, handles: { ...draft.handles, [id]: value } }); if (socialErrors[id]) setSocialErrors({ ...socialErrors, [id]: "" }); }} />)}
+          {platforms.length === 0
+            ? <p class="portal-subject-note">This conference does not collect speaker social profiles.</p>
+            : <p class="social-fields-note">Leave any blank you would rather not share. Pasting the full profile link works too.</p>}
+        </div>
+        {draft.other.trim() !== "" ? <div class="portal-field portal-other-links"><label for="profile-other-links">Other links</label><textarea id="profile-other-links" value={draft.other} onInput={(event) => setDraft({ ...draft, other: (event.currentTarget as HTMLTextAreaElement).value })} /><small class="portal-crop-note">One link per line. These were on your record already and are kept as they are.</small></div> : null}
+      </div> : null}
       <div class="portal-field full portal-headshot-field">
         <label for={headshotId}>Headshot</label>
         {/* A missing headshot is the gap speakers most often leave behind, and
@@ -606,9 +679,10 @@ function ProfileTaskSurface({ eventId, task, person, onComplete }: { eventId: st
     <div class="portal-subject-card">
       <div class="portal-subject-head"><div class="portal-subject-title"><HeadshotAvatar eventId={eventId} person={person} size="compact" /><div><span class="portal-subject-kicker">Speaker profile</span><h3>Bio and headshot</h3></div></div><button class="portal-task-action" type="button" onClick={() => setEditing((current) => !current)}>{editing ? "Close" : "Edit bio & photos"}</button></div>
       <p class="portal-talk-description">{person.bio || "No bio added yet."}</p>
+      <SocialBadges links={person.social_links} ownerName={person.name} size="compact" />
       <p class={`portal-subject-note${person.headshot_attachment_id ? "" : " needs-action"}`}>{person.headshot_attachment_id ? "A headshot is on file for the speaker gallery." : "No headshot yet — the gallery will publish your name without a photo until you add one."}</p>
     </div>
-    {editing ? <div class="portal-subject-editor"><ProfileForm eventId={eventId} compact person={person} onSaved={async () => { setEditing(false); await onComplete(); }} /></div> : null}
+    {editing ? <div class="portal-subject-editor"><ProfileForm eventId={eventId} compact person={person} platforms={[]} onSaved={async () => { setEditing(false); await onComplete(); }} /></div> : null}
     <form class="portal-subject-confirm" onSubmit={submit}>
       <label class="portal-check"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged((event.currentTarget as HTMLInputElement).checked)} /> <span>I have reviewed my speaker bio and headshot.</span></label>
       <div class="portal-payload-actions"><span class="portal-payload-error">{error ?? ""}</span><button class="portal-button" type="submit" disabled={busy}>{busy ? "Saving…" : "Confirm profile"}</button></div>
@@ -702,11 +776,11 @@ function TasksPanel({ eventId, tasks, submissions, person, onRefresh }: { eventI
   return <section class="portal-panel" aria-labelledby="tasks-heading"><header class="portal-panel-head"><h2 id="tasks-heading">Your tasks</h2><div class="portal-panel-meta">{openCount > 0 ? <span class="portal-panel-flag needs-action">{openCount} need{openCount === 1 ? "s" : ""} action</span> : null}<span>{doneCount}/{activeTasks.length} complete</span></div></header><div class="portal-panel-body"><div class="portal-task-list">{activeTasks.length === 0 ? <div class="portal-empty">No tasks are assigned to you right now.</div> : activeTasks.map((task) => <TaskRow key={task.id} eventId={eventId} task={task} submissions={submissions} person={person} onComplete={onRefresh} />)}</div>{complete ? <p class="portal-empty">All speaker tasks are complete. Nothing is waiting on you.</p> : null}{cancelledTasks.length > 0 ? <div class="portal-cancelled-task-list" data-cancelled-task-count={cancelledTasks.length}><div class="portal-cancelled-divider"><span>Cancelled · {cancelledTasks.length}</span></div>{cancelledSets.map((group) => <section class="portal-cancelled-set" key={group.key}><div class="portal-cancelled-set-head"><strong>{group.title}</strong><p>{group.reason}</p></div><div class="portal-task-list">{group.tasks.map((task) => <CancelledTaskRow key={task.id} task={task} />)}</div></section>)}</div> : null}</div></section>;
 }
 
-function ProfileEditor({ eventId, person, onSaved }: { eventId: string; person: PortalPerson; onSaved: () => Promise<void> }): JSX.Element {
+function ProfileEditor({ eventId, person, platforms, onSaved }: { eventId: string; person: PortalPerson; platforms: SocialPlatformId[]; onSaved: () => Promise<void> }): JSX.Element {
   // The profile is the one panel whose gaps are invisible from the task list —
   // nothing chases a missing headshot — so the panel head carries the flag.
   const missing = [person.headshot_attachment_id ? null : "headshot", person.bio?.trim() ? null : "bio"].filter((item): item is string => item !== null);
-  return <section class="portal-panel" aria-labelledby="profile-heading"><header class="portal-panel-head"><h2 id="profile-heading">Your profile</h2><div class="portal-panel-meta">{missing.length > 0 ? <span class="portal-panel-flag needs-action">{missing.join(" and ")} needed</span> : <span>public speaker record</span>}</div></header><div class="portal-panel-body"><ProfileForm eventId={eventId} person={person} onSaved={onSaved} /></div></section>;
+  return <section class="portal-panel" aria-labelledby="profile-heading"><header class="portal-panel-head"><h2 id="profile-heading">Your profile</h2><div class="portal-panel-meta">{missing.length > 0 ? <span class="portal-panel-flag needs-action">{missing.join(" and ")} needed</span> : <span>public speaker record</span>}</div></header><div class="portal-panel-body"><ProfileForm eventId={eventId} person={person} platforms={platforms} onSaved={onSaved} /></div></section>;
 }
 
 function TalkCard({ submission, onSaved }: { submission: PortalSubmission; onSaved: () => Promise<void> }): JSX.Element {
@@ -1119,7 +1193,7 @@ function PortalPage(): JSX.Element {
   if (error && !snapshot) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span></div><main class="portal-main"><div class="portal-error"><div><strong>We could not load your portal.</strong><p>{error.message}</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
   if (snapshot && snapshot.seat === "submitter") return <SubmitterPortal snapshot={snapshot} onSignOut={() => void signOut()} viewingAsSpeaker={viewingAsSpeaker} />;
   if (!speaker) return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></header><main class="portal-main"><div class="portal-error"><div><strong>No portal data is available.</strong><p>Try loading the speaker workspace again.</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
-  return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><button type="button" onClick={() => void signOut()}>Sign out</button></header><main class="portal-main">{viewingAsSpeaker ? <div class="portal-viewing-as" role="status">Viewing as speaker · organizer preview</div> : null}{speaker.submissions.length === 0 ? <section class="portal-status-hero" aria-labelledby="portal-status-heading"><span class="eyebrow">Current status</span><h1 id="portal-status-heading">Speaker portal</h1><div class="portal-status-copy">Your conference submissions and speaker tasks will appear here.</div><a class="portal-button secondary" href="/">Return to conference</a></section> : speaker.submissions.map((submission, index) => <StatusHero key={submission.id} submission={submission} index={index} timezone={speaker.event.timezone} onRefresh={refresh} />)}<div class="portal-welcome"><div><h2>Welcome back, {speaker.person.name}</h2><p>{speaker.event.name} · your speaker workspace</p></div><div class={`portal-progress${activeTasks.length > completedTasks ? " needs-action" : " is-complete"}`}><strong>{completedTasks} of {activeTasks.length}</strong><span class="portal-progress-label">tasks complete</span><span class="portal-progress-note">{activeTasks.length > completedTasks ? `${activeTasks.length - completedTasks} still need${activeTasks.length - completedTasks === 1 ? "s" : ""} you` : "nothing is waiting on you"}</span></div></div><div class="portal-grid"><TasksPanel eventId={speaker.event.id} tasks={speaker.tasks} submissions={speaker.submissions} person={speaker.person} onRefresh={refresh} /><ProfileEditor eventId={speaker.event.id} person={speaker.person} onSaved={refresh} /></div><section class="portal-panel portal-talks" aria-labelledby="talks-heading"><header class="portal-panel-head"><h2 id="talks-heading">Your talks</h2><span>{speaker.submissions.length} record{speaker.submissions.length === 1 ? "" : "s"}</span></header><div class="portal-panel-body">{speaker.submissions.length === 0 ? <div class="portal-empty">No submissions are attached to this speaker record. The conference team will attach one when it is ready.</div> : speaker.submissions.map((submission) => <TalkCard key={submission.id} submission={submission} onSaved={refresh} />)}</div></section>{speaker.submissions.some((submission) => submission.decision_feedback) ? <section class="portal-panel portal-talks" aria-labelledby="feedback-heading"><header class="portal-panel-head"><h2 id="feedback-heading">Conference update</h2><span>latest note</span></header><div class="portal-panel-body">{speaker.submissions.filter((submission) => submission.decision_feedback).map((submission) => <div class="portal-feedback" key={submission.id}><h3>{submission.title}</h3><p>{submission.decision_feedback?.markdown}</p></div>)}</div></section> : null}<section class="portal-panel portal-handbook" aria-labelledby="handbook-heading"><header class="portal-panel-head"><h2 id="handbook-heading">Speaker handbook</h2><span>{speaker.event.name}</span></header><div class="portal-panel-body"><Markdown markdown={handbook} /></div></section></main></div>;
+  return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><button type="button" onClick={() => void signOut()}>Sign out</button></header><main class="portal-main">{viewingAsSpeaker ? <div class="portal-viewing-as" role="status">Viewing as speaker · organizer preview</div> : null}{speaker.submissions.length === 0 ? <section class="portal-status-hero" aria-labelledby="portal-status-heading"><span class="eyebrow">Current status</span><h1 id="portal-status-heading">Speaker portal</h1><div class="portal-status-copy">Your conference submissions and speaker tasks will appear here.</div><a class="portal-button secondary" href="/">Return to conference</a></section> : speaker.submissions.map((submission, index) => <StatusHero key={submission.id} submission={submission} index={index} timezone={speaker.event.timezone} onRefresh={refresh} />)}<div class="portal-welcome"><div><h2>Welcome back, {speaker.person.name}</h2><p>{speaker.event.name} · your speaker workspace</p></div><div class={`portal-progress${activeTasks.length > completedTasks ? " needs-action" : " is-complete"}`}><strong>{completedTasks} of {activeTasks.length}</strong><span class="portal-progress-label">tasks complete</span><span class="portal-progress-note">{activeTasks.length > completedTasks ? `${activeTasks.length - completedTasks} still need${activeTasks.length - completedTasks === 1 ? "s" : ""} you` : "nothing is waiting on you"}</span></div></div><div class="portal-grid"><TasksPanel eventId={speaker.event.id} tasks={speaker.tasks} submissions={speaker.submissions} person={speaker.person} onRefresh={refresh} /><ProfileEditor eventId={speaker.event.id} person={speaker.person} platforms={speaker.event.social_platforms ?? [...SOCIAL_PLATFORM_IDS]} onSaved={refresh} /></div><section class="portal-panel portal-talks" aria-labelledby="talks-heading"><header class="portal-panel-head"><h2 id="talks-heading">Your talks</h2><span>{speaker.submissions.length} record{speaker.submissions.length === 1 ? "" : "s"}</span></header><div class="portal-panel-body">{speaker.submissions.length === 0 ? <div class="portal-empty">No submissions are attached to this speaker record. The conference team will attach one when it is ready.</div> : speaker.submissions.map((submission) => <TalkCard key={submission.id} submission={submission} onSaved={refresh} />)}</div></section>{speaker.submissions.some((submission) => submission.decision_feedback) ? <section class="portal-panel portal-talks" aria-labelledby="feedback-heading"><header class="portal-panel-head"><h2 id="feedback-heading">Conference update</h2><span>latest note</span></header><div class="portal-panel-body">{speaker.submissions.filter((submission) => submission.decision_feedback).map((submission) => <div class="portal-feedback" key={submission.id}><h3>{submission.title}</h3><p>{submission.decision_feedback?.markdown}</p></div>)}</div></section> : null}<section class="portal-panel portal-handbook" aria-labelledby="handbook-heading"><header class="portal-panel-head"><h2 id="handbook-heading">Speaker handbook</h2><span>{speaker.event.name}</span></header><div class="portal-panel-body"><Markdown markdown={handbook} /></div></section></main></div>;
 }
 
 export { NoSeatNotice, PortalPage, SubmitterPortal };

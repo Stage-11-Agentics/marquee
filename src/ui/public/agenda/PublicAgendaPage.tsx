@@ -1,6 +1,8 @@
 /** @jsxImportSource preact */
 import type { ComponentChildren, JSX } from "preact";
 
+import { SocialBadges } from "../../social/SocialBadges";
+import SOCIAL_BADGE_STYLES from "../../social/social-badge.css?raw";
 import { sessionCalendarLinks, sessionDirectionsUrl } from "../../../lib/public-calendar";
 import {
   publicAbstractSnippet,
@@ -294,6 +296,13 @@ export const PUBLIC_SITE_STYLES = `
   .sched-export { width: 100%; }
   .sched-export .public-button { flex: 1 1 45%; padding: 7px 4px; font-size: 11px; }
 }
+
+/* Speaker social badges, inlined from the one stylesheet the portal and the
+   organizer's record also use. The component carries no palette of its own, so
+   the same rules read correctly against this page's light. */
+${SOCIAL_BADGE_STYLES}
+.public-card .social-badges { margin: 18px 0 0; }
+.public-card .social-badge { color: var(--public-accent); font-family: var(--public-mono); }
 `;
 
 export const PUBLIC_AGENDA_SCRIPT = `
@@ -1145,6 +1154,8 @@ export function PublicSpeakerPage({ event, venue, speaker }: { event: PublicEven
           {speaker.bio
             ? <details class="public-bio" data-public-bio open><summary data-public-bio-toggle>Show more</summary><p data-public-bio-copy>{speaker.bio}</p></details>
             : <p class="public-bio">—</p>}
+          {/* The same badges the speaker approved in their portal. */}
+          <SocialBadges links={speaker.socialLinks} ownerName={speaker.name} />
           <div class="public-divider" />
           <h2>Sessions ({speaker.sessions.length})</h2>
           <div class="public-speaker-list">

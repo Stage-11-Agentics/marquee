@@ -124,3 +124,58 @@ test("AC-13 · settings hands venue capacity and room authoring to the Venues su
   expect(body.data).not.toHaveProperty("buildings");
   expect(body.data).not.toHaveProperty("rooms");
 });
+
+/**
+ * Which social profiles a conference asks its speakers for is a conference
+ * setting, so it rides the settings endpoint rather than a route of its own.
+ * The unset case is the one worth pinning: a conference that never opens the
+ * screen has to get every shipped platform, not an empty speaker form.
+ */
+test("a conference that has never touched the setting is asked for every shipped platform", async () => {
+  const response = await request(`/api/v1/events/${EVENT_ID}`);
+  expect(response.status).toBe(200);
+  const body = await response.json<{ data: { speaker_social_platforms: string[] } }>();
+  expect(body.data.speaker_social_platforms).toEqual(["x", "linkedin"]);
+});
+
+test("turning a platform off persists, and turning them all off is a real choice", async () => {
+  const saved = await request(`/api/v1/events/${EVENT_ID}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ speaker_social_platforms: ["x"] }),
+  });
+  expect(saved.status).toBe(200);
+  expect((await saved.json<{ data: { speaker_social_platforms: string[] } }>()).data.speaker_social_platforms).toEqual(["x"]);
+
+  const emptied = await request(`/api/v1/events/${EVENT_ID}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ speaker_social_platforms: [] }),
+  });
+  // An empty array must survive the read, or "we collect none" would silently
+  // read back as "we collect every one".
+  expect((await emptied.json<{ data: { speaker_social_platforms: string[] } }>()).data.speaker_social_platforms).toEqual([]);
+});
+
+test("omitting the field leaves the conference's existing choice alone", async () => {
+  await request(`/api/v1/events/${EVENT_ID}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ speaker_social_platforms: ["linkedin"] }),
+  });
+  const renamed = await request(`/api/v1/events/${EVENT_ID}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "A rename that says nothing about social profiles" }),
+  });
+  expect((await renamed.json<{ data: { speaker_social_platforms: string[] } }>()).data.speaker_social_platforms).toEqual(["linkedin"]);
+});
+
+test("an unknown platform id is refused rather than stored", async () => {
+  const response = await request(`/api/v1/events/${EVENT_ID}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ speaker_social_platforms: ["myspace"] }),
+  });
+  expect(response.status).toBeGreaterThanOrEqual(400);
+});

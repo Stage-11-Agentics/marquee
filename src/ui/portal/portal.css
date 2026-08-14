@@ -1,3 +1,5 @@
+@import "../social/social-badge.css";
+
 /* The speaker portal reads one step larger than the organizer's admin shell.
    An organizer lives in this product all day and learns its density; a speaker
    opens it three times a year, often on a phone, usually to answer one
@@ -215,6 +217,24 @@
 .portal-field label { color: var(--muted); font: 600 10.5px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .portal-field input, .portal-field textarea { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); font-size: 13.5px; min-height: 38px; padding: 9px 10px; width: 100%; }
 .portal-field textarea { min-height: 88px; resize: vertical; }
+/* The per-platform social inputs. The prefix is fixed chrome rather than
+   placeholder copy, so what the speaker types is a handle and what the record
+   stores is a canonical URL — nobody has to think about the difference. */
+.portal-social-field { gap: 8px; }
+.social-fields { display: grid; gap: 12px; }
+.social-field { display: grid; gap: 5px; }
+.social-field > label { align-items: center; display: flex; gap: 7px; }
+.social-field-input { align-items: stretch; display: flex; min-width: 0; }
+.social-field-prefix { align-items: center; background: var(--surface-sunk); border: 1px solid var(--rule); border-radius: var(--radius) 0 0 var(--radius); border-right: 0; color: var(--muted); display: flex; flex: 0 0 auto; font: 500 12.5px/1 var(--mono); padding: 0 9px; white-space: nowrap; }
+.social-field-input input { border-radius: 0 var(--radius) var(--radius) 0; flex: 1 1 auto; min-width: 0; }
+.social-field-error { color: var(--alarm); font-size: 11.5px; line-height: 1.35; min-height: 4px; }
+.social-fields-note { color: var(--muted); font-size: 11.5px; line-height: 1.45; margin: 2px 0 0; }
+.portal-other-links { margin-top: 4px; }
+@container (max-width: 320px) {
+  .social-field-input { display: grid; }
+  .social-field-prefix { border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; border-right: 1px solid var(--rule); min-height: 26px; }
+  .social-field-input input { border-radius: 0 0 var(--radius) var(--radius); }
+}
 .portal-crop { aspect-ratio: 1; background: var(--surface-sunk); border: 1px solid var(--rule); max-width: 132px; overflow: hidden; }
 .portal-crop img { display: block; height: 100%; object-fit: cover; width: 100%; }
 .portal-avatar-copy { min-width: 0; }

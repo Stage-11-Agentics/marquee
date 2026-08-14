@@ -10,6 +10,8 @@ import { roleForEvent, tokenEventAllowed } from "../lib/auth/scope-resolution";
 import { COPY_SET_KEYS } from "../lib/events/copy-manifest";
 import { planEventCopy, readCopyPlan } from "../lib/events/copy-event";
 import { SHIPPED_DEMO_ORGANIZATION_ID } from "../lib/reset-demo/demo-fixture";
+import { SOCIAL_PLATFORM_IDS, type SocialPlatformId } from "../lib/social-links";
+import { enabledSocialPlatformsFor, writeEnabledSocialPlatforms } from "../lib/social-platform-setting";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const formatParams = eventParams.extend({ formatId: z.string().min(1) });
@@ -48,8 +50,15 @@ const trackSchema = z.object({
   position: z.number().int().nonnegative(),
   updated_at: z.number(),
 });
+const socialPlatformId = z.enum(SOCIAL_PLATFORM_IDS as unknown as [SocialPlatformId, ...SocialPlatformId[]]);
 const settingsResponse = z.object({
-  data: z.object({ event: eventSchema, formats: z.array(formatSchema), tracks: z.array(trackSchema) }),
+  data: z.object({
+    event: eventSchema,
+    formats: z.array(formatSchema),
+    tracks: z.array(trackSchema),
+    /** Which social profiles this conference asks its speakers for. */
+    speaker_social_platforms: z.array(socialPlatformId),
+  }),
 });
 
 const copySetSchema = z.object(
@@ -107,6 +116,12 @@ const eventPatch = z.object({
   venue: z.string().max(300).nullable().optional(),
   logo_key: z.string().max(500).nullable().optional(),
   accent: color.nullable().optional(),
+  /**
+   * Which social profiles speakers are asked for. An empty array is a real
+   * choice — "this conference does not collect them" — which is why it is
+   * distinct from omitting the field, meaning "leave the setting alone".
+   */
+  speaker_social_platforms: z.array(socialPlatformId).max(SOCIAL_PLATFORM_IDS.length).optional(),
 });
 const eventInput = z.object({
   name: z.string().trim().min(1).max(200),
@@ -149,8 +164,8 @@ async function eventFor(db: D1Database, eventId: string): Promise<PublicEvent> {
   return event;
 }
 
-async function settingsFor(db: D1Database, eventId: string): Promise<{ event: PublicEvent; formats: FormatRow[]; tracks: TrackRow[] }> {
-  const [event, formats, tracks] = await Promise.all([
+async function settingsFor(db: D1Database, eventId: string): Promise<{ event: PublicEvent; formats: FormatRow[]; tracks: TrackRow[]; speaker_social_platforms: SocialPlatformId[] }> {
+  const [event, formats, tracks, socialPlatforms] = await Promise.all([
     eventFor(db, eventId),
     db.prepare(
       `SELECT id, event_id, name, default_duration_min, min_duration_min, max_duration_min, position, created_at, updated_at
@@ -160,8 +175,9 @@ async function settingsFor(db: D1Database, eventId: string): Promise<{ event: Pu
       `SELECT id, event_id, name, color, position, created_at, updated_at
        FROM tracks WHERE event_id = ? ORDER BY position, id`,
     ).bind(eventId).all<TrackRow>(),
+    enabledSocialPlatformsFor(db, eventId),
   ]);
-  return { event, formats: formats.results, tracks: tracks.results };
+  return { event, formats: formats.results, tracks: tracks.results, speaker_social_platforms: socialPlatforms };
 }
 
 /**
@@ -533,6 +549,9 @@ const updateSettings = defineApiRoute(
       now,
       eventId,
     ).run();
+    if (body.speaker_social_platforms !== undefined) {
+      await writeEnabledSocialPlatforms(context.env.DB, eventId, body.speaker_social_platforms, now);
+    }
     return context.json({ data: await settingsFor(context.env.DB, eventId) }, 200);
   },
 );
