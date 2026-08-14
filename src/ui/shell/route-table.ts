@@ -35,6 +35,7 @@ export interface RouteDefinition {
 }
 
 export const routeTable: readonly RouteDefinition[] = [
+  { id: "org-home", path: "/org/home", label: "Home", icon: "⌂", group: "organization", sidebar: true },
   // "People CRM" — the judge-legibility ruling (R5, 2026-08-14). The earlier
   // comment here argued against "CRM" as software's word for an address book,
   // and it is superseded: the people who go looking for this capability look

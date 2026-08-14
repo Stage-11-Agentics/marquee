@@ -249,7 +249,7 @@ test("CONTRACT · MRQ-131 · Lists is reached from People, not from a sidebar ro
   // one further: /lists renders inside the People screen, as its Lists tab.
   // Asserted through the resolver rather than the source text, so reordering a
   // property in the table cannot fail a test about navigation.
-  expectDeep(routesFor("organization").map((route) => route.id), ["people", "sourcing"]);
+  expectDeep(routesFor("organization").map((route) => route.id), ["org-home", "people", "sourcing"]);
   // The route itself survives — /lists still resolves, it just has no row.
   const lists = matchRoute("/lists");
   expectEqual(lists?.id, "lists");

@@ -1,0 +1,82 @@
+.org-home-page { display: grid; gap: 24px; }
+.org-home-page .page-head { margin-bottom: 0; }
+.org-home-page .page-head p { max-width: 680px; }
+.org-home-attention { display: grid; gap: 1px; grid-template-columns: repeat(3, minmax(0, 1fr)); min-height: 76px; }
+.org-home-attention-slot { align-items: center; background: var(--panel); border: 1px solid var(--line-strong); display: grid; gap: 10px; grid-template-columns: 22px minmax(0, 1fr) 14px; min-height: 76px; padding: 12px 14px; }
+.org-home-attention-slot + .org-home-attention-slot { border-left: 0; }
+.org-home-attention-slot:hover { background: var(--accent-soft); border-color: var(--accent); position: relative; z-index: 1; }
+.org-home-attention-slot.ok { border-top: 2px solid var(--ok); }
+.org-home-attention-slot.attention { border-top: 2px solid var(--warn); }
+.org-home-attention-slot.unavailable { border-top: 2px solid var(--line-strong); }
+.org-home-attention-mark { color: var(--warn); font: 600 15px/1 var(--mono); text-align: center; }
+.org-home-attention-slot.ok .org-home-attention-mark { color: var(--ok); }
+.org-home-attention-slot.unavailable .org-home-attention-mark { color: var(--muted); }
+.org-home-attention-copy { display: grid; gap: 5px; min-width: 0; }
+.org-home-attention-copy strong { font: 600 11.5px/1.2 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-home-attention-copy small { color: var(--muted); font-size: 10.5px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-home-attention-arrow { color: var(--accent); font: 600 13px/1 var(--mono); text-align: right; }
+.org-home-attention-slot.loading { background: var(--sunk); }
+.org-home-section { display: grid; gap: 14px; }
+.org-home-section-head { align-items: end; display: flex; gap: 16px; justify-content: space-between; min-height: 42px; }
+.org-home-section-head h2 { font-size: 18px; margin: 7px 0 0; }
+.org-home-season-grid { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.org-home-season-card { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); min-height: 176px; }
+.org-home-season-card > a { display: grid; gap: 18px; height: 100%; padding: 16px; }
+.org-home-season-card > a:hover { background: var(--accent-soft); }
+.org-home-season-card header { align-items: start; display: flex; gap: 10px; justify-content: space-between; }
+.org-home-season-card h3 { font: 600 14px/1.2 var(--mono); margin: 0 0 6px; }
+.org-home-season-card .chip { flex: 0 0 auto; }
+.org-home-season-counts { border-top: 1px solid var(--line); display: grid; gap: 7px; padding-top: 12px; }
+.org-home-season-counts span { color: var(--muted); display: flex; font: 400 10px/1.2 var(--mono); gap: 6px; justify-content: space-between; }
+.org-home-season-counts strong { color: var(--ink); font-weight: 600; }
+.org-home-season-link { color: var(--accent-dark); font: 600 10px/1 var(--mono); }
+.org-home-season-card.ended { opacity: .78; }
+.org-home-next { align-items: center; display: flex; gap: 18px; justify-content: space-between; min-height: 116px; padding: 20px 22px; }
+.org-home-next-copy { min-width: 0; }
+.org-home-next h2 { font-size: 18px; margin: 7px 0 5px; }
+.org-home-next p { color: var(--muted); font-size: 12px; margin: 0; }
+.org-home-next .button { flex: 0 0 auto; }
+.org-home-kpi-grid { display: grid; gap: 1px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.org-home-kpi { background: var(--panel); border: 1px solid var(--line-strong); display: grid; gap: 9px; min-height: 136px; padding: 17px; }
+.org-home-kpi + .org-home-kpi { border-left: 0; }
+.org-home-kpi:hover { background: var(--accent-soft); }
+.org-home-kpi-number { font-size: 30px; line-height: 1; }
+.org-home-kpi.unavailable .org-home-kpi-number { color: var(--muted); }
+.org-home-kpi .subtle { line-height: 1.35; }
+.org-home-activity-list { border-top: 1px solid var(--line-strong); min-height: 220px; }
+.org-home-activity-row { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 18px; justify-content: space-between; min-height: 54px; padding: 9px 12px; }
+.org-home-activity-row:hover { background: var(--accent-soft); }
+.org-home-activity-main, .org-home-activity-meta { display: grid; gap: 4px; min-width: 0; }
+.org-home-activity-main strong, .org-home-activity-meta strong { font: 600 11.5px/1.2 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-home-activity-main small, .org-home-activity-meta small { color: var(--muted); font: 400 10px/1.2 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-home-activity-meta { flex: 0 0 210px; text-align: right; }
+.org-home-reserved-empty { align-items: center; background: var(--sunk); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; justify-content: center; min-height: 176px; padding: 24px; text-align: center; }
+.org-home-reserved-empty strong { font: 600 12px/1.2 var(--mono); }
+.org-home-reserved-empty span { color: var(--muted); font-size: 11px; }
+.org-home-reserved-empty.compact { min-height: 220px; }
+.org-home-skeleton { background: var(--line); display: block; height: 10px; }
+.org-home-skeleton.long { width: 72%; }
+.org-home-skeleton.medium { width: 48%; }
+.org-home-skeleton.short { width: 28%; }
+.org-home-skeleton.tiny { width: 12%; }
+.org-home-season-card.loading, .org-home-kpi.loading, .org-home-activity-row.loading, .org-home-next.loading { align-content: center; display: grid; gap: 14px; }
+.org-home-season-card.loading { padding: 18px; }
+.org-home-kpi.loading { align-content: start; }
+.org-home-activity-row.loading { grid-template-columns: 1fr 22%; }
+.org-home-attention-slot.loading .org-home-skeleton { margin: 0; }
+
+@media (max-width: 980px) {
+  .org-home-season-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .org-home-attention { grid-template-columns: 1fr; }
+  .org-home-attention-slot + .org-home-attention-slot { border-left: 1px solid var(--line-strong); border-top: 0; }
+  .org-home-attention-slot.ok { border-top: 2px solid var(--ok); }
+  .org-home-attention-slot.attention { border-top: 2px solid var(--warn); }
+  .org-home-attention-slot.unavailable { border-top: 2px solid var(--line-strong); }
+}
+@media (max-width: 760px) {
+  .org-home-season-grid, .org-home-kpi-grid { grid-template-columns: 1fr; }
+  .org-home-kpi + .org-home-kpi { border-left: 1px solid var(--line-strong); border-top: 0; }
+  .org-home-section-head { align-items: start; flex-direction: column; }
+  .org-home-next { align-items: start; flex-direction: column; }
+  .org-home-activity-meta { flex-basis: 130px; }
+}
