@@ -16,6 +16,10 @@ test("CONTRACT · MRQ-127 create submission uses live settings pickers and a req
   assert.match(create, /<legend>Submitter <span class="required-mark">Required<\/span><\/legend>/);
   assert.match(create, /Choose existing person/);
   assert.match(create, /Create new person/);
+  assert.match(create, /const model = settings\.kind === "ready" \? settings\.model : \{ formats: \[\], tracks: \[\] \};/);
+  assert.match(create, /You can still create the record without an optional format or track/);
+  assert.doesNotMatch(create, /\{model && <div class="record-form-grid">/);
+  assert.doesNotMatch(create, /disabled=\{state === "saving" \|\| !model\}/);
   assert.doesNotMatch(create, /track_agents|format_talk/);
 });
 
