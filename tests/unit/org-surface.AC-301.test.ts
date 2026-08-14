@@ -11,7 +11,7 @@ import { resolve } from "node:path";
 
 import { expect, test } from "vitest";
 
-import { activeNavId, matchRoute, routesFor, routeTable } from "../../src/ui/shell/route-table";
+import { activeNavId, matchRoute, routesFor, routeTable, SIDEBAR_GROUPS } from "../../src/ui/shell/route-table";
 
 const root = resolve(import.meta.dirname, "../..");
 const read = (path: string): string => readFileSync(resolve(root, path), "utf8");
@@ -35,12 +35,16 @@ test("AC-301 · the organization surface is four reachable tabs under one sideba
   expect(settingsRows[0]).toMatchObject({ id: "org-settings", path: "/org", icon: "⚙" });
   expect(organization.at(-1)?.id).toBe("org-settings");
 
-  // The conference group still ends in its own Settings row — the symmetry is
-  // the thing being taught, so losing either half is a defect.
+  // The conference stack still ends in its own Settings row — the symmetry is
+  // the thing being taught, so losing either half is a defect. It sits in the
+  // trailing `settings` group, which is the last group the sidebar draws.
   expect(routeTable.find((route) => route.id === "settings")).toMatchObject({
     path: "/settings",
-    label: "Conference settings",
+    label: "Settings",
+    group: "settings",
   });
+  expect(SIDEBAR_GROUPS.at(0)).toBe("organization");
+  expect(SIDEBAR_GROUPS.at(-1)).toBe("settings");
 });
 
 test("AC-301 · the old API-tokens URL still resolves after the move", () => {
