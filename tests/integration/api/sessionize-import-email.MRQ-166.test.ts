@@ -125,19 +125,20 @@ describe.sequential("CONTRACT · MRQ-166 · Sessionize speaker email", () => {
     expect(await env.DB.prepare("SELECT id FROM people WHERE org_id = ? AND email LIKE 'speaker+%@example.invalid'").bind(ORG_ID).first()).toBeNull();
   });
 
-  test("CONTRACT · MRQ-166 · a unique name match keeps its stored email and profile values", async () => {
+  test("CONTRACT · MRQ-166 · a same-name row with another email creates a separate person", async () => {
     const imported = await upload([
       "Name,Email,Title,Company,Bio",
       "Unique Name Match,new-address@mrq166.test,Imported title,Imported company,Imported bio",
     ].join("\n"));
     const result = await mapAndRun(imported);
 
-    const person = await env.DB.prepare("SELECT email, title, company, bio FROM people WHERE id = ?").bind(NAME_MATCH_ID).first<{ email: string; title: string; company: string; bio: string }>();
-    expect(person).toMatchObject({ email: "stored@mrq166.test", title: "Stored title", company: "Stored company", bio: "Stored bio" });
+    const existing = await env.DB.prepare("SELECT email, title, company, bio FROM people WHERE id = ?").bind(NAME_MATCH_ID).first<{ email: string; title: string; company: string; bio: string }>();
+    expect(existing).toMatchObject({ email: "stored@mrq166.test", title: "Stored title", company: "Stored company", bio: "Stored bio" });
+    const separate = await env.DB.prepare("SELECT email, name, title, company, bio FROM people WHERE org_id = ? AND email = ?").bind(ORG_ID, "new-address@mrq166.test").first<{ email: string; name: string; title: string; company: string; bio: string }>();
+    expect(separate).toMatchObject({ email: "new-address@mrq166.test", name: "Unique Name Match", title: "Imported title", company: "Imported company", bio: "Imported bio" });
     const row = result.rows.find((candidate) => candidate.entity === "speaker");
-    expect(row?.reason).toContain("matched by name");
-    expect(row?.reason).toContain("kept email");
-    expect(row?.reason).toContain("kept title, company, bio (existing value)");
+    expect(row).toMatchObject({ outcome: "created" });
+    expect(row?.reason).toContain("same name exists with a different email; created separate person");
   });
 
   test("CONTRACT · MRQ-166 · duplicate names match neither existing person", async () => {
