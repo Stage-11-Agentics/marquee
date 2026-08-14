@@ -1,3 +1,12 @@
+import {
+  ORG_HOME_ACTIVITY_HREF,
+  ORG_HOME_CREATE_HREF,
+  ORG_HOME_ORGANIZERS_HREF,
+  ORG_HOME_OUTREACH_HREF,
+  ORG_HOME_PEOPLE_HREF,
+  ORG_HOME_SERVER_HREF,
+} from "../../api/org-home";
+
 /**
  * `organization` is the group that sits ABOVE the conference caption in the
  * sidebar. That placement is the scope boundary made visible: everything below
@@ -43,7 +52,7 @@ export const routeTable: readonly RouteDefinition[] = [
   // finds. "People" alone is broad; "People CRM" is unambiguous. Inside the
   // screen the language stays the organizer's — a person, a list, never a
   // "contact" or a "segment".
-  { id: "people", path: "/people", label: "People CRM", icon: "", group: "organization", sidebar: true },
+  { id: "people", path: ORG_HOME_PEOPLE_HREF, label: "People CRM", icon: "", group: "organization", sidebar: true },
   // Lists is a way of looking at People, so it is reached from People — the
   // toolbar button there, and the band on a list's own view. It keeps a real
   // route (saving a list lands on it, and the URL is shareable) but no sidebar
@@ -53,17 +62,21 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "lists", path: "/lists", label: "Lists", icon: "", group: "organization" },
   // Org-level by design: one relationship, courted across years, each card
   // naming the conference it is currently aimed at.
-  { id: "sourcing", path: "/pipeline", label: "Outreach", icon: "", group: "organization", sidebar: true },
+  { id: "sourcing", path: ORG_HOME_OUTREACH_HREF, label: "Outreach", icon: "", group: "organization", sidebar: true },
   // MRQ-207 will own the visible Organization settings tabs. Keep Server
   // reachable as a standalone org-level surface until that fold lands.
-  { id: "org-server", path: "/org/server", label: "Server", icon: "", group: "organization" },
+  { id: "org-server", path: ORG_HOME_SERVER_HREF, label: "Server", icon: "", group: "organization" },
   { id: "org-instance", path: "/org/instance", label: "Server", icon: "", group: "organization" },
-  // Agents guess URLs, and every 404 costs turns. These three resolve to People
+  // Agents guess URLs, and every 404 costs turns. These organization destinations
   // rather than to the SPA's not-found state; they are not shown in the sidebar
   // because the area has one name and one entry.
   { id: "people-crm", path: "/crm", label: "People CRM", icon: "", group: "utility" },
   { id: "people-directory", path: "/directory", label: "People CRM", icon: "", group: "utility" },
   { id: "people-contacts", path: "/contacts", label: "People CRM", icon: "", group: "utility" },
+  // Sibling-owned organization destinations: route contracts only, with no
+  // local shell mount until their owning tickets deliver the screens.
+  { id: "org-organizers", path: ORG_HOME_ORGANIZERS_HREF, label: "Organizers", icon: "", group: "utility" },
+  { id: "org-activity", path: ORG_HOME_ACTIVITY_HREF, label: "Organization activity", icon: "", group: "utility" },
   // "Program pipeline" agrees with the page's own title. The brand mark is
   // still the way home.
   { id: "dashboard", path: "/dashboard", label: "Program pipeline", icon: "", group: "conference", sidebar: true },
@@ -127,7 +140,7 @@ export const routeTable: readonly RouteDefinition[] = [
   // declared here because it is a real route, and a route map that omits a real
   // route is the same defect as one that invents a route that is not.
   { id: "co-speaker", path: "/co-speaker", label: "Co-speaker confirmation", icon: "", group: "utility", external: true },
-  { id: "conference-new", path: "/conferences/new", label: "Create conference", icon: "", group: "utility" },
+  { id: "conference-new", path: ORG_HOME_CREATE_HREF, label: "Create conference", icon: "", group: "utility" },
   { id: "handoff", path: "/handoff", label: "Instance handoff", icon: "", group: "utility" },
   { id: "venues", path: "/settings/venues", label: "Venues", icon: "⌖", group: "utility" },
   { id: "submission-detail", path: "/submissions/:id", label: "Submission record", icon: "", group: "utility" },

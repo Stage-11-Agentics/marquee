@@ -17,8 +17,23 @@ const OWNER_SESSION_ID = "sess_mrq209_owner";
 const SPEAKER_SESSION_ID = "sess_mrq209_speaker";
 const NOW = Date.UTC(2026, 7, 14, 12, 0, 0);
 
+async function ensureMrq205StageColumns(): Promise<void> {
+  const columns = await env.DB.prepare("PRAGMA table_info(person_events)").all<{ name: string }>();
+  const existing = new Set(columns.results.map((column) => column.name));
+  for (const [name, definition] of [
+    ["target_event_id", "target_event_id TEXT"],
+    ["next_touch_on", "next_touch_on TEXT"],
+  ] as const) {
+    if (!existing.has(name)) await env.DB.prepare(`ALTER TABLE person_events ADD COLUMN ${definition}`).run();
+  }
+}
+
 async function seedFixture(): Promise<void> {
   await applyMigrations();
+  // MRQ-205 owns these append-only stage columns. Keep this test seam local
+  // until that branch lands; do not add a product migration or duplicate
+  // outreach table on the MRQ-209 base.
+  await ensureMrq205StageColumns();
   await env.DB.batch([
     env.DB.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
       .bind(ORG_ID, "MRQ-209 Home", "mrq-209-home", NOW, NOW),
@@ -65,6 +80,14 @@ async function seedFixture(): Promise<void> {
       .bind("part_mrq209_ended_returning", "sub_mrq209_ended_returning", RETURNING_SPEAKER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
       .bind("part_mrq209_upcoming_single", "sub_mrq209_upcoming_single", SINGLE_SPEAKER_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO person_events (id, org_id, person_id, kind, value_json, actor_person_id, created_at, target_event_id, next_touch_on) VALUES (?, ?, ?, 'stage', ?, ?, ?, ?, ?)")
+      .bind("stage_mrq209_returning", ORG_ID, RETURNING_SPEAKER_ID, '{"stage":"contacted"}', OWNER_ID, NOW + 10, UPCOMING_EVENT_ID, "2026-08-12"),
+    env.DB.prepare("INSERT INTO person_events (id, org_id, person_id, kind, value_json, actor_person_id, created_at, target_event_id, next_touch_on) VALUES (?, ?, ?, 'stage', ?, ?, ?, ?, ?)")
+      .bind("stage_mrq209_single", ORG_ID, SINGLE_SPEAKER_ID, '{"stage":"identified"}', OWNER_ID, NOW + 11, UPCOMING_EVENT_ID, "2026-08-13"),
+    env.DB.prepare("INSERT INTO person_events (id, org_id, person_id, kind, value_json, actor_person_id, created_at, target_event_id, next_touch_on) VALUES (?, ?, ?, 'stage', ?, ?, ?, ?, ?)")
+      .bind("stage_mrq209_terminal", ORG_ID, OWNER_ID, '{"stage":"declined"}', OWNER_ID, NOW + 12, UPCOMING_EVENT_ID, "2026-08-01"),
+    env.DB.prepare("INSERT INTO person_events (id, org_id, person_id, kind, value_json, actor_person_id, created_at, target_event_id, next_touch_on) VALUES (?, ?, ?, 'stage', ?, ?, ?, ?, ?)")
+      .bind("stage_mrq209_other", OTHER_ORG_ID, OTHER_PERSON_ID, '{"stage":"contacted"}', OTHER_PERSON_ID, NOW + 13, OTHER_EVENT_ID, "2026-08-01"),
     env.DB.prepare("INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_minutes, created_at, updated_at) VALUES (?, ?, 'Home Hall', '1 Main St', 0, NULL, NULL, 0, ?, ?)")
       .bind("building_mrq209", UPCOMING_EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO rooms (id, event_id, building_id, name, capacity, position, av_capabilities, notes, created_at, updated_at) VALUES (?, ?, ?, 'Room 1', 100, 0, '[]', NULL, ?, ?)")
@@ -125,17 +148,29 @@ describe.sequential("MRQ-209 organization home", () => {
     expect(body.data.create_conference_href).toBe("/conferences/new");
     expect(body.data.relationships.people).toMatchObject({ value: 3, state: "ready" });
     expect(body.data.relationships.returning_speakers).toMatchObject({ value: 1, state: "ready" });
+    expect(body.data.relationships.in_outreach).toMatchObject({ value: 2, state: "ready", href: "/pipeline" });
     expect(body.data.relationships.organizers).toMatchObject({ value: 2, state: "ready" });
     expect(body.data.attention.map((slot: { id: string }) => slot.id)).toEqual(["overdue_outreach", "stale_seats", "server_status"]);
-    expect(body.data.attention[0]).toMatchObject({ state: "unavailable", count: null });
-    expect(body.data.attention[1]).toMatchObject({ state: "unavailable", count: null });
+    expect(body.data.attention[0]).toMatchObject({
+      state: "ready",
+      count: 2,
+      href: "/pipeline",
+      item: { person_name: "Priya Returning", event_name: "MRQ-209 2026", due_at: "2026-08-12" },
+    });
+    expect(body.data.attention[1]).toMatchObject({
+      state: "ready",
+      count: 1,
+      href: "/org/organizers",
+      item: { person_name: "Sam Single", event_name: "MRQ-209 2025", role: "ops" },
+    });
   });
 
-  test("keeps missing parallel sources honest and limits activity to four newest rows", async () => {
+  test("excludes terminal stages and keeps activity to four newest rows", async () => {
     const response = await request("/api/v1/org/home", OWNER_SESSION_ID);
     const body = await response.json<{ data: Record<string, any> }>();
 
-    expect(body.data.relationships.in_outreach).toMatchObject({ value: null, state: "unavailable" });
+    expect(body.data.relationships.in_outreach.value).toBe(2);
+    expect(body.data.attention[0].item.person_name).not.toBe("Jordan Home");
     expect(body.data.recent_activity).toHaveLength(4);
     expect(body.data.recent_activity.map((row: { id: string }) => row.id)).toEqual([
       "audit_mrq209_5",
@@ -144,6 +179,6 @@ describe.sequential("MRQ-209 organization home", () => {
       "audit_mrq209_2",
     ]);
     expect(body.data.recent_activity.every((row: { event_id: string }) => [UPCOMING_EVENT_ID, ENDED_EVENT_ID].includes(row.event_id))).toBe(true);
-    expect(body.data.recent_activity[0]).toMatchObject({ actor_name: "Jordan Home", event_name: "MRQ-209 2026", href: "/org/settings?tab=activity" });
+    expect(body.data.recent_activity[0]).toMatchObject({ actor_name: "Jordan Home", event_name: "MRQ-209 2026", href: "/org/activity" });
   });
 });

@@ -1,6 +1,14 @@
 export const ORG_HOME_ROUTE = "/api/v1/org/home";
-export const ORG_ACTIVITY_HREF = "/org/settings?tab=activity";
+export const ORG_HOME_PEOPLE_HREF = "/people";
+export const ORG_HOME_RETURNING_PEOPLE_HREF = "/people?filter=returning";
+export const ORG_HOME_OUTREACH_HREF = "/pipeline";
+export const ORG_HOME_ORGANIZERS_HREF = "/org/organizers";
+export const ORG_HOME_SERVER_HREF = "/org/server";
+export const ORG_HOME_ACTIVITY_HREF = "/org/activity";
 export const ORG_HOME_CREATE_HREF = "/conferences/new";
+
+/** Kept as a named alias for callers that predate the organization-home prefix. */
+export const ORG_ACTIVITY_HREF = ORG_HOME_ACTIVITY_HREF;
 
 export const ORG_HOME_ATTENTION_IDS = [
   "overdue_outreach",
@@ -40,7 +48,7 @@ export interface OrgHomeAttentionItem {
   person_name: string | null;
   event_name: string | null;
   role: string | null;
-  due_at: number | null;
+  due_at: string | null;
   href: string;
 }
 

@@ -2,10 +2,18 @@ import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
 import {
+  ORG_HOME_ACTIVITY_HREF,
   ORG_HOME_ATTENTION_IDS,
+  ORG_HOME_CREATE_HREF,
+  ORG_HOME_ORGANIZERS_HREF,
+  ORG_HOME_OUTREACH_HREF,
+  ORG_HOME_PEOPLE_HREF,
   ORG_HOME_ROUTE,
+  ORG_HOME_RETURNING_PEOPLE_HREF,
+  ORG_HOME_SERVER_HREF,
   type OrgHomeActivity,
   type OrgHomeAttention,
+  type OrgHomeAttentionId,
   type OrgHomeRelationshipMetric,
   type OrgHomeSeason,
   type OrgHomeSnapshot,
@@ -39,10 +47,16 @@ const RELATIONSHIP_LABELS: Record<(typeof ORG_HOME_RELATIONSHIP_ORDER)[number], 
 };
 
 const RELATIONSHIP_HREFS: Record<(typeof ORG_HOME_RELATIONSHIP_ORDER)[number], string> = {
-  people: "/people",
-  returning_speakers: "/people?filter=returning",
-  in_outreach: "/outreach",
-  organizers: "/org/settings?tab=organizers",
+  people: ORG_HOME_PEOPLE_HREF,
+  returning_speakers: ORG_HOME_RETURNING_PEOPLE_HREF,
+  in_outreach: ORG_HOME_OUTREACH_HREF,
+  organizers: ORG_HOME_ORGANIZERS_HREF,
+};
+
+const ATTENTION_HREFS: Record<OrgHomeAttentionId, string> = {
+  overdue_outreach: ORG_HOME_OUTREACH_HREF,
+  stale_seats: ORG_HOME_ORGANIZERS_HREF,
+  server_status: ORG_HOME_SERVER_HREF,
 };
 
 function formatNumber(value: number): string {
@@ -95,6 +109,7 @@ function openSeason(
 
 function AttentionSlot({ slot, navigate }: { slot: OrgHomeAttention; navigate: Navigate }): JSX.Element {
   const className = `org-home-attention-slot ${slot.status}`;
+  const href = slot.href ?? ATTENTION_HREFS[slot.id];
   const content = <>
     <span class="org-home-attention-mark" aria-hidden="true">{slot.status === "ok" ? "✓" : slot.status === "unavailable" ? "—" : "◆"}</span>
     <span class="org-home-attention-copy">
@@ -103,8 +118,8 @@ function AttentionSlot({ slot, navigate }: { slot: OrgHomeAttention; navigate: N
     </span>
     <span class="org-home-attention-arrow" aria-hidden="true">→</span>
   </>;
-  return slot.href
-    ? <a class={className} href={slot.href} onClick={(event) => { event.preventDefault(); navigate(slot.href!); }} aria-label={`${slot.title}. ${slot.detail}`}>{content}</a>
+  return href
+    ? <a class={className} href={href} onClick={(event) => { event.preventDefault(); navigate(href); }} aria-label={`${slot.title}. ${slot.detail}`}>{content}</a>
     : <div class={className}>{content}</div>;
 }
 
@@ -140,11 +155,11 @@ function SeasonsSection({ snapshot, navigate, switchEvent }: { snapshot: OrgHome
   return <section class="org-home-section" aria-labelledby="org-home-conferences">
     <header class="org-home-section-head">
       <div><span class="eyebrow">Conferences</span><h2 id="org-home-conferences">{snapshot.seasons.length} seasons · {range}</h2></div>
-      <Button small onClick={() => navigate(snapshot.create_conference_href)}>+ Create conference</Button>
+      <Button small onClick={() => navigate(ORG_HOME_CREATE_HREF)}>+ Create conference</Button>
     </header>
     {snapshot.seasons.length > 0
       ? <div class="org-home-season-grid">{snapshot.seasons.map((season) => <SeasonCard key={season.id} season={season} navigate={navigate} switchEvent={switchEvent} />)}</div>
-      : <div class="org-home-reserved-empty"><strong>No conferences yet</strong><span>Create the first season and the work will have a home.</span><Button small variant="primary" onClick={() => navigate(snapshot.create_conference_href)}>Create conference</Button></div>}
+      : <div class="org-home-reserved-empty"><strong>No conferences yet</strong><span>Create the first season and the work will have a home.</span><Button small variant="primary" onClick={() => navigate(ORG_HOME_CREATE_HREF)}>Create conference</Button></div>}
   </section>;
 }
 
@@ -158,13 +173,13 @@ function NextConference({ snapshot, navigate, switchEvent }: { snapshot: OrgHome
     </div>
     {season
       ? <a class="button small primary" href={season.links.dashboard} onClick={(event) => { event.preventDefault(); openSeason(season.id, season.links.dashboard, switchEvent, navigate); }}>Open</a>
-      : <Button small variant="primary" onClick={() => navigate(snapshot.create_conference_href)}>Create</Button>}
+      : <Button small variant="primary" onClick={() => navigate(ORG_HOME_CREATE_HREF)}>Create</Button>}
   </section>;
 }
 
 function RelationshipMetric({ id, metric }: { id: (typeof ORG_HOME_RELATIONSHIP_ORDER)[number]; metric: OrgHomeRelationshipMetric }): JSX.Element {
   const value = metric.value === null ? "—" : formatNumber(metric.value);
-  return <a class={`org-home-kpi ${metric.state}`} href={metric.href}>
+  return <a class={`org-home-kpi ${metric.state}`} href={RELATIONSHIP_HREFS[id]}>
     <span class="eyebrow">{RELATIONSHIP_LABELS[id]}</span>
     <strong class="org-home-kpi-number tabular">{value}</strong>
     <span class="subtle">{metric.note}</span>
@@ -175,7 +190,7 @@ function RelationshipsSection({ snapshot }: { snapshot: OrgHomeSnapshot }): JSX.
   return <section class="org-home-section" aria-labelledby="org-home-relationships">
     <header class="org-home-section-head">
       <div><span class="eyebrow">The relationships</span><h2 id="org-home-relationships">Org-level — people carry across conferences</h2></div>
-      <a class="button small" href="/people">Open CRM</a>
+      <a class="button small" href={ORG_HOME_PEOPLE_HREF}>Open CRM</a>
     </header>
     <div class="org-home-kpi-grid">
       {ORG_HOME_RELATIONSHIP_ORDER.map((id) => <RelationshipMetric key={id} id={id} metric={snapshot.relationships[id]} />)}
@@ -192,7 +207,7 @@ function ActivityRow({ activity }: { activity: OrgHomeActivity }): JSX.Element {
 
 function ActivitySection({ snapshot }: { snapshot: OrgHomeSnapshot }): JSX.Element {
   return <section class="org-home-section" aria-labelledby="org-home-activity">
-    <header class="org-home-section-head"><div><span class="eyebrow">Recent activity</span><h2 id="org-home-activity">Who changed what, org-wide</h2></div><a class="button small" href="/org/settings?tab=activity">Full log →</a></header>
+    <header class="org-home-section-head"><div><span class="eyebrow">Recent activity</span><h2 id="org-home-activity">Who changed what, org-wide</h2></div><a class="button small" href={ORG_HOME_ACTIVITY_HREF}>Full log →</a></header>
     <div class="org-home-activity-list">
       {snapshot.recent_activity.length > 0
         ? snapshot.recent_activity.map((activity) => <ActivityRow key={activity.id} activity={activity} />)
@@ -255,7 +270,7 @@ export function OrganizationHomePage({ navigate }: { navigate: Navigate }): JSX.
     <PageHeader
       title={state.snapshot?.organization.name ?? "Organization"}
       copy="The organization across its conferences. Each conference is one season; the people and relationships carry over."
-      actions={<><Button onClick={() => navigate("/people")}>Open People CRM</Button><Button variant="primary" onClick={() => navigate("/conferences/new")}>+ Create conference</Button></>}
+      actions={<><Button onClick={() => navigate(ORG_HOME_PEOPLE_HREF)}>Open People CRM</Button><Button variant="primary" onClick={() => navigate(ORG_HOME_CREATE_HREF)}>+ Create conference</Button></>}
     />
     {state.error !== null && <ErrorBanner title="Organization Home could not be read" error={state.error} onRetry={() => { setState((current) => ({ ...current, error: null })); setReloadKey((value) => value + 1); }} route={ORG_HOME_ROUTE} />}
     {state.snapshot ? <HomeContents snapshot={state.snapshot} navigate={navigate} switchEvent={switchEvent} /> : <HomeLoading error={state.error} />}

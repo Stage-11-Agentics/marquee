@@ -2,8 +2,18 @@ import { z } from "@hono/zod-openapi";
 
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
-import { ORG_ACTIVITY_HREF, ORG_HOME_CREATE_HREF, ORG_HOME_ATTENTION_IDS } from "../api/org-home";
+import {
+  ORG_HOME_ACTIVITY_HREF,
+  ORG_HOME_ATTENTION_IDS,
+  ORG_HOME_CREATE_HREF,
+  ORG_HOME_ORGANIZERS_HREF,
+  ORG_HOME_OUTREACH_HREF,
+  ORG_HOME_PEOPLE_HREF,
+  ORG_HOME_RETURNING_PEOPLE_HREF,
+  ORG_HOME_SERVER_HREF,
+} from "../api/org-home";
 import { requireOrgAccess } from "../lib/auth/org-access";
+import { CURRENT_STAGE } from "./people.queries";
 import {
   readInstanceStatus,
   type InstanceStatusEnvironment,
@@ -40,7 +50,7 @@ const attentionItemSchema = z.object({
   person_name: z.string().nullable(),
   event_name: z.string().nullable(),
   role: z.string().nullable(),
-  due_at: z.number().nullable(),
+  due_at: z.string().nullable(),
   href: z.string(),
 });
 
@@ -126,17 +136,16 @@ type AttentionRead = {
     person_name: string | null;
     event_name: string | null;
     role: string | null;
-    due_at: number | null;
+    due_at: string | null;
     href: string;
   } | null;
 };
 
-type OutreachRow = {
-  id: string;
-  person_name: string | null;
-  event_name: string | null;
-  next_touch_at: number | null;
-  total_count: number;
+type OutreachRead = {
+  state: "ready" | "empty" | "unavailable";
+  active_count: number | null;
+  overdue_count: number | null;
+  overdue_item: AttentionRead["item"];
 };
 
 type StaleSeatRow = {
@@ -165,8 +174,6 @@ const SPEAKER_ROLES = ["speaker", "co_speaker"] as const;
 const ATTENTION_LIMIT = 25;
 const SEASON_LIMIT = 100;
 const ACTIVITY_LIMIT = 4;
-
-export const ORG_HOME_ACTIVITY_HREF = ORG_ACTIVITY_HREF;
 
 function todayIso(now: number): string {
   return new Date(now).toISOString().slice(0, 10);
@@ -208,12 +215,31 @@ function missingTable(error: unknown, table: string): boolean {
   return new RegExp(`no such table:\\s*(?:main\\.)?${table}\\b`, "i").test(error.message);
 }
 
+function missingColumn(error: unknown, column: string): boolean {
+  if (!(error instanceof Error)) return false;
+  return new RegExp(`no such column:\\s*(?:[A-Za-z0-9_]+\\.)?${column}\\b`, "i").test(error.message);
+}
+
+function missingOutreachSource(error: unknown): boolean {
+  return missingTable(error, "person_events")
+    || missingColumn(error, "target_event_id")
+    || missingColumn(error, "next_touch_on");
+}
+
 function unavailableSource(): AttentionRead {
   return { state: "unavailable", count: null, item: null };
 }
 
 function emptySource(): AttentionRead {
   return { state: "empty", count: 0, item: null };
+}
+
+function unavailableOutreach(): OutreachRead {
+  return { state: "unavailable", active_count: null, overdue_count: null, overdue_item: null };
+}
+
+function emptyOutreach(): OutreachRead {
+  return { state: "empty", active_count: 0, overdue_count: 0, overdue_item: null };
 }
 
 async function readOrganization(db: D1Database, orgId: string): Promise<{ id: string; name: string }> {
@@ -274,81 +300,114 @@ async function readRelationshipCounts(db: D1Database, orgId: string): Promise<Re
 }
 
 /**
- * MRQ-205 integration seam. The Outreach branch owns this projection and its
- * next-touch semantics. Until that source exists, a missing table is an honest
- * unavailable state; it is never converted into a fabricated zero.
+ * MRQ-205 integration seam. A person's current stage is the newest stage row
+ * in the append-only person_events log. The branch adds target_event_id and
+ * next_touch_on to that row; until those columns exist, the result is honest
+ * unavailable rather than a fabricated zero.
  */
-export async function readOutreachAttention(db: D1Database, orgId: string, now: number): Promise<AttentionRead> {
+export async function readOutreachAttention(db: D1Database, orgId: string, today: string): Promise<OutreachRead> {
   try {
-    const rows = await db.prepare(
-      `SELECT o.id, p.name AS person_name, e.name AS event_name, o.next_touch_at,
-              COUNT(*) OVER () AS total_count
-         FROM outreach o
-         JOIN people p ON p.id = o.person_id AND p.org_id = o.org_id
-         LEFT JOIN events e ON e.id = o.event_id AND e.org_id = o.org_id
-        WHERE o.org_id = ?
-          AND o.next_touch_at IS NOT NULL
-          AND o.next_touch_at < ?
-          AND (o.completed_at IS NULL OR o.completed_at = 0)
-        ORDER BY o.next_touch_at ASC, o.id ASC
-        LIMIT ${ATTENTION_LIMIT}`,
-    ).bind(orgId, now).all<OutreachRow>();
-    if (rows.results.length === 0) return emptySource();
-    const first = rows.results[0];
+    const [summary, oldestOverdue] = await Promise.all([
+      db.prepare(
+        `SELECT COUNT(*) AS active_count,
+                COALESCE(SUM(CASE WHEN latest.next_touch_on IS NOT NULL AND latest.next_touch_on < ? THEN 1 ELSE 0 END), 0) AS overdue_count
+           FROM people person
+           JOIN person_events latest
+             ON latest.org_id = person.org_id
+            AND latest.person_id = person.id
+            AND latest.kind = 'stage'
+            AND latest.id = (
+              SELECT newest.id
+                FROM person_events newest
+               WHERE newest.org_id = person.org_id
+                 AND newest.person_id = person.id
+                 AND newest.kind = 'stage'
+               ORDER BY newest.created_at DESC, newest.id DESC
+               LIMIT 1
+            )
+          WHERE person.org_id = ?
+            AND ${CURRENT_STAGE} NOT IN ('confirmed', 'declined')`,
+      ).bind(today, orgId).first<{ active_count: number; overdue_count: number }>(),
+      db.prepare(
+        `SELECT latest.id, person.name AS person_name, event.name AS event_name, latest.next_touch_on
+           FROM people person
+           JOIN person_events latest
+             ON latest.org_id = person.org_id
+            AND latest.person_id = person.id
+            AND latest.kind = 'stage'
+            AND latest.id = (
+              SELECT newest.id
+                FROM person_events newest
+               WHERE newest.org_id = person.org_id
+                 AND newest.person_id = person.id
+                 AND newest.kind = 'stage'
+               ORDER BY newest.created_at DESC, newest.id DESC
+               LIMIT 1
+            )
+           LEFT JOIN events event
+             ON event.id = latest.target_event_id AND event.org_id = person.org_id
+          WHERE person.org_id = ?
+            AND ${CURRENT_STAGE} NOT IN ('confirmed', 'declined')
+            AND latest.next_touch_on IS NOT NULL
+            AND latest.next_touch_on < ?
+          ORDER BY latest.next_touch_on ASC, latest.id ASC
+          LIMIT 1`,
+      ).bind(orgId, today).first<{ id: string; person_name: string | null; event_name: string | null; next_touch_on: string | null }>(),
+    ]);
+    const activeCount = Number(summary?.active_count ?? 0);
+    const overdueCount = Number(summary?.overdue_count ?? 0);
+    if (activeCount === 0) return emptyOutreach();
     return {
       state: "ready",
-      count: Number(first.total_count),
-      item: {
-        id: first.id,
-        person_name: first.person_name,
-        event_name: first.event_name,
+      active_count: activeCount,
+      overdue_count: overdueCount,
+      overdue_item: oldestOverdue ? {
+        id: oldestOverdue.id,
+        person_name: oldestOverdue.person_name,
+        event_name: oldestOverdue.event_name,
         role: null,
-        due_at: first.next_touch_at,
-        href: "/outreach",
-      },
+        due_at: oldestOverdue.next_touch_on,
+        href: ORG_HOME_OUTREACH_HREF,
+      } : null,
     };
   } catch (error) {
-    if (missingTable(error, "outreach")) return unavailableSource();
+    if (missingOutreachSource(error)) return unavailableOutreach();
     throw error;
   }
 }
 
 /**
- * MRQ-212 integration seam. The stale-seat branch owns the projection of
- * ended-conference seats that need review. Its absence is distinct from an
- * empty result, so organizers never see a false all-clear while that branch is
- * still being integrated.
+ * MRQ-212 integration seam. Memberships are the canonical source for
+ * event-scoped organizer seats; ended conferences are derived at read time.
  */
 export async function readStaleSeatAttention(db: D1Database, orgId: string, today: string): Promise<AttentionRead> {
-  try {
-    const rows = await db.prepare(
-      `SELECT seat.id, p.name AS person_name, e.name AS event_name, seat.role,
-              COUNT(*) OVER () AS total_count
-         FROM stale_conference_seats seat
-         JOIN people p ON p.id = seat.person_id AND p.org_id = seat.org_id
-         JOIN events e ON e.id = seat.event_id AND e.org_id = seat.org_id
-        WHERE seat.org_id = ? AND e.ends_on < ?
-        ORDER BY e.ends_on ASC, seat.id ASC
-        LIMIT ${ATTENTION_LIMIT}`,
-    ).bind(orgId, today).all<StaleSeatRow>();
-    if (rows.results.length === 0) return emptySource();
-    const first = rows.results[0];
-    return {
-      state: "ready",
-      count: Number(first.total_count),
-      item: {
-        id: first.id,
-        person_name: first.person_name,
-        event_name: first.event_name,
-        role: first.role,
-        due_at: null,
-        href: "/org/settings?tab=organizers",
-      },
-    };
-  } catch (error) {
-    if (missingTable(error, "stale_conference_seats")) return unavailableSource();
-    throw error;
-  }
+  const rows = await db.prepare(
+    `SELECT seat.id, person.name AS person_name, event.name AS event_name, seat.role,
+            COUNT(*) OVER () AS total_count
+       FROM memberships seat
+       JOIN people person ON person.id = seat.person_id AND person.org_id = seat.org_id
+       JOIN events event ON event.id = seat.event_id AND event.org_id = seat.org_id
+      WHERE seat.org_id = ?
+        AND seat.event_id IS NOT NULL
+        AND seat.role != 'speaker'
+        AND event.ends_on < ?
+      ORDER BY event.ends_on ASC, seat.id ASC
+      LIMIT ${ATTENTION_LIMIT}`,
+  ).bind(orgId, today).all<StaleSeatRow>();
+  if (rows.results.length === 0) return emptySource();
+  const first = rows.results[0];
+  return {
+    state: "ready",
+    count: Number(first.total_count),
+    item: {
+      id: first.id,
+      person_name: first.person_name,
+      event_name: first.event_name,
+      role: first.role,
+      due_at: null,
+      href: ORG_HOME_ORGANIZERS_HREF,
+    },
+  };
 }
 
 async function readActivity(db: D1Database, orgId: string): Promise<ActivityRow[]> {
@@ -401,6 +460,16 @@ function attentionCopy(
   };
 }
 
+function overdueOutreach(source: OutreachRead): AttentionRead {
+  if (source.state === "unavailable") return unavailableSource();
+  if (source.overdue_count === 0) return emptySource();
+  return {
+    state: "ready",
+    count: source.overdue_count,
+    item: source.overdue_item,
+  };
+}
+
 function serverAttention(rows: InstanceStatusRow[], requestUrl: string) {
   const configured = rows.filter((row) => row.configured).length;
   const allConfigured = configured === rows.length;
@@ -414,7 +483,7 @@ function serverAttention(rows: InstanceStatusRow[], requestUrl: string) {
     detail: allConfigured
       ? "Email, uploads, spam protection, web address"
       : rows.filter((row) => !row.configured).map((row) => row.label).join(" · "),
-    href: "/org/settings?tab=instance",
+    href: ORG_HOME_SERVER_HREF,
     item: null,
     server: {
       host: new URL(requestUrl).host,
@@ -450,26 +519,27 @@ const getOrganizationHome = defineApiRoute(
       readOrganization(context.env.DB, access.orgId),
       readSeasons(context.env.DB, access.orgId, today),
       readRelationshipCounts(context.env.DB, access.orgId),
-      readOutreachAttention(context.env.DB, access.orgId, now),
+      readOutreachAttention(context.env.DB, access.orgId, today),
       readStaleSeatAttention(context.env.DB, access.orgId, today),
       readActivity(context.env.DB, access.orgId),
     ]);
 
     const nextSeason = seasons.find((season) => season.lifecycle === "upcoming" || season.lifecycle === "live") ?? null;
+    const outreachAttention = overdueOutreach(outreach);
     const outreachMetric = outreach.state === "unavailable"
-      ? metric(null, "unavailable", "Outreach data is not connected yet.", "/outreach")
-      : metric(outreach.count ?? 0, "ready", "People being courted toward a slot.", "/outreach");
+      ? metric(null, "unavailable", "Outreach data is not connected yet.", ORG_HOME_OUTREACH_HREF)
+      : metric(outreach.active_count ?? 0, "ready", "People being courted toward a slot.", ORG_HOME_OUTREACH_HREF);
     const attention = [
       {
         id: "overdue_outreach" as const,
         label: "Overdue outreach",
-        ...attentionCopy("outreach follow-ups overdue", outreach, "No outreach follow-ups overdue", "Outreach follow-ups unavailable", "/outreach", "The chase is clear."),
+        ...attentionCopy("outreach follow-ups overdue", outreachAttention, "No outreach follow-ups overdue", "Outreach follow-ups unavailable", ORG_HOME_OUTREACH_HREF, "The chase is clear."),
         server: null,
       },
       {
         id: "stale_seats" as const,
         label: "Past-conference seats",
-        ...attentionCopy("seat from a past conference", staleSeats, "No past-conference seats need review", "Past-conference seats unavailable", "/org/settings?tab=organizers", "No ended-conference seats are waiting for review."),
+        ...attentionCopy("seat from a past conference", staleSeats, "No past-conference seats need review", "Past-conference seats unavailable", ORG_HOME_ORGANIZERS_HREF, "No ended-conference seats are waiting for review."),
         server: null,
       },
       serverAttention(instanceRows, context.req.url),
@@ -483,10 +553,10 @@ const getOrganizationHome = defineApiRoute(
         next_season: nextSeason,
         create_conference_href: ORG_HOME_CREATE_HREF,
         relationships: {
-          people: metric(counts.people_count, "ready", "across all conferences.", "/people"),
-          returning_speakers: metric(counts.returning_speaker_count, "ready", "spoke at 2+ conferences.", "/people?filter=returning"),
+          people: metric(counts.people_count, "ready", "across all conferences.", ORG_HOME_PEOPLE_HREF),
+          returning_speakers: metric(counts.returning_speaker_count, "ready", "spoke at 2+ conferences.", ORG_HOME_RETURNING_PEOPLE_HREF),
           in_outreach: outreachMetric,
-          organizers: metric(counts.organizer_count, "ready", "organization staff seats.", "/org/settings?tab=organizers"),
+          organizers: metric(counts.organizer_count, "ready", "organization staff seats.", ORG_HOME_ORGANIZERS_HREF),
         },
         attention,
         recent_activity: activity.map((row) => ({
@@ -499,7 +569,7 @@ const getOrganizationHome = defineApiRoute(
           entity_type: row.entity_type,
           entity_id: row.entity_id,
           created_at: row.created_at,
-          href: ORG_ACTIVITY_HREF,
+          href: ORG_HOME_ACTIVITY_HREF,
         })),
       },
     }, 200);
