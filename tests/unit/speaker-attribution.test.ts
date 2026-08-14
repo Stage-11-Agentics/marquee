@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { hasPublicSpeakingParticipant } from "../../src/ui/submissions/SubmissionRecordPage";
 
 describe("speaker attribution", () => {
-  it("warns for submitter-only records while recognizing public speaking roles", () => {
+  it("CONTRACT · warns for submitter-only records while recognizing public speaking roles", () => {
     expect(hasPublicSpeakingParticipant([{ role: "submitter" }])).toBe(false);
     expect(hasPublicSpeakingParticipant([{ role: "sponsor_contact" }])).toBe(false);
     expect(hasPublicSpeakingParticipant([{ role: "speaker" }])).toBe(true);
