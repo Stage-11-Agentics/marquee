@@ -104,6 +104,16 @@ export function formatEventDateTime(timestamp: number, timezone: string): string
     minute: "2-digit",
     timeZone: timezone,
     timeZoneName: "short",
+}).format(new Date(timestamp));
+}
+
+/** Render an event-local clock time with its DST-aware short zone label. */
+export function formatEventTime(timestamp: number, timezone: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+    timeZoneName: "short",
   }).format(new Date(timestamp));
 }
 

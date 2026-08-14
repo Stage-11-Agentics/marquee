@@ -54,6 +54,7 @@ export interface PublicFormState {
   conference: {
     name: string;
     slug: string;
+    timezone: string;
   };
   form: {
     id: string;

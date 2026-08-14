@@ -87,9 +87,10 @@ describe.sequential("MRQ-15 public conference form", () => {
   test("AC-29 + AC-30 + AC-31 + AC-32 · the public read is builder ordered and states its conference limit and welcome", async () => {
     const response = await request("/api/v1/public/forms/public-cfp");
     expect(response.status).toBe(200);
-    const body = await json<{ state: string; conference: { name: string }; form: { min_speakers: number; per_submitter_limit: number }; fields: Array<{ key: string }> }>(response);
+    const body = await json<{ state: string; conference: { name: string; timezone: string }; form: { min_speakers: number; per_submitter_limit: number }; fields: Array<{ key: string }> }>(response);
     expect(body.state).toBe("open");
     expect(body.conference.name).toBe("Walkthrough Conference");
+    expect(body.conference.timezone).toBe("America/New_York");
     expect(body.form.min_speakers).toBe(1);
     expect(body.form.per_submitter_limit).toBe(3);
     expect(body.fields.map((field) => field.key)).toEqual(["title", "speaker_name", "speaker_email", "tracks", "vendor_content", "vendor_product", "supporting_file", "arrival_date"]);

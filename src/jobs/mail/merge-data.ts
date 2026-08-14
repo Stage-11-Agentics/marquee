@@ -1,4 +1,6 @@
 import type { MergeData } from "./render";
+import { formatEventDateTime, formatEventTime } from "../../lib/event-time";
+import { formatDueDate } from "../../lib/task-due";
 
 export interface RecipientMergeContext {
   name: string;
@@ -27,12 +29,8 @@ export function firstName(name: string): string {
 }
 
 function mergeTime(value: number | null | undefined, timezone: string | null | undefined): string {
-  if (value === null || value === undefined) return "—";
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: timezone ?? "UTC",
-  }).format(new Date(value));
+  if (value === null || value === undefined || !timezone) return "—";
+  return formatEventTime(value, timezone);
 }
 
 /**
@@ -45,10 +43,10 @@ export function mergeDataForRecipient(recipient: RecipientMergeContext): MergeDa
   const room = recipient.room ?? "—";
   const startsAt = recipient.startsAt === null || recipient.startsAt === undefined
     ? "—"
-    : new Date(recipient.startsAt).toISOString();
+    : recipient.timezone ? formatEventDateTime(recipient.startsAt, recipient.timezone) : "—";
   const taskDueAt = recipient.taskDueAt === null || recipient.taskDueAt === undefined
     ? "—"
-    : new Date(recipient.taskDueAt).toISOString();
+    : formatDueDate(recipient.taskDueAt);
   return {
     "speaker.first_name": firstName(recipient.name),
     "speaker.name": recipient.name,

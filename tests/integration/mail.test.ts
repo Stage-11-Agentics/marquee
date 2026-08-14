@@ -7,9 +7,11 @@ import { listCommsAudience, listCommsRecipientsForSubmissionIds } from "../../sr
 import { processMailOutbox, runMailSchedule, type MailProvider } from "../../src/jobs/mail/consumer";
 import { enqueueOutbox, enqueuePublicFormConfirmation, enqueueSmokeHarnessMail, buildIdempotencyKey } from "../../src/jobs/mail/outbox";
 import { isMailScheduleCron, selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "../../src/jobs/mail/schedule";
+import { mergeDataForRecipient } from "../../src/jobs/mail/merge-data";
 import { enqueueBulkReminder, enqueuePreCloseReminders, enqueueTrigger } from "../../src/jobs/mail/triggers";
 import { findTemplate, renderStoredTemplate, TRIGGER_TEMPLATE_KEYS } from "../../src/jobs/mail/templates";
 import { renderMail } from "../../src/jobs/mail/render";
+import { dueAtFromDateInput } from "../../src/lib/task-due";
 import { applyMigrations, env } from "./apply-migrations";
 
 const NOW = Date.parse("2026-08-10T12:00:00.000Z");
@@ -338,12 +340,46 @@ test("AC-126 · a disabled trigger emits no row and an edited template round-tri
 test("AC-127 · the pre-close schedule fires at the configured offset and not before", async () => {
   expect(isMailScheduleCron("0 * * * *")).toBe(true);
   expect(isMailScheduleCron("*/5 * * * *")).toBe(false);
+  await env.DB.prepare("UPDATE events SET timezone = 'America/New_York' WHERE id = 'evt_mail'").run();
   expect(await selectPreCloseReminderCandidates(env.DB, NOW + 23 * 60 * 60_000)).toHaveLength(0);
-  expect(await selectPreCloseReminderCandidates(env.DB, NOW + 24 * 60 * 60_000)).toHaveLength(1);
+  const preClose = await selectPreCloseReminderCandidates(env.DB, NOW + 24 * 60 * 60_000);
+  expect(preClose).toHaveLength(1);
+  expect(preClose[0]?.data["form.closes_at"]).toBe("Aug 12, 2026, 8:00 AM EDT");
   expect(await selectOverdueTaskCandidates(env.DB, NOW)).toHaveLength(0);
   expect(await enqueuePreCloseReminders(env.DB, NOW + 23 * 60 * 60_000)).toBe(0);
   expect(await enqueuePreCloseReminders(env.DB, NOW + 24 * 60 * 60_000)).toBe(1);
   expect(await enqueuePreCloseReminders(env.DB, NOW + 25 * 60 * 60_000)).toBe(0);
+});
+
+test("CONTRACT · MRQ-201 · overdue mail waits for the conference-local due day to end", async () => {
+  await env.DB.prepare("UPDATE events SET timezone = 'America/New_York' WHERE id = 'evt_mail'").run();
+  const dueAt = dueAtFromDateInput("2027-05-01");
+  expect(dueAt).not.toBeNull();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO task_templates (id, event_id, name, kind, description, due_at, position, auto_assign, created_at, updated_at) VALUES ('template_mrq201', 'evt_mail', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 0, 0, ?, ?)").bind(dueAt, NOW, NOW),
+    env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, last_write_source, cancelled_at, created_at, updated_at) VALUES ('task_mrq201', 'evt_mail', 'per_mail', 'sub_mail', 'template_mrq201', 'Speaker agreement', 'acknowledge', 'Confirm the agreement.', ?, 'open', NULL, NULL, NULL, 'marquee', NULL, ?, ?)").bind(dueAt, NOW, NOW),
+  ]);
+
+  expect(await selectOverdueTaskCandidates(env.DB, Date.parse("2027-05-01T20:00:00-04:00"))).toHaveLength(0);
+  const overdue = await selectOverdueTaskCandidates(env.DB, Date.parse("2027-05-02T00:00:01-04:00"));
+  expect(overdue).toHaveLength(1);
+  expect(overdue[0]?.data["task.due_date"]).toBe("May 1, 2027");
+});
+
+test("CONTRACT · MRQ-201 · mail merge clocks name the conference zone while calendar due dates stay date-only", () => {
+  const data = mergeDataForRecipient({
+    name: "Ada Lovelace",
+    email: "speaker@example.com",
+    submissionTitle: "Reliable email",
+    timezone: "America/New_York",
+    startsAt: Date.parse("2027-05-01T03:59:00.000Z"),
+    leaveBy: Date.parse("2027-05-01T02:30:00.000Z"),
+    taskDueAt: dueAtFromDateInput("2027-05-01"),
+  });
+  expect(data["session.time"]).toBe("Apr 30, 2027, 11:59 PM EDT");
+  expect(data["session.leaveBy"]).toBe("10:30 PM EDT");
+  expect(data["task.due_date"]).toBe("May 1, 2027");
+  expect(String(data["session.time"])).not.toMatch(/T\d{2}:\d{2}/);
 });
 
 test("AC-127 · the cron handoff queues only rows created by its scan", async () => {

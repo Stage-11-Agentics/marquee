@@ -1,14 +1,15 @@
 /**
  * Task due dates are *days*, not instants.
  *
- * An organizer types "2027-05-01" and expects to read "2027-05-01" back, from
- * any desk in any timezone. Parsing that string to local midnight breaks the
- * promise west of Greenwich — `new Date("2027-05-01")` is UTC midnight, which
- * renders as Apr 30 in New York — so both ends of the round trip pin to UTC.
+ * An organizer types "2027-05-01" and expects to read "2027-05-01" back from
+ * any desk. Because the field has no clock, the day is encoded at UTC rather
+ * than interpreted through the reader's zone; every reader therefore sees the
+ * same calendar day.
  *
- * The instant stored is the *end* of the named day (23:59:59.999 UTC), because
- * "due 2027-05-01" means the speaker has that whole day, not that they were
- * already late when it began.
+ * The instant stored is the *end* of the named UTC-encoded day
+ * (23:59:59.999 UTC), because "due 2027-05-01" means the speaker has that
+ * whole calendar day, not that they were already late when it began. Runtime
+ * enforcement interprets that day in the conference timezone.
  */
 
 const MS_PER_DAY = 86_400_000;
