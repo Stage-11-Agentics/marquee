@@ -90,3 +90,20 @@ test("CONTRACT · act() keeps its own policy for writes that carry no typed work
   assert.match(act, /if \(isRefusal\(error\)\) setActionError/);
   assert.match(act, /else setState\(\{ kind: "error"/);
 });
+
+test("CONTRACT · every reload path defers to the operator's unsaved text", async () => {
+  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
+
+  // The load handler is the single place both fields are reseeded, and it must
+  // go through the rule rather than assigning the server value outright — every
+  // reload() call site on this page funnels through here.
+  assert.match(page, /setDraftTitle\(\(current\) => adoptServerValue\(current, serverContent\.current\.title, record\.title\)\)/);
+  assert.match(page, /setDraftAbstract\(\(current\) => adoptServerValue\(current, serverContent\.current\.abstract, record\.abstract \?\? ""\)\)/);
+  // And the baseline must advance, or the second reload would compare against
+  // a stale value and start overwriting again.
+  assert.match(page, /serverContent\.current = \{ title: record\.title, abstract: record\.abstract \?\? "" \}/);
+
+  // No path may still seed the fields unconditionally.
+  assert.doesNotMatch(page, /setDraftTitle\(record\.title\)/);
+  assert.doesNotMatch(page, /setDraftAbstract\(record\.abstract \?\? ""\)/);
+});

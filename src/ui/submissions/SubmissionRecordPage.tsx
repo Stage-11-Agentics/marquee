@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 
 import { formatFileSize, type FileAnswerView } from "../../lib/file-answers";
 import { eventTimeLabel, localDateTimeToInstant } from "../../lib/event-time";
@@ -125,6 +125,26 @@ interface RecordData {
 interface Props { eventId: string; submissionId: string; navigate: (target: string) => void; }
 
 type LoadState = { kind: "loading" } | { kind: "error"; message: string; notFound: boolean } | { kind: "ready"; record: RecordData };
+
+/**
+ * Which value an editable field should hold after the record reloads.
+ *
+ * `reload()` runs after every successful write on this page — assigning a
+ * reviewer, publishing, deciding, resending, overriding a score, editing
+ * participants — and it reseeded the content editor from the server every time.
+ * An organizer part-way through a long abstract lost it to any of those, with
+ * no failure and no message: the eval only caught the failed-save route, but
+ * there were eight.
+ *
+ * The test is whether the field still holds what the server last gave us. If it
+ * does, nobody has typed and the fresher server value is the right one. If it
+ * does not, the difference is the operator's work and it stays — including work
+ * typed while a save was in flight, which arrives back as "edited" and is kept
+ * rather than being replaced by the value that was saved a moment earlier.
+ */
+export function adoptServerValue(current: string, lastServer: string, incoming: string): string {
+  return current === lastServer ? incoming : current;
+}
 
 /** A real 404 and a dropped connection call for different headlines — the
  * organizer's retry saw both as "not available" and repeated a request that
@@ -399,6 +419,8 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [draftTitle, setDraftTitle] = useState("");
   const [draftAbstract, setDraftAbstract] = useState("");
   const [contentError, setContentError] = useState("");
+  /** What the server last handed these two fields, so an edit can be told from an untouched field. */
+  const serverContent = useRef({ title: "", abstract: "" });
   const [contentConfirming, setContentConfirming] = useState(false);
   const [selectedReviewers, setSelectedReviewers] = useState<Record<string, string>>({});
   const [schedule, setSchedule] = useState({ starts_at: "", duration_min: "30", room_id: "", track_id: "" });
@@ -433,7 +455,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     const controller = new AbortController();
     setState({ kind: "loading" });
     apiFetch<RecordData>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}`, { signal: controller.signal, route: SUBMISSION_ROUTE })
-      .then((record) => { setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setDraftTitle(record.title); setDraftAbstract(record.abstract ?? ""); setMessageRecipientId((current) => current || record.participants.find((participant) => participant.role !== "submitter")?.id || record.participants[0]?.id || ""); setMessageSubject((current) => current || `A note about ${record.title}`); setMessageBody((current) => current || "Hi {{speaker.first_name}},\n\n"); setState({ kind: "ready", record }); })
+      .then((record) => { setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setDraftTitle((current) => adoptServerValue(current, serverContent.current.title, record.title)); setDraftAbstract((current) => adoptServerValue(current, serverContent.current.abstract, record.abstract ?? "")); serverContent.current = { title: record.title, abstract: record.abstract ?? "" }; setMessageRecipientId((current) => current || record.participants.find((participant) => participant.role !== "submitter")?.id || record.participants[0]?.id || ""); setMessageSubject((current) => current || `A note about ${record.title}`); setMessageBody((current) => current || "Hi {{speaker.first_name}},\n\n"); setState({ kind: "ready", record }); })
       .catch((error: unknown) => { if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) }); });
     return () => controller.abort();
   }, [eventId, submissionId, reloadKey]);
