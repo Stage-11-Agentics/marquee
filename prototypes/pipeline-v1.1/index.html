@@ -1909,11 +1909,12 @@
             <a class="brand" href="#dashboard"><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
             <div class="nav-label">Organization</div>
             <nav class="nav" aria-label="Organization">
-              <a href="../crm/index.html?v=13"><span class="nav-icon"></span><span>People</span></a>
-              <a href="../crm/index.html?v=13"><span class="nav-icon"></span><span>Sourcing</span></a>
+              <a href="../crm/index.html?v=14"><span class="nav-icon"></span><span>People CRM</span></a>
+              <a href="../crm/index.html?v=14"><span class="nav-icon"></span><span>Outreach</span></a>
             </nav>
-            <div class="event-switcher-row" style="margin-top:12px">
-              <a class="event-switcher" href="#settings"><small>Conference${state.setup.active && state.demoPeek ? " · demo" : ""}</small><strong>${esc(state.event.name || "No conference yet")}</strong></a>
+            <div class="nav-label">Conference</div>
+            <div class="event-switcher-row">
+              <a class="event-switcher" href="#settings"><strong>${esc(state.event.name || "No conference yet")}${state.setup.active && state.demoPeek ? " · demo" : ""}</strong></a>
               <a class="event-add" href="#conferences/new" id="event-add" title="Create conference" aria-label="Create conference">＋</a>
             </div>
             ${switcherAltRow()}
