@@ -4,6 +4,8 @@ import type { Context } from "hono";
 import { ApiError } from "../api/errors";
 import { newUlid } from "../api/ids";
 import { BOARD_STAGE_LABELS, BOARD_STAGE_SQL, type BoardSlot } from "../api/board";
+import { LIST_DEFAULTS } from "../api/list";
+import { parsePagination, totalPages } from "../api/pagination";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
@@ -25,12 +27,26 @@ import { projectApplicableAnswers, type FormAnswerValue } from "../lib/form-cond
 import { errorFields } from "../lib/observability/log";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 import { auditStatement, auditStatementFromSelect, writeAudit } from "../lib/audit";
-import { contentOf, isContentAction, isRestorable, recordHistoryFor } from "../lib/history";
+import { contentOf, isContentAction, recordTimelinePage } from "../lib/history";
 import { purgePublicEmbedCache } from "../lib/public-site";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const submissionParams = eventParams.extend({ submissionId: z.string().min(1) });
 const recordResponse = jsonResponse(z.unknown(), "Submission record");
+
+/**
+ * How much of the timeline the record opens with. A talk that has been edited,
+ * re-decided and re-mailed for six months has a long one, and the answer an
+ * organizer opens the record for — what happened most recently — is on page one.
+ */
+const RECORD_TIMELINE_PAGE_SIZE = 40;
+
+const timelineQuery = z.object({
+  page: z.coerce.number().int().min(1).optional().catch(undefined)
+    .openapi({ type: "integer", minimum: 1 }),
+  per_page: z.coerce.number().int().min(1).max(LIST_DEFAULTS.maxPerPage).optional().catch(undefined)
+    .openapi({ type: "integer", minimum: 1, maximum: LIST_DEFAULTS.maxPerPage }),
+});
 const errors = errorResponses([400, 401, 403, 404, 409, 422, 429, 500]);
 
 const personInput = z.object({
@@ -642,7 +658,11 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
     // against `people`. Without that join the card had nothing but
     // `actor_kind` to render, and printed the literal string "user" where a
     // name belongs.
-    recordHistoryFor(db, eventId, submissionId),
+    // Lens three of MRQ-211: the same audit rows, read into sentences and paged.
+    // The record opens with the most recent page; "Load more" walks the rest
+    // through `GET …/timeline`, so a six-month-old session with hundreds of
+    // rows costs the same first paint as a fresh one.
+    recordTimelinePage(db, eventId, submissionId, parsePagination({ per_page: RECORD_TIMELINE_PAGE_SIZE })),
     db.prepare(`
       SELECT round.id, round.name, round.position, round.mode, round.target_reviews_per_submission,
         plan.id AS plan_id, plan.name AS plan_name, plan.status AS plan_status,
@@ -841,12 +861,12 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
         track_ids: jsonValue(reviewer.track_ids as string, []),
       })),
     },
-    history: history.map((entry) => ({
+    history: history.entries.map((entry) => ({
       ...entry,
-      restorable: isRestorable(entry),
       // Kept for the existing wire shape; `after` carries the parsed value.
       after_json: entry.after,
     })),
+    history_total: history.total,
     actions: {
       // `declined` covers waitlisted, rejected, and withdrawn. All three stay
       // decidable: Maybe is a holding state the organizer resolves later, and
@@ -1122,6 +1142,55 @@ const getSubmissionRecord = defineApiRoute(
     if (submission.status === "draft") await requireDraftRead(context, eventId);
     else await requireSubmissionRead(context, eventId);
     return context.json(await loadRecord(context.env.DB, eventId, submissionId, canWriteProgram(context, eventId)), 200);
+  },
+);
+
+/**
+ * Lens three of MRQ-211, paginated: this record's timeline.
+ *
+ * Submitted, routed, reviewed, decided, reversed, re-accepted, mailed — each
+ * with its author and its moment. It reads the same `audit_log` rows the record
+ * opens with, so the page and this endpoint can never tell different stories
+ * about the same session.
+ */
+const getSubmissionTimeline = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/submissions/{submissionId}/timeline",
+    operationId: "getSubmissionTimeline",
+    summary: "Read one submission's timeline",
+    description:
+      "Every audited moment on this record, newest first, each read into a sentence with its author and timestamp. This is the answer to \"why is this talk in this state\".",
+    tags: ["Submissions"],
+    request: { params: submissionParams, query: timelineQuery },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: jsonResponse(z.unknown(), "Submission timeline"), ...errors },
+  },
+  async (context) => {
+    const { eventId, submissionId } = context.req.valid("param");
+    await eventFor(context.env.DB, eventId);
+    const submission = await context.env.DB
+      .prepare("SELECT status FROM submissions WHERE id = ? AND event_id = ?")
+      .bind(submissionId, eventId)
+      .first<{ status: string }>();
+    if (!submission) throw ApiError.notFound("submission not found");
+    // The same two-policy gate the record read applies: a draft is readable by
+    // the form's admins, everything past it needs program read.
+    if (submission.status === "draft") await requireDraftRead(context, eventId);
+    else await requireSubmissionRead(context, eventId);
+    const query = context.req.valid("query");
+    const page = parsePagination({ ...query, per_page: query.per_page ?? RECORD_TIMELINE_PAGE_SIZE });
+    const timeline = await recordTimelinePage(context.env.DB, eventId, submissionId, page);
+    return context.json(
+      {
+        data: timeline.entries,
+        page: page.page,
+        per_page: page.perPage,
+        total: timeline.total,
+        total_pages: totalPages(timeline.total, page.perPage),
+      },
+      200,
+    );
   },
 );
 
@@ -1453,7 +1522,6 @@ async function setPublication(
     now,
     requestId: actor.requestId,
   }, `
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     FROM agenda_items item
     JOIN submissions submission
       ON submission.id = item.submission_id AND submission.event_id = item.event_id
@@ -1627,4 +1695,4 @@ const removeParticipant = defineApiRoute(
   },
 );
 
-export const apiRoutes = [createSubmission, getSubmissionRecord, patchDraft, updateSubmissionContent, restoreSubmissionContent, scheduleSubmission, publishSubmission, unpublishSubmission, addParticipant, removeParticipant];
+export const apiRoutes = [createSubmission, getSubmissionRecord, getSubmissionTimeline, patchDraft, updateSubmissionContent, restoreSubmissionContent, scheduleSubmission, publishSubmission, unpublishSubmission, addParticipant, removeParticipant];

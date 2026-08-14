@@ -10,6 +10,8 @@ import type { ApiTokenRow, ApiTokenScopes } from "../db/schema";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
 import { roleRank, type SessionAuth } from "../lib/auth/scope-resolution";
+import { ORG_ACTIVITY_ACTIONS } from "../lib/activity-copy";
+import { orgActor, recordOrgActivity } from "../lib/org-activity";
 
 const tokenParams = z.object({ tokenId: z.string().min(1) });
 const tokenScopes = z.object({
@@ -189,6 +191,21 @@ const createApiToken = defineApiRoute(
 
     const row = await context.env.DB.prepare("SELECT * FROM api_tokens WHERE id = ?").bind(id).first<ApiTokenRow>();
     if (!row) throw new Error("created_api_token_disappeared");
+    // The name and the grants, never the secret or its hash: a credential in an
+    // append-only log is a credential that cannot be un-leaked. `eventId` is the
+    // scope, so the lens can name the conference by join rather than by a copy
+    // of its name that a rename would falsify.
+    await recordOrgActivity(context.env.DB, {
+      orgId: auth.orgId,
+      eventId,
+      ...orgActor(auth),
+      action: ORG_ACTIVITY_ACTIONS.tokenCreated,
+      entityType: "api_token",
+      entityId: id,
+      after: { name: body.name, permissions },
+      now,
+      requestId: context.get("requestId") ?? null,
+    });
     return context.json({ data: summarizeToken(row), secret }, 201);
   },
 );
@@ -219,6 +236,17 @@ const revokeApiToken = defineApiRoute(
     ).bind(now, now, tokenId, auth.orgId).run();
     const revoked = await context.env.DB.prepare("SELECT * FROM api_tokens WHERE id = ?").bind(tokenId).first<ApiTokenRow>();
     if (!revoked) throw new Error("revoked_api_token_disappeared");
+    await recordOrgActivity(context.env.DB, {
+      orgId: auth.orgId,
+      eventId: row.event_id,
+      ...orgActor(auth),
+      action: ORG_ACTIVITY_ACTIONS.tokenRevoked,
+      entityType: "api_token",
+      entityId: tokenId,
+      before: { name: row.name },
+      now,
+      requestId: context.get("requestId") ?? null,
+    });
     return context.json({ data: summarizeToken(revoked) }, 200);
   },
 );

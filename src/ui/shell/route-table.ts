@@ -147,6 +147,13 @@ export const routeTable: readonly RouteDefinition[] = [
   // settings path working for anything that already links to it.
   { id: "task-templates", path: "/settings/tasks", label: "Task templates", icon: "", group: "utility" },
   { id: "api-tokens", path: "/settings/api", label: "API tokens", icon: "", group: "utility" },
+  // Organization-level, like People and the sourcing pipeline: the log survives
+  // every conference in it, and an instance with no conference at all still has
+  // invites and tokens to account for. No sidebar row — the steady-state home is
+  // the Activity tab of Organization settings (MRQ-207), which mounts the same
+  // page; this route is how it is reachable before that shell lands, and stays
+  // valid after.
+  { id: "org-activity", path: "/org/activity", label: "Activity", icon: "", group: "utility" },
   { id: "webhooks", path: "/settings/webhooks", label: "Webhooks", icon: "", group: "utility" },
   { id: "api-docs", path: "/api/docs", label: "API & CLI", icon: "⌘", group: "utility" },
   { id: "import", path: "/import", label: "Import speakers", icon: "", group: "utility" },

@@ -725,7 +725,18 @@ export interface AuditLogRow extends ImmutableRecord {
   before_json: JsonText | null;
   entity_id: Id;
   entity_type: string;
-  event_id: Id;
+  /**
+   * Null for an action that belongs to the organization rather than to any one
+   * conference — an invite, a token, an organizer removed. A CHECK requires at
+   * least one of `event_id` and `org_id`, so a row is never scoped to nothing.
+   */
+  event_id: Id | null;
+  /**
+   * Set by every organization-level writer (`src/lib/org-activity.ts`), and by
+   * an event-scoped one whose action is still an org-admin fact. It is what the
+   * org admin lens reads, which is why the lens needs no list of action names.
+   */
+  org_id: Id | null;
   /**
    * The request this change came from, joining the domain audit trail to the
    * operational log. Null means there was no originating request — a cron

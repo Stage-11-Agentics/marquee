@@ -12,6 +12,7 @@
  * restore is a forward edit that adds a row (see `content/restore` in
  * `submission-record.routes.ts`), never an update or a delete of an old one.
  */
+import { describeActivity, type ActivityLine } from "./activity-copy";
 
 /**
  * The actions that describe a content change and can therefore be restored.
@@ -129,6 +130,53 @@ export async function recordHistoryFor(
     .bind(eventId, entityId)
     .all<HistoryRow>();
   return rows.results.map(project);
+}
+
+/** A history row that has been read into a sentence — MRQ-211's third lens. */
+export interface TimelineEntry extends HistoryEntry, ActivityLine {
+  restorable: boolean;
+}
+
+/**
+ * Lens three: the submission's timeline — "why is this talk in this state".
+ *
+ * Submitted, routed, reviewed, decided, reversed, re-accepted, mailed: every one
+ * of those already writes an `audit_log` row, so this is the same rows
+ * `recordHistoryFor` returns, read in the organizer's language and one page at
+ * a time. Nothing is synthesised and nothing is stored twice; a moment missing
+ * from the timeline is a writer that does not record, and is fixed at the
+ * writer.
+ *
+ * Paged in SQL for the record most worth reading late in a conference — the one
+ * that has been edited, re-decided, and re-mailed for six months (R7).
+ */
+export async function recordTimelinePage(
+  db: D1Database,
+  eventId: string,
+  entityId: string,
+  page: { limit: number; offset: number },
+): Promise<{ entries: TimelineEntry[]; total: number }> {
+  const [count, rows] = await Promise.all([
+    db
+      .prepare("SELECT COUNT(*) AS total FROM audit_log WHERE event_id = ? AND entity_id = ?")
+      .bind(eventId, entityId)
+      .first<{ total: number }>(),
+    db
+      .prepare(`${SELECT} WHERE audit.event_id = ? AND audit.entity_id = ? ${ORDER} LIMIT ? OFFSET ?`)
+      .bind(eventId, entityId, page.limit, page.offset)
+      .all<HistoryRow>(),
+  ]);
+  return {
+    entries: rows.results.map((row) => {
+      const entry = project(row);
+      return {
+        ...entry,
+        ...describeActivity({ action: entry.action, before: entry.before, after: entry.after }),
+        restorable: isRestorable(entry),
+      };
+    }),
+    total: Number(count?.total ?? 0),
+  };
 }
 
 export function isContentAction(action: string): action is ContentAction {
