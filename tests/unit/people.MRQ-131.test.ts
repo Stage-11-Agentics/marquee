@@ -17,7 +17,7 @@ import {
 import { mapPersonHeaders, planPersonImport } from "../../src/lib/people-import";
 import { buildPeopleQuery, parseTags } from "../../src/routes/people.queries";
 import { activeCriteria, EMPTY_FILTERS, hasFilters, saveControl } from "../../src/ui/people/people-api";
-import { matchRoute, routesFor } from "../../src/ui/shell/route-table";
+import { activeNavId, matchRoute, routesFor } from "../../src/ui/shell/route-table";
 import { PIPELINE_STAGES as CLIENT_STAGES } from "../../src/ui/people/pipeline-stages";
 import { peopleImportBrief } from "../../src/ui/people/people-brief";
 
@@ -222,8 +222,10 @@ test("CONTRACT · MRQ-131 · Lists is reached from People, not from a sidebar ro
   expectEqual(lists?.id, "lists");
   expectEqual(lists?.sidebar, undefined);
   // And on /lists the nav names where you are rather than highlighting nothing.
-  const shell = readFileSync(new URL("../../src/ui/shell/AppShell.tsx", import.meta.url), "utf8");
-  expect(shell).toMatch(/route\?\.id === "lists" \? "people"/);
+  expectEqual(activeNavId("lists"), "people");
+  expectEqual(activeNavId("people"), "people");
+  expectEqual(activeNavId("sourcing"), "sourcing");
+  expectEqual(activeNavId(undefined), undefined);
 });
 
 test("CONTRACT · MRQ-131 · a radio in a field is never sized like a text entry", () => {

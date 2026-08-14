@@ -254,6 +254,21 @@ test("CONTRACT · MRQ-131 · CRM-09 · both kinds of List save and reopen with t
   expect((await people()).total).toBe(3);
 });
 
+test("CONTRACT · MRQ-131 · CRM-09 · the Lists index returns every list, which People depends on", async () => {
+  // People names the list you are inside by finding it in this index, and
+  // treats absent-from-the-index as "this list no longer exists". That is only
+  // true while the index is complete. The day someone pages or caps this
+  // endpoint, every list past the first page renders as deleted — the exact
+  // false statement the band exists to prevent. This test is the tripwire on
+  // that coupling, so it fails here rather than in front of an organizer.
+  const names = Array.from({ length: 12 }, (_, index) => `List ${String(index).padStart(2, "0")}`);
+  for (const name of names) {
+    expect((await post("/api/v1/org/lists", { name, kind: "live", config: { q: name } })).status).toBe(201);
+  }
+  const index = await json<{ data: Array<{ name: string }> }>("/api/v1/org/lists");
+  expect(index.data.map((entry) => entry.name).sort()).toEqual([...names].sort());
+});
+
 test("CONTRACT · MRQ-131 · CRM-09 · opening a List from People resolves BOTH kinds, not just Fixed", async () => {
   // The untested arm. `openList` resolved a Live list through its saved filter,
   // but `GET /org/people?list_id=` only ever looked in `person_list_members` —
@@ -283,9 +298,42 @@ test("CONTRACT · MRQ-131 · CRM-09 · opening a List from People resolves BOTH 
   const narrowed = `?list_id=${liveId}&company=${encodeURIComponent("Latticework Systems")}`;
   expect((await people(narrowed)).data.map((row) => row.name)).toEqual(["Priya Raman"]);
 
+  // And a chip naming a field the SAVED FILTER ALSO names must still narrow.
+  // This is the arm that broke: a Live list merged in as filters gave one value
+  // per key, so the caller's value REPLACED the list's own predicate and
+  // returned people who are not in the list — under a band still naming it.
+  // `q` is the dangerous one: the search box sits directly above the band.
+  const shortlist = await post("/api/v1/org/lists", { name: "Priya only", kind: "live", config: { q: "priya" } });
+  const shortlistId = ((await shortlist.json()) as { list: { id: string } }).list.id;
+  expect((await people(`?list_id=${shortlistId}`)).data.map((row) => row.name)).toEqual(["Priya Raman"]);
+  // Marcus is NOT in that list. Searching his name inside it must find nobody,
+  // not leave the list behind and find him in the whole organization.
+  expect((await people(`?list_id=${shortlistId}&q=marcus`)).data.map((row) => row.name)).toEqual([]);
+  // Same for a tag the list does not carry.
+  expect((await people(`?list_id=${shortlistId}&tag=Keynote`)).data.map((row) => row.name)).toEqual(["Priya Raman"]);
+  // The identical gesture against a Fixed list always narrowed correctly; both
+  // kinds now answer it the same way, which is what an organizer assumes.
+  expect((await people(`?list_id=${fixedId}&q=marcus`)).data.map((row) => row.name)).toEqual(["Marcus Okafor"]);
+  expect((await people(`?list_id=${fixedId}&q=nobody`)).data.map((row) => row.name)).toEqual([]);
+
   // An id this organization does not own matches nobody. Dropping the clause
   // instead would answer a borrowed id with the entire organization.
   expect((await people("?list_id=lst_not_ours")).total).toBe(0);
+
+  // And emptiness has to be a property of the QUERY, not of an invariant kept
+  // in the create route. Here is a list owned by another organization holding a
+  // membership row that names one of OUR people — the exact row a bulk import
+  // or a merge tool could write without thinking about orgs. The membership
+  // clause joins `person_lists` and checks its owner, so the borrowed id still
+  // matches nobody. (Cross-org people were never reachable — `person.org_id`
+  // binds separately — but this is the half that was resting on another file.)
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO person_lists (id, org_id, name, kind, config_json, created_by, created_at, updated_at)
+      VALUES ('lst_alien', ?, 'Theirs', 'fixed', '{"q":""}', NULL, ?, ?)`).bind(OTHER_ORG_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO person_list_members (list_id, person_id, created_at) VALUES ('lst_alien', ?, ?)")
+      .bind(SPEAKER, NOW),
+  ]);
+  expect((await people("?list_id=lst_alien")).total).toBe(0);
 });
 
 test("CONTRACT · MRQ-131 · CRM-11 · a bulk send from People is logged per recipient in the outbox", async () => {

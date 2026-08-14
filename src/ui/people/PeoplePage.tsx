@@ -172,7 +172,7 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
     setPage(1);
     setFilters((current) => ({ ...current, [key]: current[key] === value ? "" : value }));
   };
-  const clearAll = () => { setPage(1); setFilters({ ...EMPTY_FILTERS }); navigate?.("/people"); };
+  const clearAll = () => { setPage(1); setFilters({ ...EMPTY_FILTERS }); navigate?.(peopleUrl("")); };
   // Leaves the list and NOTHING else — it is not "show everyone", because a
   // company or tag chip set alongside the list stays set, and a button whose
   // label overpromises is worse than one that says what it does. It clears the

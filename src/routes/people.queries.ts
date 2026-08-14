@@ -65,30 +65,37 @@ export function configFilters(config: PersonListConfig) {
 }
 
 /**
- * Turn `list_id` into filters, which is not the same thing for both kinds.
+ * Turn `list_id` into a scope, which is not the same thing for both kinds.
  *
  * A **Fixed** list is its membership rows. A **Live** list has none — it is a
  * saved filter, and its members are whoever matches that filter right now — so
  * resolving it through `person_list_members` matches nobody. That is why
- * opening a Live list showed an empty table under a band that named a real
- * count: two different definitions of the same list, one per screen.
+ * opening a Live list showed an empty table under a band naming a real count.
  *
- * A list this organization does not own resolves to the membership clause on
- * purpose. It matches nobody, which is the safe direction to fail: dropping the
- * clause instead would answer a bad or borrowed id with the entire org.
+ * Both kinds come back as an id restriction rather than as filters, and that is
+ * load-bearing rather than tidy. `buildPeopleQuery` holds one value per key, so
+ * a Live list merged in as filters would be *overwritten* by a caller's chip
+ * naming the same field — searching "raman" inside a 12-person shortlist would
+ * quietly show every Raman in the organization, under a band still reading
+ * "Keynote shortlist · 12 people". As an intersection it cannot: the caller's
+ * filters AND with the list instead of competing with it.
+ *
+ * An unknown or borrowed id keeps the membership clause, which is empty for a
+ * list this org does not own — the safe direction. Dropping the clause instead
+ * would answer a typo'd id with the entire organization.
  */
 export async function resolveListScope(
   db: D1Database,
   orgId: string,
   listId: string,
-): Promise<{ found: boolean; filters: Partial<PeopleQueryInput> }> {
+): Promise<Partial<PeopleQueryInput>> {
   const row = await db
     .prepare("SELECT kind, config_json FROM person_lists WHERE id = ? AND org_id = ?")
     .bind(listId, orgId)
     .first<{ kind: string; config_json: string }>();
-  if (!row) return { found: false, filters: { listId } };
-  if (row.kind !== "live") return { found: true, filters: { listId } };
-  return { found: true, filters: configFilters(parseListConfig(row.config_json)) };
+  if (!row || row.kind !== "live") return { listId };
+  const saved = buildPeopleQuery({ orgId, ...configFilters(parseListConfig(row.config_json)) });
+  return { personIdIn: { sql: saved.idsSql, bindings: saved.idsBindings } };
 }
 
 export const PEOPLE_SORTS: SortRegistry = {
@@ -115,6 +122,12 @@ export interface PeopleFilters {
   eventId?: string;
   /** Read exactly one person through the same projection the list uses. */
   personId?: string;
+  /**
+   * An id projection this query intersects with — how a Live list is applied.
+   * Built by `resolveListScope`, never by a request, and always AND-ed, so a
+   * caller's own filters can only narrow what it selects.
+   */
+  personIdIn?: { sql: string; bindings: (string | number)[] };
 }
 
 export interface PeopleQueryInput extends PeopleFilters {
@@ -252,8 +265,24 @@ function filterClauses(input: PeopleQueryInput): Clauses {
     bindings.push(input.stage);
   }
   if (input.listId) {
-    where.push("person.id IN (SELECT person_id FROM person_list_members WHERE list_id = ?)");
-    bindings.push(input.listId);
+    // Joined to `person_lists` so the clause is empty for a list this org does
+    // not own, rather than trusting every future writer of
+    // `person_list_members` to have filtered by org first. The emptiness has to
+    // be a property of the query, not of an invariant kept in another file.
+    where.push(`person.id IN (
+      SELECT member.person_id FROM person_list_members member
+      JOIN person_lists saved ON saved.id = member.list_id
+      WHERE member.list_id = ? AND saved.org_id = ?)`);
+    bindings.push(input.listId, input.orgId ?? "");
+  }
+  if (input.personIdIn) {
+    // A Live list, already compiled to an id projection by `resolveListScope`.
+    // It cannot be merged in as filters: `buildPeopleQuery` holds one value per
+    // key, so a caller's chip naming a field the saved filter also names would
+    // REPLACE the list's predicate instead of intersecting with it — widening
+    // the view to people outside the list, under a band still naming the list.
+    where.push(`person.id IN (${input.personIdIn.sql})`);
+    bindings.push(...input.personIdIn.bindings);
   }
   if (input.personId) {
     where.push("person.id = ?");
@@ -267,6 +296,9 @@ export interface BuiltQuery {
   countBindings: (string | number)[];
   dataSql: string;
   dataBindings: (string | number)[];
+  /** The same population as an id-only subquery, for callers that intersect. */
+  idsSql: string;
+  idsBindings: (string | number)[];
 }
 
 /**
@@ -303,6 +335,12 @@ export function buildPeopleQuery(input: PeopleQueryInput): BuiltQuery {
     countBindings: [...bindings],
     dataSql: `SELECT ${columns} FROM people person${joins} ${whereSql} ORDER BY ${order}${limit}`,
     dataBindings: [...joinBindings, ...bindings, ...pageBindings],
+    // The same population as `countSql`, projected to ids so another query can
+    // intersect with it. No joins, no order, no limit: it is only ever a
+    // subquery, and it is the one shape that lets a saved filter compose with a
+    // caller's filters instead of competing with them for a key.
+    idsSql: `SELECT person.id FROM people person ${whereSql}`,
+    idsBindings: [...bindings],
   };
 }
 

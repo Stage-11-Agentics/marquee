@@ -220,17 +220,16 @@ const listPeople = defineApiRoute(
     const access = requireOrgAccess(context);
     const query = context.req.valid("query");
     const page = parsePagination({ page: query.page, per_page: query.per_page });
-    // A Live list is a saved filter, not a membership: it has to be expanded
-    // into filters before the query is built, or it matches nobody. The scope
-    // goes in FIRST so the caller's own chips narrow further and win outright
-    // where they name a field the saved filter also names — the chip is the
-    // thing the organizer just clicked.
+    // A Live list is a saved filter, not a membership, so it has to be resolved
+    // before the query is built or it matches nobody. It arrives as an id
+    // restriction rather than as filters precisely so the caller's own chips
+    // AND with it — see `resolveListScope`, where merging them was the bug.
     const listScope = query.list_id
       ? await resolveListScope(context.env.DB, access.orgId, query.list_id)
-      : null;
+      : {};
     const built = buildPeopleQuery({
       orgId: access.orgId,
-      ...(listScope ? listScope.filters : {}),
+      ...listScope,
       ...(query.q ? { q: query.q } : {}),
       ...(query.company ? { company: query.company } : {}),
       ...(query.title ? { title: query.title } : {}),

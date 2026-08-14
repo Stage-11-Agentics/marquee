@@ -119,3 +119,15 @@ export function matchRoute(pathname: string, search = ""): RouteDefinition | und
 export function routesFor(group: RouteGroup): readonly RouteDefinition[] {
   return routeTable.filter((route) => route.group === group && route.sidebar);
 }
+
+/**
+ * Which sidebar row a route lights up. Usually its own — but a route with no
+ * row of its own has to name the row it belongs under, or the organizer stands
+ * somewhere the nav refuses to acknowledge. `/lists` is a lens on People.
+ */
+const SIDEBAR_HOME: Readonly<Record<string, string>> = { lists: "people" };
+
+export function activeNavId(routeId: string | undefined): string | undefined {
+  if (!routeId) return undefined;
+  return SIDEBAR_HOME[routeId] ?? routeId;
+}
