@@ -133,6 +133,13 @@ test("AC-273 · the sessions embed is a flat title/track/time card list with pub
   expect(await readPublicEmbedCache(cache, key)).not.toBeNull();
   expect(await purgePublicEmbedCache(cache, { eventId: EVENT_ID })).toBe(1);
   expect(await readPublicEmbedCache(cache, key)).toBeNull();
+
+  const legacyKey = publicEmbedCacheKey(EVENT_ID, `${EVENT_SLUG}-sessions`, { fields: null });
+  const legacy = { ...first, config: { ...first.config, fields: undefined as never } };
+  cache.values.set(legacyKey, JSON.stringify(legacy));
+  expect((await readPublicEmbedCache(cache, legacyKey))?.config.fields).toEqual([
+    "time", "title", "abstract", "speakers", "location", "format", "track",
+  ]);
 });
 
 test("AC-274 · the speakers embed offers cards and list layouts carried in the snippet URL, both responsive", async () => {
