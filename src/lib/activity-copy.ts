@@ -55,21 +55,41 @@ const SUMMARIES: Readonly<Record<string, string>> = {
   // predate this file; naming them here is what turns a timeline of
   // `submission.acceptance_reversed` into a timeline someone can read.
   created: "Record created",
+  "submission.received": "Submitted",
+  "submission.routed": "Routed by rule",
+  "submission.reviewed": "Reviewed",
+  "submission.conflict_declared": "Conflict declared",
   content_updated: "Content edited",
   content_restored: "Earlier version restored",
   speaker_talk_updated: "Speaker edited their talk",
   speaker_updated: "Speaker profile edited",
-  accept: "Accepted",
-  reject: "Declined",
-  waitlist: "Moved to Maybe",
   scheduled: "Scheduled",
-  published: "Published",
+  published: "Published to the public agenda",
+  unpublished: "Removed from the public agenda",
   participant_added: "Speaker added",
   participant_removed: "Speaker removed",
+  // The decision writer records the DECISION, not the organizer's verb:
+  // `approve`/`maybe`/`deny`. Reading those three back as the words the
+  // pipeline uses on screen is most of what makes a timeline legible.
+  "submission.approve": "Accepted",
+  "submission.maybe": "Moved to Maybe",
+  "submission.deny": "Declined",
+  "bulk.accept": "Accepted in a bulk action",
+  "bulk.waitlist": "Moved to Maybe in a bulk action",
+  "bulk.reject": "Declined in a bulk action",
+  "bulk.withdraw": "Withdrawn in a bulk action",
   "submission.acceptance_reversed": "Acceptance reversed",
   "submission.decision_resent": "Decision email resent",
   "submission.message_sent": "Message sent",
   "submission.tasks_reconciled": "Speaker tasks updated",
+  "submission.tasks_cancelled": "Speaker tasks cancelled",
+  "submission.tasks_retained": "Speaker tasks kept",
+  "submission.emails_cancelled": "Queued email cancelled",
+  "submission.emails_retained": "Queued email kept",
+  "submission.calendar_cancelled": "Calendar invitation cancelled",
+  "submission.calendar_retained": "Calendar invitation kept",
+  "participation.confirmed": "Speaker confirmed",
+  "participation.declined": "Speaker declined",
   reviewer_invited: "Reviewer invited",
   reviewer_added_to_committee: "Reviewer added to committee",
   reviewer_removed_from_committee: "Reviewer removed from committee",
@@ -183,6 +203,10 @@ export function describeActivity(entry: {
     case "content_restored":
     case "speaker_talk_updated":
       return { summary, detail: payloadField(after, "title") };
+    case "submission.received":
+      return { summary, detail: payloadField(after, "title") };
+    case "submission.routed":
+      return { summary, detail: payloadField(after, "rule_name") };
     case "submission.message_sent":
     case "submission.decision_resent":
       return { summary, detail: payloadField(after, "subject") ?? payloadField(after, "template_key") };

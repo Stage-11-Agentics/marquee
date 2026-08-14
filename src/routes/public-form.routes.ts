@@ -814,6 +814,42 @@ async function handlePublicSubmission(
       now, now, JSON.stringify(projected.projected.answers), routing.ruleId, now, now,
     ).run();
   }
+  // The first two moments of MRQ-211's submission timeline. Everything that
+  // happens to a record afterwards — decided, reversed, mailed — already writes
+  // an audit row; arrival and routing did not, so the one question the timeline
+  // exists to answer ("why is this talk in this state") started mid-sentence.
+  // Two rows rather than one: an organizer asking why a talk landed with this
+  // committee is asking about the routing, not about the submission.
+  const intakeRows = [
+    auditStatement(context.env.DB, {
+      eventId: base.form.event_id,
+      actorKind: "user",
+      actorPersonId: person.id,
+      action: "submission.received",
+      entityType: "submission",
+      entityId: submissionId,
+      after: { title, kind: base.form.kind, form_id: base.form.id },
+      now,
+      requestId: context.get("requestId") ?? null,
+    }),
+  ];
+  if (routing.ruleId !== null) {
+    intakeRows.push(auditStatement(context.env.DB, {
+      eventId: base.form.event_id,
+      // Routing is the system applying a rule an organizer wrote, not the
+      // submitter doing anything — crediting the submitter would be a lie about
+      // authorship in the one place authorship is the product.
+      actorKind: "system",
+      actorPersonId: null,
+      action: "submission.routed",
+      entityType: "submission",
+      entityId: submissionId,
+      after: { rule_id: routing.ruleId, rule_name: routing.ruleName, committee_id: routing.committeeId },
+      now,
+      requestId: context.get("requestId") ?? null,
+    }));
+  }
+  await context.env.DB.batch(intakeRows);
   await replaceProjectedAnswers(context.env.DB, submissionId, base.fields, projected.projected.answers, now);
   await persistTracks(context.env.DB, submissionId, references.trackIds, now);
   const insertedParticipants = await insertParticipationRows(context.env.DB, submissionId, person, projected.projected.answers, event.org_id, now);

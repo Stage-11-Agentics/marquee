@@ -77,8 +77,18 @@ export interface PersonActivity {
   id: string;
   kind: string;
   summary: string;
+  /** What the row adds — which tag, which roles ended, which subject. */
+  detail: string | null;
   actor_name: string | null;
   created_at: number;
+}
+
+export interface PersonActivityPage {
+  data: PersonActivity[];
+  page: number;
+  per_page: number;
+  total: number;
+  total_pages: number;
 }
 
 export interface PersonRecord {
@@ -86,6 +96,8 @@ export interface PersonRecord {
   notes: PersonNote[];
   connections: PersonConnection[];
   activity: PersonActivity[];
+  /** Everything the feed holds, so the drawer knows whether page two exists. */
+  activity_total: number;
   stage_history: StageEntry[];
   card: StageEntry | null;
   target_events: Array<{ id: string; name: string }>;
@@ -236,6 +248,21 @@ export function fetchPerson(personId: string, signal?: AbortSignal): Promise<Per
     route: "/api/v1/org/people/{personId}",
     ...(signal ? { signal } : {}),
   });
+}
+
+/**
+ * Page two onward of the feed. The drawer opens with page one inside the record
+ * read; this is the same projection, so a row cannot read one way on open and
+ * another after "Load more".
+ */
+export function fetchPersonActivity(personId: string, page: number, signal?: AbortSignal): Promise<PersonActivityPage> {
+  return apiFetch<PersonActivityPage>(
+    `${PEOPLE_ROUTE}/${encodeURIComponent(personId)}/activity?page=${page}`,
+    {
+      route: "/api/v1/org/people/{personId}/activity",
+      ...(signal ? { signal } : {}),
+    },
+  );
 }
 
 function write<Result>(path: string, route: string, body: unknown, method = "POST"): Promise<Result> {

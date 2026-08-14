@@ -29,6 +29,7 @@ const CONTENT_RESTORE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionI
 const PARTICIPANTS_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/participants";
 const PARTICIPANT_DELETE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/participants/{participationId}";
 const SEARCH_ROUTE = "/api/v1/events/{eventId}/search";
+const TIMELINE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/timeline";
 
 export interface SubmissionScheduleDraft {
   starts_at: string;
@@ -119,9 +120,31 @@ interface RecordData {
   evaluations: EvaluationEvidence[];
   comparisons: Array<{ round_id: string; round_name: string; reviewer_person_id: string; reviewer_name: string; reviewer_kind: "human" | "agent"; ranking: unknown; submission_ids: string[] }>;
   evaluation: { rounds: Round[]; reviewer_options: Reviewer[] };
-  history: Array<{ id: string; action: string; actor_kind: string | null; actor_name: string | null; created_at: number; before: unknown; after: unknown; restorable: boolean }>;
+  history: TimelineEntry[];
+  /** Everything the timeline holds, so the card knows whether there is more. */
+  history_total: number;
   actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_unpublish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean; can_edit_participants: boolean; can_override_scores: boolean };
 }
+
+/**
+ * Lens three of MRQ-211. `summary` and `detail` are composed on the server from
+ * the same `audit_log` row the organization log and the person's feed read, so
+ * one moment cannot be described three ways by three surfaces.
+ */
+interface TimelineEntry {
+  id: string;
+  action: string;
+  summary: string;
+  detail: string | null;
+  actor_kind: string | null;
+  actor_name: string | null;
+  created_at: number;
+  before: unknown;
+  after: unknown;
+  restorable: boolean;
+}
+
+interface TimelinePage { data: TimelineEntry[]; page: number; total: number; total_pages: number }
 
 interface Props { eventId: string; submissionId: string; navigate: (target: string) => void; }
 
@@ -500,6 +523,30 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [participantError, setParticipantError] = useState("");
   const [actionError, setActionError] = useState<{ action: string; message: string } | null>(null);
 
+  // The record opens with the newest page of its timeline; older pages are
+  // fetched beside it and dropped whenever the record reloads, because a write
+  // is exactly the moment the newest page changed.
+  const [olderHistory, setOlderHistory] = useState<TimelineEntry[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyBusy, setHistoryBusy] = useState(false);
+
+  const loadMoreHistory = async (): Promise<void> => {
+    if (historyBusy) return;
+    setHistoryBusy(true);
+    try {
+      const next = await apiFetch<TimelinePage>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/timeline?page=${historyPage + 1}`,
+        { route: TIMELINE_ROUTE },
+      );
+      setOlderHistory((rows) => [...rows, ...next.data]);
+      setHistoryPage(next.page);
+    } catch (error) {
+      setActionError({ action: "timeline", message: errorSummary(error) });
+    } finally {
+      setHistoryBusy(false);
+    }
+  };
+
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
   useEffect(() => {
     const controller = new AbortController();
@@ -509,6 +556,11 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     // because they do not live on the page. The record stays on screen while it
     // refetches; only the first load has nothing to show.
     setState((current) => (current.kind === "ready" ? current : { kind: "loading" }));
+    // The pages of timeline fetched beyond the first are dropped on every
+    // reload: the record read returns a fresh page one, and keeping stale older
+    // pages beside it would show one row twice the moment anything was written.
+    setOlderHistory([]);
+    setHistoryPage(1);
     apiFetch<RecordData>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}`, { signal: controller.signal, route: SUBMISSION_ROUTE })
       .then((record) => { setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setDraftTitle((current) => adoptServerValue(contentEdits.current !== contentSavedAtEdit.current, current, record.title)); setDraftAbstract((current) => adoptServerValue(contentEdits.current !== contentSavedAtEdit.current, current, record.abstract ?? "")); setMessageRecipientId((current) => current || record.participants.find((participant) => participant.role !== "submitter")?.id || record.participants[0]?.id || ""); setMessageSubject((current) => current || `A note about ${record.title}`); setMessageBody((current) => current || "Hi {{speaker.first_name}},\n\n"); setState({ kind: "ready", record }); setBusy(""); })
       .catch((error: unknown) => { if (!controller.signal.aborted) { setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) }); setBusy(""); } });
@@ -806,6 +858,10 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   // is still `accepted`. This is the only thing that decides whether saving
   // changes what attendees see, so it is what gates the confirm.
   const isLivePublicly = record.slot?.is_published === true;
+  // Page one arrives with the record; later pages sit after it in the order the
+  // server returned them. No client-side re-sorting — the log's order is the
+  // one thing every lens must agree on.
+  const shownHistory = [...record.history, ...olderHistory];
   const publicationAction = isLivePublicly
     ? (record.actions.can_unpublish ? "unpublish" : null)
     : (record.actions.can_publish ? "publish" : null);
@@ -908,7 +964,20 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         </CardBody></Card>
         <Card><CardHeader title="Message participant"><span class="subtle">Logged on this record · demo-safe</span></CardHeader><CardBody><form class="record-message-form" onSubmit={(event) => void sendMessage(event)}><label class="field"><span>Recipient and role</span><select value={messageRecipientId} onChange={(event) => setMessageRecipientId(event.currentTarget.value)}>{record.participants.map((participant) => <option value={participant.id} key={participant.id}>{participantNames.get(participant.person_id) ?? participant.name} · {statusLabel(participant.role)}</option>)}</select></label><label class="field"><span>Subject</span><input required value={messageSubject} onInput={(event) => setMessageSubject(event.currentTarget.value)} /></label><label class="field"><span>Message</span><textarea required rows={5} value={messageBody} onInput={(event) => setMessageBody(event.currentTarget.value)} /><small>Use the shared merge fields, such as <code>{"{{speaker.first_name}}"}</code> and <code>{"{{submission.title}}"}</code>.</small></label><div class="record-action-row"><span class={`record-inline-message ${messageError ? "error" : messageNotice ? "notice" : ""}`}>{messageError || messageNotice}</span><Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "message" ? "Queueing…" : "Queue message"}</Button></div></form></CardBody></Card>
         <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <EvaluationEvidenceRow key={`${evaluation.id}-${index}`} evaluation={evaluation} displayName={evidenceNames.get(evaluation.reviewer_person_id) ?? evaluation.reviewer_name} criteria={criteriaByRound.get(evaluation.round_id) ?? []} canOverride={record.actions.can_override_scores} busy={Boolean(busy)} onOverride={overrideScore} onClear={clearOverride} error={busy === `override-${evaluation.id}` ? "" : overrideError} />)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · <ReviewerName name={evidenceNames.get(comparison.reviewer_person_id) ?? comparison.reviewer_name} kind={comparison.reviewer_kind} /></small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
-        <Card><CardHeader title="History"><span class="subtle">Every change, who made it, and when.</span></CardHeader><CardBody><ContentHistory entries={record.history} onRestore={record.actions.can_restore_content ? ((entryId) => void restoreVersion(entryId, isLivePublicly)) : undefined} busy={Boolean(busy)} label={statusLabel} moment={historyMoment} livePublicly={isLivePublicly} /></CardBody></Card>
+        <Card><CardHeader title="Timeline"><span class="subtle">Submitted, decided, mailed — who, and when.</span></CardHeader><CardBody><ContentHistory
+          entries={shownHistory}
+          onRestore={record.actions.can_restore_content ? ((entryId) => void restoreVersion(entryId, isLivePublicly)) : undefined}
+          busy={Boolean(busy)}
+          label={statusLabel}
+          moment={historyMoment}
+          livePublicly={isLivePublicly}
+          footer={<div class="history-foot">
+            <span class="subtle tabular">{shownHistory.length} of {record.history_total}</span>
+            {shownHistory.length < record.history_total
+              ? <Button small disabled={historyBusy} onClick={() => void loadMoreHistory()}>{historyBusy ? "Loading…" : "Load more"}</Button>
+              : <span class="subtle">Complete</span>}
+          </div>}
+        /></CardBody></Card>
       </div>
       <aside class="record-aside stack">
         <Card><CardHeader title="Tracks" /><CardBody><div class="track-chips">{record.tracks.length ? record.tracks.map((track) => <Chip key={track.id}>{track.name}{track.is_primary ? " · Primary" : ""}</Chip>) : <span class="subtle">No tracks assigned</span>}</div></CardBody></Card>

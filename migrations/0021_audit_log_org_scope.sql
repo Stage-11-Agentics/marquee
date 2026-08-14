@@ -10,20 +10,27 @@
 -- log living somewhere else, which is exactly what this ticket exists to avoid.
 --
 -- SQLite cannot relax a NOT NULL, so the table is rebuilt — the pattern 0007,
--- 0008, 0009 and 0011 already use. Nothing references `audit_log`, so the drop
--- takes no foreign key with it.
+-- 0008, 0009, 0011 and 0018 already use.
 --
--- The CHECK is the thing that keeps the substrate whole: a row scoped to
--- neither an organization nor a conference is a row no lens can reach, which is
--- the same as not writing it. Every existing row is event-scoped and backfills
--- its `org_id` from that event, so history predating this column is not
--- stranded outside the org lens.
+-- **0018's decision is preserved deliberately: `event_id` still carries no
+-- foreign key.** MRQ-204 removed it so a deleted conference keeps its audit
+-- history, which is the one record that must outlive the thing it describes.
+-- Re-adding the constraint here would delete that history the next time a
+-- conference is deleted — a silent regression of another ticket's whole point.
+--
+-- The CHECK is what keeps "one substrate" true: a row scoped to neither an
+-- organization nor a conference is a row no lens can reach, which is the same
+-- as not writing it. Existing rows are all event-scoped and backfill `org_id`
+-- from that event where it still exists, so history predating this column is
+-- not stranded outside the org lens — and a row whose conference is already
+-- gone keeps its `event_id` and satisfies the CHECK on that alone.
 
-CREATE TABLE audit_log_new (
+CREATE TABLE audit_log_0021_new (
   id TEXT PRIMARY KEY,
   -- Nullable now, and null means exactly one thing: this action was about the
-  -- organization itself, not about anything inside one conference.
-  event_id TEXT REFERENCES events(id),
+  -- organization itself, not about anything inside one conference. Still no FK
+  -- (0018): the row outlives the conference it names.
+  event_id TEXT,
   org_id TEXT REFERENCES organizations(id),
   actor_person_id TEXT REFERENCES people(id),
   actor_kind TEXT NOT NULL CHECK (actor_kind IN ('user', 'api_token', 'system', 'airtable')),
@@ -37,7 +44,7 @@ CREATE TABLE audit_log_new (
   CHECK (event_id IS NOT NULL OR org_id IS NOT NULL)
 );
 
-INSERT INTO audit_log_new
+INSERT INTO audit_log_0021_new
   (id, event_id, org_id, actor_person_id, actor_kind, action, entity_type, entity_id,
    before_json, after_json, created_at, request_id)
 SELECT entry.id, entry.event_id,
@@ -48,7 +55,7 @@ FROM audit_log entry;
 
 DROP TABLE audit_log;
 
-ALTER TABLE audit_log_new RENAME TO audit_log;
+ALTER TABLE audit_log_0021_new RENAME TO audit_log;
 
 CREATE INDEX idx_audit_event_created ON audit_log(event_id, created_at);
 CREATE INDEX idx_audit_entity_created ON audit_log(entity_type, entity_id, created_at);
