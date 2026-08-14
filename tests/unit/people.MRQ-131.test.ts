@@ -14,6 +14,7 @@ import {
   foldTags,
   PIPELINE_STAGES,
 } from "../../src/lib/person-annotations";
+import { ORG_HOME_PEOPLE_HREF } from "../../src/api/org-home";
 import { mapPersonHeaders, planPersonImport } from "../../src/lib/people-import";
 import { buildPeopleQuery, parseTags } from "../../src/routes/people.queries";
 import { activeCriteria, EMPTY_FILTERS, hasFilters, saveControl } from "../../src/ui/people/people-api";
@@ -249,7 +250,7 @@ test("CONTRACT · MRQ-131 · Lists is reached from People, not from a sidebar ro
   // one further: /lists renders inside the People screen, as its Lists tab.
   // Asserted through the resolver rather than the source text, so reordering a
   // property in the table cannot fail a test about navigation.
-  expectDeep(routesFor("organization").map((route) => route.id), ["people", "sourcing"]);
+  expectDeep(routesFor("organization").map((route) => route.id), ["org-home", "people", "sourcing"]);
   // The route itself survives — /lists still resolves, it just has no row.
   const lists = matchRoute("/lists");
   expectEqual(lists?.id, "lists");
@@ -282,10 +283,11 @@ test("CONTRACT · MRQ-131 · tags arrive as a JSON array and a broken one degrad
 });
 
 test("CONTRACT · MRQ-131 · People is org-level in the nav, above the conference boundary", () => {
-  expect(routeTable).toMatch(/path: "\/people", label: "People CRM"/);
+  expect(routeTable).toMatch(/path: ORG_HOME_PEOPLE_HREF, label: "People CRM"/);
   expect(routeTable).toMatch(/group: "organization"/);
+  expect(matchRoute(ORG_HOME_PEOPLE_HREF)).toMatchObject({ id: "people", group: "organization" });
   // All four paths resolve; agents guess URLs and a 404 costs turns.
-  for (const path of ["/people", "/crm", "/directory", "/contacts"]) {
+  for (const path of ["/crm", "/directory", "/contacts"]) {
     expect(routeTable).toMatch(new RegExp(`path: "${path}"`));
   }
   // The Organization group is rendered BEFORE the conference boundary. That

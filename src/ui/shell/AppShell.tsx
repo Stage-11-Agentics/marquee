@@ -40,6 +40,7 @@ import { HandoffPage } from "../setup/HandoffPage";
 import { PeoplePage } from "../people/PeoplePage";
 import { SourcingPipelinePage } from "../people/SourcingPipelinePage";
 import { ServerPage } from "../settings/ServerPage";
+import { OrganizationHomePage } from "../org/OrganizationHomePage";
 
 type ResetResponse = {
   job_id?: unknown;
@@ -163,6 +164,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   useEffect(() => {
     if (location.pathname === "/org/instance") navigate("/org/server", { replace: true });
   }, [location.pathname, navigate]);
+  const isOrganizationHome = location.pathname === "/org/home";
   // The handoff is the second half of the claim, not an admin screen: it is
   // reached seconds after a session first exists, before there is a conference
   // to draw navigation around.
@@ -234,6 +236,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
               — a person belongs to the organization, not to one conference. */}
           {route?.id === "conference-new"
             ? <CreateConferencePage navigate={navigate} />
+            : isOrganizationHome ? <OrganizationHomePage navigate={navigate} />
             : isPeople ? <PeoplePage search={location.search} navigate={navigate} />
             /* Lists is the People screen's second tab, not a screen of its own. */
             : route?.id === "lists" ? <PeoplePage search={location.search} navigate={navigate} tab="lists" />

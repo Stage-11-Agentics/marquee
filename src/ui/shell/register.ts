@@ -61,6 +61,7 @@ const REGISTER_CHROME: Partial<Record<ThemeId, RegisterChrome>> = {
     // complete lowercase nav, so a row this map forgets reverts to Marquee's
     // sentence case in the middle of it.
     navLabels: {
+      "org-home": "home",
       people: "people crm",
       sourcing: "outreach",
       dashboard: "pipeline",

@@ -12,10 +12,9 @@ import { matchRoute, routesFor, SIDEBAR_GROUPS } from "../../src/ui/shell/route-
  */
 test("CONTRACT · MRQ-203 · the sidebar reproduces the ruled group structure", () => {
   expect(SIDEBAR_GROUPS.map((group) => [group, routesFor(group).map((route) => route.label)])).toEqual([
-    // Home and an org-level Settings row are MRQ-207's to add, with the org
-    // routes they point at. A row pointing at a route that does not exist is a
-    // dead end, and this product does not ship those.
-    ["organization", ["People CRM", "Outreach"]],
+    // Home is MRQ-209's organization-level row; every row points at a route
+    // that exists, so a click never becomes a dead end.
+    ["organization", ["Home", "People CRM", "Outreach"]],
     ["conference", ["Program pipeline", "Program board", "Abstracts & sessions", "Agenda", "Speakers"]],
     ["speaker-ops", ["Onboarding", "Tasks", "Communications", "Files", "Follow-ups"]],
     ["cfp", ["Forms", "Evaluation", "Reviewer"]],
