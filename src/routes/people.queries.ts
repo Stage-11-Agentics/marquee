@@ -425,8 +425,9 @@ export interface PeopleFacets {
 /**
  * The filter panel's options and counts, resolved server-side against the same
  * population the table reads. Each facet leaves its own field open so the
- * organizer can see alternative values, but list/search/other chips stay in the
- * scope; an org-wide count beside a narrowed table is a visible lie.
+ * organizer can switch to another value without first clearing the active
+ * chip; list/search/other chips stay in the scope. The filter panel says plainly
+ * that these are available-value counts, not counts for the selected facet.
  */
 export async function listPeopleFacets(db: D1Database, input: PeopleQueryInput): Promise<PeopleFacets> {
   const countFacet = (column: "company" | "title", limit: number) => {

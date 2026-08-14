@@ -270,6 +270,7 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
     </div> : null}
 
     {filterOpen ? <div class="people-filter-panel">
+      <p class="people-filter-note">Counts show available values after the current list, search, and other filters; they are not narrowed by the selected chip.</p>
       <div class="people-filter-group">
         <h3>Company</h3>
         {facets.company.length === 0 ? <span class="people-hint">No companies recorded yet.</span> : facets.company.map((facet) => <button

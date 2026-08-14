@@ -131,8 +131,9 @@ test("CONTRACT · MRQ-131 · CRM-02 · an attribute filter narrows consistently 
   const filtered = await people(`?company=${encodeURIComponent("Latticework Systems")}`);
   expect(filtered.total).toBe(1);
   expect(filtered.data[0]?.name).toBe("Priya Raman");
-  // The panel's options come from the server, so it can never offer a filter
-  // that matches nothing on the next page.
+  // The panel keeps this facet open so the organizer can switch values without
+  // clearing the chip; its UI labels these as available-value counts rather
+  // than pretending Northwind is in the visible Latticework result.
   expect(filtered.facets.company.map((facet) => facet.value)).toContain("Northwind Data");
   expect((await people()).total).toBe(3);
 });
@@ -241,8 +242,18 @@ test("CONTRACT · MRQ-131 · CRM-09 · both kinds of List save and resolve as me
   // The outsider belongs to another organization and cannot be smuggled in.
   expect(fixedList.member_count).toBe(2);
 
+  // A stray cross-org membership row must not make the metadata count disagree
+  // with the org-scoped People projection.
+  await env.DB
+    .prepare("INSERT INTO person_list_members (list_id, person_id, created_at) VALUES (?, ?, ?)")
+    .bind(fixedList.id, OUTSIDER, NOW)
+    .run();
+  const indexedAfterStray = await json<{ data: Array<{ id: string; member_count: number }> }>('/api/v1/org/lists');
+  expect(indexedAfterStray.data.find((entry) => entry.id === fixedList.id)?.member_count).toBe(2);
+
   const opened = await json<{ list: { id: string; name: string; kind: string; member_count: number; created_by_name: string | null; created_at: number }; members?: unknown }>(`/api/v1/org/lists/${fixedList.id}`);
   expect(opened.list).toMatchObject({ id: fixedList.id, name: "2026 chairs", kind: "fixed", member_count: 2 });
+  expect(Object.keys(opened.list).sort()).toEqual(["created_at", "created_by_name", "id", "kind", "member_count", "name"]);
   expect(opened.list.created_by_name).toBe("Jordan Alvarez");
   expect(opened.list.created_at).toEqual(expect.any(Number));
   expect(opened).not.toHaveProperty("members");
@@ -349,6 +360,17 @@ test("CONTRACT · MRQ-200 · list, search, and chip facets share one visible pop
   expect(scoped.facets.company).toEqual([{ value: "Latticework Systems", count: 1 }]);
   expect(scoped.facets.title).toEqual([{ value: "Principal Engineer", count: 1 }]);
   expect(scoped.facets.tag).toEqual([{ value: "Keynote", count: 1 }]);
+});
+
+test("CONTRACT · MRQ-200 · an active facet chip labels available-value counts", async () => {
+  const created = await post("/api/v1/org/lists", { name: "Company slice", kind: "fixed", person_ids: [SPEAKER, SUBMITTER] });
+  const listId = ((await created.json()) as { list: { id: string } }).list.id;
+  const scoped = await people(`?list_id=${listId}&company=${encodeURIComponent("Northwind Data")}`);
+  expect(scoped.data.map((row) => row.name)).toEqual(["Marcus Okafor"]);
+  expect(scoped.facets.company).toEqual([
+    { value: "Latticework Systems", count: 1 },
+    { value: "Northwind Data", count: 1 },
+  ]);
 });
 
 test("CONTRACT · MRQ-131 · CRM-11 · a bulk send from People is logged per recipient in the outbox", async () => {

@@ -208,6 +208,7 @@ test("CONTRACT · MRQ-131 · a list is never rendered as its id, and still count
   // and the table below must not move when they land.
   const css = readFileSync(new URL("../../src/ui/people/people.css", import.meta.url), "utf8");
   expectOk(/\.people-listband \{[^}]*min-height:/s.test(css));
+  expect(page).toContain("they are not narrowed by the selected chip");
 });
 
 test("CONTRACT · MRQ-200 · the People band resolves one list by id, not by scanning the index", () => {

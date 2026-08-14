@@ -41,6 +41,15 @@ const listSummary = z.object({
   updated_at: z.number().int(),
 }).openapi("PersonList");
 
+const openListSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.enum(["live", "fixed"]),
+  member_count: z.number().int().nonnegative(),
+  created_by_name: z.string().nullable(),
+  created_at: z.number().int(),
+}).openapi("PersonListDetail");
+
 interface PersonListRecord {
   id: string;
   name: string;
@@ -66,16 +75,31 @@ function recordResponse(row: PersonListRecord) {
   };
 }
 
+function openRecordResponse(row: PersonListRecord) {
+  return {
+    id: row.id,
+    name: row.name,
+    kind: row.kind,
+    member_count: Number(row.member_count ?? 0),
+    created_by_name: row.created_by_name,
+    created_at: row.created_at,
+  };
+}
+
+const FIXED_LIST_COUNT_SQL = `(SELECT COUNT(*) FROM person_list_members member
+         JOIN people member_person ON member_person.id = member.person_id
+         WHERE member.list_id = saved.id AND member_person.org_id = saved.org_id)`;
+
 const LIST_SELECT = `SELECT saved.id, saved.name, saved.kind, saved.config_json, saved.created_by,
          author.name AS created_by_name, saved.created_at, saved.updated_at,
-         (SELECT COUNT(*) FROM person_list_members member WHERE member.list_id = saved.id) AS member_count
+         ${FIXED_LIST_COUNT_SQL} AS member_count
   FROM person_lists saved
   LEFT JOIN people author ON author.id = saved.created_by`;
 
 const OPEN_LIST_SELECT = `SELECT saved.id, saved.name, saved.kind, saved.config_json, saved.created_by,
          author.name AS created_by_name, saved.created_at, saved.updated_at,
          CASE WHEN saved.kind = 'live' THEN ${LIVE_LIST_COUNT_SQL}
-           ELSE (SELECT COUNT(*) FROM person_list_members member WHERE member.list_id = saved.id)
+           ELSE ${FIXED_LIST_COUNT_SQL}
          END AS member_count
   FROM person_lists saved
   LEFT JOIN people author ON author.id = saved.created_by`;
@@ -199,7 +223,7 @@ const openList = defineApiRoute(
     request: { params: listParams },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
     responses: {
-      200: jsonResponse(z.object({ list: listSummary }), "List"),
+      200: jsonResponse(z.object({ list: openListSummary }), "List metadata"),
       ...errorResponses([401, 403, 404, 429, 500]),
     },
   },
@@ -211,7 +235,7 @@ const openList = defineApiRoute(
       .bind(listId, access.orgId)
       .first<PersonListRecord>();
     if (!row) throw ApiError.notFound("list not found");
-    return context.json({ list: recordResponse(row) }, 200);
+    return context.json({ list: openRecordResponse(row) }, 200);
   },
 );
 
