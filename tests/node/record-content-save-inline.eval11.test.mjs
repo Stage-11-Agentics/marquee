@@ -124,12 +124,38 @@ test("CONTRACT · decision feedback survives a decision that did not land", asyn
 
   const decide = page.slice(page.indexOf("const decide = async"), page.indexOf("\n  };", page.indexOf("const decide = async")));
   // Cleared only on success — this text is what the speaker reads in the mail.
+  // The guard reads `if (!decided) return;` since the dialog must survive too;
+  // what matters is that neither clear can be reached on the failure path.
   assert.match(decide, /const decided = await act\(/);
-  assert.match(decide, /if \(decided\) setFeedbackDraft\(""\)/);
+  const afterGuard = decide.slice(decide.indexOf("if (!decided) return;"));
+  assert.match(afterGuard, /setFeedbackDraft\(""\)/);
+  assert.doesNotMatch(decide.slice(0, decide.indexOf("if (!decided) return;")), /setFeedbackDraft\(""\)/);
 
   // act has to report the outcome for that to be possible.
   const act = page.slice(page.indexOf("const act = async"), page.indexOf("const changePublication"));
   assert.match(act, /Promise<boolean>/);
   assert.match(act, /reload\(\);\s*return true;/);
   assert.match(act, /return false;/);
+});
+
+test("CONTRACT · a decision that did not land leaves its dialog and its words on screen", async () => {
+  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
+  const decide = page.slice(page.indexOf("const decide = async"), page.indexOf("\n  };", page.indexOf("const decide = async")));
+
+  // Closing the dialog before the request meant the feedback survived in state
+  // with nothing on screen able to reach it, and the next action cleared it.
+  // Both the text and the surface that shows it now wait for success.
+  assert.doesNotMatch(decide.slice(0, decide.indexOf("await act")), /setDecisionRequest\(null\)/);
+  assert.match(decide, /if \(!decided\) return;/);
+  assert.match(decide, /setDecisionRequest\(null\);\s*setFeedbackDraft\(""\);/);
+});
+
+test("CONTRACT · a refresh does not unmount the record it is refreshing", async () => {
+  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
+
+  // Blanking to "loading" on every reload destroyed child state that no
+  // page-level guard can reach — the override form's typed score and comment
+  // live in the row component, not on the page.
+  assert.match(page, /setState\(\(current\) => \(current\.kind === "ready" \? current : \{ kind: "loading" \}\)\)/);
+  assert.doesNotMatch(page, /setState\(\{ kind: "loading" \}\)/);
 });

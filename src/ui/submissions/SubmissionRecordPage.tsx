@@ -453,7 +453,12 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
   useEffect(() => {
     const controller = new AbortController();
-    setState({ kind: "loading" });
+    // A refresh is not a first load. Blanking to "loading" unmounted the whole
+    // record, and with it every child's state — the score-override form's typed
+    // score and comment among them, which no page-level guard can protect
+    // because they do not live on the page. The record stays on screen while it
+    // refetches; only the first load has nothing to show.
+    setState((current) => (current.kind === "ready" ? current : { kind: "loading" }));
     apiFetch<RecordData>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}`, { signal: controller.signal, route: SUBMISSION_ROUTE })
       .then((record) => { setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setDraftTitle((current) => adoptServerValue(current, serverContent.current.title, record.title)); setDraftAbstract((current) => adoptServerValue(current, serverContent.current.abstract, record.abstract ?? "")); serverContent.current = { title: record.title, abstract: record.abstract ?? "" }; setMessageRecipientId((current) => current || record.participants.find((participant) => participant.role !== "submitter")?.id || record.participants[0]?.id || ""); setMessageSubject((current) => current || `A note about ${record.title}`); setMessageBody((current) => current || "Hi {{speaker.first_name}},\n\n"); setState({ kind: "ready", record }); })
       .catch((error: unknown) => { if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) }); });
@@ -558,12 +563,15 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const decide = async () => {
     if (!decisionRequest) return;
     const recommendation = decisionRequest;
-    setDecisionRequest(null);
     // The feedback is the same words the speaker reads in the decision mail, so
-    // it is cleared only once the decision is recorded. Clearing it regardless
-    // meant a refused or unreachable decision took the message with it.
+    // neither it nor the dialog holding it goes away until the decision is
+    // recorded. Keeping the text while closing the dialog was not enough: the
+    // words survived in state with nothing on screen to reach them, and the
+    // next action cleared them.
     const decided = await act(recommendation, "/decision", { method: "POST", body: JSON.stringify({ recommendation, feedback_md: feedbackDraft.trim() || null }) }, DECISION_ROUTE);
-    if (decided) setFeedbackDraft("");
+    if (!decided) return;
+    setDecisionRequest(null);
+    setFeedbackDraft("");
   };
 
   const sendMessage = async (event: Event) => {
