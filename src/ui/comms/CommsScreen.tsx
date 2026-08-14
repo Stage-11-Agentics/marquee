@@ -1,6 +1,6 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
-import { MERGE_FIELDS, mergeFieldErrorMessage, unknownMergeFields } from "../../lib/mail-merge-fields";
+import { COMMUNICATION_MERGE_FIELDS, mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../../lib/mail-merge-fields";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import "./comms.css";
@@ -147,7 +147,7 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
     && (subject !== activeTemplate.subject || body !== activeTemplate.body_md);
   const selectedRecipient = audience.data[0] ?? null;
   const selector = useMemo(() => selectorFor(filters), [filters]);
-  const unknownFields = useMemo(() => unknownMergeFields(subject, body), [body, subject]);
+  const unknownFields = useMemo(() => unknownMergeFieldsForCommunication(subject, body), [body, subject]);
   const mergeFieldWarning = unknownFields.length > 0 ? mergeFieldErrorMessage(unknownFields) : " ";
 
   useEffect(() => {
@@ -330,7 +330,7 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
         <div class={`merge-field-warning${unknownFields.length > 0 ? " has-warning" : ""}`} role={unknownFields.length > 0 ? "alert" : undefined} aria-live="polite" aria-hidden={unknownFields.length === 0}>{mergeFieldWarning}</div>
         <label>Subject<input value={subject} onInput={(event) => setSubject((event.currentTarget as HTMLInputElement).value)} placeholder="Message subject" /></label>
         <label>Body<textarea rows={7} value={body} onInput={(event) => setBody((event.currentTarget as HTMLTextAreaElement).value)} placeholder="Write the message body with {{merge.fields}}" /></label>
-        <div class="merge-fields" aria-label="Available merge fields"><span>Merge fields</span>{MERGE_FIELDS.map((field) => <code key={field}>{`{{${field}}}`}</code>)}</div>
+        <div class="merge-fields" aria-label="Available merge fields"><span>Merge fields</span>{COMMUNICATION_MERGE_FIELDS.map((field) => <code key={field}>{`{{${field}}}`}</code>)}</div>
         {mode === "template" && <button class="button-secondary" type="button" onClick={() => void saveTemplate()} disabled={!activeTemplate || !templateDirty || busy !== null}>{busy?.startsWith("save:") ? "Saving…" : "Save template edits"}</button>}
         <div class="comms-recipient-box" aria-live="polite">
           <div><span class="panel-kicker">Counted selector</span><strong>{audienceLoading ? "…" : audience.total}</strong><span>recipient{audience.total === 1 ? "" : "s"}</span></div>

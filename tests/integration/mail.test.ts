@@ -593,6 +593,28 @@ test("CONTRACT · MRQ-175 · preview preserves an unknown token but the bulk que
   expect(after?.total).toBe(before?.total);
 });
 
+test("CONTRACT · organizer communications reject the auth-only link before queueing", async () => {
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "auth-link-comms" });
+  const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+  const response = await app.request(
+    "/api/v1/events/evt_mail/comms/send",
+    {
+      method: "POST",
+      headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        selector: { submission_ids: ["sub_mail"], person_ids: ["per_mail"], role: "speaker" },
+        subject: "Your speaker portal",
+        body: "Open your link: {{auth.link}}",
+      }),
+    },
+    env,
+    requestContext,
+  );
+  expect(response.status).toBe(400);
+  expect(await response.text()).toContain("auth.link");
+  expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE event_id = 'evt_mail'").first<{ total: number }>()).toEqual({ total: 0 });
+});
+
 test("CONTRACT · MRQ-175 · known merge fields queue and known missing values remain literal", async () => {
   const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-known-token" });
   const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
