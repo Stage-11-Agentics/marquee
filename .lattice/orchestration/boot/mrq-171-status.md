@@ -1,7 +1,9 @@
 - Nit A — Refresh ejection: DONE; shared resolver preserves the active revision and draft across refresh; reverify after rebase.
-- Browser deep link: DONE on the pre-rebase tree; reverify after rebase.
+- Browser deep link: DONE on the rebased tree; target `sub_synthetic-pool-0002` opened from home.
 - Test-only seam collapse: DONE; initial render and fetched load use `reviewerRevisionFor`.
 - Decision: keep one resolver taking search, completed items, and an optional preserved id; this makes first render and production `load()` share the same authorization-shaped lookup and preserves refresh state after `replaceState` strips the query.
-- Browser driven: cold-opened demo reviewer; home completed row opened `/reviewer/queue?revise=sub_synthetic-pool-0002`; queue showed that id, recorded recommendation/score/criteria/comment, `Update review`, and timestamp; Refresh preserved the revision; changed recommendation and saved; home remained at 2 reviews with the updated row.
-- Evidence captured: `.artifacts/mrq-171-reviewer-home-f21-refresh.png`, `.artifacts/mrq-171-reviewer-queue-f21-refresh.png`, `.artifacts/mrq-171-reviewer-home-f21-updated.png`.
-- Half-done: rebase onto `github/main` and hand-resolution of portal files; merge guard; post-rebase browser/profile/seam verification; locked full gates; PR body, push, CI completion, and Lattice handoff.
+- Browser driven: cold-opened demo reviewer; home completed row opened `/reviewer/queue?revise=sub_synthetic-pool-0002`; queue showed recorded `Approve`, overall `4.2`, criteria `4.2/4.3/4.1`, comment, `Update review`, and timestamp; Refresh preserved all values; an earlier same-build session changed the recommendation and saved `Review updated`, with home remaining at 2 reviews.
+- Browser profile/theme: title, company, and bio saved and persisted after reload; reviewer theme persisted across reload and organizer navigation; home and queue each had one theme select.
+- Evidence captured: `.artifacts/mrq-171-reviewer-home-9194e1b9.png`, `.artifacts/mrq-171-reviewer-queue-9194e1b9.png`, `.artifacts/mrq-171-reviewer-home-f21-refresh.png`, `.artifacts/mrq-171-reviewer-queue-f21-refresh.png`, `.artifacts/mrq-171-reviewer-home-f21-updated.png`.
+- Additional fix: fractional recorded scores are included as selected score options during revision.
+- Half-done: locked full gates; PR body, push, CI completion, and Lattice handoff.
