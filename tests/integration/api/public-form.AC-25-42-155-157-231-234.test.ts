@@ -561,39 +561,112 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(reread.message).not.toContain("cospeaker@example.com");
     const rendered = await (await request(`/f/public-cfp${resume.search}`)).text();
     expect(rendered).not.toContain("cospeaker@example.com");
+
+    // `?email=` is request-supplied and overrides the resolved address. A
+    // resume-link holder must not be able to aim the sentence at a neighbouring
+    // row, nor to hide their own receipt with an address that matches nothing.
+    const aimed = await json<{ message: string | null; confirmation: { receipt_email: string | null } }>(
+      await request(`/api/v1/public/forms/public-cfp${resume.search}&email=cospeaker%40example.com`),
+    );
+    expect(aimed.confirmation.receipt_email).toBe("avery@example.com");
+    expect(aimed.message).not.toContain("cospeaker@example.com");
+    // The page echoes `?email=` back into its own hydration state, which is the
+    // caller's own input; what must not happen is the RECEIPT SENTENCE naming it.
+    const aimedPage = await (await request(`/f/public-cfp${resume.search}&email=cospeaker%40example.com`)).text();
+    expect(aimedPage).toContain("A confirmation is on its way to avery@example.com.");
+    expect(aimedPage).not.toMatch(/(?:on its way to|confirmation to)\s*(?:<strong>)?cospeaker@example\.com/);
+
+    const nowhere = await json<{ confirmation: { receipt_email: string | null } }>(
+      await request(`/api/v1/public/forms/public-cfp${resume.search}&email=nobody%40example.com`),
+    );
+    expect(nowhere.confirmation.receipt_email).toBe("avery@example.com");
   });
 
-  test("CONTRACT · a receipt that failed or hard-bounced is not still 'on its way'", async () => {
-    // The delivery webhook moves a hard bounce to `failed`. Telling that
-    // submitter to watch their inbox is the same untruth in a later tense.
+  test("CONTRACT · a receipt that failed, or hard-bounced while still queued, is no longer promised", async () => {
+    // Two independent exclusions, asserted independently: the delivery webhook
+    // moves a hard bounce to `failed` only when the row had already been sent,
+    // and leaves `status` alone otherwise. One fixture setting both at once
+    // would stay green with either production filter deleted.
+    const submitReceipt = async (title: string): Promise<{ receipt_email: string | null; resume_url: string }> => {
+      const response = await request("/api/v1/public/forms/public-cfp/submissions", {
+        method: "POST",
+        body: JSON.stringify({
+          turnstileToken: nextTurnstileToken(),
+          answers: {
+            title, speaker_name: "Avery Example", speaker_email: "avery@example.com",
+            tracks: ["Agents"], vendor_content: "No",
+          },
+        }),
+      });
+      expect(response.status).toBe(201);
+      return (await json<{ confirmation: { receipt_email: string | null; resume_url: string } }>(response)).confirmation;
+    };
+    const rereadReceipt = async (resumeUrl: string): Promise<{ message: string | null; confirmation: { receipt_email: string | null } }> => {
+      const resume = new URL(resumeUrl);
+      return json(await request(`/api/v1/public/forms/public-cfp${resume.search}`));
+    };
+
+    // A provider failure with no delivery verdict recorded at all.
+    const failed = await submitReceipt("A session whose receipt failed to send");
+    expect(failed.receipt_email).toBe("avery@example.com");
+    await env.DB.prepare(
+      "UPDATE outbox SET status = 'failed', delivery_state = 'unknown' WHERE template_key = 'submission_confirmation'",
+    ).run();
+    const afterFailure = await rereadReceipt(failed.resume_url);
+    expect(afterFailure.confirmation.receipt_email).toBeNull();
+    expect(afterFailure.message).not.toContain("on its way");
+    await env.DB.prepare("DELETE FROM outbox").run();
+
+    // A hard bounce against a row still sitting in the queue: `status` never moves.
+    const bounced = await submitReceipt("A session whose receipt hard-bounced");
+    expect(bounced.receipt_email).toBe("avery@example.com");
+    await env.DB.prepare(
+      "UPDATE outbox SET status = 'queued', delivery_state = 'bounced_hard' WHERE template_key = 'submission_confirmation'",
+    ).run();
+    const afterBounce = await rereadReceipt(bounced.resume_url);
+    expect(afterBounce.confirmation.receipt_email).toBeNull();
+    expect(afterBounce.message).not.toContain("on its way");
+    const rendered = await (await request(`/f/public-cfp${new URL(bounced.resume_url).search}`)).text();
+    expect(rendered).not.toContain("on its way to");
+
+    // Positive control: a soft bounce is still in flight and stays promised.
+    await env.DB.prepare(
+      "UPDATE outbox SET status = 'sent', delivery_state = 'bounced_soft' WHERE template_key = 'submission_confirmation'",
+    ).run();
+    const afterSoftBounce = await rereadReceipt(bounced.resume_url);
+    expect(afterSoftBounce.confirmation.receipt_email).toBe("avery@example.com");
+  });
+
+  test("CONTRACT · the receipt sentence takes its tense from the outbox, not from the moment", async () => {
+    // A page reopened a week later must not still call a delivered mail
+    // "on its way".
     const submitted = await request("/api/v1/public/forms/public-cfp/submissions", {
       method: "POST",
       body: JSON.stringify({
         turnstileToken: nextTurnstileToken(),
         answers: {
-          title: "A session whose receipt bounced",
-          speaker_name: "Avery Example",
-          speaker_email: "avery@example.com",
-          tracks: ["Agents"],
-          vendor_content: "No",
+          title: "A session revisited later", speaker_name: "Avery Example",
+          speaker_email: "avery@example.com", tracks: ["Agents"], vendor_content: "No",
         },
       }),
     });
     expect(submitted.status).toBe(201);
-    const body = await json<{ confirmation: { receipt_email: string | null; resume_url: string } }>(submitted);
-    expect(body.confirmation.receipt_email).toBe("avery@example.com");
+    const queued = await json<{ message: string | null; confirmation: { receipt_sent: boolean; resume_url: string } }>(submitted);
+    expect(queued.confirmation.receipt_sent).toBe(false);
+    expect(queued.message).toContain("A confirmation is on its way to avery@example.com.");
 
     await env.DB.prepare(
-      "UPDATE outbox SET status = 'failed', delivery_state = 'bounced_hard' WHERE template_key = 'submission_confirmation'",
+      "UPDATE outbox SET status = 'sent', delivery_state = 'delivered' WHERE template_key = 'submission_confirmation'",
     ).run();
-
-    const resume = new URL(body.confirmation.resume_url);
-    const reread = await json<{ message: string | null; confirmation: { receipt_email: string | null } }>(
+    const resume = new URL(queued.confirmation.resume_url);
+    const later = await json<{ message: string | null; confirmation: { receipt_sent: boolean } }>(
       await request(`/api/v1/public/forms/public-cfp${resume.search}`),
     );
-    expect(reread.confirmation.receipt_email).toBeNull();
-    expect(reread.message).not.toContain("on its way");
+    expect(later.confirmation.receipt_sent).toBe(true);
+    expect(later.message).toContain("We emailed a confirmation to avery@example.com.");
+    expect(later.message).not.toContain("on its way");
     const rendered = await (await request(`/f/public-cfp${resume.search}`)).text();
+    expect(rendered).toContain("We emailed a confirmation to");
     expect(rendered).not.toContain("on its way to");
   });
 
@@ -643,6 +716,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     const properties = confirmation?.properties
       ?? confirmation?.anyOf?.map((entry) => entry.properties).find((entry) => entry !== undefined);
     expect(Object.keys(properties ?? {})).toContain("receipt_email");
+    expect(Object.keys(properties ?? {})).toContain("receipt_sent");
   });
 
   test("CONTRACT · public routes are present in the served OpenAPI document", async () => {

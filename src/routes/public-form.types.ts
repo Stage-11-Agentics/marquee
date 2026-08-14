@@ -44,6 +44,8 @@ export interface PublicFormConfirmation {
    * may only promise a receipt when one exists.
    */
   receipt_email: string | null;
+  /** Whether that confirmation has left the outbox, which decides the tense. */
+  receipt_sent: boolean;
   resume_url: string | null;
   portal_url: string | null;
 }
