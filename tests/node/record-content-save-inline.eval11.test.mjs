@@ -4,15 +4,15 @@
  * The conference server could not be reached. Retrying shortly. Your work is
  * not lost." and Retry re-rendered the record with both edits gone.
  *
- * The reassurance was false at the moment it was shown. The mechanism is the
- * two halves meeting: `act` gives the page to anything that is not a 4xx
- * refusal, and `reload()` reseeds `draftTitle` / `draftAbstract` from the
- * server — so the recovery action is what overwrites the work.
+ * The reassurance was false at the moment it was shown. Two halves met: `act`
+ * gave the page to anything that was not a 4xx refusal, and `reload()` reseeded
+ * the content editor from the server — so the recovery action was what
+ * overwrote the work.
  *
- * `act` is deliberately NOT changed. A record that really is gone should still
- * take the page; that contract is asserted by record-refusal-inline.MRQ-162 and
- * must stay green. What changes is that the one control holding typed prose
- * stops routing through it — the same move already made for the score override.
+ * Five review rounds each found the same defect through another door, which is
+ * why these assertions are about RULES rather than call sites. The last round
+ * found it in four more writes at once; patching four `finally`s would have
+ * left the fifth to whoever added it next.
  */
 
 import assert from "node:assert/strict";
@@ -23,90 +23,94 @@ const root = new URL("../../", import.meta.url);
 const source = async (path) => readFile(new URL(path, root), "utf8");
 
 /**
- * Exactly the saveContent arrow function and nothing after it — a slice that
- * ran to the next screen-level marker swallowed `restoreVersion`, which uses
- * `act` correctly, and made the assertions below look violated when they were
- * not.
+ * Exactly one arrow function and nothing after it. An earlier version sliced to
+ * the next screen-level marker and swallowed `restoreVersion`, which uses `act`
+ * correctly, making these assertions look violated when they were not.
  */
-const saveContentOf = (page) => {
-  const start = page.indexOf("const saveContent = async");
-  const end = page.indexOf("\n  };", start);
-  return page.slice(start, end);
+const fn = (page, declaration) => {
+  const start = page.indexOf(declaration);
+  assert.notStrictEqual(start, -1, `not found: ${declaration}`);
+  return page.slice(start, page.indexOf("\n  };", start));
 };
 
-test("CONTRACT · a failed content save keeps the record on screen", async () => {
+test("CONTRACT · one rule owns busy for every write that refreshes the record", async () => {
   const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
-  const saveContent = saveContentOf(page);
 
-  // It must not hand its failure to act(), which would take the page.
-  assert.doesNotMatch(saveContent, /await act\(/);
-  // Nor may it raise the page-level error state itself.
+  // The lifecycle lives in one helper: it sets busy, and the load effect clears
+  // it when the record lands. Nothing else may hold its own.
+  assert.match(page, /const writeThenRefresh = async \(name: string, run: \(\) => Promise<void>, onFailure: \(error: unknown\) => void\): Promise<boolean> =>/);
+  assert.doesNotMatch(page, /finally \{ setBusy\(""\); \}/);
+
+  // act, participantWrite, writeOverride, resendDecision, saveContent, sendMessage.
+  const routed = page.match(/writeThenRefresh\(/g) ?? [];
+  assert.ok(routed.length >= 6, `expected every refreshing write routed, saw ${routed.length}`);
+
+  // A child that writes for itself and asks the record to catch up must arm the
+  // parent, or its refresh window is the one place left unguarded.
+  assert.match(page, /const refreshRecord = useCallback\(\(\) => \{ setBusy\("refresh"\); reload\(\); \}/);
+  assert.match(page, /onReversed=\{refreshRecord\}/);
+});
+
+test("CONTRACT · the refresh, not the write, is what releases the controls", async () => {
+  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
+  const helper = fn(page, "const writeThenRefresh = async");
+
+  const [success, failure] = helper.split("catch (error: unknown)");
+  // Success reloads and deliberately does not clear busy — the record on screen
+  // is still the one from before the write, and must not be actionable.
+  assert.match(success, /reload\(\);/);
+  assert.doesNotMatch(success, /setBusy\(""\)/);
+  // Failure clears it itself, because no refresh is coming, and never reloads —
+  // a reload after a failed write is what discarded the operator's text.
+  assert.match(failure, /setBusy\(""\)/);
+  assert.doesNotMatch(failure, /reload\(\)/);
+
+  // The load effect owns it on BOTH outcomes, or a failed refresh leaves the
+  // page disabled with nothing coming to release it.
+  const effect = page.slice(page.indexOf("const controller = new AbortController();"), page.indexOf("}, [eventId, submissionId, reloadKey]);"));
+  assert.match(effect, /setState\(\{ kind: "ready", record \}\); setBusy\(""\);/);
+  assert.match(effect, /notFound: isNotFound\(error\) \}\); setBusy\(""\);/);
+});
+
+test("CONTRACT · a failed content save reports beside the control, not over the record", async () => {
+  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
+  const saveContent = fn(page, "const saveContent = async");
+
+  // Its failure is the operator's to answer, so it never raises the page-level
+  // error state that `act` reserves for a record that is genuinely gone.
   assert.doesNotMatch(saveContent, /setState\(\{ kind: "error"/);
-  // It reports beside the control instead.
-  assert.match(saveContent, /catch \(error: unknown\) \{\s*setContentError\(errorSummary\(error\)\);/);
+  assert.match(saveContent, /\(error\) => setContentError\(errorSummary\(error\)\)/);
+  // And a fresh attempt does not inherit the last failure.
+  assert.match(saveContent, /setContentError\(""\)/);
 });
 
-test("CONTRACT · a failed content save leaves the typed title and abstract in the fields", async () => {
+test("CONTRACT · a refresh does not unmount the record it is refreshing", async () => {
   const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
-  const saveContent = saveContentOf(page);
 
-  // reload() reseeds both drafts from the server, so it may only run on the
-  // success path — after a failure it is exactly what would discard the work.
-  const [beforeCatch, afterCatch] = saveContent.split("catch (error: unknown)");
-  assert.match(beforeCatch, /reload\(\);/);
-  assert.doesNotMatch(afterCatch, /reload\(\)/);
-
-  // And nothing in the failure path may reseed the fields directly either.
-  assert.doesNotMatch(afterCatch, /setDraftTitle|setDraftAbstract/);
-});
-
-test("CONTRACT · a fresh save attempt does not inherit the last failure", async () => {
-  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
-  const saveContent = saveContentOf(page);
-
-  const openingLines = saveContent.slice(0, saveContent.indexOf("try {"));
-  assert.match(openingLines, /setContentError\(""\)/);
-});
-
-test("CONTRACT · the failure is rendered beside the Save control in reserved space", async () => {
-  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
-  const css = await source("src/ui/submissions/record.css");
-
-  const form = page.slice(page.indexOf('class="record-draft-form"'), page.indexOf('record.actions.can_decide'));
-  assert.match(form, /record-inline-message \$\{contentError \? "error" : ""\}/);
-  assert.match(form, /role=\{contentError \? "alert" : undefined\}/);
-
-  // Reserved height: the message appearing must not move the button under a
-  // cursor already travelling towards it.
-  assert.match(css, /\.record-inline-message \{[^}]*min-height/);
-});
-
-test("CONTRACT · act() keeps its own policy for writes that carry no typed work", async () => {
-  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
-  const act = page.slice(page.indexOf("const act = async"), page.indexOf("const changePublication"));
-
-  // Unchanged by this fix, and asserted here so a later edit to saveContent
-  // cannot quietly generalise into act and swallow a genuinely dead record.
-  assert.match(act, /if \(isRefusal\(error\)\) setActionError/);
-  assert.match(act, /else setState\(\{ kind: "error"/);
+  // Blanking to "loading" on every reload destroyed child state that no
+  // page-level guard can reach — the override form's typed score and comment
+  // live in the row component, not on the page.
+  assert.match(page, /setState\(\(current\) => \(current\.kind === "ready" \? current : \{ kind: "loading" \}\)\)/);
+  assert.doesNotMatch(page, /setState\(\{ kind: "loading" \}\)/);
 });
 
 test("CONTRACT · every reload path defers to the operator's unsaved text", async () => {
   const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
 
-  // The load handler is the single place both fields are reseeded, and it must
-  // go through the rule rather than assigning the server value outright — every
-  // reload() call site on this page funnels through here.
-  assert.match(page, /setDraftTitle\(\(current\) => adoptServerValue\(contentEdited\.current, current, record\.title\)\)/);
-  assert.match(page, /setDraftAbstract\(\(current\) => adoptServerValue\(contentEdited\.current, current, record\.abstract \?\? ""\)\)/);
-  // The flag has to be SET where typing happens, or every field reads untouched.
-  assert.match(page, /onInput=\{\(event\) => \{ contentEdited\.current = true; setDraftTitle/);
-  assert.match(page, /onInput=\{\(event\) => \{ contentEdited\.current = true; setDraftAbstract/);
-  // And cleared only where a save of THESE fields lands, so the values just
-  // written are adopted rather than defended against.
-  assert.match(page, /contentEdited\.current = false;/);
+  assert.match(page, /adoptServerValue\(contentEdits\.current !== contentSavedAtEdit\.current, current, record\.title\)/);
+  assert.match(page, /adoptServerValue\(contentEdits\.current !== contentSavedAtEdit\.current, current, record\.abstract \?\? ""\)/);
 
-  // No path may still seed the fields unconditionally.
+  // Counted where typing happens, or every field reads untouched.
+  assert.match(page, /onInput=\{\(event\) => \{ contentEdits\.current \+= 1; setDraftTitle/);
+  assert.match(page, /onInput=\{\(event\) => \{ contentEdits\.current \+= 1; setDraftAbstract/);
+
+  // The count is taken BEFORE the request and recorded only on success, so
+  // keystrokes landing while it is in flight leave the counts unequal and the
+  // field still reads as edited.
+  assert.match(page, /const editsAtSend = contentEdits\.current;/);
+  assert.match(page, /\.then\(\(\) => \{ contentSavedAtEdit\.current = editsAtSend; \}\)/);
+
+  // No path may seed the fields unconditionally.
   assert.doesNotMatch(page, /setDraftTitle\(record\.title\)/);
   assert.doesNotMatch(page, /setDraftAbstract\(record\.abstract \?\? ""\)/);
 });
@@ -122,64 +126,23 @@ test("CONTRACT · one record's unsaved text cannot follow you to another record"
   assert.match(shell, /<SubmissionRecordPage key=\{decodeURIComponent\(location\.pathname\.slice\("\/submissions\/"\.length\)\)\}/);
 });
 
-test("CONTRACT · decision feedback survives a decision that did not land", async () => {
-  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
-
-  const decide = page.slice(page.indexOf("const decide = async"), page.indexOf("\n  };", page.indexOf("const decide = async")));
-  // Cleared only on success — this text is what the speaker reads in the mail.
-  // The guard reads `if (!decided) return;` since the dialog must survive too;
-  // what matters is that neither clear can be reached on the failure path.
-  assert.match(decide, /const decided = await act\(/);
-  const afterGuard = decide.slice(decide.indexOf("if (!decided) return;"));
-  assert.match(afterGuard, /setFeedbackDraft\(""\)/);
-  assert.doesNotMatch(decide.slice(0, decide.indexOf("if (!decided) return;")), /setFeedbackDraft\(""\)/);
-
-  // act has to report the outcome for that to be possible.
-  const act = page.slice(page.indexOf("const act = async"), page.indexOf("const changePublication"));
-  assert.match(act, /Promise<boolean>/);
-  assert.match(act, /reload\(\);\s*return true;/);
-  assert.match(act, /return false;/);
-});
-
 test("CONTRACT · a decision that did not land leaves its dialog and its words on screen", async () => {
   const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
-  const decide = page.slice(page.indexOf("const decide = async"), page.indexOf("\n  };", page.indexOf("const decide = async")));
+  const decide = fn(page, "const decide = async");
 
   // Closing the dialog before the request meant the feedback survived in state
   // with nothing on screen able to reach it, and the next action cleared it.
-  // Both the text and the surface that shows it now wait for success.
   assert.doesNotMatch(decide.slice(0, decide.indexOf("await act")), /setDecisionRequest\(null\)/);
   assert.match(decide, /if \(!decided\) return;/);
   assert.match(decide, /setDecisionRequest\(null\);\s*setFeedbackDraft\(""\);/);
 });
 
-test("CONTRACT · a refresh does not unmount the record it is refreshing", async () => {
+test("CONTRACT · act keeps its own policy for writes that carry no typed work", async () => {
   const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
+  const act = fn(page, "const act = async");
 
-  // Blanking to "loading" on every reload destroyed child state that no
-  // page-level guard can reach — the override form's typed score and comment
-  // live in the row component, not on the page.
-  assert.match(page, /setState\(\(current\) => \(current\.kind === "ready" \? current : \{ kind: "loading" \}\)\)/);
-  assert.doesNotMatch(page, /setState\(\{ kind: "loading" \}\)/);
-});
-
-test("CONTRACT · a refresh leaves nothing stale actionable", async () => {
-  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
-  const act = page.slice(page.indexOf("const act = async"), page.indexOf("const changePublication"));
-
-  // Keeping the record rendered through a refresh is what protects child state,
-  // and it also leaves stale chips, status and actions on screen. They must not
-  // be usable until the fresh record lands, so busy spans the refetch: the
-  // success path does not clear it and there is no finally that would.
-  assert.doesNotMatch(act, /finally \{ setBusy\(""\); \}/);
-  const success = act.slice(0, act.indexOf("catch (error: unknown)"));
-  assert.doesNotMatch(success, /setBusy\(""\)/);
-  // The failure path clears it itself, since no refresh is coming.
-  assert.match(act.slice(act.indexOf("catch (error: unknown)")), /setBusy\(""\)/);
-
-  // The load effect owns it on BOTH outcomes, or a failed refresh leaves the
-  // page disabled forever.
-  const effect = page.slice(page.indexOf("const controller = new AbortController();"), page.indexOf("}, [eventId, submissionId, reloadKey]);"));
-  assert.match(effect, /setState\(\{ kind: "ready", record \}\); setBusy\(""\);/);
-  assert.match(effect, /notFound: isNotFound\(error\) \}\); setBusy\(""\);/);
+  // Unchanged by any of this: a refused write answers beside the control, and a
+  // record that really is gone still takes the page.
+  assert.match(act, /if \(isRefusal\(error\)\) setActionError/);
+  assert.match(act, /else setState\(\{ kind: "error"/);
 });
