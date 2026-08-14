@@ -68,6 +68,15 @@ test("CONTRACT · every column in the header row states a width, whatever the te
   assert.match(sharedCss, /\.wide-grid-content \{[^}]*min-width: max-content/);
 });
 
+test("CONTRACT · MRQ-180 · onboarding bulk reminders preserve exact co-speaker selections", async () => {
+  const page = await read("src/ui/onboarding/OnboardingPage.tsx");
+  const selector = /selector: \{([^}]*)\}/.exec(page)?.[1];
+  assert.ok(selector, "the onboarding queue request should send a selector");
+  assert.match(selector, /recipient_pairs: recipientPairs/);
+  assert.match(selector, /task_state: "open"/);
+  assert.doesNotMatch(selector, /role\s*:/, "the exact board selection must not narrow participation roles");
+});
+
 /**
  * MRQ-164 · scrolling is how the matrix fits many templates, and silence about
  * it is how a tracked task read as an untracked one: the newest column lands
