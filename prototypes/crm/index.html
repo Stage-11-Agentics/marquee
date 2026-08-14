@@ -400,6 +400,24 @@
   body.scope [data-scope="dep"]::before { background:#8a5c00; }
 
   @media (max-width:1240px) { .filter-panel { grid-template-columns:1fr; } .filter-group { border-right:0; border-bottom:1px solid var(--rule-soft); } }
+
+  /* ═══ Sidebar parity with pipeline-v1.1 (2026-08-14) ══════════════════════
+     The frame around the work must not change when crossing prototype
+     documents: these overrides pin the sidebar to the binding prototype's
+     exact geometry — 224px column, 28px brand mark, 34px rows, its paddings
+     and label rhythm. Page-side styles above are untouched. ─────────────── */
+  .app { grid-template-columns:224px minmax(0,1fr); }
+  .sidebar { padding:20px 14px; }
+  .brand { padding:2px 8px 21px; border-bottom:0; margin-bottom:0; }
+  .brand-mark { width:28px; height:28px; flex:0 0 28px; }
+  .switcher-anchor { margin:12px 0 0; }
+  .switcher-row { margin:0 4px; }
+  .event-switcher { padding:9px 10px; }
+  .nav-label { margin:14px 10px 6px; }
+  .nav a { min-height:34px; padding:8px 10px; grid-template-columns:16px 1fr; }
+  .nav a.has-count { grid-template-columns:16px 1fr auto; }
+  .nav-icon { width:16px; }
+  .sidebar-foot { padding-top:16px; }
 </style>
 </head>
 <body>
