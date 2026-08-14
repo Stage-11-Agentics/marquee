@@ -91,6 +91,28 @@ export interface OrgSummary {
   top_companies: Facet[];
 }
 
+export interface PeopleImportResult {
+  import_id: string;
+  created: number;
+  updated: number;
+  skipped: number;
+  unmapped: string[];
+  headers: string[];
+  undo_path: string;
+}
+
+export interface PeopleImportUndoResult {
+  undone: number;
+  skipped: number;
+  skipped_rows: Array<{
+    target_id: string;
+    reason: "changed_after_import" | "has_references" | "missing_restore_receipt";
+    fields: string[];
+    references: string[];
+  }>;
+  retained_manifest: true;
+}
+
 export interface PersonListConfig {
   q: string;
   company?: string;
@@ -260,14 +282,16 @@ export function sendOrgMail(input: { person_ids: string[]; subject: string; body
   return write("/api/v1/org/comms/send", "/api/v1/org/comms/send", input);
 }
 
-export function importPeople(input: { csv: string; filename?: string }): Promise<{
-  import_id: string;
-  created: number;
-  updated: number;
-  skipped: number;
-  unmapped: string[];
-}> {
+export function importPeople(input: { csv: string; filename?: string }): Promise<PeopleImportResult> {
   return write("/api/v1/org/imports", "/api/v1/org/imports", input);
+}
+
+export function undoImportedPeople(importId: string): Promise<PeopleImportUndoResult> {
+  return write(
+    `/api/v1/org/imports/${encodeURIComponent(importId)}/undo`,
+    "/api/v1/org/imports/{importId}/undo",
+    {},
+  );
 }
 
 export function createPerson(input: { name: string; email: string; title?: string; company?: string }): Promise<{ person: Person }> {

@@ -692,6 +692,7 @@ export interface ImportRow extends MutableRecord {
 }
 
 export interface ImportRowRow extends MutableRecord {
+  after_json: JsonText | null;
   before_json: JsonText | null;
   entity: string;
   import_id: Id;
