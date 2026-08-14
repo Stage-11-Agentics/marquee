@@ -364,7 +364,7 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
     expect(afterEmpty?.total).toBe(1);
   });
 
-  test("AC-261 · place merge fields render through preview and delivery byte-for-byte, including unknown fields", async () => {
+  test("AC-261 · place merge fields render through preview, while unknown fields block delivery", async () => {
     const body = {
       subject: "Where to be: {{session.room}} · {{session.building}}",
       body: "{{session.title}}\n{{session.room}}\n{{session.building}}\n{{session.address}}\n{{session.accessNote}}\nLeave by {{session.leaveBy}}\nUnknown {{session.not_a_field}}",
@@ -387,9 +387,11 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
       method: "POST",
       body: JSON.stringify({ selector: { submission_ids: [SUB_NO_FEEDBACK], person_ids: [SPEAKER_ID], role: "speaker" }, ...body }),
     }, ownerCookie);
-    expect(sent.status).toBe(202);
-    const sentBody = await sent.json<{ outbox_ids: string[] }>();
-    const delivered = await env.DB.prepare("SELECT subject, text, html FROM outbox WHERE id = ?").bind(sentBody.outbox_ids[0]).first<{ subject: string; text: string; html: string }>();
-    expect(delivered).toEqual(previewBody);
+    expect(sent.status).toBe(400);
+    expect(await sent.text()).toContain("session.not_a_field");
+    const delivered = await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM outbox WHERE event_id = ? AND template_key = 'custom' AND entity_id = ? AND person_id = ?",
+    ).bind(EVENT_ID, SUB_NO_FEEDBACK, SPEAKER_ID).first<{ total: number }>();
+    expect(delivered?.total).toBe(0);
   });
 });

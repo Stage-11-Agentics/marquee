@@ -5,6 +5,7 @@ import { enqueueOutbox, type EnqueuedOutbox } from "./outbox";
 import { selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "./schedule";
 import { findTemplate, TRIGGER_TEMPLATE_KEYS, type MailTemplateKey } from "./templates";
 import type { MergeData } from "./render";
+import { assertKnownMergeFields } from "../../lib/mail-merge-fields";
 
 export type TriggerKey = (typeof TRIGGER_TEMPLATE_KEYS)[number];
 
@@ -45,6 +46,8 @@ export async function enqueueBulkReminder(input: {
   now?: number;
 }): Promise<EnqueuedOutbox[]> {
   const templateKey = input.templateKey ?? "reminder_generic";
+  const template = await findTemplate(input.db, input.eventId, templateKey);
+  assertKnownMergeFields(input.subject ?? template.subject, input.body ?? template.body_md);
   const result: EnqueuedOutbox[] = [];
   for (const recipient of input.recipients) {
     result.push(

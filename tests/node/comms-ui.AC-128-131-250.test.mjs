@@ -16,6 +16,12 @@ test("AC-128 · AC-131 · AC-250 · the communications surface has stable templa
   assert.match(source, /demo_safe/);
   assert.match(source, /conference/);
   assert.match(source, /MERGE_FIELDS/);
+  assert.match(source, /unknownMergeFields/);
+  assert.match(source, /merge-field-warning/);
+  assert.doesNotMatch(source, /const MERGE_FIELDS/);
+  const mergeFields = await readFile(resolve(root, "src/lib/mail-merge-fields.ts"), "utf8");
+  assert.match(mergeFields, /MERGE_TOKEN_PATTERN/);
+  assert.match(mergeFields, /speaker\.first_name/);
   assert.doesNotMatch(source, /messages\/send/);
 });
 

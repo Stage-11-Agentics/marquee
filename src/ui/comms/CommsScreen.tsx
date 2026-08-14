@@ -1,5 +1,6 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
+import { MERGE_FIELDS, mergeFieldErrorMessage, unknownMergeFields } from "../../lib/mail-merge-fields";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import "./comms.css";
@@ -81,19 +82,6 @@ const TRIGGER_KEYS = [
   "task_assigned",
   "task_overdue",
 ] as const;
-const MERGE_FIELDS = [
-  "speaker.first_name",
-  "submission.title",
-  "session.room",
-  "session.building",
-  "session.address",
-  "session.accessNote",
-  "session.leaveBy",
-  "room.name",
-  "session.time",
-  "task.title",
-] as const;
-
 async function request<T>(path: string, route: string, init: RequestInit = {}): Promise<T> {
   return apiFetch<T>(path, {
     ...init,
@@ -159,6 +147,8 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
     && (subject !== activeTemplate.subject || body !== activeTemplate.body_md);
   const selectedRecipient = audience.data[0] ?? null;
   const selector = useMemo(() => selectorFor(filters), [filters]);
+  const unknownFields = useMemo(() => unknownMergeFields(subject, body), [body, subject]);
+  const mergeFieldWarning = unknownFields.length > 0 ? mergeFieldErrorMessage(unknownFields) : " ";
 
   useEffect(() => {
     let cancelled = false;
@@ -234,6 +224,10 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
 
   async function saveTemplate(): Promise<void> {
     if (!activeTemplate) return;
+    if (unknownFields.length > 0) {
+      setError(mergeFieldWarning);
+      return;
+    }
     setBusy(`save:${activeTemplate.id}`);
     try {
       const saved = await request<Template>(`/api/v1/events/${eventId}/templates/${activeTemplate.id}`, "/api/v1/events/{eventId}/templates/{templateId}", {
@@ -272,6 +266,10 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
 
   async function queueMessage(): Promise<void> {
     if (!preview || audience.total === 0 || (mode === "template" && (!activeTemplate || activeTemplate.enabled !== 1 || templateDirty)) || !subject.trim() || !body.trim()) return;
+    if (unknownFields.length > 0) {
+      setError(mergeFieldWarning);
+      return;
+    }
     setBusy("send");
     try {
       const payload = mode === "template"
@@ -296,6 +294,7 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
       && audience.total > 0
       && subject.trim()
       && body.trim()
+      && unknownFields.length === 0
       && (mode === "adhoc" || (activeTemplate?.enabled === 1 && !templateDirty)),
   );
   const triggers = templates.filter(isTrigger);
@@ -328,6 +327,7 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
         <div class="section-heading section-heading-compose"><h2 id="comms-compose-heading">Queue a message</h2><div class="mode-switch" role="group" aria-label="Message type"><button class={mode === "template" ? "is-active" : ""} type="button" onClick={() => setMode("template")}>Template</button><button class={mode === "adhoc" ? "is-active" : ""} type="button" onClick={() => setMode("adhoc")}>Ad-hoc</button></div></div>
         {mode === "template" && activeTemplate?.enabled !== 1 && <div class="inline-warning">This template is off. Turn it on in Templates before queueing.</div>}
         {mode === "template" && templateDirty && <div class="inline-warning">Unsaved edits are preview-only. Save the template before queueing.</div>}
+        <div class={`merge-field-warning${unknownFields.length > 0 ? " has-warning" : ""}`} role={unknownFields.length > 0 ? "alert" : undefined} aria-live="polite" aria-hidden={unknownFields.length === 0}>{mergeFieldWarning}</div>
         <label>Subject<input value={subject} onInput={(event) => setSubject((event.currentTarget as HTMLInputElement).value)} placeholder="Message subject" /></label>
         <label>Body<textarea rows={7} value={body} onInput={(event) => setBody((event.currentTarget as HTMLTextAreaElement).value)} placeholder="Write the message body with {{merge.fields}}" /></label>
         <div class="merge-fields" aria-label="Available merge fields"><span>Merge fields</span>{MERGE_FIELDS.map((field) => <code key={field}>{`{{${field}}}`}</code>)}</div>
