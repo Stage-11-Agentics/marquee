@@ -61,6 +61,8 @@ export const peopleListQuerySchema = z.object({
     .openapi({ type: "integer", minimum: 1, maximum: LIST_DEFAULTS.maxPerPage }),
   sort: z.enum(Object.keys(PEOPLE_SORTS) as [string, ...string[]]).optional().catch(undefined)
     .openapi({ type: "string", enum: Object.keys(PEOPLE_SORTS) }),
+  format: z.enum(["json", "csv"]).optional().catch(undefined)
+    .openapi({ type: "string", enum: ["json", "csv"] }),
 });
 
 const personSummary = z.object({
@@ -73,6 +75,10 @@ const personSummary = z.object({
   headshot_attachment_id: z.string().nullable(),
   tags: z.array(z.string()),
   stage: z.string().nullable(),
+  do_not_contact: z.boolean(),
+  outreach_target_event_id: z.string().nullable(),
+  outreach_target_event_name: z.string().nullable(),
+  outreach_next_touch_on: z.string().nullable(),
   conference_count: z.number().int().nonnegative(),
   last_contact_at: z.number().int().nullable(),
   created_at: z.number().int(),
@@ -96,6 +102,7 @@ const noteSchema = z.object({
   actor_name: z.string().nullable(),
   created_at: z.number().int(),
 });
+const targetEventSchema = z.object({ id: z.string(), name: z.string() });
 const stageEntrySchema = z.object({
   id: z.string(),
   stage: z.string(),
@@ -105,6 +112,9 @@ const stageEntrySchema = z.object({
   actor_person_id: z.string().nullable(),
   actor_name: z.string().nullable(),
   created_at: z.number().int(),
+  target_event_id: z.string().nullable(),
+  target_event_name: z.string().nullable().optional(),
+  next_touch_on: z.string().nullable(),
 });
 const connectionSchema = z.object({
   submission_id: z.string(),
@@ -128,6 +138,7 @@ const personRecordResponse = z.object({
   activity: z.array(activitySchema),
   stage_history: z.array(stageEntrySchema),
   card: stageEntrySchema.nullable(),
+  target_events: z.array(targetEventSchema),
 }).openapi("PersonRecord");
 
 const personInput = z.object({
@@ -136,6 +147,7 @@ const personInput = z.object({
   title: z.string().trim().max(200).optional(),
   company: z.string().trim().max(200).optional(),
   bio: z.string().trim().max(5000).optional(),
+  do_not_contact: z.boolean().optional(),
 });
 const personPatch = personInput.partial();
 
@@ -150,6 +162,10 @@ function rowResponse(row: PersonListRow) {
     headshot_attachment_id: row.headshot_attachment_id,
     tags: parseTags(row.tags_json),
     stage: row.stage,
+    do_not_contact: Number(row.do_not_contact) === 1,
+    outreach_target_event_id: row.outreach_target_event_id,
+    outreach_target_event_name: row.outreach_target_event_name,
+    outreach_next_touch_on: row.outreach_next_touch_on,
     conference_count: Number(row.conference_count ?? 0),
     last_contact_at: row.last_contact_at === null ? null : Number(row.last_contact_at),
     created_at: row.created_at,
@@ -162,7 +178,9 @@ export async function readPersonEvents(db: D1Database, personId: string): Promis
   const result = await db
     .prepare(
       `SELECT annotation.id, annotation.person_id, annotation.kind, annotation.value_json,
-              annotation.actor_person_id, annotation.created_at, actor.name AS actor_name
+              annotation.actor_person_id, annotation.created_at,
+              annotation.target_event_id, annotation.next_touch_on,
+              actor.name AS actor_name
        FROM person_events annotation
        LEFT JOIN people actor ON actor.id = annotation.actor_person_id
        WHERE annotation.person_id = ?
@@ -181,16 +199,29 @@ async function appendPersonEvent(input: {
   kind: "note" | "tag" | "stage";
   value: Record<string, unknown>;
   actorPersonId: string | null;
+  targetEventId?: string | null;
+  nextTouchOn?: string | null;
   now?: number;
 }): Promise<{ id: string; created_at: number }> {
   const id = newUlid();
   const createdAt = input.now ?? Date.now();
   await input.db
     .prepare(
-      `INSERT INTO person_events (id, org_id, person_id, kind, value_json, actor_person_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO person_events
+        (id, org_id, person_id, kind, value_json, actor_person_id, target_event_id, next_touch_on, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, input.orgId, input.personId, input.kind, JSON.stringify(input.value), input.actorPersonId, createdAt)
+    .bind(
+      id,
+      input.orgId,
+      input.personId,
+      input.kind,
+      JSON.stringify(input.value),
+      input.actorPersonId,
+      input.targetEventId ?? null,
+      input.nextTouchOn ?? null,
+      createdAt,
+    )
     .run();
   return { id, created_at: createdAt };
 }
@@ -201,6 +232,38 @@ export async function requirePerson(db: D1Database, orgId: string, personId: str
   const row = await db.prepare(built.dataSql).bind(...built.dataBindings).first<PersonListRow>();
   if (!row) throw ApiError.notFound("person not found in this organization");
   return row;
+}
+
+function csvCell(value: unknown): string {
+  return `"${String(value ?? "").replaceAll('"', '""').replaceAll("\n", " ").replaceAll("\r", " ")}"`;
+}
+
+function peopleCsv(rows: readonly PersonListRow[]): string {
+  const lines = [[
+    "id",
+    "name",
+    "email",
+    "company",
+    "title",
+    "stage",
+    "target_event",
+    "next_touch_on",
+    "do_not_contact",
+  ].map(csvCell).join(",")];
+  for (const row of rows) {
+    lines.push([
+      row.id,
+      row.name,
+      row.email,
+      row.company,
+      row.title,
+      row.stage,
+      row.outreach_target_event_name,
+      row.outreach_next_touch_on,
+      Number(row.do_not_contact) === 1 ? "true" : "false",
+    ].map(csvCell).join(","));
+  }
+  return `${lines.join("\n")}\n`;
 }
 
 const listPeople = defineApiRoute(
@@ -214,7 +277,16 @@ const listPeople = defineApiRoute(
     tags: ["People"],
     request: { query: peopleListQuerySchema },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
-    responses: { 200: jsonResponse(peopleListResponse, "People"), ...errorResponses([400, 401, 403, 404, 429, 500]) },
+    responses: {
+      200: {
+        content: {
+          "application/json": { schema: peopleListResponse },
+          "text/csv": { schema: z.string() },
+        },
+        description: "People or a server-filtered CSV export",
+      },
+      ...errorResponses([400, 401, 403, 404, 429, 500]),
+    },
   },
   async (context) => {
     const access = requireOrgAccess(context);
@@ -239,6 +311,16 @@ const listPeople = defineApiRoute(
       ...(query.event_id ? { eventId: query.event_id } : {}),
       ...(query.sort ? { sort: query.sort } : {}),
     };
+    if (query.format === "csv") {
+      const built = buildPeopleQuery(input);
+      const rows = await context.env.DB.prepare(built.dataSql).bind(...built.dataBindings).all<PersonListRow>();
+      return new Response(peopleCsv(rows.results), {
+        headers: {
+          "Content-Disposition": "attachment; filename=marquee-people.csv",
+          "Content-Type": "text/csv; charset=utf-8",
+        },
+      });
+    }
     const built = buildPeopleQuery({
       ...input,
       page,
@@ -282,11 +364,28 @@ const createPerson = defineApiRoute(
         `UPDATE people SET name = ?, title = COALESCE(?, title), company = COALESCE(?, company),
                 bio = COALESCE(?, bio), updated_at = ? WHERE id = ?`,
       ).bind(body.name, body.title ?? null, body.company ?? null, body.bio ?? null, now, id).run();
+      if (body.do_not_contact !== undefined) {
+        await context.env.DB.prepare("UPDATE people SET do_not_contact = ? WHERE id = ? AND org_id = ?")
+          .bind(body.do_not_contact ? 1 : 0, id, access.orgId)
+          .run();
+      }
     } else {
       await context.env.DB.prepare(
-        `INSERT INTO people (id, org_id, email, name, title, company, bio, social_links, custom_fields, is_demo, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, '[]', '{}', 0, ?, ?)`,
-      ).bind(id, access.orgId, email, body.name, body.title ?? null, body.company ?? null, body.bio ?? null, now, now).run();
+        `INSERT INTO people
+          (id, org_id, email, name, title, company, bio, social_links, custom_fields, is_demo, do_not_contact, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, '[]', '{}', 0, ?, ?, ?)`,
+      ).bind(
+        id,
+        access.orgId,
+        email,
+        body.name,
+        body.title ?? null,
+        body.company ?? null,
+        body.bio ?? null,
+        body.do_not_contact ? 1 : 0,
+        now,
+        now,
+      ).run();
     }
     return context.json({ person: rowResponse(await requirePerson(context.env.DB, access.orgId, id)) }, 201);
   },
@@ -299,7 +398,7 @@ const getPerson = defineApiRoute(
     operationId: "getOrgPerson",
     summary: "Read one person's whole record",
     description:
-      "Identity, tags, internal notes, connections across every conference, the activity feed, and the sourcing card — one read, because the profile is one scrolling drawer rather than a tab chain.",
+      "Identity, tags, internal notes, connections across every conference, the activity feed, and the Outreach card — one read, because the profile is one scrolling drawer rather than a tab chain.",
     tags: ["People"],
     request: { params: personParams },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
@@ -309,7 +408,7 @@ const getPerson = defineApiRoute(
     const access = requireOrgAccess(context);
     const { personId } = context.req.valid("param");
     const person = await requirePerson(context.env.DB, access.orgId, personId);
-    const [annotations, connections, audit, messages] = await Promise.all([
+    const [annotations, connections, audit, messages, targetEvents] = await Promise.all([
       readPersonEvents(context.env.DB, personId),
       context.env.DB.prepare(
         `SELECT participation.submission_id, participation.role, submission.title, submission.status,
@@ -332,6 +431,9 @@ const getPerson = defineApiRoute(
         `SELECT id, subject, status, created_at FROM outbox
          WHERE person_id = ? ORDER BY created_at DESC LIMIT 40`,
       ).bind(personId).all<{ id: string; subject: string; status: string; created_at: number }>(),
+      context.env.DB.prepare(
+        "SELECT id, name FROM events WHERE org_id = ? ORDER BY starts_on ASC, id ASC",
+      ).bind(access.orgId).all<{ id: string; name: string }>(),
     ]);
     // The activity feed is the annotations log plus what the rest of the product
     // already records about this person. It is assembled, never stored.
@@ -362,6 +464,12 @@ const getPerson = defineApiRoute(
         created_at: row.created_at,
       })),
     ].sort((left, right) => right.created_at - left.created_at).slice(0, 60);
+    const targetNames = new Map(targetEvents.results.map((event) => [event.id, event.name]));
+    const stageHistory = foldStageHistory(annotations).map((entry) => ({
+      ...entry,
+      target_event_name: entry.target_event_id ? targetNames.get(entry.target_event_id) ?? null : null,
+    }));
+    const card = currentCard(annotations);
     return context.json({
       person: rowResponse(person),
       notes: foldNotes(annotations),
@@ -374,8 +482,11 @@ const getPerson = defineApiRoute(
         event_name: row.event_name,
       })),
       activity,
-      stage_history: foldStageHistory(annotations),
-      card: currentCard(annotations),
+      stage_history: stageHistory,
+      card: card
+        ? { ...card, target_event_name: card.target_event_id ? targetNames.get(card.target_event_id) ?? null : null }
+        : null,
+      target_events: targetEvents.results,
     }, 200);
   },
 );
@@ -399,7 +510,9 @@ const updatePerson = defineApiRoute(
     const now = Date.now();
     await context.env.DB.prepare(
       `UPDATE people SET name = COALESCE(?, name), email = COALESCE(?, email), title = COALESCE(?, title),
-              company = COALESCE(?, company), bio = COALESCE(?, bio), updated_at = ?
+              company = COALESCE(?, company), bio = COALESCE(?, bio),
+              do_not_contact = CASE WHEN ? IS NULL THEN do_not_contact ELSE ? END,
+              updated_at = ?
        WHERE id = ? AND org_id = ?`,
     ).bind(
       body.name ?? null,
@@ -407,6 +520,8 @@ const updatePerson = defineApiRoute(
       body.title ?? null,
       body.company ?? null,
       body.bio ?? null,
+      body.do_not_contact === undefined ? null : body.do_not_contact ? 1 : 0,
+      body.do_not_contact === undefined ? null : body.do_not_contact ? 1 : 0,
       now,
       personId,
       access.orgId,
@@ -522,7 +637,7 @@ const moveStage = defineApiRoute(
     method: "post",
     path: "/api/v1/org/people/{personId}/stage",
     operationId: "setOrgPersonStage",
-    summary: "Enroll a person in the sourcing pipeline, or move their card",
+    summary: "Enroll a person in Outreach, or move their card",
     description:
       "One verb for both: enrolling is the first stage row, moving is the next one. The append-only log is the timestamped stage history.",
     tags: ["People"],
@@ -535,6 +650,8 @@ const moveStage = defineApiRoute(
               stage: z.enum(PIPELINE_STAGE_IDS as unknown as [string, ...string[]]),
               score: z.number().int().min(0).max(100).optional(),
               rationale: z.string().trim().max(2000).optional(),
+              target_event_id: z.string().trim().min(1).nullable().optional(),
+              next_touch_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
             }),
           },
         },
@@ -549,8 +666,21 @@ const moveStage = defineApiRoute(
   async (context) => {
     const access = requireOrgAccess(context, true);
     const { personId } = context.req.valid("param");
-    await requirePerson(context.env.DB, access.orgId, personId);
+    const person = await requirePerson(context.env.DB, access.orgId, personId);
     const body = context.req.valid("json");
+    const targetEventId = body.target_event_id === undefined
+      ? person.outreach_target_event_id
+      : body.target_event_id;
+    if (targetEventId) {
+      const target = await context.env.DB
+        .prepare("SELECT id FROM events WHERE id = ? AND org_id = ?")
+        .bind(targetEventId, access.orgId)
+        .first<{ id: string }>();
+      if (!target) throw ApiError.notFound("target conference not found in this organization");
+    }
+    const nextTouchOn = body.stage === "confirmed" || body.stage === "declined"
+      ? null
+      : body.next_touch_on === undefined ? person.outreach_next_touch_on : body.next_touch_on;
     await appendPersonEvent({
       db: context.env.DB,
       orgId: access.orgId,
@@ -562,6 +692,8 @@ const moveStage = defineApiRoute(
         ...(body.rationale === undefined ? {} : { rationale: body.rationale }),
       },
       actorPersonId: access.personId,
+      targetEventId,
+      nextTouchOn,
     });
     const annotations = await readPersonEvents(context.env.DB, personId);
     const card = currentCard(annotations);
@@ -578,6 +710,9 @@ const pipelineCardSchema = z.object({
   score: z.number().nullable(),
   rationale: z.string().nullable(),
   moved_at: z.number().int(),
+  target_event_id: z.string().nullable(),
+  target_event_name: z.string().nullable(),
+  next_touch_on: z.string().nullable(),
 });
 
 const getPipeline = defineApiRoute(
@@ -585,7 +720,7 @@ const getPipeline = defineApiRoute(
     method: "get",
     path: "/api/v1/org/pipeline",
     operationId: "getOrgPipeline",
-    summary: "Read the sourcing pipeline board",
+    summary: "Read the Outreach board",
     description: "Six named stages including terminal won and lost, folded from the append-only annotations log.",
     tags: ["People"],
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
@@ -594,8 +729,9 @@ const getPipeline = defineApiRoute(
         z.object({
           stages: z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() })),
           cards: z.array(pipelineCardSchema),
-        }).openapi("SourcingPipeline"),
-        "Sourcing pipeline",
+          target_events: z.array(targetEventSchema),
+        }).openapi("Outreach"),
+        "Outreach",
       ),
       ...errorResponses([401, 403, 429, 500]),
     },
@@ -607,15 +743,18 @@ const getPipeline = defineApiRoute(
     const rows = await context.env.DB
       .prepare(
         `SELECT annotation.id, annotation.person_id, annotation.kind, annotation.value_json,
-                annotation.actor_person_id, annotation.created_at, person.name, person.company
+                annotation.actor_person_id, annotation.created_at,
+                annotation.target_event_id, annotation.next_touch_on,
+                person.name, person.company, target.name AS target_event_name
          FROM person_events annotation
          JOIN people person ON person.id = annotation.person_id
+         LEFT JOIN events target ON target.id = annotation.target_event_id AND target.org_id = annotation.org_id
          WHERE annotation.org_id = ? AND annotation.kind = 'stage'
          ORDER BY annotation.created_at ASC, annotation.id ASC`,
       )
       .bind(access.orgId)
-      .all<PersonEventRow & { name: string; company: string | null }>();
-    const byPerson = new Map<string, Array<PersonEventRow & { name: string; company: string | null }>>();
+      .all<PersonEventRow & { name: string; company: string | null; target_event_name: string | null }>();
+    const byPerson = new Map<string, Array<PersonEventRow & { name: string; company: string | null; target_event_name: string | null }>>();
     for (const row of rows.results) {
       const current = byPerson.get(row.person_id);
       if (current) current.push(row);
@@ -633,9 +772,16 @@ const getPipeline = defineApiRoute(
         score: card.score,
         rationale: card.rationale,
         moved_at: card.created_at,
+        target_event_id: card.target_event_id,
+        target_event_name: identity.target_event_name,
+        next_touch_on: card.next_touch_on,
       }];
     }).sort((left, right) => right.moved_at - left.moved_at || left.person_id.localeCompare(right.person_id));
-    return context.json({ stages: PIPELINE_STAGES.map((stage) => ({ ...stage })), cards }, 200);
+    const targetEvents = await context.env.DB
+      .prepare("SELECT id, name FROM events WHERE org_id = ? ORDER BY starts_on ASC, id ASC")
+      .bind(access.orgId)
+      .all<{ id: string; name: string }>();
+    return context.json({ stages: PIPELINE_STAGES.map((stage) => ({ ...stage })), cards, target_events: targetEvents.results }, 200);
   },
 );
 

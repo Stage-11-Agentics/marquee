@@ -111,6 +111,7 @@ export const PEOPLE_SORTS: SortRegistry = {
   newest: { column: "person.created_at", direction: "desc" },
   updated: { column: "person.updated_at", direction: "desc" },
   last_contact: { column: "last_contact_at", direction: "desc", nullsLast: true },
+  next_touch: { column: "outreach_next_touch_on", direction: "asc", nullsLast: true },
 };
 
 export const DEFAULT_PEOPLE_SORT = "name";
@@ -169,6 +170,10 @@ export interface PersonListRow {
   /** Folded from the annotations log; JSON array text from `json_group_array`. */
   tags_json: string | null;
   stage: string | null;
+  do_not_contact: number;
+  outreach_target_event_id: string | null;
+  outreach_target_event_name: string | null;
+  outreach_next_touch_on: string | null;
 }
 
 /**
@@ -210,6 +215,30 @@ export const CURRENT_STAGE = `(
   FROM person_events latest_stage
   WHERE latest_stage.person_id = person.id AND latest_stage.kind = 'stage'
   ORDER BY latest_stage.created_at DESC, latest_stage.id DESC
+  LIMIT 1
+)`;
+
+/** The current card's conference target and next touch, folded from the latest stage row. */
+export const CURRENT_TARGET_EVENT = `(
+  SELECT latest_stage.target_event_id
+  FROM person_events latest_stage
+  WHERE latest_stage.person_id = person.id AND latest_stage.kind = 'stage'
+  ORDER BY latest_stage.created_at DESC, latest_stage.id DESC
+  LIMIT 1
+)`;
+
+export const CURRENT_NEXT_TOUCH = `(
+  SELECT latest_stage.next_touch_on
+  FROM person_events latest_stage
+  WHERE latest_stage.person_id = person.id AND latest_stage.kind = 'stage'
+  ORDER BY latest_stage.created_at DESC, latest_stage.id DESC
+  LIMIT 1
+)`;
+
+const CURRENT_TARGET_EVENT_NAME = `(
+  SELECT target.name
+  FROM events target
+  WHERE target.id = ${CURRENT_TARGET_EVENT} AND target.org_id = person.org_id
   LIMIT 1
 )`;
 
@@ -381,10 +410,14 @@ export function buildPeopleQuery(input: PeopleQueryInput): BuiltQuery {
   const order = `${primary}, person.id ASC`;
   const columns = `person.id, person.name, person.email, person.title, person.company, person.bio,
        person.headshot_attachment_id, person.created_at, person.updated_at,
+       person.do_not_contact,
        ${CONFERENCE_COUNT} AS conference_count,
        ${LAST_CONTACT} AS last_contact_at,
        ${CURRENT_TAGS} AS tags_json,
-       ${CURRENT_STAGE} AS stage${input.columns ? `,\n       ${input.columns}` : ""}`;
+       ${CURRENT_STAGE} AS stage,
+       ${CURRENT_TARGET_EVENT} AS outreach_target_event_id,
+       ${CURRENT_TARGET_EVENT_NAME} AS outreach_target_event_name,
+       ${CURRENT_NEXT_TOUCH} AS outreach_next_touch_on${input.columns ? `,\n       ${input.columns}` : ""}`;
   const joins = input.joins ? ` ${input.joins}` : "";
   const joinBindings = input.joinBindings ?? [];
   const limit = input.page ? " LIMIT ? OFFSET ?" : "";

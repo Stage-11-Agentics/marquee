@@ -21,6 +21,7 @@ import {
   formatMoment,
   removeTag,
   setStage,
+  updatePerson,
   type PersonRecord,
 } from "./people-api";
 import { PIPELINE_STAGES } from "./pipeline-stages";
@@ -29,10 +30,12 @@ export function PersonDrawer({
   personId,
   onClose,
   onChanged,
+  navigate,
 }: {
   personId: string;
   onClose: () => void;
   onChanged?: () => void;
+  navigate?: (target: string) => void;
 }): JSX.Element {
   const [record, setRecord] = useState<PersonRecord | null>(null);
   const [error, setError] = useState("");
@@ -88,6 +91,17 @@ export function PersonDrawer({
     await run(async () => { await addTag(personId, tag); setTagDraft(""); });
   };
 
+  const saveCard = (input: { target_event_id?: string | null; next_touch_on?: string | null }) => {
+    if (!record?.card) return;
+    void run(() => setStage(personId, {
+      stage: record.card!.stage,
+      target_event_id: input.target_event_id === undefined ? record.card!.target_event_id : input.target_event_id,
+      next_touch_on: input.next_touch_on === undefined ? record.card!.next_touch_on : input.next_touch_on,
+    }));
+  };
+
+  const boardHref = `/pipeline?person=${encodeURIComponent(personId)}`;
+
   const person = record?.person;
 
   return <>
@@ -119,7 +133,32 @@ export function PersonDrawer({
               <dt>Stage</dt><dd>{record.card ? record.card.stage_name : "Not in the pipeline"}</dd>
             </dl>
             {record.person.bio ? <p class="people-bio">{record.person.bio}</p> : <p class="people-hint">No bio yet.</p>}
+            <div class="people-drawer-action-row">
+              <span class="people-hint">{record.person.do_not_contact ? "Excluded from compose" : "Available for compose"}</span>
+              <Button
+                small
+                variant={record.person.do_not_contact ? "" : "danger"}
+                aria-pressed={record.person.do_not_contact}
+                disabled={busy}
+                onClick={() => void run(() => updatePerson(personId, { do_not_contact: !record.person.do_not_contact }))}
+              >{record.person.do_not_contact ? "Clear do-not-contact" : "Mark do-not-contact"}</Button>
+            </div>
           </section>
+
+          {record.card ? <section class="people-section people-outreach-status">
+            <h3>Outreach</h3>
+            <p>
+              Outreach: {record.card.stage_name} → {record.card.target_event_name ?? record.person.outreach_target_event_name ?? "No conference target"} ·{" "}
+              <a
+                href={boardHref}
+                onClick={(event) => {
+                  if (!navigate) return;
+                  event.preventDefault();
+                  navigate(boardHref);
+                }}
+              >Open board</a>
+            </p>
+          </section> : null}
 
           <section class="people-section">
             <h3>Tags</h3>
@@ -197,9 +236,9 @@ export function PersonDrawer({
           </section>
 
           <section class="people-section">
-            <h3>Sourcing</h3>
+            <h3>Outreach</h3>
             <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
-              <label class="people-hint" for="people-stage-select">Move to</label>
+              <label class="people-hint" for="people-stage-select">Stage</label>
               <select
                 id="people-stage-select"
                 class="people-moveto"
@@ -207,13 +246,37 @@ export function PersonDrawer({
                 value={record.card?.stage ?? ""}
                 onChange={(event) => {
                   const stage = (event.currentTarget as HTMLSelectElement).value;
-                  if (stage) void run(() => setStage(personId, { stage }));
+                  if (stage) void run(() => setStage(personId, {
+                    stage,
+                    target_event_id: record.card?.target_event_id ?? null,
+                    next_touch_on: record.card?.next_touch_on ?? null,
+                  }));
                 }}
               >
                 <option value="">Not in the pipeline</option>
                 {PIPELINE_STAGES.map((stage) => <option value={stage.id} key={stage.id}>{stage.name}</option>)}
               </select>
             </div>
+            <label class="people-field" style={{ marginTop: "var(--s2)" }}>
+              <span>Target conference</span>
+              <select
+                disabled={busy || !record.card}
+                value={record.card?.target_event_id ?? ""}
+                onChange={(event) => saveCard({ target_event_id: (event.currentTarget as HTMLSelectElement).value || null })}
+              >
+                <option value="">No conference target</option>
+                {record.target_events.map((target) => <option value={target.id} key={target.id}>{target.name}</option>)}
+              </select>
+            </label>
+            <label class="people-field">
+              <span>Next touch</span>
+              <input
+                type="date"
+                disabled={busy || !record.card}
+                value={record.card?.next_touch_on ?? ""}
+                onChange={(event) => saveCard({ next_touch_on: (event.currentTarget as HTMLInputElement).value || null })}
+              />
+            </label>
             {record.stage_history.length === 0
               ? <p class="people-hint" style={{ marginTop: "var(--s2)" }}>Not enrolled yet. Pick a stage and the move is recorded with a timestamp.</p>
               : <div class="people-feed" style={{ marginTop: "var(--s2)" }}>

@@ -288,6 +288,8 @@ function codeFromEnvelope(value: unknown, status: number): ApiErrorCode {
 export interface ApiFetchOptions extends RequestInit {
   /** Route template for logging and the diagnostic report; defaults to the path. */
   route?: string;
+  /** Successful downloads can be plain text while errors remain the JSON envelope. */
+  responseType?: "json" | "text";
 }
 
 /**
@@ -374,7 +376,7 @@ export async function apiFetch<Result>(
   path: string,
   options: ApiFetchOptions = {},
 ): Promise<Result> {
-  const { route = path, ...init } = options;
+  const { route = path, responseType = "json", ...init } = options;
   let response: Response;
   try {
     response = await fetch(path, { ...init, signal: scopedSignal(init.signal) });
@@ -415,7 +417,7 @@ export async function apiFetch<Result>(
   if (response.status === 204 || response.status === 205) return undefined as Result;
 
   try {
-    return (await response.json()) as Result;
+    return (await (responseType === "text" ? response.text() : response.json())) as Result;
   } catch {
     throw noted(new MarqueeApiError({
       code: "unreadable",

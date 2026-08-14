@@ -143,7 +143,9 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [location.pathname, openSearch]);
 
-  const routeName = route?.label ?? "Route not found";
+  // MRQ-203 owns the nav label; the surface itself can adopt the new noun
+  // without changing the stable `sourcing` route id or route table.
+  const routeName = route?.id === "sourcing" ? "Outreach" : route?.label ?? "Route not found";
   const isSubmissionsList = location.pathname === "/submissions";
   const isProgramBoard = location.pathname === "/board";
   const isSubmissionNew = location.pathname === "/submissions/new";
@@ -228,7 +230,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
           {/* Three screens answer before the conference guard, for the same
               reason the sidebar draws Organization above the switcher: the
               create screen exists precisely when there is no conference yet,
-              and People, Lists and the sourcing pipeline are organization-level
+              and People, Lists and Outreach are organization-level
               — a person belongs to the organization, not to one conference. */}
           {route?.id === "conference-new"
             ? <CreateConferencePage navigate={navigate} />

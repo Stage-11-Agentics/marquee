@@ -3,12 +3,14 @@ import {
   EVENT_ID,
   FROZEN_NOW,
   ORG_ID,
+  OUTREACH_EVENT_ID,
   STAFF_PERSON_ID,
 } from "../../../scripts/seed/event.ts";
 
 /** Identities used by the shipped full reset seed and route guard. */
 export const SHIPPED_DEMO_ORGANIZATION_ID = ORG_ID;
 export const SHIPPED_DEMO_EVENT_ID = EVENT_ID;
+export const SHIPPED_DEMO_TARGET_EVENT_ID = OUTREACH_EVENT_ID;
 export const SHIPPED_DEMO_ORGANIZER_PERSON_ID = STAFF_PERSON_ID;
 /** First named accepted-core speaker; stable because the source seed is pinned. */
 export const SHIPPED_DEMO_SPEAKER_PERSON_ID = "per_aarush-selvan";

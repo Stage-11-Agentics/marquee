@@ -26,6 +26,7 @@ import {
   fetchLists,
   fetchPeople,
   fetchSummary,
+  exportPeople,
   formatDay,
   formatMoment,
   hasFilters,
@@ -33,12 +34,14 @@ import {
   type OrgSummary,
   type PeopleFilters,
   type PeoplePage as PeoplePayload,
+  type Person,
   type PersonListDetail,
   type SavedPersonList,
 } from "./people-api";
 import "./people.css";
 
 const PER_PAGE = 25;
+type SelectedPerson = Pick<Person, "id" | "name" | "do_not_contact">;
 
 /**
  * The People URL. Only two things live in it — which list you are inside and
@@ -108,7 +111,10 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
   const [filters, setFilters] = useState<PeopleFilters>({ ...EMPTY_FILTERS, listId: listFromUrl });
   const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Keep the selected records, not only their ids. Selection survives a
+  // server-side search/page change, and the composer must still be able to
+  // name a do-not-contact person who is no longer in the visible page.
+  const [selected, setSelected] = useState<Map<string, SelectedPerson>>(new Map());
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [summary, setSummary] = useState<OrgSummary | null>(null);
   const [lists, setLists] = useState<SavedPersonList[] | null>(null);
@@ -116,6 +122,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
   const [modal, setModal] = useState<"" | "import" | "compose" | "savelist" | "addperson">("");
   const [toast, setToast] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
+  const [exporting, setExporting] = useState(false);
   // Four states, and telling them apart is the point. "Deleted" and "the
   // request failed" look identical to a `.catch`, and reporting a network blip
   // as "this list no longer exists" tells an organizer their work is gone.
@@ -215,9 +222,9 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
     setFilters((current) => ({ ...current, listId: "" }));
     navigate?.(peopleUrl(""));
   };
-  const toggleRow = (id: string) => setSelected((current) => {
-    const next = new Set(current);
-    if (next.has(id)) next.delete(id); else next.add(id);
+  const toggleRow = (row: SelectedPerson) => setSelected((current) => {
+    const next = new Map(current);
+    if (next.has(row.id)) next.delete(row.id); else next.set(row.id, row);
     return next;
   });
   // The drawer is a layer over the list you are in, so both of these carry the
@@ -246,6 +253,25 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
   // width when the number arrives, or when a list is created or deleted.
   const listsLabel = lists === null ? "—" : lists.length.toLocaleString();
 
+  const downloadCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const csv = await exportPeople(filters);
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "marquee-people.csv";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      announce("People exported as CSV");
+    } catch (caught) {
+      announce(`Export failed: ${errorSummary(caught)}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return <div class="people-page">
     <PageHeader
       title="People CRM"
@@ -257,6 +283,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
             ? `Everyone this organization has worked with, across every conference — ${payload.total.toLocaleString()} speakers, submitters, chairs and contacts, carrying their history, notes and tags. A returning speaker is already here; nobody re-keys anything.`
             : "Reading everyone this organization has worked with…"}
       actions={<>
+        <Button onClick={() => void downloadCsv()} disabled={exporting}>{exporting ? "Exporting…" : "Export CSV"}</Button>
         <Button onClick={() => setModal("import")}>Import people</Button>
         <Button variant="primary" onClick={() => setModal("addperson")}>Add person</Button>
       </>}
@@ -309,7 +336,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
       <span class="people-toolbar-spacer" />
       <Button small onClick={() => navigate?.("/lists")}>Lists · {listsLabel}</Button>
       <Button small class="people-save-control" onClick={() => setModal("savelist")}>{control.label}</Button>
-      <Button small onClick={() => navigate?.("/pipeline")}>Sourcing pipeline</Button>
+      <Button small onClick={() => navigate?.("/pipeline")}>Outreach</Button>
     </div>
 
     {/* The list you are inside, said in the name you gave it. Rendered from the
@@ -384,7 +411,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
         <span class="people-selcount">{selected.size} selected</span>
         <Button small onClick={() => setModal("compose")}>Communicate</Button>
         <Button small onClick={() => setModal("savelist")}>{control.label}</Button>
-        <button type="button" class="people-chip" onClick={() => setSelected(new Set())}>
+        <button type="button" class="people-chip" onClick={() => setSelected(new Map())}>
           <span class="people-chip-x" aria-hidden="true">×</span> Clear selection
         </button>
       </> : <>
@@ -428,8 +455,11 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
                 onChange={(event) => {
                   const on = (event.currentTarget as HTMLInputElement).checked;
                   setSelected((current) => {
-                    const next = new Set(current);
-                    for (const row of rows) { if (on) next.add(row.id); else next.delete(row.id); }
+                    const next = new Map(current);
+                    for (const row of rows) {
+                      if (on) next.set(row.id, { id: row.id, name: row.name, do_not_contact: row.do_not_contact });
+                      else next.delete(row.id);
+                    }
                     return next;
                   });
                 }}
@@ -439,6 +469,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
             <th scope="col">Email</th>
             <th scope="col">Company</th>
             <th scope="col">Job title</th>
+            <th scope="col">Outreach</th>
             <th scope="col">Tags</th>
             <th scope="col">Confs</th>
             <th scope="col">Last contact</th>
@@ -451,7 +482,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
                 type="checkbox"
                 aria-label={`Select ${displayNames.get(row.id) ?? row.name}`}
                 checked={selected.has(row.id)}
-                onChange={() => toggleRow(row.id)}
+                onChange={() => toggleRow({ id: row.id, name: row.name, do_not_contact: row.do_not_contact })}
               />
             </td>
             <td>
@@ -462,6 +493,14 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
             <td><span class="people-cell-mail people-cell-trunc">{row.email}</span></td>
             <td><span class="people-cell-trunc">{row.company ?? "—"}</span></td>
             <td><span class="people-cell-trunc">{row.title ?? "—"}</span></td>
+            <td class="people-cell-outreach">
+              <strong title={row.outreach_target_event_name ? `→ ${row.outreach_target_event_name}` : "No conference target"}>
+                {row.stage ? row.stage.replaceAll("_", " ") : "Not enrolled"}
+              </strong>
+              <span class={row.outreach_next_touch_on && row.outreach_next_touch_on < new Date().toISOString().slice(0, 10) ? "overdue" : ""}>
+                {row.outreach_target_event_name ? `→ ${row.outreach_target_event_name}` : "→ No target"}
+              </span>
+            </td>
             <td>
               <span class="people-tagset">
                 {row.tags.length === 0
@@ -490,6 +529,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
     {openPersonId ? <PersonDrawer
       personId={openPersonId}
       onClose={closePerson}
+      navigate={navigate}
       onChanged={() => setReloadToken((token) => token + 1)}
     /> : null}
 
@@ -506,12 +546,12 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
     /> : null}
 
     {modal === "compose" ? <ComposeModal
-      personIds={[...selected]}
+      people={[...selected.values()]}
       onClose={() => setModal("")}
       onSent={(result) => {
         setModal("");
-        setSelected(new Set());
-        announce(`${result.queued} message${result.queued === 1 ? "" : "s"} queued — every one is logged in the outbox`);
+        setSelected(new Map());
+        announce(`${result.queued} message${result.queued === 1 ? "" : "s"} queued — every one is logged in the outbox${result.excluded_people.length ? ` · excluded: ${result.excluded_people.join(", ")}` : ""}`);
       }}
     /> : null}
 
@@ -525,7 +565,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
     /> : null}
 
     {modal === "savelist" ? <SaveListModal
-      selectedIds={[...selected]}
+      selectedIds={[...selected.keys()]}
       matching={payload?.total ?? 0}
       filters={filters}
       onClose={() => setModal("")}

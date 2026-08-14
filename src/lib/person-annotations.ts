@@ -40,6 +40,9 @@ export interface PersonEventRow {
   actor_person_id: string | null;
   actor_name?: string | null;
   created_at: number;
+  /** Nullable on legacy stage rows from before Outreach targeting shipped. */
+  target_event_id?: string | null;
+  next_touch_on?: string | null;
 }
 
 export interface PersonNote {
@@ -59,6 +62,8 @@ export interface PersonStageEntry {
   actor_person_id: string | null;
   actor_name: string | null;
   created_at: number;
+  target_event_id: string | null;
+  next_touch_on: string | null;
 }
 
 function value(row: PersonEventRow): Record<string, unknown> {
@@ -131,6 +136,8 @@ export function foldStageHistory(rows: readonly PersonEventRow[]): PersonStageEn
         actor_person_id: row.actor_person_id,
         actor_name: row.actor_name ?? null,
         created_at: row.created_at,
+        target_event_id: row.target_event_id ?? null,
+        next_touch_on: row.next_touch_on ?? null,
       };
     })
     .filter((entry): entry is PersonStageEntry => entry !== null)
@@ -155,4 +162,14 @@ export function currentCard(rows: readonly PersonEventRow[]): PersonStageEntry |
   const scored = [...history].reverse().find((entry) => entry.score !== null);
   const explained = [...history].reverse().find((entry) => entry.rationale !== null);
   return { ...latest, score: latest.score ?? scored?.score ?? null, rationale: latest.rationale ?? explained?.rationale ?? null };
+}
+
+/** A next touch is overdue only for a live card; terminal cards need no chase. */
+export function isOutreachOverdue(
+  nextTouchOn: string | null | undefined,
+  stage: string,
+  now: number = Date.now(),
+): boolean {
+  if (!nextTouchOn || stage === "confirmed" || stage === "declined") return false;
+  return nextTouchOn < new Date(now).toISOString().slice(0, 10);
 }

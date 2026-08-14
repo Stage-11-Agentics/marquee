@@ -12,6 +12,8 @@ import type { SeedContext, SeedModule } from "./_sql.ts";
 
 export const ORG_ID = seedId("org", "aie-ny");
 export const EVENT_ID = seedId("evt", "aie-ny-2026");
+/** Second org-level conference used by Outreach targeting. */
+export const OUTREACH_EVENT_ID = seedId("evt", "devflow-conf-2027");
 /** Frozen demo clock (SPEC §6): Aug 20, 2026, 12:00 ET (EDT, UTC-4). */
 export const FROZEN_NOW = Date.UTC(2026, 7, 20, 16, 0, 0, 0);
 const WAVE_ONE_SENT = Date.UTC(2026, 7, 15, 16, 0, 0, 0);
@@ -92,6 +94,24 @@ export function run(ctx: SeedContext): void {
     logo_key: null,
     accent: "#0b6a72",
     status: "live",
+    demo_mode: 1,
+    created_at: now,
+    updated_at: now,
+  });
+
+  ctx.add("events", {
+    id: OUTREACH_EVENT_ID,
+    org_id: ORG_ID,
+    name: "DevFlow Conf 2027",
+    slug: "devflow-conf-2027",
+    tagline: "A conference for people building the developer future",
+    starts_on: "2027-03-18",
+    ends_on: "2027-03-19",
+    timezone: "America/New_York",
+    venue: "Brooklyn Navy Yard",
+    logo_key: null,
+    accent: "#635bff",
+    status: "draft",
     demo_mode: 1,
     created_at: now,
     updated_at: now,

@@ -51,6 +51,7 @@
     "@playwright/test": "^1.62.1",
     "@scalar/openapi-parser": "^0.28.12",
     "@types/node": "^26.2.0",
+    "happy-dom": "^20.11.2",
     "typescript": "^7.0.2",
     "typescript-ast": "npm:typescript@^5.9.3",
     "vite": "^8.2.1",

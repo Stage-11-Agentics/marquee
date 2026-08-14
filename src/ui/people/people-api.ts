@@ -18,6 +18,10 @@ export interface Person {
   headshot_attachment_id: string | null;
   tags: string[];
   stage: string | null;
+  do_not_contact: boolean;
+  outreach_target_event_id: string | null;
+  outreach_target_event_name: string | null;
+  outreach_next_touch_on: string | null;
   conference_count: number;
   last_contact_at: number | null;
   created_at: number;
@@ -55,6 +59,9 @@ export interface StageEntry {
   actor_person_id: string | null;
   actor_name: string | null;
   created_at: number;
+  target_event_id: string | null;
+  target_event_name?: string | null;
+  next_touch_on: string | null;
 }
 
 export interface PersonConnection {
@@ -81,6 +88,7 @@ export interface PersonRecord {
   activity: PersonActivity[];
   stage_history: StageEntry[];
   card: StageEntry | null;
+  target_events: Array<{ id: string; name: string }>;
 }
 
 export interface OrgSummary {
@@ -155,6 +163,9 @@ export interface PipelineCard {
   score: number | null;
   rationale: string | null;
   moved_at: number;
+  target_event_id: string | null;
+  target_event_name: string | null;
+  next_touch_on: string | null;
 }
 
 export interface PeopleFilters {
@@ -251,11 +262,25 @@ export function removeTag(personId: string, tag: string): Promise<{ tags: string
   });
 }
 
-export function setStage(personId: string, input: { stage: string; score?: number; rationale?: string }): Promise<{ card: StageEntry; stage_history: StageEntry[] }> {
+export function setStage(personId: string, input: {
+  stage: string;
+  score?: number;
+  rationale?: string;
+  target_event_id?: string | null;
+  next_touch_on?: string | null;
+}): Promise<{ card: StageEntry; stage_history: StageEntry[] }> {
   return write(`${PEOPLE_ROUTE}/${encodeURIComponent(personId)}/stage`, "/api/v1/org/people/{personId}/stage", input);
 }
 
-export function fetchPipeline(signal?: AbortSignal): Promise<{ stages: PipelineStage[]; cards: PipelineCard[] }> {
+export function updatePerson(personId: string, input: { do_not_contact?: boolean }): Promise<{ person: Person }> {
+  return write(`${PEOPLE_ROUTE}/${encodeURIComponent(personId)}`, "/api/v1/org/people/{personId}", input, "PATCH");
+}
+
+export function fetchPipeline(signal?: AbortSignal): Promise<{
+  stages: PipelineStage[];
+  cards: PipelineCard[];
+  target_events: Array<{ id: string; name: string }>;
+}> {
   return apiFetch("/api/v1/org/pipeline", { route: "/api/v1/org/pipeline", ...(signal ? { signal } : {}) });
 }
 
@@ -292,6 +317,7 @@ export function previewOrgMail(input: { person_ids: string[]; subject: string; b
   text: string;
   html: string;
   recipients: number;
+  excluded_people: string[];
 }> {
   return write("/api/v1/org/comms/preview", "/api/v1/org/comms/preview", input);
 }
@@ -300,8 +326,16 @@ export function sendOrgMail(input: { person_ids: string[]; subject: string; body
   selected: number;
   queued: number;
   duplicate: number;
+  excluded_people: string[];
 }> {
   return write("/api/v1/org/comms/send", "/api/v1/org/comms/send", input);
+}
+
+export function exportPeople(filters: PeopleFilters): Promise<string> {
+  return apiFetch(`${PEOPLE_ROUTE}?${peopleQuery(filters, 1, 1)}&format=csv`, {
+    route: PEOPLE_ROUTE,
+    responseType: "text",
+  });
 }
 
 export function importPeople(input: { csv: string; filename?: string }): Promise<PeopleImportResult> {

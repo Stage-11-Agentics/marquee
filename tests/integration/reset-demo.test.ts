@@ -73,18 +73,19 @@ const SEEDED_COUNTS: Record<string, number> = {
   auth_sessions: 0,
   api_tokens: 1,
   memberships: 161,
-  // The annotations log and Lists are org-scoped and organizer-authored, so the
-  // seed ships none of them — but a reset must still sweep them, or a note
-  // would outlive the person it is about.
+  // Lists remain organizer-authored, but the demo includes two org-level
+  // Outreach cards so the board demonstrates one funnel aimed at two events.
+  // A reset must still sweep the append-only log, or a note/card would outlive
+  // the person it is about.
   person_list_members: 0,
   person_lists: 0,
-  person_events: 0,
-  people: 1102,
+  person_events: 2,
+  people: 1103,
   attachments: 40,
   event_settings: 0,
   mirror_outbox: 0,
   mirror_state: 0,
-  events: 1,
+  events: 2,
   organizations: 1,
 };
 

@@ -244,6 +244,7 @@ async function insertPerson(
     bio: null,
     company: null,
     custom_fields: "{}" as PersonRow["custom_fields"],
+    do_not_contact: 0,
     headshot_attachment_id: null,
     is_demo: 0,
     kind: "human",
