@@ -2,7 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import { URL as NodeURL, fileURLToPath } from "node:url";
-import { h, render } from "preact";
+import { h, render, type VNode } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -22,13 +22,17 @@ import { OutreachCard } from "../../src/ui/people/SourcingPipelinePage";
 
 const PEOPLE_CSS = readFileSync(fileURLToPath(new NodeURL("../../src/ui/people/people.css", import.meta.url)), "utf8");
 
-let mountedRoot: HTMLElement | null = null;
+// tsconfig.test intentionally uses Worker globals without DOM lib types. The
+// happy-dom environment supplies the real DOM at runtime; keep that boundary
+// explicit instead of mixing two incompatible DOM class hierarchies.
+const dom = globalThis.document as any;
+let mountedRoot: any = null;
 
 afterEach(() => {
   if (mountedRoot) render(null, mountedRoot);
   mountedRoot = null;
-  document.head.querySelectorAll("style[data-outreach-test]").forEach((style) => style.remove());
-  document.body.innerHTML = "";
+  dom.head.querySelectorAll("style[data-outreach-test]").forEach((style: any) => style.remove());
+  dom.body.innerHTML = "";
   vi.resetAllMocks();
 });
 
@@ -38,13 +42,13 @@ async function settle(): Promise<void> {
   });
 }
 
-function mount(element: Parameters<typeof h>[0]): HTMLElement {
-  const root = document.createElement("div");
-  const style = document.createElement("style");
+function mount(element: VNode<any>): any {
+  const root = dom.createElement("div");
+  const style = dom.createElement("style");
   style.dataset.outreachTest = "true";
   style.textContent = PEOPLE_CSS;
-  document.head.append(style);
-  document.body.append(root);
+  dom.head.append(style);
+  dom.body.append(root);
   mountedRoot = root;
   render(element, root);
   return root;
@@ -87,7 +91,7 @@ test("CONTRACT · MRQ-205 · the mounted long-name card contains and drives its 
   const name = "Margarethe von Habsburg-Lothringen, Erzherzogin zu Österreich";
   const moved: string[] = [];
   const opened: string[] = [];
-  let root!: HTMLElement;
+  let root!: any;
   await act(async () => {
     root = mount(h(OutreachCard, {
       card: {
@@ -114,17 +118,17 @@ test("CONTRACT · MRQ-205 · the mounted long-name card contains and drives its 
   });
   await settle();
 
-  const card = root.querySelector<HTMLElement>('[data-outreach-card="true"]');
-  const link = root.querySelector<HTMLButtonElement>(".people-rowlink");
-  const selector = root.querySelector<HTMLSelectElement>(".people-moveto");
+  const card = root.querySelector('[data-outreach-card="true"]') as any;
+  const link = root.querySelector(".people-rowlink") as any;
+  const selector = root.querySelector(".people-moveto") as any;
   expect(card).not.toBeNull();
   expect(link?.title).toBe(name);
   expect(card?.textContent).toContain("→ DevFlow Conf 2027 with an exceptionally long conference name");
   expect(card?.dataset.overflow).toBe("false");
   expect(card?.contains(selector)).toBe(true);
 
-  const cardStyle = getComputedStyle(card!);
-  const selectorStyle = getComputedStyle(selector!);
+  const cardStyle = getComputedStyle(card) as any;
+  const selectorStyle = getComputedStyle(selector) as any;
   expect(cardStyle.overflow).toBe("hidden");
   expect(cardStyle.minWidth).toBe("0");
   expect(selectorStyle.minWidth).toBe("0");
@@ -151,13 +155,13 @@ test("CONTRACT · MRQ-205 · mounted People selection survives a page change int
   vi.mocked(fetchSummary).mockResolvedValue({ people: 2, conferences: 2, returning_speakers: 0, in_pipeline: 0, top_companies: [] });
   vi.mocked(fetchLists).mockResolvedValue({ data: [] });
 
-  let root!: HTMLElement;
+  let root!: any;
   await act(async () => {
     root = mount(h(PeoplePage, { navigate: () => undefined }));
   });
   await settle();
 
-  const excludedCheckbox = root.querySelector<HTMLInputElement>(`input[aria-label="Select ${excludedName}"]`);
+  const excludedCheckbox = root.querySelector(`input[aria-label="Select ${excludedName}"]`) as any;
   expect(excludedCheckbox).not.toBeNull();
   await act(async () => {
     excludedCheckbox!.click();
@@ -165,7 +169,7 @@ test("CONTRACT · MRQ-205 · mounted People selection survives a page change int
   });
   expect(root.textContent).toContain("1 selected");
 
-  const next = [...root.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Next");
+  const next = [...root.querySelectorAll("button")].find((button: any) => button.textContent?.trim() === "Next") as any;
   expect(next).not.toBeUndefined();
   await act(async () => {
     next!.click();
@@ -175,20 +179,20 @@ test("CONTRACT · MRQ-205 · mounted People selection survives a page change int
 
   expect(root.textContent).toContain("Grace Isford");
   expect(root.querySelector(`input[aria-label="Select ${excludedName}"]`)).toBeNull();
-  const graceCheckbox = root.querySelector<HTMLInputElement>('input[aria-label="Select Grace Isford"]');
+  const graceCheckbox = root.querySelector('input[aria-label="Select Grace Isford"]') as any;
   expect(graceCheckbox).not.toBeNull();
   await act(async () => {
     graceCheckbox!.click();
     await Promise.resolve();
   });
-  const communicate = [...root.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Communicate");
+  const communicate = [...root.querySelectorAll("button")].find((button: any) => button.textContent?.trim() === "Communicate") as any;
   expect(communicate).not.toBeUndefined();
   await act(async () => {
     communicate!.click();
     await Promise.resolve();
   });
 
-  const dialog = root.querySelector<HTMLElement>('[role="dialog"]');
+  const dialog = root.querySelector('[role="dialog"]') as any;
   expect(dialog?.textContent).toContain("1 recipient ready");
   expect(dialog?.textContent).toContain(`1 excluded — marked do-not-contact: ${excludedName}`);
 });
