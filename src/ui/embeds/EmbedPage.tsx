@@ -11,7 +11,7 @@ import {
   type PublicSession,
   type PublicTrack,
 } from "../../lib/public-site";
-import { EMBED_SNIPPET_HEIGHT_PX, embedCalendarLink, embedIframeSnippet, embedSnippetStyle } from "../../lib/embed-snippet";
+import { EMBED_SNIPPET_HEIGHT_PX, embedCalendarLink, embedIframeSnippet, embedSnippetNote, embedSnippetStyle } from "../../lib/embed-snippet";
 import { PUBLIC_SPEAKER_EMPTY_LABEL } from "../../lib/participants";
 import { PublicShell, PUBLIC_SITE_STYLES, PublicSpeakerAvatar } from "../public/agenda/PublicAgendaPage";
 
@@ -164,6 +164,10 @@ export const EMBED_CONFIG_SCRIPT = `
   // and the one the saved-embed API returns cannot drift apart.
   const SNIPPET_STYLE = ${JSON.stringify(Object.fromEntries(EMBED_KINDS.map((kind) => [kind, embedSnippetStyle(kind)])))};
   const SNIPPET_HEIGHT = ${JSON.stringify(EMBED_SNIPPET_HEIGHT_PX)};
+  const SNIPPET_NOTE = ${JSON.stringify(Object.fromEntries(EMBED_KINDS.map((kind) => [kind, {
+    html: embedSnippetNote(kind, "html"),
+    other: embedSnippetNote(kind, "json"),
+  }])))};
   // The conference name reaches an HTML attribute here, and this textarea
   // decodes one layer of entities before anyone copies what is in it.
   const escapeAttr = (value) => String(value)
@@ -243,8 +247,9 @@ export const EMBED_CONFIG_SCRIPT = `
     const previewSrc = src + (src.includes('?') ? '&' : '?') + 'preview=' + encodeURIComponent(state.output);
     preview.src = previewSrc;
     preview.setAttribute('data-preview-output', state.output);
-    // The snippet's height changes with the kind, so the note about it has to.
-    if (previewNote) previewNote.textContent = 'Fitted to this panel. Your snippet is ' + SNIPPET_HEIGHT[kind] + 'px tall, and you can change that number in the code.';
+    // The note follows the kind AND the output: only the HTML snippet is a
+    // frame with a height, and the others are a link.
+    if (previewNote) previewNote.textContent = SNIPPET_NOTE[kind][state.output === 'html' ? 'html' : 'other'];
   };
   kindButtons.forEach((b) => b.addEventListener('click', () => { saveFieldSelection(); state.kind = b.dataset.embedKind; state.savedSlug = null; paintControls(); update(); }));
   outputButtons.forEach((b) => b.addEventListener('click', () => { state.output = b.dataset.embedOutput; outputButtons.forEach((item) => { const active = item.dataset.embedOutput === state.output; item.classList.toggle('active', active); item.setAttribute('aria-pressed', String(active)); }); update(); }));
@@ -655,7 +660,7 @@ export function EmbedConfigPage({
             {/* The preview is its own viewport and always has been. Saying so
                 stops an organizer reading its height as the one they are about
                 to paste — the snippet states that number itself. */}
-            <p class="embed-preview-note" data-preview-note>Fitted to this panel. Your snippet is {EMBED_SNIPPET_HEIGHT_PX[kind]}px tall, and you can change that number in the code.</p>
+            <p class="embed-preview-note" data-preview-note>{embedSnippetNote(kind, output)}</p>
             <div class="embed-preview"><iframe data-embed-preview title={`${event.name} ${EMBED_KIND_LABEL[kind].toLowerCase()} live preview`} src={previewSrc(event, kind, track, status, layout, accent, selectedFields, output)} /></div>
             <p style={{ margin: "10px 0 0", fontSize: "11px" }}>Published changes are served anonymously and refreshed from a 30-second edge cache.</p>
           </section>

@@ -26,13 +26,17 @@ import { escapeHtml } from "../jobs/mail/render";
  *
  * The speakers gallery is the one kind NO embeddable height satisfies, and the
  * honest thing is to say so rather than pick a number and describe it well.
- * Measured: the first card ends at 2275px at a 600px host and 2431px at 375px,
- * so one whole card needs an iframe taller than most pages and two need 2481px
- * / 2717px. 900px is chosen as the most of that first card a reasonable embed
- * can show, and the gallery scrolls from there. The card being that tall is the
- * defect underneath, and it is a layout question rather than a snippet one —
- * filed separately rather than absorbed here. A host who wants several speakers
- * in a short box should ask for the list layout, which this embed supports.
+ * Measured: one whole card needs 2276px at a 600px host and 2432px at 375px,
+ * and one whole card plus the next beginning needs 2355px / 2591px — taller
+ * than most pages. The list layout is no escape either: with the default fields
+ * its first row ends at 3752px / 3828px, worse than cards. 900px is the most of
+ * that first card a reasonable embed can show, and the gallery scrolls from
+ * there.
+ *
+ * Nothing about the snippet can fix that. The row height is the defect
+ * underneath, it is a layout question rather than a snippet one, and it is
+ * reported to the eval triage seat rather than absorbed here or minted as a
+ * ticket by a delegator who is not the board's single writer.
  */
 export const EMBED_SNIPPET_HEIGHT_PX: Readonly<Record<EmbedKind, number>> = {
   agenda: 720,
@@ -42,6 +46,20 @@ export const EMBED_SNIPPET_HEIGHT_PX: Readonly<Record<EmbedKind, number>> = {
 };
 
 /** The style attribute every generated HTML snippet carries. */
+/**
+ * What the page can honestly tell an organizer about the snippet they copied.
+ *
+ * Only the HTML output is an iframe. The others hand over a URL or an anchor,
+ * and telling their user a pixel height is simply false. Changing the height
+ * also means changing BOTH numbers: the inline style wins over the attribute,
+ * so editing `height="900"` alone leaves the frame where it was.
+ */
+export function embedSnippetNote(kind: EmbedKind, output: string): string {
+  if (output !== "html") return "Fitted to this panel. This output is a link rather than a frame, so it has no height of its own.";
+  const height = EMBED_SNIPPET_HEIGHT_PX[kind];
+  return `Fitted to this panel. Your snippet is ${height}px tall — change both the height attribute and the height in the style to resize it.`;
+}
+
 export function embedSnippetStyle(kind: EmbedKind): string {
   const height = EMBED_SNIPPET_HEIGHT_PX[kind];
   return `width:100%;height:${height}px;border:0`;

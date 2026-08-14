@@ -6,7 +6,9 @@ import {
   embedCalendarLink,
   embedIframeSnippet,
 } from "../../src/lib/embed-snippet";
-import { EMBED_CONFIG_SCRIPT } from "../../src/ui/embeds/EmbedPage";
+import { EMBED_CONFIG_SCRIPT, EmbedConfigPage } from "../../src/ui/embeds/EmbedPage";
+import { h } from "preact";
+import { renderToString } from "preact-render-to-string";
 
 /**
  * sbek round 11, manual EMB-15: the generated snippet carried
@@ -21,6 +23,36 @@ import { EMBED_CONFIG_SCRIPT } from "../../src/ui/embeds/EmbedPage";
  * dead helper reference beside a hand-written tag, which is the shape of the
  * defect it claims to prevent.
  */
+
+/**
+ * The one layer of entity decoding a browser performs when a script reads
+ * `textarea.value`, or a human selects and copies what is displayed.
+ */
+function decodeOnce(value: string): string {
+  return value
+    .replaceAll("&lt;", "<").replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"').replaceAll("&#39;", "'")
+    .replaceAll("&amp;", "&");
+}
+
+/** The snippet the server-rendered page hands over, as an organizer copies it. */
+function renderedSnippet(eventName: string, output: string): { snippet: string; note: string } {
+  const event = {
+    id: "e", name: eventName, slug: "aie", tagline: null,
+    starts_on: "2026-10-12", ends_on: "2026-10-14", timezone: "America/New_York", accent: "#0b6a72",
+  } as never;
+  const preview = {
+    event, venue: { disclosed: false }, slug: "aie-agenda", kind: "agenda",
+    config: { fields: [] }, tracks: [], formats: [], rooms: [], sessions: [], speakers: [],
+  } as never;
+  const html = renderToString(h(EmbedConfigPage, {
+    event, tracks: [], kind: "agenda", track: "", status: "", layout: "cards",
+    accent: "#0b6a72", fields: [], output, preview,
+  } as never));
+  const textarea = /data-embed-code="true"[^>]*>([\s\S]*?)<\/textarea>/.exec(html);
+  const note = /class="embed-preview-note"[^>]*>([\s\S]*?)<\/p>/.exec(html);
+  return { snippet: decodeOnce(textarea?.[1] ?? ""), note: decodeOnce(note?.[1] ?? "") };
+}
 
 /** The generated snippet's attributes, read as a browser would read them. */
 function attributes(tag: string): Record<string, string> {
@@ -151,7 +183,7 @@ describe("generated embed snippet", () => {
       expect(styleOf(snippet).height).toBe(`${EMBED_SNIPPET_HEIGHT_PX[kind]}px`);
       // The note beside the preview follows the kind rather than freezing on the
       // one the page was rendered with.
-      expect(previewNote, `${kind} preview note`).toContain(`${EMBED_SNIPPET_HEIGHT_PX[kind]}px`);
+      expect(previewNote, `${kind} preview note`).toContain(`${EMBED_SNIPPET_HEIGHT_PX[kind]}px tall`);
     }
   });
 
@@ -163,6 +195,38 @@ describe("generated embed snippet", () => {
     const calendar = runConfigScript({ eventName: HOSTILE_TEXT, kind: "agenda", output: "ical" });
     expect(calendar.snippet).not.toContain("<img");
     expect(calendar.snippet).toContain("&lt;img");
+  });
+
+  test("CONTRACT · what the server-rendered page hands over survives its own decoding", () => {
+    // The snippet reaches an organizer through a textarea, which decodes one
+    // layer of entities. What matters is the string AFTER that decode: a
+    // conference name has to still be inert once the page has undone a layer.
+    const { snippet } = renderedSnippet(`${HOSTILE_ATTRIBUTE} agenda`, "html");
+    expect(snippet).toContain("<iframe");
+    expect(attributes(snippet).height).toBe(String(EMBED_SNIPPET_HEIGHT_PX.agenda));
+    // The name's quotes are still entities after the decode, so the title
+    // attribute is not closed and no handler is created.
+    expect(attributes(snippet).title).not.toContain('"');
+    expect(snippet).not.toContain('onload="alert(1)"');
+    expect(snippet).toContain("&quot;");
+
+    const text = renderedSnippet(HOSTILE_TEXT, "ical");
+    expect(text.snippet).not.toContain("<img");
+  });
+
+  test("CONTRACT · the note beside the preview is true of the output it describes", () => {
+    // Only the HTML output is a frame. Telling someone copying a JSON URL that
+    // their snippet is 720px tall is a plain untruth, on the surface whose whole
+    // job is telling them what they just copied.
+    expect(renderedSnippet("AIE NYC 2026", "html").note).toContain(`${EMBED_SNIPPET_HEIGHT_PX.agenda}px`);
+    for (const output of ["json", "xml", "basic", "ical"]) {
+      const { note } = renderedSnippet("AIE NYC 2026", output);
+      expect(note, `${output} note`).not.toContain("px tall");
+      expect(note, `${output} note`).toContain("link rather than a frame");
+    }
+    // And the script agrees, for the output an organizer switches to in place.
+    expect(runConfigScript({ eventName: "AIE NYC 2026", kind: "agenda", output: "json" }).previewNote)
+      .toContain("link rather than a frame");
   });
 
   test("CONTRACT · a call for speakers is shorter than a day of programme", () => {
