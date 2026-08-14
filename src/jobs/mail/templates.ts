@@ -17,7 +17,7 @@ export const TRIGGER_TEMPLATE_KEYS = [
 export const SUPPORT_TEMPLATE_KEYS = ["reminder_generic", "custom"] as const;
 /** Reviewer reminders use a direct reviewer recipient, not the speaker audience engine. */
 export const REVIEWER_TEMPLATE_KEYS = ["reviewer_reminder"] as const;
-export const AUTH_TEMPLATE_KEYS = ["magic_link_login", "draft_resume", "task_link"] as const;
+export const AUTH_TEMPLATE_KEYS = ["magic_link_login", "portal_invite", "draft_resume", "task_link"] as const;
 export const MAIL_TEMPLATE_KEYS = [
   ...TRIGGER_TEMPLATE_KEYS,
   ...SUPPORT_TEMPLATE_KEYS,
@@ -93,6 +93,11 @@ export const DEFAULT_TEMPLATES: Record<MailTemplateKey, DefaultTemplate> = {
     name: "Magic link sign-in",
     subject: "Your Marquee sign-in link",
     body_md: "Sign in to Marquee: {{auth.link}}\n\nThis link works once and expires in 15 minutes.",
+  },
+  portal_invite: {
+    name: "Speaker portal invitation",
+    subject: "Your Marquee speaker portal invitation",
+    body_md: "Open your Marquee speaker portal: {{auth.link}}\n\nThis invitation is valid for 15 days and can be opened again during that window.",
   },
   draft_resume: {
     name: "Resume your draft",

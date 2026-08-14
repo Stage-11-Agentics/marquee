@@ -6,7 +6,9 @@ import {
 } from "../../db/schema";
 import { mintToken, sha256Hex } from "./random-token";
 
-/** SPEC §3: 15 minutes for login; 30 days for draft resume; 24 h claim, 7 d invite. */
+export const PORTAL_INVITE_TTL_MS = 15 * 24 * 60 * 60_000;
+
+/** SPEC §3: 15 minutes for login; portal invitations are reusable for 15 days. */
 const TTL_BY_PURPOSE: Record<MagicLinkPurpose, number> = {
   login: 15 * 60_000,
   draft_resume: 30 * 24 * 60 * 60_000,
@@ -14,6 +16,7 @@ const TTL_BY_PURPOSE: Record<MagicLinkPurpose, number> = {
   task_link: 30 * 24 * 60 * 60_000,
   claim: 24 * 60 * 60_000,
   org_invite: 7 * 24 * 60 * 60_000,
+  portal_invite: PORTAL_INVITE_TTL_MS,
 };
 
 /** Purposes whose token is minted before its person exists (SPEC Amendment 19 §3.2). */
@@ -51,7 +54,12 @@ type MintMagicLinkInput = {
  * narrower shape: only the two personless purposes may pass a null, and no
  * speaker-facing caller should be able to reach that door by accident.
  */
-type PortalMagicLinkInput = MintMagicLinkInput & { eventId: Id; personId: Id };
+type PortalMagicLinkInput = Omit<MintMagicLinkInput, "personId" | "purpose"> & {
+  eventId: Id;
+  personId: Id;
+  /** Organizer previews retain ordinary login's one-time behavior. */
+  purpose?: "login" | "portal_invite";
+};
 
 async function mintLink(
   db: D1Database,
@@ -97,8 +105,14 @@ export function mintMagicLink(db: D1Database, input: MintMagicLinkInput): Promis
 
 /** Organizer-only speaker invitations share the auth token writer without adding another route-local writer. */
 export function mintPortalMagicLink(db: D1Database, input: PortalMagicLinkInput): Promise<MintedMagicLink> {
-  return mintLink(db, input);
+  return mintLink(db, { ...input, purpose: input.purpose ?? "portal_invite" });
 }
+
+type MagicLinkOptions = {
+  purposes?: readonly MagicLinkPurpose[];
+  /** Invitations are credentials that may be reopened until they expire. */
+  reusablePurposes?: readonly MagicLinkPurpose[];
+};
 
 export type MagicLinkState =
   | { status: "live"; link: MagicLinkRow }
@@ -114,7 +128,7 @@ export async function readMagicLink(
   db: D1Database,
   token: string,
   now = Date.now(),
-  options: { purposes?: readonly MagicLinkPurpose[] } = {},
+  options: MagicLinkOptions = {},
 ): Promise<MagicLinkState> {
   const tokenHash = await sha256Hex(token);
   const link = await db
@@ -134,20 +148,24 @@ export type MagicLinkConsumption =
   | { status: "expired" | "used" | "invalid"; link: MagicLinkRow | null };
 
 /**
- * Single-use and expiring, enforced atomically: the UPDATE only lands when the
- * link is still unused and unexpired, so a raced second exchange gets
- * `changes = 0` and fails. Lookup is by token hash (unique index); the raw
- * token never touches the database or the logs.
+ * Expiring links are single-use by default, enforced atomically: the UPDATE
+ * only lands when the link is still unused and unexpired, so a raced second
+ * exchange gets `changes = 0` and fails. Reusable invitation purposes are the
+ * deliberate exception and do not write `used_at`. Lookup is by token hash
+ * (unique index); the raw token never touches the database or the logs.
  */
 async function consumeMagicLinkState(
   db: D1Database,
   token: string,
   now = Date.now(),
-  options: { purposes?: readonly MagicLinkPurpose[] } = {},
+  options: MagicLinkOptions = {},
 ): Promise<MagicLinkConsumption> {
   const state = await readMagicLink(db, token, now, options);
   if (state.status !== "live") return state;
   const link = state.link;
+  if (options.reusablePurposes?.includes(link.purpose)) {
+    return { status: "consumed", link };
+  }
   const consumed = await db
     .prepare(
       `UPDATE magic_links SET used_at = ?, updated_at = ?
@@ -171,7 +189,7 @@ export async function consumeMagicLinkWithStatus(
   db: D1Database,
   token: string,
   now = Date.now(),
-  options: { purposes?: readonly MagicLinkPurpose[] } = {},
+  options: MagicLinkOptions = {},
 ): Promise<MagicLinkConsumption> {
   return consumeMagicLinkState(db, token, now, options);
 }
@@ -180,7 +198,7 @@ export async function consumeMagicLink(
   db: D1Database,
   token: string,
   now = Date.now(),
-  options: { purposes?: readonly MagicLinkPurpose[] } = {},
+  options: MagicLinkOptions = {},
 ): Promise<MagicLinkRow | null> {
   const result = await consumeMagicLinkState(db, token, now, options);
   return result.status === "consumed" ? result.link : null;

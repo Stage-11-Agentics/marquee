@@ -1,7 +1,7 @@
 import type { Id } from "../../db/schema";
 import { enqueueOutbox } from "../../jobs/mail/outbox";
 
-export const AUTH_TEMPLATE_KEYS = ["magic_link_login", "draft_resume", "task_link"] as const;
+export const AUTH_TEMPLATE_KEYS = ["magic_link_login", "portal_invite", "draft_resume", "task_link"] as const;
 export type AuthTemplateKey = (typeof AUTH_TEMPLATE_KEYS)[number];
 
 /**
@@ -45,5 +45,12 @@ export function renderMagicLinkLoginMail(link: string): { subject: string; text:
   const subject = "Your Marquee sign-in link";
   const text = `Sign in to Marquee: ${link}\n\nThis link works once and expires in 15 minutes.`;
   const html = `<p><a href="${link}">Sign in to Marquee</a></p><p>This link works once and expires in 15 minutes.</p>`;
+  return { subject, text, html };
+}
+
+export function renderPortalInviteMail(link: string): { subject: string; text: string; html: string } {
+  const subject = "Your Marquee speaker portal invitation";
+  const text = `Open your Marquee speaker portal: ${link}\n\nThis invitation is valid for 15 days and can be opened again during that window.`;
+  const html = `<p><a href="${link}">Open your Marquee speaker portal</a></p><p>This invitation is valid for 15 days and can be opened again during that window.</p>`;
   return { subject, text, html };
 }

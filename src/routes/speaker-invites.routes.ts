@@ -2,7 +2,7 @@ import { z } from "@hono/zod-openapi";
 
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
-import { enqueueAuthMail, renderMagicLinkLoginMail } from "../lib/auth/auth-mail";
+import { enqueueAuthMail, renderPortalInviteMail } from "../lib/auth/auth-mail";
 import { mintPortalMagicLink } from "../lib/auth/magic-links";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole } from "../lib/auth/scope-resolution";
@@ -35,7 +35,7 @@ const inviteSpeakers = defineApiRoute(
     path: "/api/v1/events/{eventId}/speakers/invite",
     operationId: "inviteSpeakersToPortal",
     summary: "Invite speakers to the portal",
-    description: "Queues one-time, demo-safe portal links for speakers belonging to this conference.",
+    description: "Queues reusable, demo-safe portal invitations valid for 15 days for speakers belonging to this conference.",
     tags: ["Speaker roster"],
     request: { params: eventParams, body: { content: { "application/json": { schema: inviteBody } } } },
     policy: { auth: { kind: "grants", grants: ["program:write"] }, rateLimit: { bucket: "write" }, concurrency: "none" },
@@ -83,17 +83,16 @@ const inviteSpeakers = defineApiRoute(
       const link = await mintPortalMagicLink(context.env.DB, {
         personId: speaker.id,
         eventId,
-        purpose: "login",
         redirectTo: "/portal",
         now,
       });
       const magicLink = `${origin}/api/v1/auth/exchange?token=${encodeURIComponent(link.token)}`;
-      const mail = renderMagicLinkLoginMail(magicLink);
+      const mail = renderPortalInviteMail(magicLink);
       const outboxId = await enqueueAuthMail(context.env.DB, {
         eventId,
         personId: speaker.id,
         toEmail: speaker.email,
-        templateKey: "magic_link_login",
+        templateKey: "portal_invite",
         entityId: link.id,
         ...mail,
         now,

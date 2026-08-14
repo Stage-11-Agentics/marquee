@@ -300,7 +300,7 @@ const exchangeMagicLink = defineApiRoute(
     const token = context.req.query("token");
     if (!token) return rejectMagicLink(context, "Missing token");
     const now = Date.now();
-    const purposes = ["login", "draft_resume", "cospeaker_profile", "task_link"] as const;
+    const purposes = ["login", "draft_resume", "cospeaker_profile", "task_link", "portal_invite"] as const;
 
     // The browser may already hold a live session for a different seat. Read
     // the link first: refusing a credential after spending it strands the
@@ -322,7 +322,10 @@ const exchangeMagicLink = defineApiRoute(
     // Sign-in exchanges only person-bound links. `claim` and `org_invite` have
     // no person yet and are exchanged at `/api/v1/claim`, which is the one
     // place a session is minted from a token that predates its owner.
-    const consumed = await consumeMagicLinkWithStatus(context.env.DB, token, now, { purposes });
+    const consumed = await consumeMagicLinkWithStatus(context.env.DB, token, now, {
+      purposes,
+      reusablePurposes: ["portal_invite"],
+    });
     if (consumed.status !== "consumed") return rejectMagicLinkState(context, consumed.status);
     const link = consumed.link;
     if (link.person_id === null) return rejectMagicLink(context, "This sign-in link is not valid");

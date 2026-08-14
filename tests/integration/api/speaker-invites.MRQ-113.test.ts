@@ -2,6 +2,7 @@ import { SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, test } from "vitest";
 
 import { createSession } from "../../../src/lib/auth/auth-sessions";
+import { readMagicLink } from "../../../src/lib/auth/magic-links";
 import { applyMigrations, env } from "../apply-migrations";
 
 const ORIGIN = "https://marquee.stage11.dev";
@@ -51,8 +52,23 @@ describe.sequential("MRQ-113 portal invites", () => {
     expect(result.message).toContain("queued");
     expect(result.invites.every((invite) => invite.magic_link?.includes("/api/v1/auth/exchange?token=") === true)).toBe(true);
     expect(await env.DB.prepare("SELECT invited_at FROM participations WHERE id = ?").bind(PARTICIPATION_ID).first<{ invited_at: number }>()).toMatchObject({ invited_at: expect.any(Number) });
-    expect(Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM outbox WHERE event_id = ? AND template_key = 'magic_link_login'").bind(EVENT_ID).first<{ count: number }>())?.count)).toBe(4);
+    expect(Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM outbox WHERE event_id = ? AND template_key = 'portal_invite'").bind(EVENT_ID).first<{ count: number }>())?.count)).toBe(4);
     expect(Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM magic_links WHERE person_id IN (?, ?)").bind(PRIYA_ID, MARCUS_ID).first<{ count: number }>())?.count)).toBe(4);
+    const stored = await env.DB.prepare("SELECT purpose, created_at, expires_at, used_at FROM magic_links WHERE person_id = ? ORDER BY created_at DESC LIMIT 1").bind(PRIYA_ID).first<{ purpose: string; created_at: number; expires_at: number; used_at: number | null }>();
+    expect(stored).toMatchObject({ purpose: "portal_invite", used_at: null, expires_at: expect.any(Number), created_at: expect.any(Number) });
+    expect(stored!.expires_at - stored!.created_at).toBe(15 * 24 * 60 * 60_000);
+    const token = new URL(result.invites[0].magic_link!).searchParams.get("token");
+    expect(token).toBeTruthy();
+    const firstExchange = await request(`/api/v1/auth/exchange?token=${encodeURIComponent(token!)}`, { redirect: "manual" }, "");
+    const secondExchange = await request(`/api/v1/auth/exchange?token=${encodeURIComponent(token!)}`, { redirect: "manual" }, "");
+    expect(firstExchange.status).toBe(302);
+    expect(secondExchange.status).toBe(302);
+    expect(Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM magic_links WHERE purpose = 'portal_invite' AND used_at IS NOT NULL").first<{ count: number }>())?.count)).toBe(0);
+    expect(await readMagicLink(env.DB, token!, stored!.expires_at, { purposes: ["portal_invite"] })).toMatchObject({ status: "expired" });
+    const invitationMail = await env.DB.prepare("SELECT subject, text FROM outbox WHERE template_key = 'portal_invite' ORDER BY created_at DESC LIMIT 1").first<{ subject: string; text: string }>();
+    expect(invitationMail).toMatchObject({ subject: "Your Marquee speaker portal invitation" });
+    expect(invitationMail?.text).toContain("valid for 15 days");
+    expect(invitationMail?.text).toContain("opened again");
   });
 
   test("AC-282 + AC-283 · unauthenticated and cross-event speaker requests are refused without writes", async () => {

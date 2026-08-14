@@ -36,6 +36,7 @@ export const MAGIC_LINK_PURPOSES = [
   "task_link",
   "claim",
   "org_invite",
+  "portal_invite",
 ] as const;
 /**
  * The two purposes that pre-date their person: a claim token is minted against
