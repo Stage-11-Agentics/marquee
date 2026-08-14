@@ -191,7 +191,10 @@ function ComposeDrawer({ eventId, rows, displayNames, onClose }: { eventId: stri
     try {
       const next = await requestJson<{ subject: string; text: string; to_email: string }>(`/api/v1/events/${encodeURIComponent(eventId)}/comms/preview`, "/api/v1/events/{eventId}/comms/preview", {
         method: "POST",
-        body: JSON.stringify({ person_id: firstRecipient.row.person.id, submission_id: firstRecipient.submissionId ?? undefined, ...message }),
+        // `task_state` matches the selector `queue` sends below, so the preview
+        // is of the message that will actually go out rather than of a
+        // differently-scoped one that happens to share its copy.
+        body: JSON.stringify({ person_id: firstRecipient.row.person.id, submission_id: firstRecipient.submissionId ?? undefined, task_state: "open", ...message }),
       });
       setPreview(next);
     } catch (caught) { setError(errorSummary(caught)); }

@@ -783,7 +783,7 @@ const previewComms = defineApiRoute(
     tags: ["Comms"],
     request: {
       params: eventParams,
-      body: { content: { "application/json": { schema: z.object({ person_id: z.string(), submission_id: z.string().optional(), role: reminderSelectorSchema.shape.role, template_key: z.string().optional(), subject: z.string().optional(), body: z.string().optional() }) } } },
+      body: { content: { "application/json": { schema: z.object({ person_id: z.string(), submission_id: z.string().optional(), role: reminderSelectorSchema.shape.role, task_state: reminderSelectorSchema.shape.task_state, template_key: z.string().optional(), subject: z.string().optional(), body: z.string().optional() }) } } },
     },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
     responses: { 200: { content: { "application/json": { schema: previewResponse } }, description: "Rendered preview" }, ...errorResponses([400, 401, 403, 404, 500]) },
@@ -806,13 +806,27 @@ const previewComms = defineApiRoute(
          )`,
     ).bind(body.person_id, eventId, eventId).first<{ id: string; email: string; name: string }>();
     if (!recipient) throw ApiError.notFound("recipient not found");
-    const selected = body.submission_id
-      ? (await recipientsFor(context.env.DB, eventId, {
-        person_ids: [body.person_id],
-        submission_ids: [body.submission_id],
-        role: body.role,
-      }))[0]
-      : undefined;
+    // Resolve the recipient the way the SEND resolves them, and narrow by
+    // submission only when the caller named one.
+    //
+    // The preview used to require `submission_id` before it would look up any
+    // context at all, and fall back to three speaker fields when it was absent.
+    // The composer passes `reminderSubmission(row) ?? undefined`, which is
+    // undefined for any speaker whose outstanding task is not tied to a
+    // session — so those previews rendered `{{task.title}}` and
+    // `{{task.due_date}}` literally while the send that followed merged them
+    // correctly. Wrong in exactly the place being wrong costs most: an
+    // organizer checking their copy before mailing real speakers concludes the
+    // merge is broken and rewrites something that was already right.
+    const selected = (await recipientsFor(context.env.DB, eventId, {
+      person_ids: [body.person_id],
+      submission_ids: body.submission_id ? [body.submission_id] : undefined,
+      role: body.role,
+      task_state: body.task_state,
+    }))[0];
+    // The fallback still exists, for a recipient with no participation at all —
+    // an organizer on the membership, say. It is now the exception it was
+    // written to be rather than the ordinary path.
     const data: MergeData = selected
       ? mergeDataFor(selected)
       : { "speaker.first_name": firstName(recipient.name), "speaker.name": recipient.name, "speaker.email": recipient.email };
