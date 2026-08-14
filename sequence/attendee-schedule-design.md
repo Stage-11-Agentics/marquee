@@ -129,3 +129,48 @@ Client-side overlap detection over starred intervals; a small muted "overlaps �
 
 - Star affordance and placement on the card (MRQ-120's new anatomy is the canvas); the export row layout; the import-as-copy moment; QR vs plain link for the sync handoff; where "For agents" lives. All visual/UX — exactly what the prototype exists to discover.
 - Prototype should mock: starring, the My Schedule toggle with count, a conflict pair, the share/sync sheet, and the export row — on realistic AIE NYC seed data, in the Flight Deck skin (`DESIGN.md`; tokens in `prototypes/skins/skin-c.html`).
+
+---
+
+## 7. Round 2 — post-competition rulings (Atin, 2026-08-14)
+
+**Context.** Round 1 shipped whole (MRQ-132, PR #102) and is live on marquee.stage11.dev. This round answers "does this need accounts / a magic link?" for the real AIE NYC 2026 (Oct 12–14), and adds two surfaces the first round deliberately left out: a star-count demand signal and attendee entry into the CRM.
+
+### Rulings
+
+| # | Question | Ruling |
+|---|----------|--------|
+| R2-1 | Accounts / login | **No accounts — reaffirmed.** Anonymous localStorage + short code stays the spine. No attendee login, no sessions, no membership role, no seat on the auth rails. |
+| R2-2 | Email claim | **Yes, opt-in.** "Save your schedule with your email" attaches an email to a schedule code and sends the sync URL; re-sendable later ("email me my link"), which closes the lost-write-key recovery gap. The claim UI says plainly that the organizer can see your picks — ruled fine. |
+| R2-3 | Attendees in the CRM | **Yes — as `people` rows, never a separate database.** An attendee is an org-scoped person plus an event-scoped attendance row. A separate attendee DB was considered and ruled against: it re-creates the parallel-people-table anti-pattern and blinds the CRM to attendee→speaker continuity — this year's attendee is next year's speaker prospect. |
+| R2-4 | Star counts | **Tracked, valuable in both directions.** The organizer sees per-session counts as an advance-demand signal (room planning before doors open). Attendee-visible counts are an organizer **setting**; when on, a count shows only once a session has ≥ n stars (default n = 3). |
+| R2-5 | Ticketing import | **Agent-native, not bespoke integrations.** No per-platform importers. The operator's agent bridges from wherever tickets were sold, guided by the skill file; the web app offers a "this is a task for your agent" copy-paste prompt. |
+
+### Design (proposed to fit the rulings; prototype before build)
+
+- **Star-count beacon.** A random device ID minted in localStorage; star/unstar upserts/deletes an `(event_id, session_id, device_hash)` row; count = distinct devices. Idempotent, unstar decrements honestly, zero PII. Own KV rate limiter per the schedules pattern (the shared buckets are a no-op, `allowAllRateLimiter`). Spoofable by a determined script — it is a *signal, not a vote*, and that framing is part of the design. Organizer surfaces show exact counts including tiny ones; the public agenda shows counts only when the org setting is on **and** count ≥ n. Public setting defaults **off** — popularity display carries speaker-feelings and rich-get-richer dynamics, so the organizer chooses it.
+- **Claim = attach, not account.** Claiming creates/updates the org-scoped person (upsert by email), writes the attendance row with the schedule code, and sends one transactional mail carrying the sync URL. No session is created; nothing to log into. Turnstile-gated, own rate limiter.
+- **Attendance join.** `participations` is deliberately NOT reused — it is submission-scoped (person ↔ submission, speaker roles), and attendees have no submission. New event-scoped join, working name `event_attendances`: `person_id`, `event_id`, `source` (`import` | `claim`), `schedule_code` when claim-sourced, timestamps. Human properties stay on `people`; this-event facts on the join — the CRM doctrine holds. Because attendees never touch `memberships`, there is **no roles CHECK-rebuild and no grants change**. The 0012 people machinery (notes, tags, lists) applies automatically; a live person-list "attendees of ⟨event⟩" is the consuming surface with zero new UI.
+- **Privacy posture (binding).** Anonymous stars stay anonymous forever. Identity exists only at the explicit claim, and the claim moment says what it shares. **No silent linkage** of star data to imported ticket-holders. Aggregate counts carry no identity.
+- **Agent import affordance.** Rails: the existing people CSV import (`org-imports.routes.ts`) and documented API, extended to write attendance rows (idempotent by email — re-running an export never dupes a person). Skill-file chapter: export → map → bulk upsert → verify counts. Web affordance on the People surface: a "task for your agent" block with a pre-filled copy-paste prompt (event slug, API base, where to mint a scoped token, the idempotency contract). This is the product's general answer to the integrations treadmill: stable rails + a taught agent loop, not N connectors.
+
+### Constraints
+
+- **Resend free tier, 100/day, is a hard cap** (ruled 2026-08-11). Claim mail is launch-gated on a paid tier before the real event — conference-week claim volume from 1k–3k attendees collides with speaker comms, which is the product's core mail. Build ≠ enable.
+- Every new anonymous endpoint brings its own limiter (schedules' 30/hr/IP KV pattern) and Turnstile where it accepts an email.
+
+### Scope bands
+
+- **Now (prototype first):** star-count beacon + organizer counts + public-display setting with threshold; opt-in email claim (recovery + CRM entry); `event_attendances` + import affordance + skill chapter.
+- **Later:** starring inside embeds (iframe-partitioned storage needs code-based hydration or postMessage; embeds are publicly cached 30s); transit-aware conflict engine; year-over-year CRM views; attendee comms/segments — needs the consuming-workflow answer below.
+- **Not:** attendee login/accounts/sessions; a separate attendee database; ticketing/payments (R33 skip); an attendee app; silent star-to-ticket linkage.
+
+### Open
+
+- **Consuming workflow:** who at AIE opens the attendee list and what do they do next (next-year CFP outreach? sponsor reporting?). Shapes which fields and analytics matter. Person-lists give the surface; the workflow is unruled.
+- **Retention:** schedule codes and webcal feeds currently live indefinitely. Proposed default: persist after the event — a feed that goes quiet beats a calendar that breaks. Unruled.
+- **n:** fixed 3 vs org-configurable — a prototype question.
+
+### Prototype first
+
+Extend `prototypes/attendee-schedule/index.html` (Flight Deck tokens): star-count chips at threshold on the public agenda; an organizer demand view (counts by session); the claim sheet with its plain-language disclosure; the "task for your agent" import block on the People surface. Nothing builds until this is loved (Tone rules).
