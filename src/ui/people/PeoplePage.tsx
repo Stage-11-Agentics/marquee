@@ -13,13 +13,13 @@ import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
 import { Button, EmptyState, PageHeader } from "../shell/components";
-import { errorSummary } from "../shell/api-client";
+import { errorSummary, MarqueeApiError } from "../shell/api-client";
 import { PersonDrawer } from "./PersonDrawer";
 import { AddPersonModal, ComposeModal, ImportPeopleModal, SaveListModal } from "./PeopleModals";
 import {
   activeCriteria,
   EMPTY_FILTERS,
-  fetchLists,
+  fetchList,
   fetchPeople,
   fetchSummary,
   formatDay,
@@ -115,26 +115,25 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
 
   useEffect(() => { setFilters((current) => ({ ...current, listId: listFromUrl })); }, [listFromUrl]);
 
-  // Resolved from the index rather than from `GET /lists/{id}`, which serialises
-  // every member to hand back a name — an unpaginated scan of the whole list to
-  // render one line (R7). The index carries the name and a correct count for
-  // both kinds and carries no members at all. Absent from it IS "missing", so
-  // the distinction never rests on classifying an error.
+  // Resolve the named lens directly. The detail projection carries no member
+  // rows, and a real 404 is the only missing state; an index cannot turn an
+  // uncapped-list assumption into a deletion claim.
   useEffect(() => {
     setListState({ kind: "resolving" });
     if (!listFromUrl) return;
     const controller = new AbortController();
-    fetchLists(controller.signal)
-      .then((payload) => {
-        const found = payload.data.find((entry) => entry.id === listFromUrl);
-        setListState(found ? { kind: "named", list: found } : { kind: "missing" });
-      })
+    fetchList(listFromUrl, controller.signal)
+      .then((payload) => setListState({ kind: "named", list: payload.list }))
       .catch((caught: unknown) => {
         if (controller.signal.aborted) return;
         // A conference switch calls `abortInFlightRequests()`, which aborts the
         // shell's generation controller and not this one — so the signal above
         // reads false and only the error's own name gives it away.
         if (caught instanceof Error && caught.name === "AbortError") return;
+        if (caught instanceof MarqueeApiError && caught.code === "not_found") {
+          setListState({ kind: "missing" });
+          return;
+        }
         setListState({ kind: "error", message: errorSummary(caught) });
       });
     return () => controller.abort();

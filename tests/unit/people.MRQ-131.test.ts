@@ -210,6 +210,30 @@ test("CONTRACT · MRQ-131 · a list is never rendered as its id, and still count
   expectOk(/\.people-listband \{[^}]*min-height:/s.test(css));
 });
 
+test("CONTRACT · MRQ-200 · the People band resolves one list by id, not by scanning the index", () => {
+  const api = readFileSync(new URL("../../src/ui/people/people-api.ts", import.meta.url), "utf8");
+  const page = readFileSync(new URL("../../src/ui/people/PeoplePage.tsx", import.meta.url), "utf8");
+  const listRoutes = readFileSync(new URL("../../src/routes/person-lists.routes.ts", import.meta.url), "utf8");
+  expect(api).toMatch(/export function fetchList\(listId: string/);
+  expect(page).toMatch(/fetchList\(listFromUrl, controller\.signal\)/);
+  expect(page).not.toMatch(/fetchLists\(controller\.signal\)/);
+  expect(listRoutes).toMatch(/const OPEN_LIST_SELECT =/);
+  expect(listRoutes).toMatch(/\.prepare\(`\$\{OPEN_LIST_SELECT\} WHERE saved\.id = \? AND saved\.org_id = \?`\)/);
+});
+
+test("CONTRACT · MRQ-200 · shared field sizing excludes radios and checkboxes", () => {
+  const components = readFileSync(new URL("../../src/styles/components.css", import.meta.url), "utf8");
+  const evaluation = readFileSync(new URL("../../src/ui/evaluation/evaluation.css", import.meta.url), "utf8");
+  const settings = readFileSync(new URL("../../src/ui/settings/settings.css", import.meta.url), "utf8");
+  const forms = readFileSync(new URL("../../src/ui/forms/forms.css", import.meta.url), "utf8");
+  expect(components).toMatch(/\.field input:not\(\[type="radio"\]\):not\(\[type="checkbox"\]\)/);
+  expect(evaluation).not.toMatch(/\.scope-check input \{[^}]*min-height: 0; width: auto;/);
+  for (const css of [components, evaluation, settings, forms]) {
+    expect(css).not.toMatch(/\.field input(?:\s*[,{}])/);
+    expect(css).not.toMatch(/\.field > input(?:\s*[,{}])/);
+  }
+});
+
 test("CONTRACT · MRQ-131 · Lists is reached from People, not from a sidebar row of its own", () => {
   // A list is a lens on People. A permanent second destination for it makes
   // the nav longer and the relationship less obvious — but the route stays,

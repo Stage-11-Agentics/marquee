@@ -254,6 +254,13 @@ export function fetchLists(signal?: AbortSignal): Promise<{ data: SavedPersonLis
   return apiFetch("/api/v1/org/lists", { route: "/api/v1/org/lists", ...(signal ? { signal } : {}) });
 }
 
+export function fetchList(listId: string, signal?: AbortSignal): Promise<{ list: SavedPersonList }> {
+  return apiFetch(`/api/v1/org/lists/${encodeURIComponent(listId)}`, {
+    route: "/api/v1/org/lists/{listId}",
+    ...(signal ? { signal } : {}),
+  });
+}
+
 export function createList(input: {
   name: string;
   kind: "live" | "fixed";
