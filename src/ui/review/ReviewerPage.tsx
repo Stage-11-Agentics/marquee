@@ -8,6 +8,7 @@ import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, Chip, EmptyState } from "../shell/components";
 import { ThemeSwitch } from "../shell/ThemeSwitch";
 import { useIdentity } from "../shell/identity";
+import { completedItemForRevision, reviewStateForRevision, reviewerRevisionId, reviewerRevisionPath } from "./reviewer-revision";
 import "./review.css";
 
 
@@ -56,7 +57,7 @@ interface CompletedItem extends QueueItem {
   review: DetailReview | null;
 }
 
-interface QueueEnvelope {
+export interface QueueEnvelope {
   committees?: Committee[];
   completed?: CompletedItem[];
   completed_truncated?: boolean;
@@ -215,32 +216,72 @@ function committeeRoleLabel(role: string): string {
   return role.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export function ReviewerPage({ eventId, mode = "queue" }: { eventId: string; mode?: "home" | "queue" }): JSX.Element {
+/** A home revision is a real link; the queue keeps its in-place revision action. */
+export function ReviewerRevisionAction({
+  isHome,
+  onRevision,
+  submissionId,
+}: {
+  isHome: boolean;
+  onRevision: () => void;
+  submissionId: string;
+}): JSX.Element {
+  if (isHome) return <a class="button small" href={reviewerRevisionPath(submissionId)}>Revise this review</a>;
+  return <Button small onClick={onRevision}>Revise this review</Button>;
+}
+
+export interface ReviewerPageProps {
+  eventId: string;
+  initialQueue?: QueueEnvelope;
+  /** Test/SSR seam; the browser uses its real location when this is omitted. */
+  locationSearch?: string;
+  mode?: "home" | "queue";
+}
+
+export function ReviewerPage({ eventId, initialQueue, locationSearch: locationSearchOverride, mode = "queue" }: ReviewerPageProps): JSX.Element {
   // Anonymity runs one way: the reviewer must not see the speaker. Hiding the
   // reviewer from themselves buys nothing and costs attribution — every review
   // recorded here lands under this name on the organizer's record, so the name
   // belongs on screen while the review is being written.
   const identity = useIdentity();
   const isHome = mode === "home";
-  const [plan, setPlan] = useState<ReviewerPlan | null>(null);
-  const [roundId, setRoundId] = useState<string | null>(null);
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [completed, setCompleted] = useState<CompletedItem[]>([]);
-  const [completedTruncated, setCompletedTruncated] = useState(false);
-  const [criteria, setCriteria] = useState<Criterion[]>([]);
-  const [scopes, setScopes] = useState<Scope[]>([]);
-  const [committees, setCommittees] = useState<Committee[]>([]);
-  const [counts, setCounts] = useState<ReviewerCounts>({ reviewed: 0, total: 0, waiting: 0 });
-  const [profile, setProfile] = useState<PortalPerson | null>(null);
+  const initialSearch = locationSearchOverride ?? (typeof window === "undefined" ? "" : window.location.search);
+  const initialCounts = initialQueue?.counts ?? {
+    reviewed: initialQueue?.completed?.length ?? 0,
+    total: (initialQueue?.remaining ?? initialQueue?.data.length ?? 0) + (initialQueue?.completed?.length ?? 0),
+    waiting: initialQueue?.remaining ?? initialQueue?.data.length ?? 0,
+  };
+  const initialPlan: ReviewerPlan | null = initialQueue ? {
+    id: initialQueue.plan.id,
+    name: initialQueue.plan.name,
+    rounds: [{ ...initialQueue.round, position: initialQueue.round.position ?? 0 }],
+  } : null;
+  const initialRevision = initialQueue && !isHome
+    ? completedItemForRevision(initialQueue.completed ?? [], reviewerRevisionId(initialSearch))
+    : null;
+  const initialDrafts = Object.fromEntries([
+    ...(initialQueue?.data ?? []).map((item) => [item.id, { ...EMPTY_REVIEW }] as const),
+    ...(initialRevision ? [[initialRevision.id, reviewStateForRevision(initialRevision)] as const] : []),
+  ]) as Record<string, ReviewState>;
+  const [plan, setPlan] = useState<ReviewerPlan | null>(initialPlan);
+  const [roundId, setRoundId] = useState<string | null>(initialQueue?.round.id ?? null);
+  const [queue, setQueue] = useState<QueueItem[]>(initialQueue?.data ?? []);
+  const [completed, setCompleted] = useState<CompletedItem[]>(initialQueue?.completed ?? []);
+  const [completedTruncated, setCompletedTruncated] = useState(Boolean(initialQueue?.completed_truncated));
+  const [criteria, setCriteria] = useState<Criterion[]>(initialQueue?.round.criteria ?? []);
+  const [scopes, setScopes] = useState<Scope[]>(initialQueue?.scopes ?? []);
+  const [committees, setCommittees] = useState<Committee[]>(initialQueue?.committees ?? []);
+  const [counts, setCounts] = useState<ReviewerCounts>(initialCounts);
+  const [profile, setProfile] = useState<PortalPerson | null>(initialQueue?.person ?? null);
   const [profileEditing, setProfileEditing] = useState(false);
-  const [roundClosesAt, setRoundClosesAt] = useState<number | null>(null);
-  const [roundName, setRoundName] = useState("Initial review");
-  const [roundMode, setRoundMode] = useState<"scorecard" | "comparison">("scorecard");
-  const [blindMode, setBlindMode] = useState(true);
-  const [currentId, setCurrentId] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, ReviewState>>({});
+  const [roundClosesAt, setRoundClosesAt] = useState<number | null>(initialQueue?.round.closes_at ?? null);
+  const [roundName, setRoundName] = useState(initialQueue?.round.name || "Initial review");
+  const [roundMode, setRoundMode] = useState<"scorecard" | "comparison">(initialQueue?.round.mode ?? "scorecard");
+  const [blindMode, setBlindMode] = useState(initialQueue?.round.anonymized ?? true);
+  const [currentId, setCurrentId] = useState<string | null>(initialQueue?.current_id ?? initialQueue?.data[0]?.id ?? null);
+  const [drafts, setDrafts] = useState<Record<string, ReviewState>>(initialDrafts);
   const [comparisonRanks, setComparisonRanks] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialQueue);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -255,8 +296,8 @@ export function ReviewerPage({ eventId, mode = "queue" }: { eventId: string; mod
    * write endpoint has always been an upsert. Revision re-enters the ordinary
    * review layout with the stored values in place, so "see exactly what you
    * recorded" and "change it" are the same screen.
-   */
-  const [revising, setRevising] = useState<CompletedItem | null>(null);
+  */
+  const [revising, setRevising] = useState<CompletedItem | null>(initialRevision);
   const cardRef = useRef<HTMLElement | null>(null);
   const detailRef = useRef<HTMLElement | null>(null);
 
@@ -289,7 +330,8 @@ export function ReviewerPage({ eventId, mode = "queue" }: { eventId: string; mod
       setCounts(responseCounts);
       setProfile(queueResponse.person ?? initialQueue.person ?? null);
       setCriteria(queueResponse.round.criteria ?? initialQueue.round.criteria ?? []);
-      setCompleted(queueResponse.completed ?? initialQueue.completed ?? []);
+      const loadedCompleted = queueResponse.completed ?? initialQueue.completed ?? [];
+      setCompleted(loadedCompleted);
       setCompletedTruncated(Boolean(queueResponse.completed_truncated ?? initialQueue.completed_truncated));
       setQueue(queueResponse.data);
       setCurrentId(queueResponse.current_id ?? queueResponse.data[0]?.id ?? null);
@@ -303,16 +345,27 @@ export function ReviewerPage({ eventId, mode = "queue" }: { eventId: string; mod
       setDrafts((previous) => {
         const next = { ...previous };
         for (const item of queueResponse.data) next[item.id] ??= { ...EMPTY_REVIEW };
+        const revision = !isHome ? completedItemForRevision(loadedCompleted, reviewerRevisionId(window.location.search)) : null;
+        if (revision) next[revision.id] = reviewStateForRevision(revision);
         return next;
       });
+      const revision = !isHome ? completedItemForRevision(loadedCompleted, reviewerRevisionId(window.location.search)) : null;
+      setRevising(revision);
+      if (revision) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("revise");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      } else if (!isHome && new URLSearchParams(window.location.search).has("revise")) {
+        setError("That saved review is no longer available in this round.");
+      }
     } catch (reason: unknown) {
       setError(errorSummary(reason));
     } finally {
       setLoading(false);
     }
-  }, [eventId, isHome]);
+  }, [eventId, initialQueue, isHome]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (!initialQueue) void load(); }, [initialQueue, load]);
 
   const currentIndex = useMemo(() => {
     const index = currentId === null ? -1 : queue.findIndex((item) => item.id === currentId);
@@ -351,13 +404,7 @@ export function ReviewerPage({ eventId, mode = "queue" }: { eventId: string; mod
   const openRevision = (item: CompletedItem): void => {
     setDrafts((previous) => ({
       ...previous,
-      [item.id]: {
-        abstained: item.review?.abstained ?? false,
-        comment: item.review?.comment ?? "",
-        criteria: item.review?.criteria_scores ?? {},
-        recommendation: item.review?.recommendation ?? null,
-        score: item.review?.score ?? null,
-      },
+      [item.id]: reviewStateForRevision(item),
     }));
     setError(null);
     setNotice(null);
@@ -452,7 +499,7 @@ export function ReviewerPage({ eventId, mode = "queue" }: { eventId: string; mod
       setCompleted((previous) => [{ ...saved, review: optimisticReview }, ...previous.filter((item) => item.id !== saved.id)]);
       setCounts((previous) => ({ ...previous, reviewed: previous.reviewed + 1, waiting: Math.max(0, previous.waiting - 1) }));
       setCurrentId(nextQueue[oldIndex]?.id ?? nextQueue[oldIndex - 1]?.id ?? null);
-      setNotice(review.abstained ? "Conflict recorded · reopen it any time from Completed" : `${recommendationLabel(review.recommendation)} saved · reopen it any time from Completed`);
+      setNotice(review.abstained ? "Conflict recorded · reopen it any time from your reviewer home" : `${recommendationLabel(review.recommendation)} saved · reopen it any time from your reviewer home`);
     } catch (reason: unknown) {
       setError(errorSummary(reason));
     } finally {
@@ -665,7 +712,7 @@ export function ReviewerPage({ eventId, mode = "queue" }: { eventId: string; mod
                 </div>)}
               </dl>}
               {detail.review.score !== null && <p class="subtle">Overall score <span class="tabular">{detail.review.score}</span></p>}
-              <div class="saved-review-actions"><Button small onClick={() => { const item = completed.find((entry) => entry.id === detail.id); closeDetail(); if (item) { if (isHome) window.location.assign("/reviewer/queue"); else openRevision(item); } }}>Revise this review</Button></div>
+              <div class="saved-review-actions"><ReviewerRevisionAction isHome={isHome} submissionId={detail.id} onRevision={() => { const item = completed.find((entry) => entry.id === detail.id); closeDetail(); if (item) openRevision(item); }} /></div>
             </section>}
             <section class="reviewer-detail-section"><h3>Full abstract</h3><p class="detail-copy">{detail.abstract ?? "No abstract was submitted."}</p></section>
             <section class="reviewer-detail-section"><h3>Evaluator-visible submission fields</h3>{detail.fields.length ? <dl class="review-field-grid">{detail.fields.map((field) => <div class="review-field" key={field.key}><dt>{field.label}</dt><dd>{displayField(field)}</dd></div>)}</dl> : <p class="subtle">No additional conference fields were submitted.</p>}</section>

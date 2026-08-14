@@ -78,17 +78,20 @@ interface RoundRow {
   event_id: string;
 }
 
-const REVIEWER_TRACK_SCOPE_SQL = `
-  EXISTS (
-    SELECT 1
-    FROM submission_tracks carried
-    JOIN reviewer_track_scopes scope
-      ON scope.track_id = carried.track_id
-     AND scope.event_id = submission.event_id
-     AND scope.person_id = ?
-    WHERE carried.submission_id = submission.id
-  )
-`;
+/** The one event-bound track intersection predicate shared by reviewer routes and audits. */
+export function reviewerTrackIntersectionSql(): string {
+  return `
+    EXISTS (
+      SELECT 1
+      FROM submission_tracks carried
+      JOIN reviewer_track_scopes scope
+        ON scope.track_id = carried.track_id
+       AND scope.event_id = submission.event_id
+       AND scope.person_id = ?
+      WHERE carried.submission_id = submission.id
+    )
+  `;
+}
 
 /**
  * An assignment is a (round, submission, reviewer) row — always.
@@ -149,7 +152,7 @@ export async function authorizeReviewerScope(
         FROM submissions submission
         WHERE submission.id = ?
           AND submission.event_id = ?
-        AND ${REVIEWER_TRACK_SCOPE_SQL}
+        AND ${reviewerTrackIntersectionSql()}
         AND ${REVIEWER_ASSIGNMENT_SCOPE_SQL}
       ) AS allowed
     `)
@@ -194,7 +197,7 @@ export async function authorizeReviewerQueueScope(
       FROM submissions submission
       WHERE submission.event_id = ?
         AND submission.id IN (${chunk.map(() => "?").join(",")})
-        AND ${REVIEWER_TRACK_SCOPE_SQL}
+        AND ${reviewerTrackIntersectionSql()}
         AND ${REVIEWER_ASSIGNMENT_SCOPE_SQL}
     `).bind(
       request.eventId,

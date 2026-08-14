@@ -10,6 +10,7 @@ import {
   authorizeReviewerScope,
   authorizeReviewerQueueScope,
   reviewerPersonIdForEvent,
+  reviewerTrackIntersectionSql,
 } from "../lib/reviewer-scope";
 import { parseSocialLinks } from "../lib/person-profile";
 
@@ -381,15 +382,7 @@ async function reviewerReviewedCount(db: D1Database, eventId: string, roundId: s
      AND submission.event_id = ?
     WHERE evaluation.round_id = ?
       AND evaluation.reviewer_person_id = ?
-      AND EXISTS (
-        SELECT 1
-        FROM submission_tracks carried
-        JOIN reviewer_track_scopes scope
-          ON scope.track_id = carried.track_id
-         AND scope.event_id = submission.event_id
-         AND scope.person_id = ?
-        WHERE carried.submission_id = submission.id
-      )
+      AND ${reviewerTrackIntersectionSql()}
   `).bind(eventId, roundId, personId, personId).first<{ reviewed: number }>();
   return Number(row?.reviewed ?? 0);
 }
