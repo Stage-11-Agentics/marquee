@@ -174,7 +174,7 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
   const model = settings.kind === "ready" ? settings.model : null;
   const submitterFieldError = fieldErrors.submitter;
   return <div class="submission-record-page">
-    <PageHeader title="Create a submission" copy="Add an Abstract or Session directly to the conference program record. Choose the real person and conference options so the record is truthful." actions={<Button onClick={() => navigate("/submissions")}>Cancel</Button>} />
+    <PageHeader title="Create a submission" copy="Add an Abstract or Session directly to the conference program record. Choose the real person and conference options so the record is truthful." />
     <form onSubmit={submit} class="record-create-form">
       <Card><CardBody>
         <CreateSettings state={settings} />
@@ -212,7 +212,7 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
           {kind === "session" && <label class="record-bypass-toggle"><input type="checkbox" checked={bypass} onChange={(event) => setBypass(event.currentTarget.checked)} /><span><strong>Bypass evaluation</strong><small>Ready for the working agenda after creation.</small></span></label>}
         </div>}
       </CardBody></Card>
-      <div class="record-form-actions"><span class={`field-error ${state === "error" ? "visible" : ""}`} role="alert">{error || " "}</span><Button variant="primary" type="submit" disabled={state === "saving" || !model}>{state === "saving" ? "Creating…" : "Create record"}</Button></div>
+      <div class="record-form-actions"><span class={`field-error ${state === "error" ? "visible" : ""}`} role="alert">{error || " "}</span><Button type="button" onClick={() => navigate("/submissions")} disabled={state === "saving"}>Cancel</Button><Button variant="primary" type="submit" disabled={state === "saving" || !model}>{state === "saving" ? "Creating…" : "Create record"}</Button></div>
     </form>
   </div>;
 }
