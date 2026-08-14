@@ -332,7 +332,7 @@ export function SaveListModal({
             disabled={selectedIds.length === 0}
             onChange={() => setKind("fixed")}
           />
-          Fixed — just these {selectedIds.length || matching}
+          Fixed — just these {(selectedIds.length || matching).toLocaleString()}
         </label>
       </div>
     </div>

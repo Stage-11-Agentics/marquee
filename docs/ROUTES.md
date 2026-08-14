@@ -21,7 +21,7 @@ everything else is drawn inside the organizer shell.
 | Path | Label | Surface | In sidebar | Navigation |
 | --- | --- | --- | --- | --- |
 | `/people` | People | organizer | yes | client push |
-| `/lists` | Lists | organizer | yes | client push |
+| `/lists` | Lists | organizer | — | client push |
 | `/pipeline` | Sourcing pipeline | organizer | yes | client push |
 | `/crm` | People | organizer | — | client push |
 | `/directory` | People | organizer | — | client push |

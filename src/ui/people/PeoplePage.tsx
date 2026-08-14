@@ -19,14 +19,17 @@ import { AddPersonModal, ComposeModal, ImportPeopleModal, SaveListModal } from "
 import {
   activeCriteria,
   EMPTY_FILTERS,
+  fetchList,
   fetchPeople,
   fetchSummary,
   formatDay,
+  formatMoment,
   hasFilters,
   saveControl,
   type OrgSummary,
   type PeopleFilters,
   type PeoplePage as PeoplePayload,
+  type SavedPersonList,
 } from "./people-api";
 import "./people.css";
 
@@ -89,9 +92,25 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
   const [modal, setModal] = useState<"" | "import" | "compose" | "savelist" | "addperson">("");
   const [toast, setToast] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
+  // Three states, not two: no list, a list still resolving, and a list that no
+  // longer exists. The third is reachable by a bookmark to a deleted list, and
+  // silently showing everyone under a stale `?list=` would be a lie.
+  const [list, setList] = useState<SavedPersonList | null>(null);
+  const [listMissing, setListMissing] = useState(false);
   const filterIdentity = JSON.stringify(filters);
 
   useEffect(() => { setFilters((current) => ({ ...current, listId: listFromUrl })); }, [listFromUrl]);
+
+  useEffect(() => {
+    setList(null);
+    setListMissing(false);
+    if (!listFromUrl) return;
+    const controller = new AbortController();
+    fetchList(listFromUrl, controller.signal)
+      .then((payload) => setList(payload.list))
+      .catch(() => { if (!controller.signal.aborted) setListMissing(true); });
+    return () => controller.abort();
+  }, [listFromUrl]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -126,6 +145,10 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
     setFilters((current) => ({ ...current, [key]: current[key] === value ? "" : value }));
   };
   const clearAll = () => { setPage(1); setFilters({ ...EMPTY_FILTERS }); navigate?.("/people"); };
+  // Leaving a list means leaving the URL that put you in it. Clearing the
+  // filter alone would drop the rows while `?list=` stayed in the address bar,
+  // so a reload would silently put the list back.
+  const showEveryone = () => { setPage(1); navigate?.("/people"); };
   const toggleRow = (id: string) => setSelected((current) => {
     const next = new Set(current);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -143,9 +166,11 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
   return <div class="people-page">
     <PageHeader
       title="People"
-      copy={payload
-        ? `Everyone this organization has worked with, across every conference — ${payload.total.toLocaleString()} speakers, submitters, chairs and contacts, carrying their history, notes and tags. A returning speaker is already here; nobody re-keys anything.`
-        : "Reading everyone this organization has worked with…"}
+      copy={filters.listId
+        ? "A list is a way of looking at People, not a separate place people live — everything below is this organization's people, narrowed to the list named beneath the search."
+        : payload
+          ? `Everyone this organization has worked with, across every conference — ${payload.total.toLocaleString()} speakers, submitters, chairs and contacts, carrying their history, notes and tags. A returning speaker is already here; nobody re-keys anything.`
+          : "Reading everyone this organization has worked with…"}
       actions={<>
         <Button onClick={() => setModal("import")}>Import people</Button>
         <Button variant="primary" onClick={() => setModal("addperson")}>Add person</Button>
@@ -176,6 +201,25 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
       <Button small onClick={() => navigate?.("/lists")}>Lists</Button>
       <Button small onClick={() => navigate?.("/pipeline")}>Sourcing pipeline</Button>
     </div>
+
+    {/* The list you are inside, said in the name you gave it. Rendered from the
+        URL rather than from the resolved record, so the band is on screen from
+        the first paint and the name fills into it — the table never shifts. */}
+    {filters.listId ? <div class="people-listband" role="status">
+      <span class="people-listband-mark" aria-hidden="true">◈</span>
+      <span class="people-listband-name">{listMissing ? "This list no longer exists" : list?.name ?? "Reading this list…"}</span>
+      <span class="people-listband-meta">
+        {listMissing
+          ? "It was deleted, or the link is from another organization."
+          : list
+            ? `${list.kind === "live" ? "Live" : "Fixed"} list · ${list.member_count.toLocaleString()} ${list.member_count === 1 ? "person" : "people"} · saved ${formatMoment(list.created_at)}${list.created_by_name ? ` by ${list.created_by_name}` : ""}`
+            : " "}
+      </span>
+      <span class="people-listband-actions">
+        <Button small onClick={() => navigate?.("/lists")}>All lists</Button>
+        <Button small onClick={showEveryone}>Show everyone</Button>
+      </span>
+    </div> : null}
 
     {filterOpen ? <div class="people-filter-panel">
       <div class="people-filter-group">
