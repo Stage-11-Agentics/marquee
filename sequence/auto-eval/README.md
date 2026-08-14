@@ -37,8 +37,8 @@ caused by improving itself.
 ## Structure
 
 The spine is a **verb toolbox**, not a daemon. Shell owns mechanism and guards;
-agents own judgement. A coordinator that dies mid-run is replaceable because
-every verb reads and writes files rather than the coordinator's context.
+agents own judgement. A surface that dies mid-run is replaceable because every
+verb reads and writes files rather than that surface's context.
 
 ```
 loop.sh status            one screen: round, sha under test, judgements landed, lanes
@@ -50,13 +50,34 @@ loop.sh barrier           THE mutation window: reset → verify → deploy → v
 loop.sh fire <sha>        kick the next round on Atlas against a known sha
 ```
 
-| role | count | life | owns |
-|---|---|---|---|
-| coordinator | 1 | whole run | round clock, ticket minting (single-writer), calls the verbs |
-| merge warden | 1 | whole run | the gate, serialized; the only thing that touches `main` |
-| area analyst | 6/round | ~10 min | item-level diff + (a)/(b)/(c) classification for one area |
-| implementer | K | ~40 min | one ticket, own worktree, PR |
-| craft critic | 1 | whole run | the axis sbek cannot see — `DESIGN.md`, `PHILOSOPHY.md` |
+Two surfaces stand for the whole run; everything else is created per unit of work
+and closed when that unit lands.
+
+| role | count | life | owns | prompt |
+|---|---|---|---|---|
+| **Eval Runner** | 1 | whole run | the only surface that talks to Atlas: round clock, the verbs, the freeze, the barrier, the score floor. Writes no code, mints no tickets, dispatches nobody. | `prompts/runner.md` |
+| **Eval Triage** | 1 | whole run | findings in, merged PRs out: item-level diff, (a)/(b)/(c) classification, ticket minting (single-writer), dispatch, and the merge | `prompts/triage.md` |
+| reviewer | 1/PR | ~15 min | reads a diff its author did not write, and reproduces the symptom rather than the cause | `prompts/reviewer.md` |
+| implementer | K | ~40 min | one ticket, own worktree, one PR | `prompts/implementer.md` |
+
+The interface between the two standing surfaces is one line: every `JUDGEMENT`
+the Runner's `watch` emits, it hands to Triage with the area and the run
+directory, uninterpreted. Nothing else crosses.
+
+**Merging belongs to Triage, and Triage may not merge unreviewed.** `CLAUDE.md`
+is the binding rule — *reviewed* means someone other than the author read the
+diff, and neither a green gate nor Triage's own confidence is a review. Since
+Triage dispatched the implementer and wrote the ticket, it is not a disinterested
+reader of the result either. So Triage dispatches a reviewer per PR and merges on
+that verdict.
+
+A reviewer is a **separate surface, not a subagent of Triage** (operator ruling,
+2026-08-14). A subagent shares Triage's context and inherits its framing of the
+defect, which is exactly what the review has to be independent of: on #221 the
+author tested the cause it had fixed and the reviewer reproduced the symptom, and
+only the second test would have caught a stall standing behind a 404. It also
+protects the scarcest resource in the loop, which is Triage's own context window.
+Doc-only PRs may use a subagent.
 
 ## Rules that are not negotiable
 

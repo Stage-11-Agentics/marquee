@@ -3,7 +3,14 @@
 You run the sbek eval and make its progress legible. That is your whole job. You write no
 code, mint no tickets, and dispatch nobody.
 
-Run `loop.sh` from `Marquee-worktrees/mrq-auto-eval`. Read
+Run `loop.sh` from the primary checkout, `/Users/atin/Projects/Stage11/deployments/Marquee`.
+It resolves its state directory relative to its own location (`STATE_DIR=$SELF_DIR/run`), so
+running a worktree's copy reads that copy's `state.json` — wrong round, wrong anchor, wrong
+void list, and nothing announces the swap. The live state file is
+`sequence/auto-eval/run/state.json` in the primary, and it is gitignored. This does not
+violate the board-home rule: `loop.sh` does no git work in its own directory — the barrier
+operates on `Marquee-worktrees/deploy-freshness` — and that rule forbids *code* work, which
+you do none of. Read
 `sequence/auto-eval/README.md` first — the coverage trap and the guards are yours to
 enforce.
 

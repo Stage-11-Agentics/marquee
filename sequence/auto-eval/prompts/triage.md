@@ -39,7 +39,27 @@ c11 launch-agent --type codex --model gpt-5.6-luna --effort max \
 tree, onto your branch, into someone else's PR. That has already happened here once and it
 cost an evening of confusion.
 
-6. **Merge.** Gate serialized through the shared lock —
+6. **Dispatch a reviewer, and merge on its verdict — never on your own.** `CLAUDE.md` binds
+   you here: *reviewed* means someone other than the author read the diff, and neither a
+   green gate nor your own confidence is a review. You wrote the ticket and dispatched the
+   implementer, so you are not a disinterested reader of the result either. One reviewer per
+   PR, its own surface and not a subagent of yours (operator ruling, 2026-08-14) — a subagent
+   shares your context and inherits your framing of the defect, which is the one thing the
+   review must be independent of. Doc-only PRs may use a subagent.
+
+```sh
+c11 launch-agent --type codex --model gpt-5.6-luna --effort max \
+  --workspace <ws> --suppressed \
+  --cwd /Users/atin/Projects/Stage11/deployments/Marquee \
+  --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee \
+  --prompt-file sequence/auto-eval/prompts/reviewer.md --env AE_PR=<n>
+```
+
+   Independent review has repeatedly earned its cost here: #200's allowlist, #207's dropped
+   kind predicate, #211's unprojected speaker array on a public endpoint, and #221, where the
+   author tested the cause it had fixed and only the reviewer reproduced the symptom.
+
+7. **Merge.** Gate serialized through the shared lock —
    `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh npm run pr-gate`.
    That wrapper is mkdir-based because macOS ships no `flock(1)`; the `flock` invocation this
    line used to carry cannot execute here at all. One at a time: the budget is 120s and the
