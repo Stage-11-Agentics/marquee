@@ -1,5 +1,7 @@
 import type { Id, MembershipRole } from "../../db/schema";
 import { isSafeRedirectTarget } from "./magic-links";
+import { ROLE_HOME } from "./role-home";
+export { ROLE_HOME } from "./role-home";
 
 /**
  * Where a sign-in lands, and which conference the mail is attributed to.
@@ -12,12 +14,6 @@ import { isSafeRedirectTarget } from "./magic-links";
 
 /** SPEC §4.1's program-staff roles — the seats whose home is the organizer dashboard. */
 const PROGRAM_STAFF_ROLES: readonly string[] = ["owner", "program_lead", "ops"];
-
-export const ROLE_HOME = {
-  staff: "/dashboard",
-  reviewer: "/reviewer",
-  speaker: "/portal",
-} as const;
 
 /**
  * The seat's own home, resolved at mint time from the roles it actually holds.

@@ -2,7 +2,7 @@ import type { JSX } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { formatFileSize, readStoredFileAnswer } from "../../lib/file-answers";
-import { ROLE_HOME } from "../../lib/auth/signin-destination";
+import { ROLE_HOME } from "../../lib/auth/role-home";
 import { ProfileForm, type PortalPerson } from "../portal/PortalPage";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, Chip, EmptyState } from "../shell/components";

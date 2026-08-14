@@ -8,6 +8,7 @@ const reviewerStyles = source("../../src/ui/review/review.css");
 const themeSwitch = source("../../src/ui/shell/ThemeSwitch.tsx");
 const topbar = source("../../src/ui/shell/Topbar.tsx");
 const signinDestination = source("../../src/lib/auth/signin-destination.ts");
+const roleHome = source("../../src/lib/auth/role-home.ts");
 
 function shellSources(): string[] {
   return readdirSync(fileURLToPath(new URL("../../src/ui/shell", import.meta.url)), { withFileTypes: true })
@@ -16,8 +17,10 @@ function shellSources(): string[] {
 }
 
 test("CONTRACT · MRQ-171 amendment 10 · the reviewer topline brand and exit link use the seat-home mapping", () => {
-  expect(signinDestination).toContain('reviewer: "/reviewer"');
-  expect(reviewerPage).toContain('import { ROLE_HOME } from "../../lib/auth/signin-destination"');
+  expect(roleHome).toContain('reviewer: "/reviewer"');
+  expect(roleHome).not.toContain("magic-links");
+  expect(signinDestination).toContain('import { ROLE_HOME } from "./role-home"');
+  expect(reviewerPage).toContain('import { ROLE_HOME } from "../../lib/auth/role-home"');
   expect(reviewerPage).toContain('<a class="reviewer-brand" href={ROLE_HOME.reviewer}');
   expect(reviewerPage).toContain('<a class="reviewer-exit" href={ROLE_HOME.reviewer}>Exit queue</a>');
   expect(reviewerPage).not.toContain("window.history.back");
