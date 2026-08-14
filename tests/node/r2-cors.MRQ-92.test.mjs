@@ -54,9 +54,25 @@ test("CONTRACT · speaker upload transport failures keep diagnostics and show re
   const uploadClient = readFileSync(resolve(root, "src/ui/upload/upload-client.ts"), "utf8");
 
   assert.match(portal, /console\.error\("Speaker upload failed", caught\)/);
-  assert.match(portal, /speakerUploadFailureMessage\(caught\)/);
+  assert.match(portal, /speakerUploadFailureMessage\(caught(?:,|\))/);
   assert.match(portal, /isUploadAborted\(caught\)/);
   assert.match(uploadClient, /UPLOAD_PUT_NETWORK_ERROR/);
   assert.match(portal, /Retry upload/);
   assert.doesNotMatch(portal, /upload PUT network error/);
+});
+
+test("CONTRACT · MRQ-177 · stalled and canceled replacements state the saved version and never fake byte progress", () => {
+  const portal = readFileSync(portalPath, "utf8");
+  const uploadClient = readFileSync(resolve(root, "src/ui/upload/upload-client.ts"), "utf8");
+
+  assert.match(uploadClient, /xhr\.timeout = UPLOAD_PUT_TIMEOUT_MS/);
+  assert.match(uploadClient, /UPLOAD_PUT_TIMED_OUT/);
+  assert.match(portal, /speakerUploadAbortedMessage\(hasPreviousVersion\)/);
+  assert.match(portal, /state: "failed"/);
+  assert.match(portal, /Upload stopped/);
+  assert.match(portal, /Previous version kept/);
+  assert.match(portal, /progress\.loaded === null/);
+  assert.doesNotMatch(portal, /setProgress\(\{ loaded: 0/);
+  assert.match(portal, /Your previous version is still current/);
+  assert.match(portal, /await onComplete\(\)/);
 });
