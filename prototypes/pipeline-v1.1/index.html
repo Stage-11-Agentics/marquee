@@ -3,8 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Marquee — Pipeline v1.14 prototype</title>
-  <!-- v1.14 (2026-08-14): Organization settings (interview rulings O1–O8,
+  <title>Marquee — Pipeline v1.15 prototype</title>
+  <!-- v1.15 (2026-08-14): the Organization concept completed (fresh-eyes
+       review rulings, sequence/org-settings-design.md iteration 3). The
+       Organization group becomes Home · People CRM · Outreach · Settings:
+       Organization Home is the between-conferences view — conferences as
+       seasons, the attention strip (outreach follow-ups, past-conference
+       seats, server state), relationship KPIs, recent org activity. New
+       Activity tab: one append-only log, three lenses (admin here; person
+       feed in the CRM; submission timeline in the build). Instance renamed
+       Server in plain organizer language — what each connection does leads,
+       the providing service is small print, and the mail row names the
+       connected Resend account with a click-out. Organizers: role legend
+       (one line per role, shown in the invite too), Owner-only removal,
+       permission-aware action column, past-conference stale-seat banner,
+       and owner transfer (org-wide Organizer recipients, type-the-org-name
+       confirm, immediate flip, logged). ONE invite machinery two doors:
+       Evaluation's committee card mints the same one-time link preset to
+       Reviewer. Conference group gains the Speakers row (roster in the CRM
+       prototype); the pipeline home carries the outreach-overdue attention
+       line.
+       v1.14 (2026-08-14): Organization settings (interview rulings O1–O8,
        sequence/org-settings-design.md). Access management gets its
        steady-state home: a ⚙ Settings row closes the Organization group,
        opening #org with four tabs — Organization (org name, default
@@ -104,6 +123,7 @@
        · pronouns + discrete socials · Client session ID + session capacity ·
        max-sponsors control removed. -->
 
+  <link rel="stylesheet" href="../shared/sidebar.css?v=1">
   <style>
     /* ════════════════════════════════════════════════════════════════════
        MARQUEE v1.5 — FLIGHT DECK
@@ -344,25 +364,13 @@
       text-transform: uppercase; pointer-events: none;
     }
     .app-shell { min-height: 100vh; display: grid; grid-template-columns: 224px minmax(0,1fr); }
-    .sidebar {
-      background: var(--panel); border-right: 1px solid var(--line-strong); padding: 20px 14px;
-      display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto;
-    }
-    .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 21px; }
-    .brand-mark { width: 28px; height: 28px; border-radius: var(--radius); background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent-dark); display: grid; place-items: center; font: 600 13px/1 var(--mono); }
-    .brand-name { font: 600 13px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; }
+    /* sidebar skeleton lives in ../shared/sidebar.css */
     .event-switcher { margin: 0 4px 18px; border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 9px 10px; background: var(--sunk); transition: border-color 110ms, background 110ms; }
     .event-switcher:hover { border-color: var(--accent); background: var(--accent-soft); }
     .event-switcher small { display: block; color: var(--muted); font: 600 9px/1 var(--mono); text-transform: uppercase; letter-spacing: .16em; margin-bottom: 5px; }
     .event-switcher strong { display: block; font: 600 12px/1.2 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .nav-label { color: var(--muted); font-size: 9px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; margin: 14px 10px 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
-    .nav { display: grid; gap: 0; }
-    .nav a { min-height: 34px; padding: 8px 10px; border-radius: 0 var(--radius) var(--radius) 0; border-left: 2px solid transparent; color: var(--ink-soft); font-size: 12.5px; display: flex; align-items: center; gap: 9px; transition: background 110ms, color 110ms, border-color 110ms; }
-    .nav a:hover { background: var(--sunk); color: var(--ink); }
-    .nav a.active { background: var(--accent-soft); color: var(--accent-dark); font-weight: 600; border-left-color: var(--accent); }
-    .nav-icon { width: 16px; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; }
-    .nav a.active .nav-icon { color: var(--accent); }
-    .settings-nav { margin-top: 14px; }
+    #kind-segment button { width: 82px; }
+    .board-kind-note { padding: 8px 14px; border-bottom: 1px solid var(--line); color: var(--muted); font: 400 11px/1.4 var(--mono); }
     /* Hovering the Program pipeline row offers a jump straight to a stage —
        with the live counts the old seven-row ladder never had. Fixed-position
        because the sidebar scrolls (overflow would clip an absolute child).
@@ -377,9 +385,6 @@
     .stage-flyout .stage-count { margin-left: auto; color: var(--muted); font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; }
     .stage-flyout a:hover .stage-num, .stage-flyout a:hover .stage-count { color: var(--accent-dark); }
     .stage-flyout a.flyout-overview { border-bottom: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; margin-bottom: 4px; }
-    .sidebar-foot { margin-top: auto; display: grid; gap: 2px; padding-top: 16px; border-top: 1px solid var(--line); }
-    .sidebar-foot button { border: 0; background: none; text-align: left; color: var(--muted); padding: 7px 10px; border-radius: var(--radius); font: 400 11.5px/1.2 var(--mono); }
-    .sidebar-foot button:hover { background: var(--sunk); color: var(--ink); }
     .main { min-width: 0; }
     .topbar { height: 52px; border-bottom: 1px solid var(--line-strong); background: var(--panel); display: flex; align-items: center; gap: 12px; padding: 0 216px 0 26px; position: sticky; top: 0; z-index: 50; }
     .breadcrumbs { color: var(--muted); font: 400 11.5px/1 var(--mono); letter-spacing: .02em; white-space: nowrap; }
@@ -1130,6 +1135,7 @@
       .nav-icon:not(:empty) + span { display: none; }
       .nav a span:not(.nav-icon) { max-width: 1.35ch; overflow: hidden; white-space: nowrap; }
       .stage-flyout { display: none !important; }
+      .nav .row-plus { display: none; }
       .builder { grid-template-columns: 220px 1fr; }
       .preview-card { grid-column: 1 / -1; position: static; }
       .agenda-layout { grid-template-columns: 210px 1fr; }
@@ -1344,9 +1350,23 @@
             { name:"Maya Chen", note:"Program lead", email:"maya.chen@example.com", role:"Owner", you:true },
             { name:"Tomás Herrera-Lindqvist", note:"Speaker ops", email:"tomas.herrera-lindqvist@example.com", role:"Organizer", alsoSpeaker:true, openWork:"2 unfinished review assignments" },
             { name:"Ruthie Adeyemi-O'Connor", note:"Review coordination", email:"ruthie.adeyemi-oconnor@example.com", role:"Organizer", openWork:"3 unfinished review assignments" },
-            { name:"Dele Ogunwale", note:"Day-of volunteer", email:"dele.ogunwale@example.com", role:"Ops", scope:"AIE New York 2026" }
+            { name:"Dele Ogunwale", note:"Day-of volunteer", email:"dele.ogunwale@example.com", role:"Ops", scope:"AIE New York 2026" },
+            { name:"Priya Raghunathan", note:"Registration desk, 2025", email:"priya.raghunathan@example.com", role:"Ops", scope:"AIE NYC 2025", stale:true }
           ]
         },
+        // The org-level admin log — one append-only record, three lenses
+        // (this admin lens; each person's CRM feed; each submission's
+        // timeline in the build). Newest first.
+        orgLog: [
+          { t:"Invite link minted · Ops, scoped to AIE New York 2026", who:"Maya Chen", w:"Aug 13 · 4:12 PM" },
+          { t:"Invite claimed — Dele Ogunwale joined as Ops", who:"System", w:"Aug 13 · 4:31 PM" },
+          { t:"API token created · Review reminder script", who:"Ruthie Adeyemi-O'Connor", w:"Aug 12 · 9:40 AM" },
+          { t:"Default theme set to Marquee Light", who:"Maya Chen", w:"Aug 11 · 2:03 PM" },
+          { t:"API token created · Sponsor roster sync", who:"Tomás Herrera-Lindqvist", w:"Aug 11 · 11:22 AM" },
+          { t:"Organizer removed — Casey Whitfield · session revoked, 1 token revoked", who:"Maya Chen", w:"Aug 9 · 5:47 PM" },
+          { t:"Invite link minted · Organizer, whole organization", who:"Maya Chen", w:"Aug 8 · 10:15 AM" },
+          { t:"Instance claimed — Maya Chen became owner", who:"System", w:"Mar 11 · 9:02 AM" }
+        ],
         // Organization settings (v1.14, rulings O1/O7). Defaults seed new
         // conferences; each conference still owns its own values.
         org: {
@@ -1707,7 +1727,7 @@
         submissions: "Abstracts & sessions", submissionDetail:"Submission record", submissionNew:"Create submission", eventNew:"Create conference",
         onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Conference site", comms:"Communications",
         venues:"Venues", taskTemplates:"Task templates", importer:"Sessionize importer", airtable:"Airtable mirror", webhooks:"Webhooks",
-        orgGeneral:"Organization settings", orgOrganizers:"Organizers", orgInstance:"Instance", orgTokens:"API tokens",
+        orgGeneral:"Organization settings", orgHome:"Organization home", orgOrganizers:"Organizers", orgServer:"Server", orgTokens:"API tokens", orgActivity:"Activity",
         apiDocs:"API documentation", aiAssist:"AI assist", publicSession:"Session", publicSpeaker:"Speaker",
         setupAgent:"Agent setup", claim:"Claim this instance", handoff:"Instance handoff"
       };
@@ -1852,7 +1872,9 @@
         if (/^p\/[^/]+$/.test(path)) { state.publicPersonName = decodeURIComponent(path.slice(2)); return "publicSpeaker"; }
         // settings/api redirects to the token surface's new home (O2): the
         // old conference-settings path keeps working, it just lands in org.
-        return ({"settings/venues":"venues","settings/tasks":"taskTemplates","settings/airtable":"airtable","settings/api":"orgTokens","settings/webhooks":"webhooks","api/docs":"apiDocs","evaluation/ai":"aiAssist","import":"importer","setup/agent":"setupAgent","org":"orgGeneral","org/organizers":"orgOrganizers","org/instance":"orgInstance","org/tokens":"orgTokens"})[path] || path;
+        // settings/api and org/instance redirect to the surfaces' current
+        // homes, so old links keep landing somewhere true.
+        return ({"settings/venues":"venues","settings/tasks":"taskTemplates","settings/airtable":"airtable","settings/api":"orgTokens","settings/webhooks":"webhooks","api/docs":"apiDocs","evaluation/ai":"aiAssist","import":"importer","setup/agent":"setupAgent","org":"orgGeneral","org/home":"orgHome","org/organizers":"orgOrganizers","org/server":"orgServer","org/instance":"orgServer","org/tokens":"orgTokens","org/activity":"orgActivity"})[path] || path;
       }
 
       function currentRoute() {
@@ -2078,9 +2100,10 @@
             <a class="brand" href="#dashboard"><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
             <div class="nav-label">Organization</div>
             <nav class="nav" aria-label="Organization">
-              <a href="../crm/index.html?v=14"><span class="nav-icon"></span><span>People CRM</span></a>
-              <a href="../crm/index.html?v=14"><span class="nav-icon"></span><span>Outreach</span></a>
-              <a href="#org" class="${String(state.route).startsWith("org")?"active":""}"><span class="nav-icon">⚙</span><span>Settings</span></a>
+              <a href="#org/home" class="${state.route==="orgHome"?"active":""}"><span class="nav-icon">⌂</span><span>Home</span></a>
+              <a href="../crm/index.html?v=15#directory"><span class="nav-icon"></span><span>People CRM</span></a>
+              <a href="../crm/index.html?v=15#outreach"><span class="nav-icon"></span><span>Outreach</span></a>
+              <a href="#org" class="${String(state.route).startsWith("org")&&state.route!=="orgHome"?"active":""}"><span class="nav-icon">⚙</span><span>Settings</span></a>
             </nav>
             <div class="nav-label">Conference</div>
             <div class="event-switcher-row">
@@ -2091,8 +2114,9 @@
             <nav class="nav" aria-label="Conference">
               <a href="#dashboard" data-route="dashboard" id="nav-pipeline" class="${state.route === "dashboard" ? "active" : ""}"><span class="nav-icon"></span><span>Program pipeline</span></a>
               ${navItem("board","","Program board")}
-              ${pipelineNavItem("Abstracts & sessions","","All")}
+              <a href="#submissions" data-nav-filter="All" data-nav-route="submissions" class="${state.route === "submissions" ? "active" : ""}"><span class="nav-icon"></span><span>Abstracts &amp; sessions</span><span class="row-plus" id="nav-add-session" role="button" title="Add a session" aria-label="Add a session">+</span></a>
               ${navItem("agenda","","Agenda")}
+              <a href="../crm/index.html?v=15#speakers"><span class="nav-icon"></span><span>Speakers</span></a>
             </nav>
             <div class="nav-label">Speaker ops</div>
             <nav class="nav" aria-label="Speaker ops">
@@ -2109,6 +2133,7 @@
             <nav class="nav" aria-label="Public links">
               ${navItem("publicAgenda","↗","Conference site")}
               ${navItem("portal","↗","Speaker portal")}
+              <a href="#publicAgenda" data-route="publicAgenda" data-open-embed="1"><span class="nav-icon">↗</span><span>Embeds</span></a>
             </nav>
             <nav class="nav settings-nav" aria-label="Settings">
               ${navItem("settings","⚙","Settings")}
@@ -2168,7 +2193,7 @@
       }
 
       function routePath(route) {
-        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",eventNew:"conferences/new",venues:"settings/venues",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiDocs:"api/docs",aiAssist:"evaluation/ai",setupAgent:"setup/agent",orgGeneral:"org",orgOrganizers:"org/organizers",orgInstance:"org/instance",orgTokens:"org/tokens",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
+        return ({submissionDetail:`submissions/${state.submissionRecordId}`,submissionNew:"submissions/new",eventNew:"conferences/new",venues:"settings/venues",taskTemplates:"settings/tasks",importer:"import",airtable:"settings/airtable",apiDocs:"api/docs",aiAssist:"evaluation/ai",setupAgent:"setup/agent",orgGeneral:"org",orgHome:"org/home",orgOrganizers:"org/organizers",orgServer:"org/server",orgTokens:"org/tokens",orgActivity:"org/activity",publicSession:`s/${state.publicRecordId||"session"}`,publicSpeaker:`p/${encodeURIComponent(state.publicPersonName||"speaker")}`})[route] || route;
       }
 
       function pageHead(title, copy, actions = "") {
@@ -2360,20 +2385,24 @@
       // The machine under the conference: what is configured, what honestly
       // isn't, and the exact command that fixes it. Rows never appear or
       // disappear — only their status chips change.
+      // Plain language facing non-technical organizers (ruling, 2026-08-14):
+      // what each connection does leads; the service that provides it is the
+      // small print. The mail row names the connected account, because these
+      // orgs run their own Resend (same ruling).
       function instancePanel() {
         const inst = state.instance;
-        const chip = ok => ok ? `<span class="chip inst-ok">configured</span>` : `<span class="chip inst-off">not configured</span>`;
+        const chip = ok => ok ? `<span class="chip inst-ok">working</span>` : `<span class="chip inst-off">not set up</span>`;
         const fixSlot = `<span class="subtle" style="display:inline-block;width:110px;text-align:center">—</span>`;
         return `<section class="card">
           <div class="card-head">
-            <div><h2>Instance</h2><span class="subtle">The machine under the conference · ${esc(inst.domain)}</span></div>
+            <div><h2>Server</h2><span class="subtle">What this Marquee is connected to, and whether each piece is working · ${esc(inst.domain)}</span></div>
             <span class="chip">${inst.owner ? `Owned by ${esc(inst.owner.name)}` : "Unclaimed"}</span>
           </div>
           <div class="card-body instance-rows">
-            <div class="inst-row"><span class="inst-name">Mail · Resend</span>${chip(inst.mail)}<span class="inst-note">${inst.mail ? "Sender verified · confirmations, decisions, and invites deliver" : "No confirmations, no decision mail, no sign-in links until this exists"}</span><span class="inst-fix">${inst.mail ? fixSlot : `<button class="button small" id="inst-mail-fix" style="width:110px">How to configure</button>`}</span></div>
-            <div class="inst-row"><span class="inst-name">Uploads · R2</span>${chip(inst.uploads)}<span class="inst-note">marquee-media bucket · headshots and slides upload via presigned PUTs</span><span class="inst-fix">${fixSlot}</span></div>
-            <div class="inst-row"><span class="inst-name">Spam · Turnstile</span>${chip(inst.spam)}<span class="inst-note">Site key set · the public call for speakers is protected</span><span class="inst-fix">${fixSlot}</span></div>
-            <div class="inst-row"><span class="inst-name">Domain</span>${chip(true)}<span class="inst-note">${esc(inst.domain)} · TLS active · non-loopback HTTP redirects to HTTPS</span><span class="inst-fix">${fixSlot}</span></div>
+            <div class="inst-row"><span class="inst-name">Email sending</span>${chip(inst.mail)}<span class="inst-note">${inst.mail ? `via Resend · sending as marquee@stage11.systems · account <strong>stage11-agentics</strong>` : "No confirmations, no decision mail, no sign-in links until this exists · via Resend"}</span><span class="inst-fix">${inst.mail ? `<a class="button small" href="https://resend.com" target="_blank" rel="noopener" style="width:110px">Open Resend ↗</a>` : `<button class="button small" id="inst-mail-fix" style="width:110px">How to set up</button>`}</span></div>
+            <div class="inst-row"><span class="inst-name">File uploads</span>${chip(inst.uploads)}<span class="inst-note">Headshots and slides · stored in the marquee-media bucket (Cloudflare R2)</span><span class="inst-fix">${fixSlot}</span></div>
+            <div class="inst-row"><span class="inst-name">Spam protection</span>${chip(inst.spam)}<span class="inst-note">The public call for speakers is protected (Cloudflare Turnstile)</span><span class="inst-fix">${fixSlot}</span></div>
+            <div class="inst-row"><span class="inst-name">Web address</span>${chip(true)}<span class="inst-note">${esc(inst.domain)} · secure connection active</span><span class="inst-fix">${fixSlot}</span></div>
           </div>
         </section>`;
       }
@@ -2526,6 +2555,7 @@
             <button class="attention-item" data-unreviewed-track="Agents"><strong>${unreviewedTrackCount("Agents")} unreviewed in Agents</strong><span>${state.submissions.filter(s=>s.status==="In Review"&&(s.tracks||[s.track]).includes("Agents")).length} in review · ${state.submissions.filter(s=>s.status==="Submitted"&&(s.tracks||[s.track]).includes("Agents")).length} waiting for assignment</span></button>
             <button class="attention-item" data-route="onboarding"><strong>${onboardingCounts().overdue} speakers overdue</strong><span>Headshots, agreements, and travel · open chase board</span></button>
             <button class="attention-item" data-not-notified><strong>${notNotifiedCount()} decided · not notified</strong><span>${notNotifiedCount()?"They have an outcome and have not heard it · open the list":"Every decision has reached its speaker"}</span></button>
+            <a class="attention-item" style="display:block" href="../crm/index.html?v=15#outreach"><strong>3 outreach follow-ups overdue</strong><span>Org-level courting going quiet · open the Outreach board</span></a>
           </div>
           <div class="dashboard-grid">
             <section class="card" style="grid-column:1/-1">
@@ -2599,7 +2629,7 @@
         const matching=filteredBoardSubmissions();
         return shell(`<div class="page">
           ${pageHead("Program board", `${matching.length.toLocaleString()} matching submissions across seven lifecycle stages · click any card to open its record and take action.`, `<button class="button" data-route="dashboard">Pipeline dashboard</button><button class="button primary" data-route="submissions">Open list</button>`)}
-          <section class="card"><div class="toolbar" aria-label="Program board filters"><input id="board-search" value="${esc(state.boardSearch)}" aria-label="Search board" placeholder="Search title, speaker, ID, or company"><select id="board-type-filter" aria-label="Filter by type">${["All types","Abstracts","Sessions"].map(value=>`<option ${state.boardType===value?"selected":""}>${value}</option>`).join("")}</select><select id="board-track-filter" aria-label="Filter by track"><option>All tracks</option>${tracks.map(t=>`<option ${state.boardTrack===t.name?"selected":""}>${esc(t.name)}</option>`).join("")}</select><select id="board-format-filter" aria-label="Filter by format"><option>All formats</option>${formats.map(f=>`<option ${state.boardFormat===f?"selected":""}>${esc(f)}</option>`).join("")}</select><select id="board-wave-filter" aria-label="Filter by wave">${["All waves","Wave 1","Wave 2","Wave 3","Unwaved"].map(w=>`<option ${state.boardWave===w?"selected":""}>${w}</option>`).join("")}</select><span class="toolbar-spacer"></span><div class="board-filter-summary"><strong>${matching.length.toLocaleString()}</strong> of ${state.submissions.length.toLocaleString()}<button class="button small" id="clear-board-filters">Clear filters</button></div></div><div class="card-body" style="padding:10px"><div class="program-board-shell"><div class="program-board">
+          <section class="card"><div class="toolbar" aria-label="Program board filters"><input id="board-search" value="${esc(state.boardSearch)}" aria-label="Search board" placeholder="Search title, speaker, ID, or company"><select id="board-type-filter" aria-label="Filter by type">${["All types","Abstracts","Sessions"].map(value=>`<option ${state.boardType===value?"selected":""}>${value}</option>`).join("")}</select><select id="board-track-filter" aria-label="Filter by track"><option>All tracks</option>${tracks.map(t=>`<option ${state.boardTrack===t.name?"selected":""}>${esc(t.name)}</option>`).join("")}</select><select id="board-format-filter" aria-label="Filter by format"><option>All formats</option>${formats.map(f=>`<option ${state.boardFormat===f?"selected":""}>${esc(f)}</option>`).join("")}</select><select id="board-wave-filter" aria-label="Filter by wave">${["All waves","Wave 1","Wave 2","Wave 3","Unwaved"].map(w=>`<option ${state.boardWave===w?"selected":""}>${w}</option>`).join("")}</select><span class="toolbar-spacer"></span><div class="board-filter-summary"><strong>${matching.length.toLocaleString()}</strong> of ${state.submissions.length.toLocaleString()}<button class="button small" id="clear-board-filters">Clear filters</button></div></div>${state.boardType==="Sessions"?`<div class="board-kind-note">Sessions are guaranteed — they skip evaluation and enter at Ready to place. The earlier columns are empty by design.</div>`:""}<div class="card-body" style="padding:10px"><div class="program-board-shell"><div class="program-board">
             ${programBoardStages.map(stage=>{const cards=matching.filter(s=>boardStageFor(s)===stage.name);return `<section class="board-column ${stage.derived?"derived":""}" data-board-column="${stage.name}" data-derived="${stage.derived?"true":"false"}"><header class="board-column-head"><div><strong>${stage.label||stage.name}</strong><small>${stage.hint}</small></div><span class="board-count">${cards.length}</span></header>${stage.derived?`<div class="board-derived-note">${stage.entry}</div>`:""}<div class="board-card-list">${cards.map(boardCard).join("")||`<div class="subtle" style="padding:24px;text-align:center">No matching submissions</div>`}</div></section>`}).join("")}
           </div></div></div></section>
         </div>`);
@@ -2674,7 +2704,7 @@
       }
 
       function orgTabs(active) {
-        const tabs = [["org","Organization"],["org/organizers","Organizers"],["org/instance","Instance"],["org/tokens","API tokens"]];
+        const tabs = [["org","Organization"],["org/organizers","Organizers"],["org/server","Server"],["org/tokens","API tokens"],["org/activity","Activity"]];
         return `<nav class="route-tabs">${tabs.map(([href,label])=>`<a class="button ${routeKey(href)===active?"active":""}" href="#${href}">${esc(label)}</a>`).join("")}</nav>`;
       }
 
@@ -2709,15 +2739,32 @@
       // the claim link, so a co-organizer can join before mail exists. A row's
       // scope mirrors memberships.event_id: whole organization, or one
       // conference (the day-of volunteer, ruling O4).
+      // What each role can do — one line each, shown wherever a role is
+      // chosen or read (ruling, 2026-08-14: legend as drafted; only the
+      // Owner removes anyone; Organizer and up can invite).
+      const ROLE_LEGEND = {
+        Owner:     "Everything, plus what nobody else can do: transfer ownership, remove organizers, manage the server connections.",
+        Organizer: "Runs the program: settings, forms, evaluation, decisions, mail, agenda, publishing. Can invite organizers; can't remove them or touch ownership.",
+        Ops:       "Runs the days: rosters, speaker tasks, chase work, files, day-of logistics. No destructive settings, no tokens, no organization settings.",
+        Reviewer:  "Sees only the review work assigned to them. Nothing else exists. Sign-in only — assign their work in Evaluation → Committees."
+      };
+      function meOrganizer() { return state.instance.organizers.find(o=>o.you); }
       function organizersCard() {
         const orgs = state.instance.organizers;
+        const iAmOwner = meOrganizer()?.role === "Owner";
         const dash = w => `<span class="subtle" style="display:inline-block;width:${w}px;text-align:center">—</span>`;
-        const scopeChip = o => `<span class="chip" style="width:auto">${esc(o.scope || "Organization")}</span>`;
+        const scopeChip = o => `<span class="chip" style="width:auto${o.stale?";border-color:var(--warning-edge);color:var(--warning-ink)":""}">${esc(o.scope || "Organization")}</span>`;
+        // The action slot is permission-aware: the Owner sees Remove on every
+        // other seat and Transfer on their own; everyone else sees no actions
+        // (only the Owner removes anyone — ruling 2026-08-14).
+        const action = (o,i) => o.you && o.role==="Owner" ? `<button class="button small" id="transfer-ownership" style="width:76px">Transfer…</button>`
+          : (iAmOwner && o.role!=="Owner") ? `<button class="button small" data-remove-organizer="${i}" style="width:76px">Remove</button>`
+          : dash(76);
         return `<section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Organizers</h2><span class="subtle">Everyone who can run this instance · invites are links, never dependent on mail</span></div><button class="button small" id="invite-organizer">+ Invite additional organizer</button></div>
           <div class="card-body" style="padding-top:2px;padding-bottom:2px">
             ${orgs.length ? orgs.map((o,i)=> o.pending
               ? `<div class="org-row"><span class="org-name">Invite link minted<span class="org-note">${esc(o.minted)} · single use · expires in 7 days</span></span><span class="org-email">${esc(o.code||"—")}</span><span class="chip" style="width:auto">${esc(o.scope || "Organization")}</span><span class="chip">Pending · ${esc(o.role||"Organizer")}</span><button class="button small" data-revoke-invite="${i}" style="width:76px">Revoke</button></div>`
-              : `<div class="org-row"><span class="org-name">${esc(o.name)}${o.you?` <span class="chip" style="width:auto;margin-left:4px">you</span>`:""}<span class="org-note">${esc(o.note||"")}${o.alsoSpeaker?" · also holds a speaker seat":""}</span></span><span class="org-email">${esc(o.email)}</span>${scopeChip(o)}<span class="chip ${o.role==="Owner"?"published":""}">${esc(o.role)}</span>${o.role==="Owner"?dash(76):`<button class="button small" data-remove-organizer="${i}" style="width:76px">Remove</button>`}</div>`).join("")
+              : `<div class="org-row"><span class="org-name">${esc(o.name)}${o.you?` <span class="chip" style="width:auto;margin-left:4px">you</span>`:""}<span class="org-note">${esc(o.note||"")}${o.alsoSpeaker?" · also holds a speaker seat":""}</span></span><span class="org-email">${esc(o.email)}</span>${scopeChip(o)}<span class="chip ${o.role==="Owner"?"published":""}">${esc(o.role)}</span>${action(o,i)}</div>`).join("")
             : `<div class="org-row"><span class="org-name">No organizers yet<span class="org-note">Claiming the instance creates the first owner</span></span><span class="org-email">—</span><span class="chip">—</span><span class="chip">—</span>${dash(76)}</div>`}
           </div></section>`;
       }
@@ -2897,7 +2944,7 @@
               <div class="round-flow"><div class="round-card"><span class="eyebrow">Round 1</span><strong>Initial screen</strong><div class="subtle">All submissions · 15-person committee</div><div class="progress-track"><i style="width:86%"></i></div><div class="wave-date">86% complete · 214 remain</div></div><div class="round-arrow">→</div><div class="round-card"><span class="eyebrow">Round 2</span><strong>Committee decision</strong><div class="subtle">240 promoted · 6-person committee</div><div class="progress-track"><i style="width:48%"></i></div><div class="wave-date">48% complete · closes Aug 26</div></div></div>
               <div class="divider"></div><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><strong style="font-size:12px">Scorecard</strong><div class="subtle">Impact 40% · Specificity 35% · Novelty 25% · Comment</div></div><button class="button small" data-eval-action="scorecard">Edit scorecard</button></div>
             </div></section>
-            <section class="card"><div class="card-head"><div><h2>Program committee</h2><span class="subtle">15 reviewers · explicit track responsibility · 3 reviews per abstract</span></div><div style="display:flex;gap:5px"><button class="button small" data-eval-action="scopes">Edit scopes</button><button class="button small" data-eval-action="committee">Manage</button></div></div><div class="card-body committee-list">
+            <section class="card"><div class="card-head"><div><h2>Program committee</h2><span class="subtle">15 reviewers · explicit track responsibility · 3 reviews per abstract</span></div><div style="display:flex;gap:5px"><button class="button small" id="invite-reviewer" title="Mints the same one-time link Organization settings mints — one machinery, two doors">+ Invite reviewer</button><button class="button small" data-eval-action="scopes">Edit scopes</button><button class="button small" data-eval-action="committee">Manage</button></div></div><div class="card-body committee-list">
               ${["Maya Chen","João García Márquez","Fatima Al-Khatib","Tobias Sørensen","Priyanka Mukherjee"].map((n,i)=>`<div class="committee-person"><span class="mini-avatar">${n.split(" ").map(x=>x[0]).slice(0,2).join("")}</span><div><strong style="font-size:11px">${n}</strong><div class="wave-date">${i===0?"Program lead · all tracks":["Agents · Evals","Evals · AI in Financial Services","Infra · Security","Leadership · Open Models"][i-1]}</div></div><span class="tabular subtle">${[188,172,164,151,149][i]} / 200</span></div>`).join("")}
               <button class="button ghost" data-eval-action="reviewers">View all 15 reviewers →</button>
             </div></section>
@@ -3068,10 +3115,10 @@
           <section class="card table-card">
             <div class="saved-view-bar"><span class="view-label">Views</span>${state.savedViews.map(view=>`<button class="saved-view ${view.id===state.activeSavedView?"active":""}" data-saved-view="${view.id}">${esc(view.name)}${view.id==="drafts"?` · ${draftCount}`:""}</button>`).join("")}<button class="button small" id="save-current-view">+ Save current</button>${activeView&&!activeView.builtIn?`<button class="button small" id="manage-current-view">Manage</button>`:""}<span class="toolbar-spacer"></span><span class="view-meta">Personal views persist per user · ${esc(state.event.name)}</span></div>
             <div class="toolbar">
+              <div class="segment" id="kind-segment" role="group" aria-label="Filter by kind" style="flex:none">${[["All","All"],["Abstract","Abstracts"],["Session","Sessions"]].map(([value,label])=>`<button data-kind="${value}" class="${state.submissionType===value?"active":""}">${label}</button>`).join("")}</div>
               <select id="search-op" aria-label="Search operator" style="flex:none;width:132px">${["contains","does not contain","starts with"].map(op=>`<option ${state.submissionSearchOp===op?"selected":""}>${op}</option>`).join("")}</select>
               <input id="submission-search" value="${esc(state.submissionSearch)}" placeholder="Search 1,000 submissions…">
               <select id="status-filter"><option value="All">All statuses</option><optgroup label="Stored decision facts">${["Draft","Submitted","In Review"].map(x=>`<option value="${x}" ${state.submissionFilter===x?"selected":""}>${x}</option>`).join("")}<option value="AcceptedAny" ${state.submissionFilter==="AcceptedAny"?"selected":""}>Accepted (any stage)</option>${["Waitlisted","Rejected","Withdrawn"].map(x=>`<option value="${x}" ${state.submissionFilter===x?"selected":""}>${x==="Waitlisted"?"Maybe":x}</option>`).join("")}</optgroup><optgroup label="Pipeline stages">${["Unreviewed","Waved","Onboarding"].map(x=>`<option value="${x}" ${state.submissionFilter===x?"selected":""}>${x}</option>`).join("")}<option value="Accepted" ${state.submissionFilter==="Accepted"?"selected":""}>Ready to place</option>${["Scheduled","Published"].map(x=>`<option value="${x}" ${state.submissionFilter===x?"selected":""}>${x}</option>`).join("")}</optgroup><optgroup label="Attention queue"><option value="NotNotified" ${state.submissionFilter==="NotNotified"?"selected":""}>Decided · not notified</option></optgroup></select>
-              <select id="type-filter"><option>All</option><option ${state.submissionType==="Abstract"?"selected":""}>Abstract</option><option ${state.submissionType==="Session"?"selected":""}>Session</option></select>
               <select id="track-filter"><option>All</option>${tracks.map(t=>`<option ${state.submissionTrack===t.name?"selected":""}>${t.name}</option>`).join("")}</select>
               <span class="toolbar-spacer"></span>
               <button class="button small" id="configure-columns">Columns · ${state.submissionColumns.length}</button>
@@ -3275,11 +3322,16 @@
       }
 
       function orgOrganizersView() {
+        const stale = state.instance.organizers.filter(o=>o.stale && !o.pending);
         return shell(`<div class="page">
           ${pageHead("Organizers", "Everyone who can run this instance. Seats are org-wide or scoped to one conference; invites are one-time links that never depend on mail.")}
           ${orgTabs("orgOrganizers")}
           <div class="grid-2">
+            ${stale.length?`<section class="card" style="grid-column:1/-1;border-left:3px solid var(--warning-edge)"><div class="card-head"><div><h2>${stale.length} ${stale.length===1?"seat":"seats"} from a past conference still active</h2><span class="subtle">${stale.map(o=>`${esc(o.name)} · ${esc(o.role)} · ${esc(o.scope)}`).join(" · ")} — the conference ended; the access didn't. Nothing expires silently: review and decide.</span></div></div></section>`:""}
             ${organizersCard()}
+            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>What each role can do</h2><span class="subtle">The same one-liners shown when a role is chosen on an invite</span></div></div><div class="card-body" style="padding-top:2px;padding-bottom:2px">
+              ${Object.entries(ROLE_LEGEND).map(([role,desc])=>`<div class="toggle-line"><span style="display:flex;gap:12px;align-items:baseline"><span class="chip ${role==="Owner"?"published":""}" style="flex:0 0 84px">${role}</span><span class="subtle" style="font-size:11px;line-height:1.5">${desc}</span></span></div>`).join("")}
+            </div></section>
             <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>When an organizer is removed</h2><span class="subtle">One dialog, one transaction — everything it touches is listed before you commit</span></div></div><div class="card-body"><div class="grid-2">
               <div class="message-preview"><strong>Ends immediately</strong><br><span class="subtle">Every seat they hold · their session on every device · any unexpired sign-in link.</span></div>
               <div class="message-preview"><strong>Decided in the dialog</strong><br><span class="subtle">API tokens they minted (listed, default = revoke) · open review work returns to the pool.</span></div>
@@ -3290,14 +3342,59 @@
         </div>`);
       }
 
-      function orgInstanceView() {
+      function orgServerView() {
         return shell(`<div class="page">
-          ${pageHead("Instance", "The machine under the conference, reported honestly — each row derives from real bindings and secrets, never a stored flag.")}
-          ${orgTabs("orgInstance")}
+          ${pageHead("Server", "What this Marquee is connected to, and whether each piece is working. Every row reflects a real check, never a stored flag.")}
+          ${orgTabs("orgServer")}
           <div class="grid-2">
             ${instancePanel().replace('<section class="card">','<section class="card" style="grid-column:1/-1">')}
-            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Recovery</h2><span class="subtle">No passwords, ever</span></div></div><div class="card-body"><span class="subtle">Sign-in is a magic link once mail works. Locked out entirely? Re-running the CLI on the deploy host prints a fresh one-time claim link — proof of deploy is proof of ownership, and a used link is inert.</span></div></section>
+            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Recovery</h2><span class="subtle">No passwords, ever</span></div></div><div class="card-body"><span class="subtle">Sign-in is an emailed link once email sending works. Locked out entirely? Re-running the setup command on the machine that deployed Marquee prints a fresh one-time claim link — proof of deploy is proof of ownership, and a used link is inert.</span></div></section>
           </div>
+        </div>`);
+      }
+
+      // The organization's own home: the between-conferences view. Everything
+      // here exists elsewhere — this screen is a composition, not a system
+      // (ruling, 2026-08-14). The org across its years: conferences, the
+      // attention strip, relationship numbers, recent admin activity.
+      function orgHomeView() {
+        const liveName = state.event.name || "AIE New York 2026";
+        return shell(`<div class="page">
+          ${pageHead(esc(state.org.name), "The organization across its conferences. Each conference is one season; the people and relationships carry over.", `<a class="button" href="../crm/index.html?v=15#directory">Open People CRM</a><a class="button primary" href="#conferences/new">+ Create conference</a>`)}
+          <div class="attention-strip">
+            <a class="attention-item" style="display:block" href="../crm/index.html?v=15#outreach"><strong>3 outreach follow-ups overdue</strong><span>Prospects going quiet · open the Outreach board</span></a>
+            <a class="attention-item" style="display:block" href="#org/organizers"><strong>1 seat from a past conference</strong><span>Priya Raghunathan · Ops · AIE NYC 2025 · review access</span></a>
+            <a class="attention-item" style="display:block;border-left-color:var(--success)" href="#org/server"><strong>Server: all connections working</strong><span>Email, uploads, spam protection, web address</span></a>
+          </div>
+          <div class="grid-2">
+            <section class="card"><div class="card-head"><div><h2>Conferences</h2><span class="subtle">4 seasons · 2024 – 2027</span></div></div><div class="card-body" style="padding-top:2px;padding-bottom:2px">
+              <div class="toggle-line"><span><strong style="font-size:11.5px">${esc(liveName)}</strong><small class="subtle" style="display:block;margin-top:3px">Oct 12–14, 2026 · intake open · 1,040 submissions</small></span><a class="button small" href="#dashboard" style="width:76px">Open</a></div>
+              <div class="toggle-line"><span><strong style="font-size:11.5px">AIE NYC 2025</strong><small class="subtle" style="display:block;margin-top:3px">Feb 19–22, 2025 · complete · 75 speakers · 60 sessions</small></span><span class="chip" style="width:76px">Past</span></div>
+              <div class="toggle-line"><span><strong style="font-size:11.5px">AIE NYC 2024</strong><small class="subtle" style="display:block;margin-top:3px">Oct 2024 · complete · 52 speakers</small></span><span class="chip" style="width:76px">Past</span></div>
+              <div class="toggle-line"><span><strong style="font-size:11.5px">Next conference</strong><small class="subtle" style="display:block;margin-top:3px">Same organizers, same people, a new season — the checklist scopes itself</small></span><a class="button small" href="#conferences/new" style="width:76px">Create</a></div>
+            </div></section>
+            <section class="card"><div class="card-head"><div><h2>The relationships</h2><span class="subtle">Org-level — people carry across conferences</span></div><a class="button small" href="../crm/index.html?v=15#directory">Open CRM</a></div><div class="card-body">
+              <div class="metric-grid">
+                <span class="metric-box"><span class="eyebrow">People</span><div class="metric">1,187</div><span class="subtle">across all conferences</span></span>
+                <span class="metric-box"><span class="eyebrow">Returning speakers</span><div class="metric">137</div><span class="subtle">spoke at 2+ conferences</span></span>
+                <span class="metric-box"><span class="eyebrow">In outreach</span><div class="metric">7</div><span class="subtle">courted toward a slot</span></span>
+                <span class="metric-box"><span class="eyebrow">Organizers</span><div class="metric">${state.instance.organizers.filter(o=>!o.pending).length}</div><span class="subtle">${state.instance.organizers.filter(o=>o.pending).length} invites pending</span></span>
+              </div>
+            </div></section>
+            <section class="card" style="grid-column:1/-1"><div class="card-head"><div><h2>Recent activity</h2><span class="subtle">Who changed what, org-wide</span></div><a class="button small" href="#org/activity">Full log →</a></div><div class="card-body" style="padding-top:2px;padding-bottom:2px">
+              ${state.orgLog.slice(0,4).map(e=>`<div class="toggle-line"><span><strong style="font-size:11px">${esc(e.t)}</strong><small class="subtle" style="display:block;margin-top:2px">${esc(e.who)} · ${esc(e.w)}</small></span></div>`).join("")}
+            </div></section>
+          </div>
+        </div>`);
+      }
+
+      function orgActivityView() {
+        return shell(`<div class="page">
+          ${pageHead("Activity", "One append-only log, three lenses: this admin lens, each person's feed in the CRM, and each submission's timeline on its record. This is the admin lens — seats, invites, tokens, defaults.")}
+          ${orgTabs("orgActivity")}
+          <section class="card"><div class="card-head"><div><h2>Organization log</h2><span class="subtle">Removal survives here — access ends, the record doesn't</span></div></div><div class="card-body" style="padding-top:2px;padding-bottom:2px">
+            ${state.orgLog.map(e=>`<div class="toggle-line"><span><strong style="font-size:11px">${esc(e.t)}</strong><small class="subtle" style="display:block;margin-top:2px">${esc(e.who)} · ${esc(e.w)}</small></span></div>`).join("")}
+          </div></section>
         </div>`);
       }
 
@@ -3771,7 +3868,8 @@
       }
 
       function bindCommon() {
-        document.querySelectorAll("[data-route]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); if(el.hasAttribute("data-create-session"))state.formTarget="Session"; navigate(el.dataset.route); }));
+        document.querySelectorAll("[data-route]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); if(el.hasAttribute("data-create-session"))state.formTarget="Session"; if(el.hasAttribute("data-open-embed"))state.openEmbedOnBind=true; navigate(el.dataset.route); }));
+        document.getElementById("nav-add-session")?.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); state.formTarget="Session"; navigate("submissions/new"); });
         document.querySelectorAll("[data-nav-filter]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); const route=el.dataset.navRoute; navigate(route,route==="submissions"?{submissionFilter:el.dataset.navFilter,submissionTrack:"All",submissionPage:1}:{ }); }));
         bindStageFlyout();
         document.querySelectorAll("[data-toast]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); toast(el.dataset.toast); }));
@@ -4121,6 +4219,9 @@
       }
 
       function bindEvaluation() {
+        // The committee door into the ONE invite machinery: preset to
+        // Reviewer, scoped to this conference (ruling, 2026-08-14).
+        document.getElementById("invite-reviewer")?.addEventListener("click",()=>openInviteModal({role:"Reviewer",scope:state.event.name||"This conference",eyebrow:"Program committee",title:"Invite reviewer"}));
         document.querySelectorAll("[data-eval-action]").forEach(button=>button.onclick=()=>{
           const action=button.dataset.evalAction;
           const reviewers=["Maya Chen","João García Márquez","Fatima Al-Khatib","Tobias Sørensen","Priyanka Mukherjee","Nikhil Okafor","Sofía Kowalska","Kwame Dela Cruz","Élodie Nwosu","Ravi Ben-Ari","Noor Nakamura","Mateo Petrović","Zainab Cheung","Léa Wachowski","Dmitri Adeyemi"];
@@ -4173,7 +4274,7 @@
         let searchTimer;document.getElementById("submission-search")?.addEventListener("input",e=>{state.submissionSearch=e.target.value;const cursor=e.target.selectionStart;clearTimeout(searchTimer);searchTimer=setTimeout(()=>{rerenderFilter();const next=document.getElementById("submission-search");next?.focus();next?.setSelectionRange?.(cursor,cursor);},80)});
         document.getElementById("search-op")?.addEventListener("change",e=>{state.submissionSearchOp=e.target.value;rerenderFilter();});
         document.getElementById("status-filter")?.addEventListener("change",e=>{state.submissionFilter=e.target.value;rerenderFilter();});
-        document.getElementById("type-filter")?.addEventListener("change",e=>{state.submissionType=e.target.value;rerenderFilter();});
+        document.querySelectorAll("#kind-segment button").forEach(b=>b.addEventListener("click",()=>{state.submissionType=b.dataset.kind;rerenderFilter();}));
         document.getElementById("track-filter")?.addEventListener("change",e=>{state.submissionTrack=e.target.value;rerenderFilter();});
         document.getElementById("sort-filter")?.addEventListener("change",e=>{state.submissionSort=e.target.value;state.activeSavedView="";persistSubmissionPreferences();render();});
         document.querySelectorAll(".row-check").forEach(c=>c.addEventListener("change",()=>{c.checked?state.selected.add(c.dataset.id):state.selected.delete(c.dataset.id);state.selectAllMatching=false;render();}));
@@ -4248,13 +4349,76 @@
         document.getElementById("sync-airtable")?.addEventListener("click",e=>{const syncButton=e.currentTarget;syncButton.disabled=true;const log=document.getElementById("airtable-log"),lines=["manual sync requested · reading local outbox","pushed 3 local changes · received 2 webhook records","echo suppression matched 2 origins · no loop","sync complete · local 1,040 · Airtable 1,040 · outbox 0"];let i=0;const tick=()=>{if(i>=lines.length){state.airtableLog.push(...lines);toast("Airtable sync complete · both sides have 1,040 rows");syncButton.disabled=false;return;}const div=document.createElement("div");div.innerHTML=`${i===lines.length-1?"<strong>✓</strong>":"·"} ${esc(new Date().toLocaleTimeString([], {hour12:false}))} ${esc(lines[i++])}`;log.appendChild(div);log.scrollTop=log.scrollHeight;setTimeout(tick,180);};tick();});
       }
 
-      // One binder serves all four Organization-settings tabs; every lookup is
+      function orgLogPush(t, who = "Maya Chen") {
+        state.orgLog.unshift({ t, who, w: "Just now" });
+      }
+
+      // ONE invite machinery, two doors (ruling, 2026-08-14): the Organizers
+      // tab opens it bare; Evaluation's committee card opens it preset to
+      // Reviewer scoped to this conference. Same link, same expiry, same
+      // pending row — synchronized by being the same function.
+      function openInviteModal(preset = {}) {
+        const code=mintInviteCode();
+        const link=`https://${state.instance.domain}/join/${code.toLowerCase()}`;
+        const mailReady=state.instance.mail;
+        const roles=["Organizer","Ops","Reviewer"];
+        const startRole=roles.includes(preset.role)?preset.role:"Organizer";
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" style="max-width:560px"><div class="modal-head"><div class="eyebrow">${esc(preset.eyebrow||"Organizers")}</div><h2>${esc(preset.title||"Invite additional organizer")}</h2><p>One link, one person, one use. They open it, confirm their name and email, and have a session — the same pattern that claimed this instance, so it works before mail does, and day-of it works over a phone's own connection.</p></div><div class="modal-body stack">
+          <div class="grid-2">
+            <div class="field"><label for="invite-role">Role</label><select id="invite-role">${roles.map(r=>`<option ${r===startRole?"selected":""}>${r}</option>`).join("")}</select><span class="field-note" id="invite-role-desc" style="display:block;min-height:44px">${ROLE_LEGEND[startRole]}</span></div>
+            <div class="field"><label>Scope</label><div class="segment"><button type="button" id="invite-scope-org" class="${preset.scope?"":"active"}" style="width:50%">Organization</button><button type="button" id="invite-scope-event" class="${preset.scope?"active":""}" style="width:50%">${esc(state.event.name||"This conference")}</button></div><span class="field-note" style="display:block;min-height:44px">A day-of volunteer gets Ops, scoped to this conference. Owner transfers are separate, deliberately.</span></div>
+          </div>
+          <div class="token-line"><div class="code-block" style="padding:10px 12px;word-break:break-all;white-space:normal">${link}</div><button class="button" id="copy-invite">Copy link</button></div>
+          <div style="display:flex;gap:14px;align-items:center">
+            <span style="flex:0 0 auto;padding:6px;background:#fff;border:1px solid var(--line-strong);border-radius:var(--radius)">${fauxQR(link)}</span>
+            <div class="field" style="flex:1"><label>Short join code</label><div class="code-block" style="font-size:15px;letter-spacing:.06em">${code}</div><span class="field-note">Readable aloud at a registration desk: they type ${esc(state.instance.domain)}/join and the code. Same single-use link, same expiry.</span></div>
+          </div>
+          <span class="subtle">${mailReady?"Send it on any channel you share — or have Marquee email it.":"Send it on any channel you already share. Once mail is configured, Marquee can send it for you."}</span>
+        </div><div class="modal-actions">${mailReady?`<button class="button" id="email-invite">Email the invite</button>`:`<button class="button" id="email-invite-off">Email the invite</button>`}<button class="button primary" id="close-invite">Done</button></div></section></div>`;
+        let minted=false, scope=preset.scope||null;
+        const scopeOrg=document.getElementById("invite-scope-org"), scopeEvent=document.getElementById("invite-scope-event");
+        scopeOrg.onclick=()=>{scope=null;scopeOrg.classList.add("active");scopeEvent.classList.remove("active");};
+        scopeEvent.onclick=()=>{scope=state.event.name||"This conference";scopeEvent.classList.add("active");scopeOrg.classList.remove("active");};
+        document.getElementById("invite-role").onchange=e=>{document.getElementById("invite-role-desc").textContent=ROLE_LEGEND[e.target.value]||"";};
+        const mint=note=>{ if(minted)return; minted=true; const role=document.getElementById("invite-role").value; state.instance.organizers.push({pending:true,minted:`Today · ${note}`,role,scope,code}); orgLogPush(`Invite link minted · ${role}, ${scope||"whole organization"}`); };
+        document.getElementById("copy-invite").onclick=()=>{ mint("link copied"); copyText(link,"Invite link copied · valid once, expires in 7 days"); };
+        document.getElementById("email-invite")?.addEventListener("click",()=>{ mint("emailed"); toast("Invite emailed · the link stays single-use"); });
+        document.getElementById("email-invite-off")?.addEventListener("click",()=>toast("Mail isn’t configured on this instance — copy the link instead"));
+        document.getElementById("close-invite").onclick=()=>{ modalRoot.innerHTML=""; render(); };
+      }
+
+      // Owner transfer (ruling, 2026-08-14: keep it safe and simple). Owner
+      // only; recipient must be an org-wide Organizer who has signed in; the
+      // confirm requires the organization's name typed back; the flip is
+      // immediate, both parties are notified, and it lands in the log.
+      function openTransferModal() {
+        const eligible=state.instance.organizers.filter(o=>!o.pending&&!o.you&&o.role==="Organizer"&&!o.scope);
+        if(!eligible.length){ toast("No eligible recipient — ownership can pass only to an org-wide Organizer"); return; }
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" style="max-width:520px"><div class="modal-head"><div class="eyebrow">Organizers · ownership</div><h2>Transfer ownership</h2><p>The new owner gets everything only an Owner can do; you become an Organizer the same moment. Both of you are notified, and the transfer is recorded. Ownership can pass only to an org-wide Organizer who has signed in.</p></div><div class="modal-body stack">
+          <div class="field"><label for="transfer-to">New owner</label><select id="transfer-to">${eligible.map((o,i)=>`<option value="${esc(o.name)}">${esc(o.name)} · ${esc(o.note||"Organizer")}</option>`).join("")}</select></div>
+          <div class="field"><label for="transfer-confirm">Type the organization name to confirm</label><input id="transfer-confirm" placeholder="${esc(state.org.name)}" autocomplete="off"></div>
+        </div><div class="modal-actions"><button class="button primary" id="cancel-transfer" autofocus>Keep ownership</button><button class="button danger-solid" id="confirm-transfer" disabled>Transfer ownership</button></div></section></div>`;
+        const input=document.getElementById("transfer-confirm"), go=document.getElementById("confirm-transfer");
+        input.addEventListener("input",()=>{ go.disabled=input.value.trim()!==state.org.name; });
+        document.getElementById("cancel-transfer").onclick=()=>modalRoot.innerHTML="";
+        go.onclick=()=>{
+          const toName=document.getElementById("transfer-to").value;
+          const from=meOrganizer(), to=state.instance.organizers.find(o=>o.name===toName);
+          if(from&&to){ from.role="Organizer"; to.role="Owner"; state.instance.owner={name:to.name,email:to.email}; orgLogPush(`Ownership transferred — ${from.name} → ${to.name}`,from.name); }
+          modalRoot.innerHTML="";
+          toast(`${toName} now owns this instance · you are an Organizer · both of you have mail`);
+          render();
+        };
+      }
+
+      // One binder serves every Organization tab; every lookup is
       // null-safe, so a tab only binds what it rendered.
       function bindOrg() {
         // ── Organization tab ──
         document.querySelectorAll("[data-org-theme]").forEach(b=>b.onclick=()=>{
           state.org.defaultTheme=b.dataset.orgTheme;
           setTheme(state.org.defaultTheme);
+          orgLogPush(`Default theme set to ${currentTheme().label}`);
           toast(`Default theme set · ${currentTheme().label} — a user's own choice still wins`);
         });
         document.getElementById("save-org")?.addEventListener("click",()=>{
@@ -4275,37 +4439,14 @@
             // claimed, configured instance with no conference data — exactly
             // what remove-demo leaves behind. The escape button restores.
             enterFreshInstall("second");
+            orgLogPush("Demo conference removed · scoped to seeded rows only");
             toast("Demo conference removed · your organizers and tokens are untouched");
             navigate("dashboard");
           };
         });
         // ── Organizers tab ──
-        document.getElementById("invite-organizer")?.addEventListener("click",()=>{
-          const code=mintInviteCode();
-          const link=`https://${state.instance.domain}/join/${code.toLowerCase()}`;
-          const mailReady=state.instance.mail;
-          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" style="max-width:560px"><div class="modal-head"><div class="eyebrow">Organizers</div><h2>Invite additional organizer</h2><p>One link, one person, one use. They open it, confirm their name and email, and have a session — the same pattern that claimed this instance, so it works before mail does, and day-of it works over a phone's own connection.</p></div><div class="modal-body stack">
-            <div class="grid-2">
-              <div class="field"><label for="invite-role">Role</label><select id="invite-role"><option>Organizer</option><option>Ops</option><option>Reviewer</option></select><span class="field-note">Owner transfers are separate, deliberately.</span></div>
-              <div class="field"><label>Scope</label><div class="segment"><button type="button" id="invite-scope-org" class="active" style="width:50%">Organization</button><button type="button" id="invite-scope-event" style="width:50%">${esc(state.event.name||"This conference")}</button></div><span class="field-note">A day-of volunteer gets Ops, scoped to this conference.</span></div>
-            </div>
-            <div class="token-line"><div class="code-block" style="padding:10px 12px;word-break:break-all;white-space:normal">${link}</div><button class="button" id="copy-invite">Copy link</button></div>
-            <div style="display:flex;gap:14px;align-items:center">
-              <span style="flex:0 0 auto;padding:6px;background:#fff;border:1px solid var(--line-strong);border-radius:var(--radius)">${fauxQR(link)}</span>
-              <div class="field" style="flex:1"><label>Short join code</label><div class="code-block" style="font-size:15px;letter-spacing:.06em">${code}</div><span class="field-note">Readable aloud at a registration desk: they type ${esc(state.instance.domain)}/join and the code. Same single-use link, same expiry.</span></div>
-            </div>
-            <span class="subtle">${mailReady?"Send it on any channel you share — or have Marquee email it.":"Send it on any channel you already share. Once mail is configured, Marquee can send it for you."}</span>
-          </div><div class="modal-actions">${mailReady?`<button class="button" id="email-invite">Email the invite</button>`:`<button class="button" id="email-invite-off">Email the invite</button>`}<button class="button primary" id="close-invite">Done</button></div></section></div>`;
-          let minted=false, scope=null;
-          const scopeOrg=document.getElementById("invite-scope-org"), scopeEvent=document.getElementById("invite-scope-event");
-          scopeOrg.onclick=()=>{scope=null;scopeOrg.classList.add("active");scopeEvent.classList.remove("active");};
-          scopeEvent.onclick=()=>{scope=state.event.name||"This conference";scopeEvent.classList.add("active");scopeOrg.classList.remove("active");};
-          const mint=note=>{ if(minted)return; minted=true; state.instance.organizers.push({pending:true,minted:`Today · ${note}`,role:document.getElementById("invite-role").value,scope,code}); };
-          document.getElementById("copy-invite").onclick=()=>{ mint("link copied"); copyText(link,"Invite link copied · valid once, expires in 7 days"); };
-          document.getElementById("email-invite")?.addEventListener("click",()=>{ mint("emailed"); toast("Invite emailed · the link stays single-use"); });
-          document.getElementById("email-invite-off")?.addEventListener("click",()=>toast("Mail isn’t configured on this instance — copy the link instead"));
-          document.getElementById("close-invite").onclick=()=>{ modalRoot.innerHTML=""; render(); };
-        });
+        document.getElementById("invite-organizer")?.addEventListener("click",()=>openInviteModal());
+        document.getElementById("transfer-ownership")?.addEventListener("click",openTransferModal);
         // The removal transaction (ruling O3): everything listed before commit.
         document.querySelectorAll("[data-remove-organizer]").forEach(b=>b.onclick=()=>{
           const i=Number(b.dataset.removeOrganizer), person=state.instance.organizers[i]; if(!person)return;
@@ -4330,6 +4471,7 @@
             document.getElementById("really-remove-org").onclick=()=>{
               state.apiTokens=state.apiTokens.filter(t=>!revoke.has(t.id));
               state.instance.organizers.splice(i,1);
+              orgLogPush(`Organizer removed — ${person.name} · session revoked${revoke.size?`, ${revoke.size} ${revoke.size===1?"token":"tokens"} revoked`:""}`);
               modalRoot.innerHTML="";
               toast(`${person.name} removed · access ended${revoke.size?` · ${revoke.size} ${revoke.size===1?"token":"tokens"} revoked`:""} · their work stays on the record`);
               render();
@@ -4338,11 +4480,12 @@
         });
         document.querySelectorAll("[data-revoke-invite]").forEach(b=>b.onclick=()=>{
           state.instance.organizers.splice(Number(b.dataset.revokeInvite),1);
+          orgLogPush("Invite link revoked before use");
           toast("Invite link revoked · it can no longer be used"); render();
         });
         // ── API tokens tab ──
-        document.getElementById("create-token")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Create API token</h2><p>The secret is shown once. Store it in the client that needs it.</p></div><div class="modal-body stack"><div class="field"><label>Token name</label><input id="token-name" value="Conference agent"></div><div class="field"><label>Scope</label><select id="token-scope"><option>All conferences</option><option>${esc(state.event.name||"This conference")}</option></select></div></div><div class="modal-actions"><button class="button" id="cancel-token">Cancel</button><button class="button primary" id="issue-token">Issue token</button></div></section></div>`;document.getElementById("cancel-token").onclick=()=>modalRoot.innerHTML="";document.getElementById("issue-token").onclick=()=>{const name=document.getElementById("token-name").value||"Untitled token",id=`tok_${Math.random().toString(36).slice(2,6)}`;state.apiTokens.push({id,name,prefix:`mq_live_${id.slice(-4)}…`,created:"Just now",lastUsed:"Never",createdBy:"Maya Chen",scope:document.getElementById("token-scope").value});modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Copy this token now</h2><p>Marquee will not show the full secret again.</p></div><div class="modal-body"><div class="code-block" id="issued-token">mq_live_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}</div></div><div class="modal-actions"><button class="button primary" id="done-token">I stored it</button></div></section></div>`;document.getElementById("done-token").onclick=()=>{modalRoot.innerHTML="";render();};};});
-        document.querySelectorAll("[data-revoke-token]").forEach(b=>b.onclick=()=>{state.apiTokens=state.apiTokens.filter(t=>t.id!==b.dataset.revokeToken);toast("API token revoked · requests using it now fail");render();});
+        document.getElementById("create-token")?.addEventListener("click",()=>{modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Create API token</h2><p>The secret is shown once. Store it in the client that needs it.</p></div><div class="modal-body stack"><div class="field"><label>Token name</label><input id="token-name" value="Conference agent"></div><div class="field"><label>Scope</label><select id="token-scope"><option>All conferences</option><option>${esc(state.event.name||"This conference")}</option></select></div></div><div class="modal-actions"><button class="button" id="cancel-token">Cancel</button><button class="button primary" id="issue-token">Issue token</button></div></section></div>`;document.getElementById("cancel-token").onclick=()=>modalRoot.innerHTML="";document.getElementById("issue-token").onclick=()=>{const name=document.getElementById("token-name").value||"Untitled token",id=`tok_${Math.random().toString(36).slice(2,6)}`;state.apiTokens.push({id,name,prefix:`mq_live_${id.slice(-4)}…`,created:"Just now",lastUsed:"Never",createdBy:"Maya Chen",scope:document.getElementById("token-scope").value});orgLogPush(`API token created · ${name}`);modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><h2>Copy this token now</h2><p>Marquee will not show the full secret again.</p></div><div class="modal-body"><div class="code-block" id="issued-token">mq_live_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}</div></div><div class="modal-actions"><button class="button primary" id="done-token">I stored it</button></div></section></div>`;document.getElementById("done-token").onclick=()=>{modalRoot.innerHTML="";render();};};});
+        document.querySelectorAll("[data-revoke-token]").forEach(b=>b.onclick=()=>{const tok=state.apiTokens.find(t=>t.id===b.dataset.revokeToken);state.apiTokens=state.apiTokens.filter(t=>t.id!==b.dataset.revokeToken);orgLogPush(`API token revoked · ${tok?tok.name:"token"}`);toast("API token revoked · requests using it now fail");render();});
       }
 
       function bindWebhooks() {
@@ -4415,6 +4558,7 @@
 
       function bindPublicAgenda() {
         document.getElementById("open-embed")?.addEventListener("click",showEmbedModal);
+        if(state.openEmbedOnBind){ state.openEmbedOnBind=false; if(document.getElementById("open-embed")) showEmbedModal(); }
         document.getElementById("subscribe-calendar")?.addEventListener("click",()=>downloadText("aie-nyc-2026-calendar.ics","BEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:AIE NYC 2026\nURL:https://marquee.stage11.dev/aie-nyc-2026/calendar.ics\nEND:VCALENDAR","text/calendar"));
         document.querySelectorAll("[data-public-day]").forEach(b=>b.onclick=()=>{state.agendaDay=b.dataset.publicDay;render();});
         document.getElementById("public-track")?.addEventListener("change",e=>{state.publicTrack=e.target.value;render();});
@@ -4517,7 +4661,7 @@
 
       function render() {
         state.route = currentRoute();
-        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,venues:venuesView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,orgGeneral:orgGeneralView,orgOrganizers:orgOrganizersView,orgInstance:orgInstanceView,orgTokens:orgTokensView,webhooks:webhooksView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView,setupAgent:agentSetupView,claim:claimView,handoff:handoffView };
+        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,venues:venuesView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,orgGeneral:orgGeneralView,orgHome:orgHomeView,orgOrganizers:orgOrganizersView,orgServer:orgServerView,orgTokens:orgTokensView,orgActivity:orgActivityView,webhooks:webhooksView,apiDocs:apiDocsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView,setupAgent:agentSetupView,claim:claimView,handoff:handoffView };
         // During the fresh-install walk the dashboard is the setup checklist, the
         // landing is the unclaimed-instance page, and screens with genuinely no
         // data render their empty state; everything else renders for real. While
@@ -4534,7 +4678,7 @@
         bindCommon();
         bindRoomHeads();
         bindMdToolbars();
-        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,venues:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,eventNew:bindEventNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,orgGeneral:bindOrg,orgOrganizers:bindOrg,orgInstance:bindOrg,orgTokens:bindOrg,webhooks:bindWebhooks,apiDocs:bindApiDocs,aiAssist:bindAiAssist,claim:bindClaim,handoff:bindHandoff}[state.route];
+        const binder={landing:bindLanding,dashboard:bindDashboard,board:bindBoard,settings:bindSettings,venues:bindSettings,forms:bindForms,cfp:bindCfp,portal:bindPortal,evaluation:bindEvaluation,reviewer:bindReviewer,submissions:bindSubmissions,submissionDetail:bindSubmissionDetail,submissionNew:bindSubmissionNew,eventNew:bindEventNew,onboarding:bindOnboarding,agenda:bindAgenda,publicAgenda:bindPublicAgenda,comms:bindComms,taskTemplates:bindTaskTemplates,importer:bindImporter,airtable:bindAirtable,orgGeneral:bindOrg,orgHome:bindOrg,orgOrganizers:bindOrg,orgServer:bindOrg,orgTokens:bindOrg,orgActivity:bindOrg,webhooks:bindWebhooks,apiDocs:bindApiDocs,aiAssist:bindAiAssist,claim:bindClaim,handoff:bindHandoff}[state.route];
         // The setup dashboard and fresh landing have no binder of their own —
         // bindCommon carries their links.
         if(!showEmpty && binder && !(inWalk && (state.route === "dashboard" || state.route === "landing"))) binder();

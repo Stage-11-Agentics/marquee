@@ -258,6 +258,79 @@ complete, attribution merged):
   destructive button ("Yes — remove X now") is the product's only
   filled-red button. Keep access exits either stage untouched.
 
+## Iteration 3 — the Organization concept completed (fresh-eyes review, same day)
+
+Atin asked for a from-scratch evaluation of the whole Organization area
+(settings + People CRM + Outreach): what would confuse a real organizer, and
+what's missing. Sixteen findings were discussed and ruled; everything below is
+**built in pipeline v1.15 + the CRM prototype** except where marked.
+
+**Clarity rulings:**
+
+- **Role legend, as drafted.** One line per role (Owner / Organizer / Ops /
+  Reviewer), shown on the Organizers tab and live under the invite modal's
+  role picker. **Only the Owner removes anyone** (simplicity ruling); Organizer
+  and up can invite. UI "Organizer" ↔ schema `program_lead` — mapping to be
+  written into the contract at fold time.
+- **One invite machinery, two doors.** Evaluation's committee card mints the
+  same one-time link, preset to Reviewer scoped to the conference. The
+  Reviewer legend line says "sign-in only — assign work in Evaluation."
+- **Org settings visible to Owner + org-wide Organizers only** (contract
+  ruling; the mock shows the owner's view).
+- **Speakers row** added to the Conference nav group (the roster — same query
+  as People CRM with the conference filter applied).
+- **Mail identity per-org, not designed here.** Orgs run their own Resend;
+  the Server tab's mail row names the connected account and links out.
+  Anything further is live-deployment customization.
+- **"Instance" → "Server", in plain organizer language.** "What this Marquee
+  is connected to, and whether each piece is working." Rows lead with what
+  they do — Email sending · File uploads · Spam protection · Web address —
+  service names as small print.
+
+**Features ruled in and built:**
+
+- **Next-touch dates on Outreach** (the chase works both ways): a date per
+  card; overdue cards tint and sort first on the board, and surface on
+  Organization Home and the conference pipeline home's attention strip.
+- **Outreach hears the pipeline**: when a courted person acts, the System
+  authors the stage move (c6's history shows "submission received via the
+  invited-session form"). CRM drawer cross-links to the board stand.
+- **One activity log, three lenses**: the new Activity tab in Org settings is
+  the admin lens (invites, removals, tokens, defaults, transfers — live-
+  appended by every action in the mock); the person's CRM feed and the
+  submission record's timeline are the other two (timeline is build-side,
+  ruled in with Atin's explicit yes).
+- **Export beside Import**, and agents export too: the same rows via
+  `GET /api/v1/org/people?format=csv` or `marquee people export`.
+- **Do-not-contact** on the person: drawer toggle, and bulk compose names its
+  exclusions instead of silently dropping them.
+- **Stale conference-scoped seats**: no silent expiry — a banner on the
+  Organizers tab and an Organization Home attention line prompt review.
+- **Owner transfer, safe and simple** (Atin: "make something safe"): Owner
+  only, recipient must be an org-wide Organizer who has signed in, the
+  confirm requires the organization name typed back, the flip is immediate,
+  both parties notified, logged. The mock is permission-aware: after
+  transferring, the ex-owner's Remove/Transfer actions genuinely disappear.
+- **Organization Home — green-lit and built.** The Organization group is now
+  **Home · People CRM · Outreach · Settings**. Home is the between-conferences
+  view: conferences as seasons (with create), the attention strip (outreach
+  follow-ups · past-conference seats · server state), relationship KPIs, and
+  recent org activity. A composition of things that exist, not a new system.
+
+**Named for later (not built):**
+
+- **Merge duplicates + email change** — the two identity edges (auth is keyed
+  by email): same human as two rows needs a survivor-picking merge; editing an
+  email is an identity operation needing a confirm. Both go in the CRM round's
+  scope so the build doesn't discover them first.
+- **Sponsors — its own prototype round.** The model is recorded now:
+  **companies are to sponsorships what people are to participations.** The
+  sponsor relationship (courted across years) is org-level, Outreach's
+  sibling; the deal (tier, booth, guaranteed session slots) is
+  conference-scoped and feeds the existing invited-Session intake. Today
+  sponsors exist only as `sponsor_contact` people and Session-type slots —
+  findable but homeless, deliberately, until that round.
+
 ## Build implications (for eventual tickets — not prototype scope)
 
 - `organizations` gains profile/default columns (name exists; default
