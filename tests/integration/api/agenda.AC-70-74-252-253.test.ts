@@ -69,11 +69,6 @@ describe.sequential("MRQ-20 agenda API", () => {
       building: null,
     });
 
-    const publicResponse = await SELF.fetch(`${ORIGIN}/api/v1/public/agenda?event=aie-nyc-2026&q=Accepted%20session`);
-    expect(publicResponse.status).toBe(200);
-    const publicBody = await publicResponse.json<{ sessions: Array<{ title: string }> }>();
-    expect(publicBody.sessions.some((session) => session.title === "Accepted session")).toBe(false);
-
     await env.DB.prepare("UPDATE submissions SET status = 'withdrawn' WHERE id = ? AND event_id = ?").bind("sub-agenda-placed", DEMO_EVENT_ID).run();
     const withdrawn = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/publish`, {
       method: "POST",
@@ -103,6 +98,13 @@ describe.sequential("MRQ-20 agenda API", () => {
     });
     expect(await env.DB.prepare("SELECT is_published FROM submissions WHERE id = ?").bind("sub-agenda-placed").first<{ is_published: number }>()).toMatchObject({ is_published: 1 });
     expect(await env.DB.prepare("SELECT action, entity_type FROM audit_log WHERE entity_id = ? AND action = 'published'").bind("sub-agenda-placed").first<{ action: string; entity_type: string }>()).toMatchObject({ action: "published", entity_type: "submission" });
+
+    const publicResponse = await SELF.fetch(`${ORIGIN}/api/v1/public/agenda?event=aie-nyc-2026`);
+    expect(publicResponse.status).toBe(200);
+    const publicBody = await publicResponse.json<{ sessions: Array<{ title: string }> }>();
+    expect(publicBody.sessions.length).toBeGreaterThan(0);
+    expect(publicBody.sessions.some((session) => session.title === "Already placed")).toBe(true);
+    expect(publicBody.sessions.some((session) => session.title === "Accepted session")).toBe(false);
   });
 
   test("AC-70 · GET derives the unscheduled pool from accepted and unplaced submissions", async () => {
