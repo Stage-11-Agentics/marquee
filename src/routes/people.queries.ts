@@ -25,9 +25,71 @@
  * lives here, in SQL, so filtering by tag or stage stays server-side too.
  */
 import type { D1Database } from "@cloudflare/workers-types";
+import { z } from "@hono/zod-openapi";
 
 import { resolveSort, type PageParams, type SortRegistry } from "../api/pagination";
+import { PIPELINE_STAGE_IDS } from "../lib/person-annotations";
 import { SPEAKER_ROSTER_PERSON_SOURCE } from "../lib/roster-source";
+
+/**
+ * The saved filter behind a Live list. It lives beside the query rather than
+ * beside the route because it IS this query's filter vocabulary — a Live list
+ * is a saved call to `buildPeopleQuery`, nothing more.
+ */
+export const listConfigSchema = z.object({
+  q: z.string().trim().max(200).default(""),
+  company: z.string().trim().max(200).optional(),
+  title: z.string().trim().max(200).optional(),
+  tag: z.string().trim().max(80).optional(),
+  stage: z.enum(PIPELINE_STAGE_IDS as unknown as [string, ...string[]]).optional(),
+});
+
+export type PersonListConfig = z.infer<typeof listConfigSchema>;
+
+export function parseListConfig(value: string): PersonListConfig {
+  try {
+    return listConfigSchema.parse(JSON.parse(value) as unknown);
+  } catch {
+    return listConfigSchema.parse({});
+  }
+}
+
+export function configFilters(config: PersonListConfig) {
+  return {
+    ...(config.q ? { q: config.q } : {}),
+    ...(config.company ? { company: config.company } : {}),
+    ...(config.title ? { title: config.title } : {}),
+    ...(config.tag ? { tag: config.tag } : {}),
+    ...(config.stage ? { stage: config.stage } : {}),
+  };
+}
+
+/**
+ * Turn `list_id` into filters, which is not the same thing for both kinds.
+ *
+ * A **Fixed** list is its membership rows. A **Live** list has none — it is a
+ * saved filter, and its members are whoever matches that filter right now — so
+ * resolving it through `person_list_members` matches nobody. That is why
+ * opening a Live list showed an empty table under a band that named a real
+ * count: two different definitions of the same list, one per screen.
+ *
+ * A list this organization does not own resolves to the membership clause on
+ * purpose. It matches nobody, which is the safe direction to fail: dropping the
+ * clause instead would answer a bad or borrowed id with the entire org.
+ */
+export async function resolveListScope(
+  db: D1Database,
+  orgId: string,
+  listId: string,
+): Promise<{ found: boolean; filters: Partial<PeopleQueryInput> }> {
+  const row = await db
+    .prepare("SELECT kind, config_json FROM person_lists WHERE id = ? AND org_id = ?")
+    .bind(listId, orgId)
+    .first<{ kind: string; config_json: string }>();
+  if (!row) return { found: false, filters: { listId } };
+  if (row.kind !== "live") return { found: true, filters: { listId } };
+  return { found: true, filters: configFilters(parseListConfig(row.config_json)) };
+}
 
 export const PEOPLE_SORTS: SortRegistry = {
   name: { column: "person.name COLLATE NOCASE", direction: "asc" },

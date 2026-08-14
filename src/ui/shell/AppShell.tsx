@@ -195,7 +195,10 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   </>;
   return <>
     <div class="app-shell">
-      <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} resetting={resetting} onReset={() => void resetDemo()} />
+      {/* Lists has no row of its own, so on `/lists` the nav would highlight
+          nothing at all and the organizer would be somewhere the sidebar
+          refuses to name. It is a lens on People; People is where you are. */}
+      <Sidebar activeId={route?.id === "lists" ? "people" : route?.id} eventName={eventName} navigate={navigate} resetting={resetting} onReset={() => void resetDemo()} />
       <main class="main">
         <Topbar
           eventName={eventName}

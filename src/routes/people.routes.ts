@@ -34,6 +34,7 @@ import {
   listPeopleFacets,
   parseTags,
   PEOPLE_SORTS,
+  resolveListScope,
   type PersonListRow,
 } from "./people.queries";
 
@@ -219,14 +220,22 @@ const listPeople = defineApiRoute(
     const access = requireOrgAccess(context);
     const query = context.req.valid("query");
     const page = parsePagination({ page: query.page, per_page: query.per_page });
+    // A Live list is a saved filter, not a membership: it has to be expanded
+    // into filters before the query is built, or it matches nobody. The scope
+    // goes in FIRST so the caller's own chips narrow further and win outright
+    // where they name a field the saved filter also names — the chip is the
+    // thing the organizer just clicked.
+    const listScope = query.list_id
+      ? await resolveListScope(context.env.DB, access.orgId, query.list_id)
+      : null;
     const built = buildPeopleQuery({
       orgId: access.orgId,
+      ...(listScope ? listScope.filters : {}),
       ...(query.q ? { q: query.q } : {}),
       ...(query.company ? { company: query.company } : {}),
       ...(query.title ? { title: query.title } : {}),
       ...(query.tag ? { tag: query.tag } : {}),
       ...(query.stage ? { stage: query.stage } : {}),
-      ...(query.list_id ? { listId: query.list_id } : {}),
       ...(query.event_id ? { eventId: query.event_id } : {}),
       ...(query.sort ? { sort: query.sort } : {}),
       page,

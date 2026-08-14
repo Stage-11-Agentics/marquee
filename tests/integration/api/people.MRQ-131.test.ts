@@ -254,6 +254,40 @@ test("CONTRACT · MRQ-131 · CRM-09 · both kinds of List save and reopen with t
   expect((await people()).total).toBe(3);
 });
 
+test("CONTRACT · MRQ-131 · CRM-09 · opening a List from People resolves BOTH kinds, not just Fixed", async () => {
+  // The untested arm. `openList` resolved a Live list through its saved filter,
+  // but `GET /org/people?list_id=` only ever looked in `person_list_members` —
+  // and a Live list has no rows there, by design. So opening one showed an
+  // empty table beneath a band naming a real count: two definitions of the same
+  // list, one per screen. Live is also the DEFAULT kind when nothing is ticked,
+  // so this was the common path, not the corner.
+  await post(`/api/v1/org/people/${SPEAKER}/tags`, { tag: "Keynote" });
+  const live = await post("/api/v1/org/lists", { name: "Keynote shortlist", kind: "live", config: { q: "", tag: "Keynote" } });
+  const fixed = await post("/api/v1/org/lists", { name: "2026 chairs", kind: "fixed", person_ids: [SPEAKER, SUBMITTER] });
+  const liveId = ((await live.json()) as { list: { id: string } }).list.id;
+  const fixedId = ((await fixed.json()) as { list: { id: string } }).list.id;
+
+  expect((await people(`?list_id=${liveId}`)).data.map((row) => row.name)).toEqual(["Priya Raman"]);
+  expect((await people(`?list_id=${fixedId}`)).data.map((row) => row.name).sort()).toEqual(["Marcus Okafor", "Priya Raman"]);
+
+  // The count the band prints and the rows the table draws come from the same
+  // definition, so they cannot disagree.
+  const saved = await json<{ data: Array<{ id: string; member_count: number }> }>("/api/v1/org/lists");
+  expect(saved.data.find((entry) => entry.id === liveId)?.member_count).toBe((await people(`?list_id=${liveId}`)).total);
+
+  // A Live list keeps up here too: tag someone else and the table grows.
+  await post(`/api/v1/org/people/${SUBMITTER}/tags`, { tag: "Keynote" });
+  expect((await people(`?list_id=${liveId}`)).total).toBe(2);
+
+  // A chip set alongside the list narrows further rather than widening.
+  const narrowed = `?list_id=${liveId}&company=${encodeURIComponent("Latticework Systems")}`;
+  expect((await people(narrowed)).data.map((row) => row.name)).toEqual(["Priya Raman"]);
+
+  // An id this organization does not own matches nobody. Dropping the clause
+  // instead would answer a borrowed id with the entire organization.
+  expect((await people("?list_id=lst_not_ours")).total).toBe(0);
+});
+
 test("CONTRACT · MRQ-131 · CRM-11 · a bulk send from People is logged per recipient in the outbox", async () => {
   const sent = await post("/api/v1/org/comms/send", {
     person_ids: [SPEAKER, SUBMITTER],

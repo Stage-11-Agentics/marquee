@@ -217,9 +217,22 @@
   background: var(--accent-wash);
 }
 
-.people-listband-mark { color: var(--accent-ink); font-size: 13px; line-height: 1; }
+.people-listband-mark { color: var(--accent-ink); font-size: 13px; line-height: 1; flex: none; }
+
+/* Both parts shrink together. `flex: 1` on the meta alone gives it a zero
+   basis, so every pixel of shrink lands on the name and the meta vanishes
+   entirely before the name has truncated a character. */
+.people-listband-said {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+}
 
 .people-listband-name {
+  flex: 0 1 auto;
+  min-width: 0;
   font: 600 13px/1.2 var(--sans);
   letter-spacing: -0.008em;
   color: var(--ink);
@@ -229,7 +242,7 @@
 }
 
 .people-listband-meta {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   font: 400 11px/1.4 var(--mono);
   color: var(--muted);

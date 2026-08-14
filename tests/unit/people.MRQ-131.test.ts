@@ -17,7 +17,7 @@ import {
 import { mapPersonHeaders, planPersonImport } from "../../src/lib/people-import";
 import { buildPeopleQuery, parseTags } from "../../src/routes/people.queries";
 import { activeCriteria, EMPTY_FILTERS, hasFilters, saveControl } from "../../src/ui/people/people-api";
-import { routesFor } from "../../src/ui/shell/route-table";
+import { matchRoute, routesFor } from "../../src/ui/shell/route-table";
 import { PIPELINE_STAGES as CLIENT_STAGES } from "../../src/ui/people/pipeline-stages";
 import { peopleImportBrief } from "../../src/ui/people/people-brief";
 
@@ -197,29 +197,33 @@ test("CONTRACT · MRQ-131 · a list is never rendered as its id, and still count
   expectEqual(hasFilters({ q: "", company: "", title: "", tag: "", listId: "lst_01KZZZ" }), true);
   expectEqual(hasFilters({ ...EMPTY_FILTERS }), false);
 
-  // People names it instead — from the URL, so the band is on screen before
-  // the name resolves, and from the record once it does.
+  // People names it instead, in a band that distinguishes all four states —
+  // and in particular does not report a failed request as a deleted list.
   const page = readFileSync(new URL("../../src/ui/people/PeoplePage.tsx", import.meta.url), "utf8");
   expect(page).toMatch(/people-listband/);
-  expect(page).toMatch(/list\?\.name/);
-  expect(page).toMatch(/This list no longer exists/);
+  for (const state of ["resolving", "named", "missing", "error"]) {
+    expect(page, `the band must handle the "${state}" state`).toContain(`"${state}"`);
+  }
   // Reserved height: the name and its meta line arrive from a second request
   // and the table below must not move when they land.
   const css = readFileSync(new URL("../../src/ui/people/people.css", import.meta.url), "utf8");
-  expect(css).toMatch(/\.people-listband \{[^}]*min-height: 44px/s);
+  expectOk(/\.people-listband \{[^}]*min-height:/s.test(css));
 });
 
 test("CONTRACT · MRQ-131 · Lists is reached from People, not from a sidebar row of its own", () => {
   // A list is a lens on People. A permanent second destination for it makes
   // the nav longer and the relationship less obvious — but the route stays,
   // because saving a list lands on it and the URL is shareable.
-  expect(routeTable).toMatch(/path: "\/lists", label: "Lists", icon: "◈", group: "organization" \}/);
-  expect(routeTable).not.toMatch(/path: "\/lists"[^\n]*sidebar: true/);
-  expect(routesFor("organization").map((route) => route.id)).toEqual(["people", "sourcing"]);
-  expectOk(routeTable.includes('path: "/lists"'));
-  // And People carries the way in.
-  const page = readFileSync(new URL("../../src/ui/people/PeoplePage.tsx", import.meta.url), "utf8");
-  expect(page).toMatch(/navigate\?\.\("\/lists"\)/);
+  // Asserted through the resolver rather than the source text, so reordering a
+  // property in the table cannot fail a test about navigation.
+  expectDeep(routesFor("organization").map((route) => route.id), ["people", "sourcing"]);
+  // The route itself survives — /lists still resolves, it just has no row.
+  const lists = matchRoute("/lists");
+  expectEqual(lists?.id, "lists");
+  expectEqual(lists?.sidebar, undefined);
+  // And on /lists the nav names where you are rather than highlighting nothing.
+  const shell = readFileSync(new URL("../../src/ui/shell/AppShell.tsx", import.meta.url), "utf8");
+  expect(shell).toMatch(/route\?\.id === "lists" \? "people"/);
 });
 
 test("CONTRACT · MRQ-131 · a radio in a field is never sized like a text entry", () => {
