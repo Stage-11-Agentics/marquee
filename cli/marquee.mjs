@@ -376,6 +376,10 @@ async function execute(command, arguments_, options, flags, client) {
     const eventId = await resolveEventId(client, command, arguments_, options);
     return client.patch(`/api/v1/events/${encodeURIComponent(eventId)}`, requireSetValues(command, options));
   }
+  if (root === "event" && verb === "delete") {
+    const eventId = await resolveEventId(client, command, arguments_, options);
+    return client.remove(`/api/v1/events/${encodeURIComponent(eventId)}`);
+  }
 
   // Diagnostics and logs are about the deployment, not about one conference,
   // so they run before any event ID is resolved.

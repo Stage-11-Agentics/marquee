@@ -241,7 +241,8 @@ export interface WaveRow extends MutableRecord {
 
 export interface AttachmentRow extends MutableRecord {
   content_type: string;
-  event_id: Id;
+  /** Null when an organization-level person headshot outlives its conference. */
+  event_id: Id | null;
   filename: string;
   owner_id: Id;
   owner_type: AttachmentOwnerType;

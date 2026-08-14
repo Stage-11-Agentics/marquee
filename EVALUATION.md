@@ -650,6 +650,19 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-292 | PD | `auto` | `test:` compute the chair-facing aggregate over a submission holding one agent and two human evaluations → equals the aggregate over the two human evaluations alone, and the agent's score renders as its own labelled line. The same agent evaluation sets its `round_assignments` row to complete and counts in that round's coverage figures. |
 | AC-293 | PD | `auto` | `e2e:` on a freshly reset demo, open *"Taming 40-Minute CI"* as the chair → an agent-attributed score with rationale and a human review render side by side, each badged, and the badged and unbadged rows occupy identical box heights (elements never jump). `static:` the tree does not carry the open-evaluation claim in any user-facing surface unless the seeded agent evaluation exists in the demo fixture — claim and evidence ship together. |
 
+### 2.6 Post-deadline conference-deletion band — AC-302 – AC-307 *(Amendment 22, 2026-08-14)*
+
+**Outside the Wednesday terminal gate, on the same terms as §2.4–§2.5.** The criteria are enforced by the MRQ-204 claims manifest and are not folded into the existing 210 live in-scope count or tier arithmetic. Stories: US-90 – US-91 (`sequence/USER_STORIES.md` Amendment 22). Binding design: `sequence/sidebar-fold-tickets.md` §T2 and `prototypes/pipeline-v1.1/index.html` settings Danger zone / confirmation handler.
+
+| AC | Tier | Tag | How verified |
+|---|---|---|---|
+| AC-302 | PD | `auto` | `test + e2e:` render the Conference settings Danger zone modal and assert the exact prototype copy. With an empty, wrong-case, extra-character, and missing-character input the red **Delete conference** button remains disabled; with the exact conference name (including surrounding whitespace that is trimmed) it becomes enabled. Assert the API route is organizer-only. |
+| AC-303 | PD | `auto` | `test + e2e:` assert the modal and card carry the ruled dies/stays disclosure, including forms/public links, agenda/site, portal access, calendar invites, and organization-level people/notes/tags/outreach. |
+| AC-304 | PD | `auto` | `test:` delete a conference with a sibling and assert the response/UI selects the sibling; delete the last conference and assert the fresh-install `/dashboard` landing is selected and the deleted ID is absent from event reads/switching. |
+| AC-305 | PD | `auto` | `test:` seed the complete event-owned graph, count every event-scoped table before and after, execute the route in one transaction, and assert the deletion audit row survives with `event.deleted`, actor kind/person, event ID, before snapshot, after marker, and request ID. Force a failed batch and assert the event graph remains; assert no restore/soft-delete path exists. |
+| AC-306 | PD | `auto` | `test:` compare byte-stable snapshots of organization `people`, `person_events` notes/tags/stage rows, and surviving person-headshot subjects before/after while asserting every event-scoped row is gone, including both submission kinds, forms/public links, agenda/site material, portal magic links, outbox/invites, embeds, evaluations, tasks/uploads, imports, venues/taxonomy, webhooks, and mirror rows. |
+| AC-307 | PD | `auto` | `test + static:` assert `marquee event delete <event-id>` appears in generated `SKILL.md`, dispatches to `DELETE /api/v1/events/:id`, and `remove-demo` imports/calls the same `deleteEventCascade` primitive rather than maintaining a second statement list. |
+
 ---
 
 ## 3. Felt checkpoints
@@ -749,6 +762,8 @@ Two carry enforcement obligations even though their UI is deferred, because retr
 ---
 
 ## Amendment log
+
+**Amendment 22 — conference deletion, 2026-08-14, merge-captain allocation.** Folds `USER_STORIES.md` Amendment 22 (US-90 – US-91, AC-302 – AC-307) as new §2.6, a post-deadline band enforced by MRQ-204's claims manifest. It leaves the existing 210 live in-scope count, tier arithmetic, and Wednesday terminal gate unchanged. The binding cascade is the T2 contract and the prototype's Danger zone confirmation flow; the seeded demo delegates to the same event-deletion primitive.
 
 **Amendment 14 — the open-evaluation band, 2026-08-12, client-directed.** Folds `USER_STORIES.md` Amendment 20 (US-87, AC-288 – AC-293) as new §2.5, a **post-deadline** band on §2.4's terms: outside the Wednesday terminal gate, unenforced by `trace:ac` until MRQ-134's claims manifest lands, and leaving §2's live in-scope count (210), the tier counts, the cut line, and the terminal gate deliberately unchanged. The ruling behind it is a scope *refusal* as much as an addition: Marquee ships no built-in AI reviewer, because a vendored evaluator bets the committee's judgment on one model and one prompt and ages badly. It ships the seat instead — an agent evaluator is a `kind='agent'` person holding a reviewer membership and track scopes, assigned through the control that already assigns reviewers, and a bearer credential bound to that seat is what finally supplies the reviewer identity `reviewer-scope.ts` has always named as the precondition for service integrations. **AC-293 exists because the claim is dangerous without its evidence:** the eval kit's ABS-14 is scored not-applicable while nothing claims AI review, and becomes a graded, failing item the moment the product says otherwise with no agent evaluation seeded — so claim and evidence are contractually bound to the same change. Binding design: `sequence/agent-evaluator-design.md`. Built by MRQ-134.
 
