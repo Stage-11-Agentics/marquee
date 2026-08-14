@@ -22,6 +22,7 @@ import {
 } from "../api/agenda";
 import { conflictParticipants, dedupeParticipants, sharedConflictParticipants } from "../lib/conflicts";
 import { participantListSql } from "../lib/participants";
+import { countOutsideConferenceWindow } from "../lib/conference-dates";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import { getTransitConflicts, type TransitAgendaItem } from "../lib/venue-geometry";
 import type { SubmissionSpeakerListItem, SubmissionTrackListItem } from "../api/submissions";
@@ -451,8 +452,15 @@ export async function readAgendaSnapshot(
     readAgendaPublication(database, eventId, event.slug),
   ]);
   const unscheduled = await readPool(database, eventId, statuses);
+  const outsideWindowSessionCount = countOutsideConferenceWindow(
+    sessions.filter((session) => session.kind === "session").map((session) => session.starts_at),
+    event.starts_on,
+    event.ends_on,
+    event.timezone,
+  );
   return {
     event,
+    schedule_window: { outside_window_session_count: outsideWindowSessionCount },
     publication,
     venue,
     schedulable_statuses: statuses,

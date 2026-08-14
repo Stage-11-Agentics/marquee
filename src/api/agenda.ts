@@ -143,6 +143,9 @@ export interface AgendaConflict {
 
 export interface AgendaSnapshot {
   event: AgendaEvent;
+  schedule_window: {
+    outside_window_session_count: number;
+  };
   publication: AgendaPublication;
   venue?: AgendaVenueDisclosure;
   schedulable_statuses: SchedulableStatus[];

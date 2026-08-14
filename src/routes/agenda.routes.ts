@@ -128,6 +128,9 @@ const agendaSnapshotSchema = z.object({
     ends_on: z.string(),
     timezone: z.string(),
   }),
+  schedule_window: z.object({
+    outside_window_session_count: z.number().int().nonnegative(),
+  }),
   venue: z.object({
     pinned_building_count: z.number().int().nonnegative(),
     primary_building_name: z.string().nullable(),

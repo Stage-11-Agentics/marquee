@@ -156,6 +156,7 @@ describe("MRQ-148 · one-action assisted placement", () => {
   test("CONTRACT · slots come from the conference's own days and grid times, in board order", () => {
     const snapshot = {
       event: { id: "event-1", name: "AIE", starts_on: "2026-05-04", ends_on: "2026-05-05", timezone: "America/New_York" },
+      schedule_window: { outside_window_session_count: 0 },
       publication: { live: 0, not_yet_public: 0, candidates: [], public_agenda_url: "/agenda" },
       schedulable_statuses: ["accepted"],
       rooms: [{

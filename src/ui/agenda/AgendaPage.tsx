@@ -26,13 +26,13 @@ import {
   type AgendaGridSlot,
 } from "../../lib/agenda-grid";
 import { displayRoomLabel, showsBuildingComparison, showsBuildingComparisonCount, visibleVenueConflicts } from "../../lib/venue-disclosure";
+import { conferenceDays } from "../../lib/conference-dates";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
 import { localParts, sessionDay, sessionTime, TrackBoard } from "./track-board";
 import "./agenda.css";
 
-const DAY_MS = 86_400_000;
 const AGENDA_ROUTE = "/api/v1/events/{eventId}/agenda";
 const AGENDA_ITEMS_ROUTE = "/api/v1/events/{eventId}/agenda/items";
 const AGENDA_ITEM_ROUTE = "/api/v1/events/{eventId}/agenda/items/{itemId}";
@@ -82,25 +82,9 @@ interface ArmedPlacement {
   title: string;
 }
 
-function dateAtNoon(value: string): Date {
-  return new Date(`${value}T12:00:00Z`);
-}
-
 function dayOptions(snapshot: AgendaSnapshot): DayOption[] {
-  const start = dateAtNoon(snapshot.event.starts_on).getTime();
-  const end = dateAtNoon(snapshot.event.ends_on).getTime();
-  const options: DayOption[] = [];
-  for (let cursor = start; cursor <= end; cursor += DAY_MS) {
-    const value = new Date(cursor).toISOString().slice(0, 10);
-    const label = new Intl.DateTimeFormat("en-US", {
-      timeZone: snapshot.event.timezone,
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    }).format(new Date(cursor));
-    options.push({ value, label: `${label.split(", ")[0]} · ${label.split(", ")[1]}` });
-  }
-  return options;
+  return conferenceDays(snapshot.event.starts_on, snapshot.event.ends_on)
+    .map((day) => ({ value: day.id, label: day.label.replace(", ", " · ") }));
 }
 
 /** Convert a conference-local wall-clock value into an instant without using the browser's zone. */
@@ -539,6 +523,15 @@ export function DayBoard({
         </PositionedSession>)}</DropCell>;
       })}
     </>)}
+  </div>;
+}
+
+export function AgendaDayStatus({ snapshot, day }: { snapshot: AgendaSnapshot; day: string }): JSX.Element {
+  const empty = day !== "all" && !snapshot.sessions.some((session) =>
+    session.kind === "session" && sessionDay(session, snapshot.event.timezone) === day,
+  );
+  return <div class={`agenda-day-window-status${empty ? " is-empty" : ""}`} role={empty ? "status" : undefined} aria-live="polite" aria-atomic="true">
+    {empty && <><strong>Nothing scheduled on this day yet</strong><span>Choose another day, or place a Session here from the unscheduled pool.</span></>}
   </div>;
 }
 
@@ -1154,6 +1147,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
 
   return <div class="agenda-page">
     <PageHeader title="Agenda builder" copy={`${headerBuilding ? `${headerBuilding}. ` : ""}Place accepted Sessions by drag or selection. Format defaults set duration; live conflicts warn without blocking.`} actions={<><AgentBriefLauncher surface="agenda" eventId={eventId} /><Button variant="danger" onClick={() => setConflictsOpen(true)}>⚠ <span class="tabular">{visibleConflictData.length}</span> conflicts</Button></>} />
+    {snapshot.schedule_window.outside_window_session_count > 0 && <div class="agenda-notice agenda-schedule-window-warning" role="status"><span><strong class="tabular">{snapshot.schedule_window.outside_window_session_count}</strong> scheduled Session{snapshot.schedule_window.outside_window_session_count === 1 ? "" : "s"} fall outside the conference dates.</span><a href="/settings">Open Conference settings ↗</a></div>}
     {publicationNotice && <div class="agenda-notice agenda-publication-success" role="status"><span>Published <strong class="tabular">{publicationNotice.count}</strong> Session{publicationNotice.count === 1 ? "" : "s"} to the public agenda.</span><span class="agenda-notice-actions"><a href={publicationNotice.publicAgendaUrl}>View public agenda ↗</a><button type="button" onClick={() => setPublicationNotice(null)} aria-label="Dismiss publication confirmation">×</button></span></div>}
     <PublicationPanel
       publication={snapshot.publication}
@@ -1186,6 +1180,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
       <span class="subtle agenda-status-note">No save button · changes persist as you place</span>
     </div>
     <div class={`agenda-placement-status${armedPlacement ? " is-active" : ""}`} role="status" aria-live="polite" aria-atomic="true">{armedPlacement ? `Placing: ${armedPlacement.title}. Choose an open time and room, or press Escape to cancel.` : ""}</div>
+    <AgendaDayStatus snapshot={snapshot} day={selectedDay} />
     {notice && <div class="agenda-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss notice">×</button></div>}
     {snapshot.sessions.length === 0 && snapshot.unscheduled.length === 0
       ? <EmptyState title="No Sessions are ready for the agenda" copy="Accepted Sessions will appear here when the conference is ready to place them. Open the submission list to check the next candidates." action={<Button variant="primary" onClick={() => window.location.assign("/submissions?status=accepted_any&placement=unplaced")}>Open accepted submissions</Button>} />

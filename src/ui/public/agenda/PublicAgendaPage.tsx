@@ -774,6 +774,8 @@ export function PublicAgendaPage({ data, view = "agenda" }: { data: PublicAgenda
   if (data.filters.q) feedQuery.set("q", data.filters.q);
   const venueName = data.venue?.buildingName ?? data.event.venue ?? "Online";
   const groups = groupSessions(data.sessions);
+  const selectedDay = data.filters.day === "all" ? null : data.days.find((day) => day.id === data.filters.day);
+  const emptyConferenceDay = Boolean(selectedDay && selectedDay.sessionCount === 0 && data.sessions.length === 0);
   return (
     <PublicShell
       event={data.event}
@@ -871,7 +873,7 @@ export function PublicAgendaPage({ data, view = "agenda" }: { data: PublicAgenda
               ))}
             </div>
           )) : (
-            <div class="public-empty"><div><strong>{hasFilters ? "No published sessions match" : "No published sessions yet"}</strong><span>{hasFilters ? "Clear a filter to bring the program back into view." : "The conference team has not published the program yet."}</span><a class="public-button primary" href={hasFilters ? `/agenda?${eventQuery}` : "/"}>{hasFilters ? "Show full agenda" : "Return to conference"}</a></div></div>
+            <div class="public-empty"><div><strong>{emptyConferenceDay ? "Nothing scheduled on this day yet" : hasFilters ? "No published sessions match" : "No published sessions yet"}</strong><span>{emptyConferenceDay ? "The conference team has not published any Sessions for this conference day. Choose All days to see the published program." : hasFilters ? "Clear a filter to bring the program back into view." : "The conference team has not published the program yet."}</span><a class="public-button primary" href={emptyConferenceDay ? `/agenda?${eventQuery}&day=all` : hasFilters ? `/agenda?${eventQuery}` : "/"}>{emptyConferenceDay || hasFilters ? "Show full agenda" : "Return to conference"}</a></div></div>
           )}
         </section>
       </main>
