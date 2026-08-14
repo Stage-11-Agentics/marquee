@@ -136,13 +136,16 @@ const agendaSnapshotSchema = z.object({
     live: z.number().int().nonnegative(),
     not_yet_public: z.number().int().nonnegative(),
     candidates: z.array(z.object({
-      agenda_item_id: z.string(),
+      agenda_item_id: z.string().nullable(),
       submission_id: z.string(),
       title: z.string(),
-      starts_at: z.number().int(),
-      duration_min: z.number().int().positive(),
-      room: z.string(),
-      building: z.string(),
+      starts_at: z.number().int().nullable(),
+      duration_min: z.number().int().positive().nullable(),
+      room: z.string().nullable(),
+      building: z.string().nullable(),
+      scheduled: z.boolean(),
+      can_publish: z.boolean(),
+      blocked_reason: z.string().nullable(),
       speakers: z.array(speakerSchema),
     })),
     public_agenda_url: z.string(),
@@ -227,7 +230,7 @@ const batchPublishRoute = defineApiRoute(
     }
     const current = await snapshotOrNotFound(context.env.DB, eventId);
     const candidates = new Map(current.publication.candidates.map((candidate) => [candidate.submission_id, candidate]));
-    if (submissionIds.some((submissionId) => !candidates.has(submissionId))) {
+    if (submissionIds.some((submissionId) => !candidates.get(submissionId)?.can_publish)) {
       throw ApiError.conflict("one or more selected Sessions are no longer ready to publish; refresh the agenda and try again");
     }
 

@@ -190,6 +190,7 @@ function speakerLine(session: AgendaSession): string {
 }
 
 function publicationDateTime(candidate: AgendaPublishCandidate, timezone: string): string {
+  if (!candidate.scheduled || candidate.starts_at === null) return "Not scheduled";
   return new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",
@@ -734,7 +735,10 @@ export function PublicationCandidateRow({
   onToggle?: (id: string) => void;
   review?: boolean;
 }): JSX.Element {
-  const detail = `${publicationDateTime(candidate, timezone)} · ${candidate.room} · ${candidate.building}`;
+  const blockedReason = candidate.blocked_reason ?? "needs a room and time before it can go public";
+  const detail = candidate.scheduled
+    ? `${publicationDateTime(candidate, timezone)} · ${candidate.room ?? "Room not set"} · ${candidate.building ?? "Building not set"}`
+    : "Not scheduled";
   const speakers = publicationSpeakerLine(candidate);
   // Review mode drops the checkbox, so the copy would otherwise land in the
   // checkbox column and ellipsise to a character or two — unreadable on the one
@@ -743,13 +747,15 @@ export function PublicationCandidateRow({
     {!review && <input
       type="checkbox"
       checked={selected === true}
-      disabled={disabled}
-      aria-label={`Select ${candidate.title} for publication`}
+      disabled={disabled || !candidate.can_publish}
+      title={!candidate.can_publish ? blockedReason : undefined}
+      aria-label={`Select ${candidate.title} for publication${candidate.can_publish ? "" : ` — ${blockedReason}`}`}
       onChange={() => onToggle?.(candidate.submission_id)}
     />}
     <div class="agenda-publication-candidate-copy">
       <strong title={candidate.title}>{candidate.title}</strong>
       <span>{detail}</span>
+      {!candidate.can_publish && <span class="agenda-publication-candidate-reason">{blockedReason}</span>}
       <span>{speakers}</span>
     </div>
   </div>;
@@ -781,8 +787,8 @@ function PublicationPanel({
   error: string;
 }): JSX.Element {
   const selected = new Set(selectedIds);
-  const selectedCandidates = publication.candidates.filter((candidate) => selected.has(candidate.submission_id));
-  const selectableCandidates = publication.candidates.slice(0, MAX_BATCH_PUBLISH_IDS);
+  const selectedCandidates = publication.candidates.filter((candidate) => candidate.can_publish && selected.has(candidate.submission_id));
+  const selectableCandidates = publication.candidates.filter((candidate) => candidate.can_publish).slice(0, MAX_BATCH_PUBLISH_IDS);
   const allSelectableSelected = selectableCandidates.length > 0 && selectableCandidates.every((candidate) => selected.has(candidate.submission_id));
   const selectAllLabel = `Select all ${selectableCandidates.length} ${selectableCandidates.length === 1 ? "Session" : "Sessions"}`;
   const toggleAll = () => onSelectAll(allSelectableSelected ? [] : selectableCandidates.map((candidate) => candidate.submission_id));
@@ -796,10 +802,10 @@ function PublicationPanel({
       <a class="button ghost small" href={publication.public_agenda_url}>View public agenda ↗</a>
     </header>
     {step === "select" ? <>
-      <div class="agenda-publication-intro">Select scheduled accepted Sessions to make their title, time, room, and speakers visible on the public agenda.</div>
-      {publication.candidates.length ? <div class="agenda-publication-list" role="list" aria-label="Scheduled Sessions not yet public">
+      <div class="agenda-publication-intro">Every accepted Session is listed here. Select a scheduled Session to make its title, time, room, and speakers visible on the public agenda.</div>
+      {publication.candidates.length ? <div class="agenda-publication-list" role="list" aria-label="Accepted Sessions and publication readiness">
         <div class="agenda-publication-select-all">
-          <label><input type="checkbox" checked={allSelectableSelected} aria-label={selectAllLabel} onChange={toggleAll} />{selectAllLabel}</label>
+          <label><input type="checkbox" checked={allSelectableSelected} disabled={!selectableCandidates.length} aria-label={selectAllLabel} onChange={toggleAll} />{selectAllLabel}</label>
           {publication.candidates.length > MAX_BATCH_PUBLISH_IDS && <span class="subtle">Publish in batches of up to {MAX_BATCH_PUBLISH_IDS} Sessions.</span>}
         </div>
         {publication.candidates.map((candidate) => <PublicationCandidateRow
@@ -810,7 +816,7 @@ function PublicationPanel({
           disabled={!selected.has(candidate.submission_id) && selectedCandidates.length >= MAX_BATCH_PUBLISH_IDS}
           onToggle={onToggle}
         />)}
-      </div> : <div class="agenda-publication-empty" role="status"><strong>Everything scheduled is public.</strong><span>Accepted Sessions will appear here after they are placed on the agenda.</span></div>}
+      </div> : <div class="agenda-publication-empty" role="status"><strong>Everything accepted is public.</strong><span>Accepted Sessions will appear here when they need publication.</span></div>}
       {error && <div class="agenda-publication-error" role="alert">{error}</div>}
       <footer class="agenda-publication-actions">
         <span class="subtle"><span class="tabular">{selectedCandidates.length}</span> selected</span>
@@ -857,7 +863,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
     try {
       const snapshot = await apiFetch<AgendaSnapshot>(`/api/v1/events/${encodeURIComponent(eventId)}/agenda`, { signal, route: AGENDA_ROUTE });
       setState({ kind: "ready", snapshot });
-      setPublishSelection((current) => current.filter((id) => snapshot.publication.candidates.some((candidate) => candidate.submission_id === id)));
+      setPublishSelection((current) => current.filter((id) => snapshot.publication.candidates.some((candidate) => candidate.submission_id === id && candidate.can_publish)));
       setDay((current) => current || dayOptions(snapshot)[0]?.value || "all");
     } catch (error: unknown) {
       if (signal?.aborted) return;

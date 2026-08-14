@@ -31,15 +31,15 @@ async function seedFixture(): Promise<void> {
     env.DB.prepare("INSERT INTO formats (id, event_id, name, default_duration_min, min_duration_min, max_duration_min, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("format-agenda", DEMO_EVENT_ID, "Stage Talk", 20, 15, 20, 0, NOW, NOW),
     env.DB.prepare("INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind("track-agenda", DEMO_EVENT_ID, "Agents", "#db4c3f", 0, NOW, NOW),
     ...[
-      ["sub-agenda-accepted", "accepted", "Accepted session"],
-      ["sub-agenda-waitlisted", "waitlisted", "Maybe session"],
-      ["sub-agenda-submitted", "submitted", "Submitted abstract"],
-      ["sub-agenda-placed", "accepted", "Already placed"],
-    ].map(([id, status, title]) => env.DB.prepare(`
+      ["sub-agenda-accepted", "session", "accepted", "Accepted session"],
+      ["sub-agenda-waitlisted", "session", "waitlisted", "Maybe session"],
+      ["sub-agenda-submitted", "abstract", "submitted", "Submitted abstract"],
+      ["sub-agenda-placed", "session", "accepted", "Already placed"],
+    ].map(([id, kind, status, title]) => env.DB.prepare(`
       INSERT INTO submissions
         (id, event_id, form_id, kind, bypass_evaluation, title, abstract, status, format_id, primary_track_id, origin, submitter_person_id, submitted_at, last_saved_at, is_published, search_blob, last_write_source, created_at, updated_at)
-      VALUES (?, ?, NULL, 'abstract', 0, ?, 'Agenda fixture', ?, 'format-agenda', 'track-agenda', 'admin', ?, ?, ?, 0, ?, 'marquee', ?, ?)
-    `).bind(id, DEMO_EVENT_ID, title, status, DEMO_ORGANIZER_PERSON_ID, NOW, NOW, title.toLowerCase(), NOW, NOW)),
+      VALUES (?, ?, NULL, ?, 0, ?, 'Agenda fixture', ?, 'format-agenda', 'track-agenda', 'admin', ?, ?, ?, 0, ?, 'marquee', ?, ?)
+    `).bind(id, DEMO_EVENT_ID, kind, title, status, DEMO_ORGANIZER_PERSON_ID, NOW, NOW, title.toLowerCase(), NOW, NOW)),
     ...["sub-agenda-accepted", "sub-agenda-waitlisted", "sub-agenda-submitted", "sub-agenda-placed"].flatMap((submissionId) => [
       env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, 'confirmed', ?, ?)").bind(`participation-${submissionId}`, submissionId, DEMO_ORGANIZER_PERSON_ID, NOW, NOW),
       env.DB.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, 'track-agenda', 1, ?, ?)").bind(`submission-track-${submissionId}`, submissionId, NOW, NOW),
@@ -51,12 +51,23 @@ async function seedFixture(): Promise<void> {
 describe.sequential("MRQ-20 agenda API", () => {
   beforeAll(seedFixture, 10_000);
 
-  test("CONTRACT · AIA-07 batch publish previews only scheduled accepted Sessions and mirrors both publication flags", async () => {
+  test("CONTRACT · CNT-12 + AIA-07 show every accepted Session but publish only scheduled ones", async () => {
     const initial = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
-    const initialBody = await initial.json<{ publication: { live: number; not_yet_public: number; candidates: Array<{ submission_id: string; title: string; room: string; building: string; speakers: Array<{ name: string }> }> } }>();
-    expect(initialBody.publication).toMatchObject({ live: 0, not_yet_public: 1 });
-    expect(initialBody.publication.candidates[0]).toMatchObject({ submission_id: "sub-agenda-placed", title: "Already placed", room: "Room 101", building: "North Hall" });
-    expect(initialBody.publication.candidates[0]?.speakers[0]?.name).toBe("Demo Organizer");
+    const initialBody = await initial.json<{ publication: { live: number; not_yet_public: number; candidates: Array<{ submission_id: string; title: string; scheduled: boolean; can_publish: boolean; blocked_reason: string | null; starts_at: number | null; room: string | null; building: string | null; speakers: Array<{ name: string }> }> } }>();
+    expect(initialBody.publication).toMatchObject({ live: 0, not_yet_public: 2 });
+    const placedCandidate = initialBody.publication.candidates.find((candidate) => candidate.submission_id === "sub-agenda-placed");
+    expect(placedCandidate).toMatchObject({ submission_id: "sub-agenda-placed", title: "Already placed", scheduled: true, can_publish: true, room: "Room 101", building: "North Hall" });
+    expect(placedCandidate?.speakers[0]?.name).toBe("Demo Organizer");
+    expect(initialBody.publication.candidates.find((candidate) => candidate.submission_id === "sub-agenda-accepted")).toMatchObject({
+      submission_id: "sub-agenda-accepted",
+      title: "Accepted session",
+      scheduled: false,
+      can_publish: false,
+      blocked_reason: "needs a room and time before it can go public",
+      starts_at: null,
+      room: null,
+      building: null,
+    });
 
     await env.DB.prepare("UPDATE submissions SET status = 'withdrawn' WHERE id = ? AND event_id = ?").bind("sub-agenda-placed", DEMO_EVENT_ID).run();
     const withdrawn = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/publish`, {
@@ -82,11 +93,35 @@ describe.sequential("MRQ-20 agenda API", () => {
     expect(await published.json<{ published_count: number; live: number; not_yet_public: number; public_agenda_url: string }>()).toMatchObject({
       published_count: 1,
       live: 1,
-      not_yet_public: 0,
+      not_yet_public: 1,
       public_agenda_url: "/agenda?event=aie-nyc-2026",
     });
     expect(await env.DB.prepare("SELECT is_published FROM submissions WHERE id = ?").bind("sub-agenda-placed").first<{ is_published: number }>()).toMatchObject({ is_published: 1 });
     expect(await env.DB.prepare("SELECT action, entity_type FROM audit_log WHERE entity_id = ? AND action = 'published'").bind("sub-agenda-placed").first<{ action: string; entity_type: string }>()).toMatchObject({ action: "published", entity_type: "submission" });
+
+    const publicResponse = await SELF.fetch(`${ORIGIN}/api/v1/public/agenda?event=aie-nyc-2026`);
+    expect(publicResponse.status).toBe(200);
+    const publicBody = await publicResponse.json<{ sessions: Array<{ title: string }> }>();
+    expect(publicBody.sessions.length).toBeGreaterThan(0);
+    expect(publicBody.sessions.some((session) => session.title === "Already placed")).toBe(true);
+    expect(publicBody.sessions.some((session) => session.title === "Accepted session")).toBe(false);
+  });
+
+  test("CONTRACT · MRQ-179 · accepted abstracts are not publication candidates", async () => {
+    const before = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
+    const beforeBody = await before.json<{ publication: { candidates: Array<{ submission_id: string }> } }>();
+    expect(beforeBody.publication.candidates.some((candidate) => candidate.submission_id === "sub-agenda-accepted")).toBe(true);
+
+    await env.DB.prepare("UPDATE submissions SET status = 'accepted' WHERE id = ? AND event_id = ?").bind("sub-agenda-submitted", DEMO_EVENT_ID).run();
+    try {
+      const after = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
+      const afterBody = await after.json<{ publication: { candidates: Array<{ submission_id: string }> } }>();
+      expect(afterBody.publication.candidates).toHaveLength(beforeBody.publication.candidates.length);
+      expect(afterBody.publication.candidates.some((candidate) => candidate.submission_id === "sub-agenda-accepted")).toBe(true);
+      expect(afterBody.publication.candidates.some((candidate) => candidate.submission_id === "sub-agenda-submitted")).toBe(false);
+    } finally {
+      await env.DB.prepare("UPDATE submissions SET status = 'submitted' WHERE id = ? AND event_id = ?").bind("sub-agenda-submitted", DEMO_EVENT_ID).run();
+    }
   });
 
   test("AC-70 · GET derives the unscheduled pool from accepted and unplaced submissions", async () => {

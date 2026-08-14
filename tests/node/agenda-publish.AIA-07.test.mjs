@@ -20,6 +20,8 @@ test("CONTRACT · AIA-07 batch publication is an accepted, scheduled, dual-table
   assert.match(route, /the selected Sessions changed while publishing/);
   assert.match(queries, /item\.is_published = 0/);
   assert.match(queries, /submission\.status = 'accepted'/);
+  assert.match(queries, /submission\.is_published = 0/);
+  assert.match(queries, /blocked_reason/);
   assert.match(queries, /public_agenda_url/);
 });
 
@@ -29,6 +31,8 @@ test("CONTRACT · AIA-07 + CFP-15 publication preview and agenda drop targets ex
   assert.match(page, /Publish in batches of up to/);
   assert.match(page, /Review publication/);
   assert.match(page, /Publish \$\{selectedCandidates\.length\} to public agenda/);
+  assert.match(page, /needs a room and time before it can go public/);
+  assert.match(page, /disabled=\{disabled \|\| !candidate\.can_publish/);
   assert.match(page, /role="group"\n    aria-label=\{ariaLabel\}\n    data-agenda-drop-target="true"/);
   assert.match(page, /Place Session on/);
   assert.match(page, /aria-label="Unscheduled sessions to place"/);

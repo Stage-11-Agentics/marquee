@@ -466,13 +466,16 @@ export async function readAgendaSnapshot(
 }
 
 interface PublishCandidateRow {
-  agenda_item_id: string;
+  agenda_item_id: string | null;
   submission_id: string;
   title: string;
-  starts_at: number;
-  duration_min: number;
-  room: string;
-  building: string;
+  starts_at: number | null;
+  duration_min: number | null;
+  room: string | null;
+  building: string | null;
+  scheduled: number;
+  can_publish: number;
+  blocked_reason: string | null;
   speakers_json: string;
 }
 
@@ -481,18 +484,23 @@ function toPublishCandidate(row: PublishCandidateRow): AgendaPublishCandidate {
     agenda_item_id: row.agenda_item_id,
     submission_id: row.submission_id,
     title: row.title,
-    starts_at: Number(row.starts_at),
-    duration_min: Number(row.duration_min),
+    starts_at: row.starts_at === null ? null : Number(row.starts_at),
+    duration_min: row.duration_min === null ? null : Number(row.duration_min),
     room: row.room,
     building: row.building,
+    scheduled: row.scheduled === 1,
+    can_publish: row.can_publish === 1,
+    blocked_reason: row.blocked_reason,
     speakers: parseSpeakers(row.speakers_json),
   };
 }
 
 /**
- * Publication is a scheduled-agenda concern, not a submission-stage count.
- * Keeping the accepted + placed + unpublished predicate here means the
- * builder counter, preview, and batch command all answer the same question.
+ * Publication is a per-session state, while the final public projection still
+ * requires a schedule. The panel therefore reads every accepted, unpublished
+ * submission and marks an unplaced one as visible-but-not-yet-publishable.
+ * Keeping the candidate projection here means the builder counter, preview,
+ * and batch command all share one answer about what is ready to go public.
  */
 export async function readAgendaPublication(
   database: D1Database,
@@ -510,14 +518,23 @@ export async function readAgendaPublication(
     database.prepare(`
       SELECT item.id AS agenda_item_id, submission.id AS submission_id, submission.title,
         item.starts_at, item.duration_min, room.name AS room, building.name AS building,
+        CASE WHEN item.id IS NULL THEN 0 ELSE 1 END AS scheduled,
+        CASE WHEN item.id IS NULL THEN 0 ELSE 1 END AS can_publish,
+        CASE WHEN item.id IS NULL THEN 'needs a room and time before it can go public' ELSE NULL END AS blocked_reason,
         ${SPEAKERS_JSON} AS speakers_json
-      FROM agenda_items item
-      JOIN submissions submission ON submission.id = item.submission_id AND submission.event_id = item.event_id
-      JOIN rooms room ON room.id = item.room_id AND room.event_id = item.event_id
-      JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id
-      WHERE item.event_id = ? AND item.kind = 'session' AND item.is_published = 0
+      FROM submissions submission
+      LEFT JOIN agenda_items item
+        ON item.event_id = submission.event_id
+       AND item.submission_id = submission.id
+       AND item.kind = 'session'
+       AND item.is_published = 0
+      LEFT JOIN rooms room ON room.id = item.room_id AND room.event_id = item.event_id
+      LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id
+      WHERE submission.event_id = ?
         AND submission.status = 'accepted'
-      ORDER BY item.starts_at ASC, submission.id ASC
+        AND submission.kind = 'session'
+        AND submission.is_published = 0
+      ORDER BY CASE WHEN item.id IS NULL THEN 1 ELSE 0 END, item.starts_at ASC, submission.id ASC
     `).bind(eventId).all<PublishCandidateRow>(),
   ]);
   return {
