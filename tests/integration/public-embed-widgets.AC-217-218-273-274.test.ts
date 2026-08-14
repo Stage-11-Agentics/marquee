@@ -256,18 +256,68 @@ test("CONTRACT · EMB-15 · basic HTML, XML, and selected fields resolve through
   expect(xmlBody).not.toContain("<room>");
 
   const json = await request(`/api/v1/public/embeds/${EVENT_SLUG}-sessions?event=${EVENT_SLUG}&fields=title`);
-  const jsonPayload = await json.json<{ sessions: Array<Record<string, unknown>> }>();
+  const jsonPayload = await json.json<{
+    sessions: Array<Record<string, unknown>>;
+    speakers: Array<Record<string, unknown>>;
+  }>();
   expect(json.status).toBe(200);
   expect(jsonPayload.sessions[0]).toMatchObject({ title: "Reliable multi-agent systems" });
   expect(jsonPayload.sessions[0]).not.toHaveProperty("abstract");
   expect(jsonPayload.sessions[0]).not.toHaveProperty("time");
   expect(jsonPayload.sessions[0]).not.toHaveProperty("roomLabel");
+  expect(jsonPayload.speakers[0]).toMatchObject({ title: "Principal Engineer" });
+  expect(jsonPayload.speakers[0]).not.toHaveProperty("name");
+  expect(jsonPayload.speakers[0]).not.toHaveProperty("company");
+  expect(jsonPayload.speakers[0]).not.toHaveProperty("bio");
+  expect(jsonPayload.speakers[0]).not.toHaveProperty("headshotUrl");
+  expect(jsonPayload.speakers[0]).not.toHaveProperty("socialLinks");
+  expect(jsonPayload.speakers[0]).not.toHaveProperty("sessions");
   // A second read exercises the cache-hit path, which must apply the same
   // projection as the fresh response rather than leaking the full record.
   const cachedJson = await request(`/api/v1/public/embeds/${EVENT_SLUG}-sessions?event=${EVENT_SLUG}&fields=title`);
-  const cachedPayload = await cachedJson.json<{ sessions: Array<Record<string, unknown>> }>();
+  const cachedPayload = await cachedJson.json<{
+    sessions: Array<Record<string, unknown>>;
+    speakers: Array<Record<string, unknown>>;
+  }>();
   expect(cachedPayload.sessions[0]).toEqual(jsonPayload.sessions[0]);
   expect(cachedPayload.sessions[0]).not.toHaveProperty("abstract");
+  expect(cachedPayload.speakers[0]).toEqual(jsonPayload.speakers[0]);
+
+  const unrestrictedSessions = await request(`/api/v1/public/embeds/${EVENT_SLUG}-sessions?event=${EVENT_SLUG}`);
+  const unrestrictedSessionsPayload = await unrestrictedSessions.json<{
+    speakers: Array<Record<string, unknown>>;
+  }>();
+  expect(unrestrictedSessionsPayload.speakers[0]).toMatchObject({
+    name: "Agents Speaker",
+    title: "Principal Engineer",
+    company: "Agents Co",
+    bio: "Agents biography",
+    headshotUrl: null,
+    socialLinks: [],
+  });
+  expect(unrestrictedSessionsPayload.speakers[0].sessions).toEqual([
+    expect.objectContaining({ title: "Reliable multi-agent systems" }),
+  ]);
+
+  const restrictedSpeakers = await request(`/api/v1/public/embeds/${EVENT_SLUG}-speakers?event=${EVENT_SLUG}&fields=name`);
+  const restrictedSpeakersPayload = await restrictedSpeakers.json<{
+    sessions: Array<Record<string, unknown>>;
+  }>();
+  expect(restrictedSpeakersPayload.sessions[0]).toMatchObject({ id: "sub-agents", slug: "reliable-multi-agent-systems", status: "accepted" });
+  expect(restrictedSpeakersPayload.sessions[0]).not.toHaveProperty("title");
+  expect(restrictedSpeakersPayload.sessions[0]).not.toHaveProperty("abstract");
+  expect(restrictedSpeakersPayload.sessions[0]).not.toHaveProperty("roomLabel");
+
+  const unrestrictedSpeakers = await request(`/api/v1/public/embeds/${EVENT_SLUG}-speakers?event=${EVENT_SLUG}`);
+  const unrestrictedSpeakersPayload = await unrestrictedSpeakers.json<{
+    sessions: Array<Record<string, unknown>>;
+  }>();
+  expect(unrestrictedSpeakersPayload.sessions[0]).toMatchObject({
+    id: "sub-agents",
+    title: "Reliable multi-agent systems",
+    abstract: "An abstract about agents",
+    roomLabel: "Main Stage",
+  });
 });
 
 test("AC-217 · the cfp embed renders the open deadline, formats, and a link to the public form; track/layout disable rather than disappear", async () => {

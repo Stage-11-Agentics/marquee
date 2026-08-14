@@ -1165,18 +1165,27 @@ function projectEmbedCfp(cfp: PublicEmbedCfp | null, fields: ReadonlySet<EmbedFi
   return projected;
 }
 
-/** Apply a saved surface's field contract to feed output without changing old default payloads. */
+function isDefaultEmbedFieldSet(fields: ReadonlySet<EmbedField>, kind: EmbedKind): boolean {
+  const defaults = defaultEmbedFields(kind);
+  return fields.size === defaults.length && defaults.every((field) => fields.has(field));
+}
+
+/** Apply a saved surface's field contract while preserving the full legacy default payload. */
 export function publicEmbedPayload(data: PublicEmbedData): Record<string, unknown> {
   const fields = new Set<EmbedField>(data.config.fields);
+  const projectSupportingArrays = !isDefaultEmbedFieldSet(fields, data.kind);
   return {
     ...data,
-    // A speaker embed's top-level sessions array is an existing part of the
-    // public payload, but it is not the rendered surface. Keep it intact so
-    // adding field controls does not silently change old consumers that read
-    // the supporting agenda data. The same applies to the supporting speaker
-    // directory on agenda/session embeds.
-    sessions: data.kind === "speakers" ? data.sessions : data.sessions.map((session) => projectEmbedSession(session, fields)),
-    speakers: data.kind === "speakers" ? data.speakers.map((speaker) => projectEmbedSpeaker(speaker, fields)) : data.speakers,
+    // Supporting arrays are part of the legacy JSON payload even when they
+    // are not the rendered surface. Preserve their complete shape for the
+    // unrestricted default, but apply a restricted field choice to both
+    // directions so a session choice cannot leak speaker data (or vice versa).
+    sessions: projectSupportingArrays
+      ? data.sessions.map((session) => projectEmbedSession(session, fields))
+      : data.sessions,
+    speakers: projectSupportingArrays
+      ? data.speakers.map((speaker) => projectEmbedSpeaker(speaker, fields))
+      : data.speakers,
     cfp: data.kind === "cfp" ? projectEmbedCfp(data.cfp, fields) : data.cfp,
   };
 }
