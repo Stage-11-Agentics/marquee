@@ -39,6 +39,8 @@ export function isSafeRedirectTarget(redirectTo: string): boolean {
 type MintMagicLinkInput = {
   /** Null exactly for the personless purposes; the schema enforces the pairing. */
   personId: Id | null;
+  /** Event-owned credentials carry the conference they grant access to. */
+  eventId?: Id | null;
   purpose: MagicLinkPurpose;
   redirectTo?: string;
   now?: number;
@@ -49,7 +51,7 @@ type MintMagicLinkInput = {
  * narrower shape: only the two personless purposes may pass a null, and no
  * speaker-facing caller should be able to reach that door by accident.
  */
-type PortalMagicLinkInput = MintMagicLinkInput & { personId: Id };
+type PortalMagicLinkInput = MintMagicLinkInput & { eventId: Id; personId: Id };
 
 async function mintLink(
   db: D1Database,
@@ -71,13 +73,14 @@ async function mintLink(
   await db
     .prepare(
       `INSERT INTO magic_links
-        (id, token_hash, person_id, purpose, redirect_to, expires_at, used_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+        (id, token_hash, person_id, event_id, purpose, redirect_to, expires_at, used_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
     )
     .bind(
       id,
       tokenHash,
       input.personId,
+      input.eventId ?? null,
       input.purpose,
       redirectTo,
       now + TTL_BY_PURPOSE[input.purpose],

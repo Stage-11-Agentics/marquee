@@ -954,7 +954,7 @@ const inviteCommitteeReviewer = defineApiRoute(
     // The credential is minted after the provisioning transaction on purpose: a
     // link that cannot be sent leaves a correctly provisioned reviewer, never a
     // half-built person. `invite_sent` reports what actually happened.
-    const link = await mintMagicLink(context.env.DB, { personId, purpose: "login", redirectTo: "/reviewer", now });
+    const link = await mintMagicLink(context.env.DB, { eventId, personId, purpose: "login", redirectTo: "/reviewer", now });
     const absoluteLink = `${new URL(context.req.url).origin}/api/v1/auth/exchange?token=${link.token}`;
     // A demo conference logs mail to unlisted addresses instead of sending it,
     // so "invitation sent" has to mean sent, not enqueued.

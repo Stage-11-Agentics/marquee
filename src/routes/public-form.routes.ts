@@ -121,7 +121,7 @@ function publicOrigin(url: string): string {
 
 async function mintParticipantMagicLink(
   db: D1Database,
-  input: { personId: string; purpose: "login" | "cospeaker_profile"; redirectTo: string; now?: number },
+  input: { eventId: string; personId: string; purpose: "login" | "cospeaker_profile"; redirectTo: string; now?: number },
 ) {
   // Keep participant links on the same magic-link authority path as the
   // existing speaker portal link. The exchange route turns the purpose into
@@ -317,6 +317,7 @@ async function enqueueCoSpeakerInvitation(
 ): Promise<void> {
   const redirectTo = `/co-speaker?participation=${encodeURIComponent(input.participant.id)}&submission=${encodeURIComponent(input.submissionId)}`;
   const link = await mintParticipantMagicLink(context.env.DB, {
+    eventId: input.eventId,
     personId: input.participant.person.id,
     purpose: "cospeaker_profile",
     redirectTo,
@@ -885,6 +886,7 @@ async function handlePublicSubmission(
     // later fallback ordering to find the conference they just used.
     const portal = await mintMagicLink(context.env.DB, {
       personId: person.id,
+      eventId: event.id,
       purpose: "login",
       redirectTo: `/portal?eventId=${encodeURIComponent(event.id)}`,
       now,

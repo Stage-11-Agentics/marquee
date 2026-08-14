@@ -12,6 +12,7 @@ const ACTOR_ID = "per_delete_204_actor";
 const SPEAKER_ID = "per_delete_204_speaker";
 const REVIEWER_ID = "per_delete_204_reviewer";
 const OTHER_PERSON_ID = "per_delete_204_other";
+const MULTI_EVENT_TOKEN_ID = "token_delete_204_multi";
 const SESSION_ID = "session_delete_204";
 const MAGIC_LINK_ID = "magic_delete_204_portal";
 const EVENT_ATTACHMENT_ID = "attachment_delete_204_event";
@@ -30,6 +31,7 @@ const EVENT_SCOPED_COUNTS: Record<string, string> = {
   waves: "SELECT COUNT(*) AS total FROM waves WHERE event_id = ?",
   attachments: "SELECT COUNT(*) AS total FROM attachments WHERE event_id = ?",
   memberships: "SELECT COUNT(*) AS total FROM memberships WHERE event_id = ?",
+  magic_links: "SELECT COUNT(*) AS total FROM magic_links WHERE event_id = ?",
   api_tokens: "SELECT COUNT(*) AS total FROM api_tokens WHERE event_id = ?",
   forms: "SELECT COUNT(*) AS total FROM forms WHERE event_id = ?",
   form_fields: "SELECT COUNT(*) AS total FROM form_fields WHERE form_id IN (SELECT id FROM forms WHERE event_id = ?)",
@@ -102,10 +104,6 @@ async function eventScopedCounts(eventId = EVENT_ID): Promise<Record<string, num
           : [eventId];
     result[table] = await countRows(sql, ...bindings);
   }
-  result.magic_links = await countRows(
-    "SELECT COUNT(*) AS total FROM magic_links WHERE id = ?",
-    MAGIC_LINK_ID,
-  );
   return result;
 }
 
@@ -309,6 +307,7 @@ async function seedFixture(): Promise<void> {
     statement("INSERT INTO public_schedules (code, event_id, session_ids, write_key_hash, created_at, updated_at) VALUES ('share204', ?, '[\"submission_delete_204_session\"]', 'write-key', ?, ?)", EVENT_ID, NOW, NOW),
     statement("INSERT INTO webhook_endpoints (id, event_id, url, secret_hash, events_json, enabled, created_at) VALUES ('webhook_delete_204', ?, 'https://hooks.example.test/marquee', 'secret', '[\"agenda.published\"]', 1, ?)", EVENT_ID, NOW),
     statement("INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at) VALUES ('token_delete_204', ?, ?, 'Event token', 'token-hash', 'mq_test', ?, ?, ?, ?)", ORG_ID, EVENT_ID, JSON.stringify({ permissions: ["program:write"], event_ids: [EVENT_ID] }), ACTOR_ID, NOW, NOW),
+    statement("INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at) VALUES (?, ?, NULL, 'Multi-event token', 'multi-token-hash', 'mq_multi', ?, ?, ?, ?)", MULTI_EVENT_TOKEN_ID, ORG_ID, JSON.stringify({ permissions: ["program:read"], event_ids: [EVENT_ID, SIBLING_EVENT_ID] }), ACTOR_ID, NOW, NOW),
   ]);
 
   await run([
@@ -333,7 +332,7 @@ async function seedFixture(): Promise<void> {
     statement("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES ('submission_track_delete_204_two', 'submission_delete_204_session', 'track_delete_204', 1, ?, ?)", NOW, NOW),
     statement("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at) VALUES ('participation_delete_204_one', 'submission_delete_204_abstract_one', ?, 'speaker', 0, 'confirmed', ?, ?)", SPEAKER_ID, NOW, NOW),
     statement("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at) VALUES ('participation_delete_204_two', 'submission_delete_204_session', ?, 'speaker', 0, 'pending', ?, ?)", SPEAKER_ID, NOW, NOW),
-    statement("INSERT INTO magic_links (id, token_hash, person_id, purpose, redirect_to, expires_at, used_at, created_at, updated_at) VALUES (?, 'magic-hash', ?, 'login', '/portal?eventId=evt_delete_204', ?, NULL, ?, ?)", MAGIC_LINK_ID, SPEAKER_ID, NOW + 86_400_000, NOW, NOW),
+    statement("INSERT INTO magic_links (id, token_hash, person_id, event_id, purpose, redirect_to, expires_at, used_at, created_at, updated_at) VALUES (?, 'magic-hash', ?, ?, 'login', '/portal?eventId=evt_delete_204', ?, NULL, ?, ?)", MAGIC_LINK_ID, SPEAKER_ID, EVENT_ID, NOW + 86_400_000, NOW, NOW),
     statement(`INSERT INTO outbox (id, event_id, template_key, person_id, to_email, subject, html, text, ics_uid, ics_body, status, send_policy, idempotency_key, created_at, updated_at, entity_id)
       VALUES ('outbox_delete_204', ?, 'magic_link_login', ?, 'speaker@delete-204.test', 'Portal access', '<p>Portal</p>', 'Portal', 'ics-delete-204', 'BEGIN:VCALENDAR', 'queued', 'demo_safe', 'outbox-delete-204', ?, ?, ?)`, EVENT_ID, SPEAKER_ID, NOW, NOW, MAGIC_LINK_ID),
     statement("INSERT INTO calendar_invites (id, submission_id, person_id, uid, sequence, last_method, status, created_at, updated_at) VALUES ('invite_delete_204', 'submission_delete_204_session', ?, 'uid-delete-204', 0, 'REQUEST', 'queued', ?, ?)", SPEAKER_ID, NOW, NOW),
@@ -396,6 +395,9 @@ test("AC-305 + AC-306 · the transactional cascade removes every event row and a
   expect(JSON.parse(audit?.after_json ?? "{}")) .toEqual({ deleted: true });
   expect(await countRows("SELECT COUNT(*) AS total FROM audit_log WHERE id = 'audit_delete_204_existing'")).toBe(1);
   expect(response.headers.get("x-request-id")).toBe(audit?.request_id);
+  const multiEventToken = await env.DB.prepare("SELECT event_id, scopes FROM api_tokens WHERE id = ?").bind(MULTI_EVENT_TOKEN_ID).first<{ event_id: string | null; scopes: string }>();
+  expect(multiEventToken?.event_id).toBeNull();
+  expect(JSON.parse(multiEventToken?.scopes ?? "{}").event_ids).toEqual([SIBLING_EVENT_ID]);
 });
 
 test("AC-304 · deletion returns the sibling first and then the fresh-install destination", async () => {

@@ -327,6 +327,7 @@ export interface AuthSessionRow extends MutableRecord {
 }
 
 export interface MagicLinkRow extends MutableRecord {
+  event_id: Id | null;
   expires_at: EpochMilliseconds;
   /** Null exactly for `claim` and `org_invite`, whose person is created at exchange. */
   person_id: Id | null;

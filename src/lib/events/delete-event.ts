@@ -164,7 +164,22 @@ export async function deleteEventCascade(
     prepared(
       db,
       `DELETE FROM magic_links
-       WHERE id IN (SELECT entity_id FROM outbox WHERE event_id IN ${eventIdsSql} AND entity_id IS NOT NULL)`,
+       WHERE event_id IN ${eventIdsSql}
+          OR id IN (
+            SELECT queued.entity_id
+            FROM outbox queued
+            WHERE queued.event_id IN ${eventIdsSql}
+              AND queued.entity_id IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM magic_links candidate
+                WHERE candidate.id = queued.entity_id
+                  AND (candidate.redirect_to LIKE '/portal%'
+                    OR candidate.redirect_to LIKE '/reviewer%'
+                    OR candidate.redirect_to LIKE '/co-speaker%'
+                    OR candidate.redirect_to LIKE '/task%')
+              )
+          )`,
+      ...eventBindings,
       ...eventBindings,
     ),
     prepared(db, `DELETE FROM outbox WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
@@ -174,6 +189,27 @@ export async function deleteEventCascade(
     prepared(db, `DELETE FROM buildings WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM tracks WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM formats WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
+    // Plural event grants live in JSON on an organization token. Remove only
+    // the deleted conference, preserving the token and every surviving grant.
+    prepared(
+      db,
+      `UPDATE api_tokens
+       SET scopes = json_set(
+         scopes,
+         '$.event_ids',
+         json((SELECT COALESCE(json_group_array(value), '[]')
+               FROM json_each(api_tokens.scopes, '$.event_ids')
+               WHERE value NOT IN ${eventIdsSql}))
+       ), updated_at = ?
+       WHERE event_id IS NULL
+         AND EXISTS (
+           SELECT 1 FROM json_each(api_tokens.scopes, '$.event_ids')
+           WHERE value IN ${eventIdsSql}
+         )`,
+      ...eventBindings,
+      now,
+      ...eventBindings,
+    ),
     prepared(
       db,
       `DELETE FROM api_tokens WHERE event_id IN ${eventIdsSql}`,

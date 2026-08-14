@@ -41,6 +41,53 @@ CREATE INDEX idx_audit_entity_created ON audit_log(entity_type, entity_id, creat
 CREATE INDEX idx_audit_actor_created ON audit_log(actor_person_id, created_at);
 CREATE INDEX idx_audit_request ON audit_log(request_id, created_at);
 
+-- Portal credentials are event-scoped even though older magic-link rows did
+-- not carry the event that minted them.  Backfill the unambiguous outbox and
+-- eventId cases, and have new writers supply event_id directly.
+CREATE TABLE magic_links_new (
+  id TEXT PRIMARY KEY,
+  token_hash TEXT NOT NULL,
+  person_id TEXT REFERENCES people(id),
+  event_id TEXT REFERENCES events(id),
+  purpose TEXT NOT NULL CHECK (
+    purpose IN ('login', 'draft_resume', 'cospeaker_profile', 'task_link', 'claim', 'org_invite')
+  ),
+  redirect_to TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  CHECK (
+    (purpose IN ('claim', 'org_invite') AND person_id IS NULL)
+    OR (purpose NOT IN ('claim', 'org_invite') AND person_id IS NOT NULL)
+  )
+);
+
+INSERT INTO magic_links_new (
+  id, token_hash, person_id, event_id, purpose, redirect_to, expires_at, used_at,
+  created_at, updated_at
+)
+SELECT link.id, link.token_hash, link.person_id,
+  COALESCE(
+    (SELECT queued.event_id FROM outbox queued
+     WHERE queued.entity_id = link.id
+       AND (link.redirect_to LIKE '/portal%'
+         OR link.redirect_to LIKE '/reviewer%'
+         OR link.redirect_to LIKE '/co-speaker%'
+         OR link.redirect_to LIKE '/task%')
+     ORDER BY queued.created_at DESC LIMIT 1),
+    (SELECT conference.id FROM events conference WHERE link.redirect_to LIKE '%eventId=' || conference.id || '%' ORDER BY conference.created_at DESC LIMIT 1)
+  ),
+  link.purpose, link.redirect_to, link.expires_at, link.used_at, link.created_at, link.updated_at
+FROM magic_links link;
+
+DROP TABLE magic_links;
+ALTER TABLE magic_links_new RENAME TO magic_links;
+
+CREATE UNIQUE INDEX uq_magic_links_token_hash ON magic_links(token_hash);
+CREATE INDEX idx_magic_links_expires ON magic_links(expires_at);
+CREATE INDEX idx_magic_links_event_created ON magic_links(event_id, created_at);
+
 -- `person_headshot` attachments are organization-level subjects in the
 -- product model even though the original table required an event_id.  Make
 -- that existing wart survivable without introducing a second attachment
