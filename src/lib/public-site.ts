@@ -339,6 +339,19 @@ function isPublicEmbedCacheEnvelope(value: unknown): value is PublicEmbedCacheEn
     (value as { __marqueePublicEmbed?: unknown }).__marqueePublicEmbed === true;
 }
 
+/** Cache entries can outlive one deploy, so old entries may not have fields. */
+function normalizeCachedEmbedData(data: PublicEmbedData): PublicEmbedData {
+  const config = data.config as PublicEmbedConfig | undefined;
+  if (!config) return data;
+  return {
+    ...data,
+    config: {
+      ...config,
+      fields: normalizeEmbedFields(config.fields, data.kind),
+    },
+  };
+}
+
 function toEvent(row: EventRow): PublicEvent {
   return {
     id: row.id,
@@ -1197,9 +1210,9 @@ export async function readPublicEmbedCache(
   const cached = await cache.get(key, "json") as PublicEmbedData | PublicEmbedCacheEnvelope | null;
   if (!cached) return null;
   if (isPublicEmbedCacheEnvelope(cached)) {
-    return cached.expiresAt > Date.now() ? cached.data : null;
+    return cached.expiresAt > Date.now() ? normalizeCachedEmbedData(cached.data) : null;
   }
-  return cached;
+  return normalizeCachedEmbedData(cached);
 }
 
 export async function writePublicEmbedCache(
