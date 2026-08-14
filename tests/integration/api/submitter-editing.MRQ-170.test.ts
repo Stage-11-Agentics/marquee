@@ -18,10 +18,11 @@ const EDITED_ABSTRACT = `${ORIGINAL_ABSTRACT} Updated: now includes 2026 benchma
 type PublicState = {
   state: string;
   answers: Record<string, unknown>;
+  outcome: string | null;
   resume_url: string | null;
   submission_editable?: boolean;
   submission_edit_reason?: string | null;
-  confirmation: { portal_url: string | null } | null;
+  confirmation: { title: string; portal_url: string | null } | null;
 };
 
 async function request(path: string, init: RequestInit = {}, cookie?: string): Promise<Response> {
@@ -108,6 +109,7 @@ describe.sequential("MRQ-170 submitter editing", () => {
     expect(resume.status).toBe(200);
     const initial = await resume.json<PublicState>();
     expect(initial.state).toBe("submitted");
+    expect(initial.outcome).toBeNull();
     expect(initial.submission_editable).toBe(true);
     expect(initial.answers.abstract).toBe(ORIGINAL_ABSTRACT);
 
@@ -167,6 +169,12 @@ describe.sequential("MRQ-170 submitter editing", () => {
 
     await env.DB.prepare("UPDATE forms SET closes_at = ?, status = 'open' WHERE id = ?").bind(OPEN_UNTIL, FORM_ID).run();
     await env.DB.prepare("UPDATE submissions SET status = 'accepted' WHERE id = ?").bind(submissionId).run();
+    const acceptedResume = await request(`/api/v1/public/forms/mrq-170-cfp?resume=${encodeURIComponent(token)}`);
+    const acceptedBody = await acceptedResume.json<PublicState>();
+    expect(acceptedBody.outcome).toBe("accepted");
+    expect(acceptedBody.confirmation?.title).toBe("Your abstract was accepted");
+    const acceptedPage = await request(`/f/mrq-170-cfp?resume=${encodeURIComponent(token)}`);
+    expect(await acceptedPage.text()).toContain("<h2>Your abstract was accepted</h2>");
     const decidedPortal = await request("/api/v1/me/portal", {}, cookie);
     const decidedBody = await decidedPortal.json<{ submissions: Array<{ id: string; edit: { enabled: boolean; reason: string | null } }> }>();
     expect(decidedBody.submissions[0]).toMatchObject({ id: submissionId, edit: { enabled: false } });
@@ -176,5 +184,25 @@ describe.sequential("MRQ-170 submitter editing", () => {
       body: JSON.stringify({ answers: { abstract: "Decided submissions cannot accept this." } }),
     });
     expect(decidedEdit.status).toBe(409);
+
+    await env.DB.prepare("UPDATE submissions SET status = 'waitlisted' WHERE id = ?").bind(submissionId).run();
+    const waitlistedResume = await request(`/api/v1/public/forms/mrq-170-cfp?resume=${encodeURIComponent(token)}`);
+    const waitlistedBody = await waitlistedResume.json<PublicState>();
+    expect(waitlistedBody.outcome).toBe("waitlisted");
+    expect(waitlistedBody.confirmation?.title).toBe("Your abstract is a Maybe");
+    const waitlistedPage = await request(`/f/mrq-170-cfp?resume=${encodeURIComponent(token)}`);
+    expect(await waitlistedPage.text()).toContain("<h2>Your abstract is a Maybe</h2>");
+
+    await env.DB.prepare("UPDATE submissions SET status = 'rejected' WHERE id = ?").bind(submissionId).run();
+    const rejectedResume = await request(`/api/v1/public/forms/mrq-170-cfp?resume=${encodeURIComponent(token)}`);
+    const rejectedBody = await rejectedResume.json<PublicState>();
+    expect(rejectedBody.outcome).toBe("rejected");
+    expect(rejectedBody.confirmation?.title).toBe("Your abstract was rejected");
+    const rejectedPage = await request(`/f/mrq-170-cfp?resume=${encodeURIComponent(token)}`);
+    expect(await rejectedPage.text()).toContain("<h2>Your abstract was rejected</h2>");
+
+    const publicForm = await request("/api/v1/public/forms/mrq-170-cfp");
+    const publicBody = await publicForm.json<PublicState>();
+    expect(publicBody.outcome).toBeNull();
   });
 });

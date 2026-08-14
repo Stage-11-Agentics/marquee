@@ -88,6 +88,7 @@ const publicFormSchema = z.object({
     min_speakers: z.number().int(), max_speakers: z.number().int(), max_sponsors: z.number().int(),
   }),
   state: publicStateSchema,
+  outcome: z.enum(["accepted", "waitlisted", "rejected"]).nullable(),
   fields: z.array(publicFieldSchema),
   answers: z.record(z.string(), z.unknown()),
   files: z.array(publicFileSchema),

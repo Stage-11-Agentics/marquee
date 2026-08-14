@@ -13,6 +13,7 @@ import type {
   PublicFormConfirmation,
   PublicFormField,
   PublicFormFile,
+  PublicFormOutcome,
   PublicFormState,
   PublicFormStateName,
 } from "./public-form.types";
@@ -40,6 +41,7 @@ export interface PublicFormRecord {
   resumeMissed: boolean;
   lastSavedAt: number | null;
   submittedAt: number | null;
+  submissionOutcome: PublicFormOutcome | null;
   submissionEditable: boolean;
   submissionEditReason: string | null;
 }
@@ -170,6 +172,18 @@ async function findResumeSubmission(
     .first<SubmissionRow>();
 }
 
+function publicOutcomeForSubmission(submission: SubmissionRow | null): PublicFormOutcome | null {
+  if (!submission) return null;
+  switch (submission.status) {
+    case "accepted":
+    case "waitlisted":
+    case "rejected":
+      return submission.status;
+    default:
+      return null;
+  }
+}
+
 /**
  * "Submissions per person" caps the abstracts someone puts in front of the
  * committee. A draft is not one of those — it is the work in progress on the
@@ -281,6 +295,7 @@ export async function loadPublicForm(
     resumeMissed: Boolean(options.resumeToken?.trim()) && submission === null,
     lastSavedAt: asNumber(submission?.last_saved_at),
     submittedAt: asNumber(submission?.submitted_at),
+    submissionOutcome: publicOutcomeForSubmission(submission),
     submissionEditable: editability.enabled,
     submissionEditReason: editability.reason,
   };
@@ -324,10 +339,16 @@ export function toPublicFormState(
     ? `${options.origin}/f/${encodeURIComponent(record.form.slug)}?resume=${encodeURIComponent(record.resumeToken)}`
     : null;
   const personEmail = record.email ?? "";
+  const confirmationCopy = record.submissionOutcome === "accepted"
+    ? { title: "Your abstract was accepted", message: "The conference team accepted this abstract. Keep this private link for the next steps." }
+    : record.submissionOutcome === "waitlisted"
+      ? { title: "Your abstract is a Maybe", message: "The conference team marked this abstract Maybe and placed it on the waitlist. Keep this private link for updates." }
+      : record.submissionOutcome === "rejected"
+        ? { title: "Your abstract was rejected", message: "The conference team rejected this abstract for the program. Keep this private link if you need to revisit the record." }
+        : { title: "Your abstract is in", message: "The conference team has your response and will follow up at the address you entered." };
   const confirmation: PublicFormConfirmation | null = record.state === "submitted"
     ? {
-        title: "Your abstract is in",
-        message: "The conference team has your response and will follow up at the address you entered.",
+        ...confirmationCopy,
         email: personEmail,
         resume_url: resumeUrl,
         portal_url: null,
@@ -348,6 +369,7 @@ export function toPublicFormState(
       max_sponsors: Number(record.form.max_sponsors),
     },
     state: record.state,
+    outcome: record.submissionOutcome,
     fields: record.fields.map(publicField),
     answers: record.answers,
     files: record.files,
