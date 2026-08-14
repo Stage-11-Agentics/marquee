@@ -162,10 +162,24 @@ interface FormRow {
   updated_at: number;
 }
 
+type SpeakerField = "email" | "name" | "title" | "company" | "bio";
+
+interface SpeakerFieldChange {
+  before: string | null;
+  after: string | null;
+}
+
 interface ImportSnapshot {
   kind: "speaker" | "session";
   person: PersonRow | null;
   attachment: AttachmentRow | null;
+  // Speaker imports use this to make undo conditional: only a value that is
+  // still exactly what this import wrote is eligible for restoration. That
+  // keeps a later organizer edit safe, while the empty object records that a
+  // new-format snapshot intentionally made no profile-field changes.
+  speaker_changes?: Partial<Record<SpeakerField, SpeakerFieldChange>>;
+  speaker_attachment_changed?: boolean;
+  speaker_attachment_after_id?: string | null;
   membership_created?: boolean;
   membership_id?: string | null;
   submission: SubmissionRow | null;
@@ -419,6 +433,29 @@ function rowJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function upgradeLegacySpeakerSnapshot(snapshot: ImportSnapshot, current: PersonRow | null, importRowCreatedAt: number): ImportSnapshot {
+  if (snapshot.kind !== "speaker" || snapshot.speaker_changes !== undefined || !snapshot.person) return snapshot;
+  // Old snapshots do not contain the value written by the import. If the
+  // person changed after the row was recorded, restoring the old whole row is
+  // unsafe; an empty change set makes this legacy undo a no-op instead.
+  // created_at is intentionally immutable across same-import reruns. Using
+  // updated_at here would move the receipt's boundary forward on every rerun
+  // and could mistake an earlier organizer edit for the import's own write.
+  if (!current || current.updated_at > importRowCreatedAt) return { ...snapshot, speaker_changes: {} };
+  const speakerChanges: Partial<Record<SpeakerField, SpeakerFieldChange>> = {};
+  for (const field of ["email", "name", "title", "company", "bio"] as const) {
+    if (snapshot.person[field] !== current[field]) {
+      speakerChanges[field] = { before: snapshot.person[field], after: current[field] };
+    }
+  }
+  const upgraded: ImportSnapshot = { ...snapshot, speaker_changes: speakerChanges };
+  if (snapshot.person.headshot_attachment_id !== current.headshot_attachment_id) {
+    upgraded.speaker_attachment_changed = true;
+    upgraded.speaker_attachment_after_id = current.headshot_attachment_id;
+  }
+  return upgraded;
+}
+
 async function eventFor(db: D1Database, eventId: string): Promise<EventRow> {
   const event = await db.prepare("SELECT id, org_id FROM events WHERE id = ?").bind(eventId).first<EventRow>();
   if (!event) throw new Error("conference not found");
@@ -426,12 +463,23 @@ async function eventFor(db: D1Database, eventId: string): Promise<EventRow> {
 }
 
 async function saveImportRow(db: D1Database, input: ImportRowInput): Promise<void> {
-  const existing = await db.prepare("SELECT before_json, outcome FROM import_rows WHERE import_id = ? AND row_index = ?")
+  const existing = await db.prepare("SELECT before_json, outcome, target_id, created_at FROM import_rows WHERE import_id = ? AND row_index = ?")
     .bind(input.importId, input.rowIndex)
-    .first<Pick<ImportRowRow, "before_json" | "outcome">>();
-  const beforeJson = existing
+    .first<Pick<ImportRowRow, "before_json" | "outcome" | "target_id" | "created_at">>();
+  let beforeJson = existing
     ? existing.before_json ?? (existing.outcome === "failed" && input.before ? rowJson(input.before) : null)
     : (input.before ? rowJson(input.before) : null);
+  if (existing?.before_json && input.before?.kind === "speaker" && input.before.person) {
+    try {
+      const prior = JSON.parse(existing.before_json) as ImportSnapshot;
+      if (prior.kind === "speaker" && prior.speaker_changes === undefined) {
+        beforeJson = rowJson(upgradeLegacySpeakerSnapshot(prior, input.before.person, existing.created_at));
+      }
+    } catch {
+      // Keep an existing receipt intact if a historical snapshot is malformed.
+    }
+  }
+  const targetId = existing?.before_json && existing.target_id ? existing.target_id : input.targetId;
   await db.prepare(
     `INSERT INTO import_rows (id, import_id, row_index, entity, outcome, reason, target_id, before_json, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -441,7 +489,7 @@ async function saveImportRow(db: D1Database, input: ImportRowInput): Promise<voi
        updated_at = excluded.updated_at`,
   ).bind(
     stableImportId("row", input.importId, String(input.rowIndex)), input.importId, input.rowIndex,
-    input.entity, input.outcome, input.reason, input.targetId, beforeJson, Date.now(), Date.now(),
+    input.entity, input.outcome, input.reason, targetId, beforeJson, Date.now(), Date.now(),
   ).run();
 }
 
@@ -481,38 +529,59 @@ async function importSpeaker(
   if (!name) throw new Error("speaker name is required");
   const email = normalizeEmail(row.email);
   if (!email) throw new Error("speaker email is required");
+  const priorImportRow = await db.prepare("SELECT target_id, before_json FROM import_rows WHERE import_id = ? AND row_index = ?")
+    .bind(importId, rowIndex).first<Pick<ImportRowRow, "target_id" | "before_json">>();
+  const priorTargetId = priorImportRow?.before_json ? priorImportRow.target_id : null;
+  const priorTarget = priorTargetId
+    ? await db.prepare("SELECT * FROM people WHERE id = ? AND org_id = ?").bind(priorTargetId, event.org_id).first<PersonRow>()
+    : null;
+  if (priorTargetId && !priorTarget) throw new Error("the original speaker target no longer exists; rerun refused");
   const byEmail = await personByEmail(db, event.org_id, email);
-  const current = byEmail ?? await personByName(db, event.org_id, name);
-  const matchedBy = !current ? null : byEmail ? "normalized email" : "name";
-  const keepsStoredEmail = Boolean(current && !byEmail);
+  const current = priorTarget ?? byEmail ?? await personByName(db, event.org_id, name);
+  const matchedBy = !current ? null : priorTarget ? "prior import target" : byEmail ? "normalized email" : "name";
+  const keepsStoredEmail = Boolean(current && byEmail?.id !== current.id);
   const beforeAttachment = current ? await attachmentForPerson(db, event.id, current.id) : null;
   const beforeMembership = current ? await speakerMembershipForPerson(db, event.id, current.id) : null;
   const before: ImportSnapshot = current ? {
-    kind: "speaker", person: current, attachment: beforeAttachment, membership_created: false, membership_id: null, submission: null,
+    kind: "speaker", person: current, attachment: beforeAttachment, speaker_changes: {}, membership_created: false, membership_id: null, submission: null,
     participations: [], answers: [], evaluations: [],
-  } : { kind: "speaker", person: null, attachment: null, membership_created: false, membership_id: null, submission: null, participations: [], answers: [], evaluations: [] };
+  } : { kind: "speaker", person: null, attachment: null, speaker_changes: {}, membership_created: false, membership_id: null, submission: null, participations: [], answers: [], evaluations: [] };
   const now = nowAfter(current?.updated_at);
   const id = current?.id ?? stableImportId("person", event.id, externalRef || email);
-  // An import is an import, never an erase — the same rule the add-speaker
-  // path states. A blank CSV cell means "this export does not carry that
-  // field", not "delete what the speaker wrote in their portal", and profile
-  // fields live on the org-level `people` row, so an erase here reaches every
-  // conference that person speaks at. A cell that *is* filled and disagrees is
-  // last-write-wins: the import's row table names what it overwrote and Batch
-  // undo reverses it.
-  const merge = (incoming: string, stored: string | null): string | null => incoming.trim() || stored;
+  // An import is additive, never destructive. A blank CSV cell means "this
+  // export does not carry that field", not "delete what the speaker wrote in
+  // their portal", and profile fields live on the org-level `people` row, so
+  // an erase here reaches every conference that person speaks at. A filled
+  // cell also cannot replace an existing value: imports may fill a missing
+  // profile field, but an organizer's current value stays authoritative until
+  // they explicitly edit it in Marquee.
+  const merge = (incoming: string, stored: string | null): string | null => stored?.trim() ? stored : incoming.trim() || null;
   const next = {
     email: keepsStoredEmail ? current!.email : email,
-    name,
+    // A repeat of this import is anchored to its prior target, so a later
+    // organizer rename cannot be treated as a new import correction. A fresh
+    // match keeps the importer’s existing name reconciliation behavior.
+    name: priorTarget ? priorTarget.name : name,
     title: merge(row.title, current?.title ?? null),
     company: merge(row.company, current?.company ?? null),
     bio: merge(row.bio, current?.bio ?? null),
   };
-  const overwritten = current
-    ? (["title", "company", "bio"] as const).filter((field) => row[field].trim() && current[field] !== next[field])
+  if (current) {
+    for (const field of ["email", "name", "title", "company", "bio"] as const) {
+      if (current[field] !== next[field]) {
+        before.speaker_changes![field] = { before: current[field], after: next[field] };
+      }
+    }
+  }
+  const hasStoredValue = (field: "title" | "company" | "bio"): boolean => Boolean(current?.[field]?.trim());
+  const preserved = current
+    ? (["title", "company", "bio"] as const).filter((field) => row[field].trim() && hasStoredValue(field))
     : [];
-  const retained = current
-    ? (["title", "company", "bio"] as const).filter((field) => !row[field].trim() && current[field] !== null)
+  const filled = current
+    ? (["title", "company", "bio"] as const).filter((field) => row[field].trim() && !hasStoredValue(field) && next[field] !== null)
+    : [];
+  const blankRetained = current
+    ? (["title", "company", "bio"] as const).filter((field) => !row[field].trim() && hasStoredValue(field))
     : [];
   const changed = !current || current.email !== next.email || current.name !== next.name || current.title !== next.title || current.company !== next.company || current.bio !== next.bio;
   if (!current) {
@@ -534,16 +603,19 @@ async function importSpeaker(
     const existing = await attachmentForPerson(db, event.id, person.id);
     if (!existing || existing.r2_key !== wantedKey || existing.status !== "pending") {
       const attachmentId = stableImportId("attachment", event.id, person.id, headshot);
-      if (existing && existing.id !== attachmentId) {
-        await db.prepare("DELETE FROM attachments WHERE id = ? AND owner_type = 'person_headshot' AND owner_id = ?").bind(existing.id, person.id).run();
-      }
-      if (!(await db.prepare("SELECT id FROM attachments WHERE id = ?").bind(attachmentId).first())) {
-        await db.prepare(
+      const attachmentExists = await db.prepare("SELECT id FROM attachments WHERE id = ?").bind(attachmentId).first();
+      const attachmentWrites = [];
+      if (!attachmentExists) {
+        attachmentWrites.push(db.prepare(
           `INSERT INTO attachments (id, event_id, owner_type, owner_id, r2_key, filename, content_type, size_bytes, status, created_at, updated_at)
            VALUES (?, ?, 'person_headshot', ?, ?, ?, ?, 0, 'pending', ?, ?)`,
-        ).bind(attachmentId, event.id, person.id, wantedKey, `sessionize-${hashPart(headshot)}.jpg`, contentTypeForUrl(headshot), now, now).run();
+        ).bind(attachmentId, event.id, person.id, wantedKey, `sessionize-${hashPart(headshot)}.jpg`, contentTypeForUrl(headshot), now, now));
       }
-      await db.prepare("UPDATE people SET headshot_attachment_id = ?, updated_at = ? WHERE id = ?").bind(attachmentId, now, person.id).run();
+      attachmentWrites.push(db.prepare("UPDATE people SET headshot_attachment_id = ?, updated_at = ? WHERE id = ?").bind(attachmentId, now, person.id));
+      if (existing && existing.id !== attachmentId) {
+        attachmentWrites.push(db.prepare("DELETE FROM attachments WHERE id = ? AND owner_type = 'person_headshot' AND owner_id = ?").bind(existing.id, person.id));
+      }
+      await db.batch(attachmentWrites);
       attachmentChanged = true;
     }
   }
@@ -553,18 +625,25 @@ async function importSpeaker(
     before.membership_created = true;
     before.membership_id = (await speakerMembershipForPerson(db, event.id, person.id))?.id ?? null;
   }
+  if (attachmentChanged) {
+    before.speaker_attachment_changed = true;
+    before.speaker_attachment_after_id = person.headshot_attachment_id;
+  }
   const outcome = !current ? "created" : changed || attachmentChanged ? "updated" : "skipped";
   // An organizer auditing an import has to be able to tell why a row landed the
   // way it did. A created row matched nothing, so it must not claim a match;
   // a matched row says which key found the person; and an updated row names the
-  // fields it overwrote and the ones the CSV left blank and therefore kept.
+  // fields it kept, filled, and the ones the CSV left blank and therefore
+  // retained. This is the durable audit trail an organizer sees after the
+  // import; it must never claim that an existing profile value was overwritten.
   const reason = [
     current
       ? `matched by ${matchedBy}`
       : externalRef ? `new person, keyed by external_ref ${externalRef}` : "new person, keyed by normalized email",
     keepsStoredEmail ? "kept email (name match)" : null,
-    overwritten.length ? `overwrote ${overwritten.join(", ")}` : null,
-    retained.length ? `kept ${retained.join(", ")} (blank in CSV)` : null,
+    preserved.length ? `kept ${preserved.join(", ")} (existing value)` : null,
+    filled.length ? `filled ${filled.join(", ")}` : null,
+    blankRetained.length ? `kept ${blankRetained.join(", ")} (blank in CSV)` : null,
     headshot ? "headshot retained as a pending external attachment" : null,
   ].filter(Boolean).join("; ");
   await saveImportRow(db, {
@@ -860,6 +939,50 @@ async function restoreSnapshot(db: D1Database, snapshot: ImportSnapshot): Promis
       if (snapshot.attachment) await db.prepare("DELETE FROM attachments WHERE id = ?").bind(snapshot.attachment.id).run();
       return;
     }
+    if (snapshot.speaker_changes !== undefined) {
+      const current = await db.prepare("SELECT * FROM people WHERE id = ?").bind(snapshot.person.id).first<PersonRow>();
+      if (!current) return;
+      const updates: string[] = [];
+      const values: Array<string | number | null> = [];
+      for (const field of ["email", "name", "title", "company", "bio"] as const) {
+        const change = snapshot.speaker_changes[field];
+        if (!change || current[field] !== change.after) continue;
+        updates.push(`${field} = ?`);
+        values.push(change.before);
+      }
+      const afterAttachmentId = snapshot.speaker_attachment_after_id ?? null;
+      const restoreAttachment = snapshot.speaker_attachment_changed === true && current.headshot_attachment_id === afterAttachmentId;
+      const restoreAttachmentId = snapshot.attachment?.id ?? null;
+      if (restoreAttachment && snapshot.attachment && restoreAttachmentId !== afterAttachmentId) {
+        await db.prepare(
+          `INSERT INTO attachments (id, event_id, owner_type, owner_id, r2_key, filename, content_type, size_bytes, status, sha256, r2_etag, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET event_id = excluded.event_id, owner_type = excluded.owner_type, owner_id = excluded.owner_id, r2_key = excluded.r2_key, filename = excluded.filename, content_type = excluded.content_type, size_bytes = excluded.size_bytes, status = excluded.status, sha256 = excluded.sha256, r2_etag = excluded.r2_etag, updated_at = excluded.updated_at`,
+        ).bind(snapshot.attachment.id, snapshot.attachment.event_id, snapshot.attachment.owner_type, snapshot.attachment.owner_id, snapshot.attachment.r2_key, snapshot.attachment.filename, snapshot.attachment.content_type, snapshot.attachment.size_bytes, snapshot.attachment.status, snapshot.attachment.sha256, snapshot.attachment.r2_etag, snapshot.attachment.created_at, snapshot.attachment.updated_at).run();
+      }
+      if (restoreAttachment) {
+        updates.push("headshot_attachment_id = ?");
+        values.push(snapshot.person.headshot_attachment_id);
+      }
+      if (updates.length > 0) {
+        updates.push("updated_at = ?");
+        values.push(Date.now());
+        values.push(snapshot.person.id);
+        await db.prepare(`UPDATE people SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
+      }
+      if (snapshot.speaker_attachment_changed === true && afterAttachmentId) {
+        if (restoreAttachment) {
+          if (restoreAttachmentId !== afterAttachmentId) {
+            await db.prepare("DELETE FROM attachments WHERE id = ? AND owner_type = 'person_headshot' AND owner_id = ?")
+              .bind(afterAttachmentId, snapshot.person.id).run();
+          }
+        } else if (!restoreAttachment) {
+          await db.prepare("DELETE FROM attachments WHERE id = ? AND owner_type = 'person_headshot' AND owner_id = ?")
+            .bind(afterAttachmentId, snapshot.person.id).run();
+        }
+      }
+      return;
+    }
     await db.prepare(
       `UPDATE people SET org_id = ?, email = ?, name = ?, title = ?, company = ?, bio = ?, headshot_attachment_id = ?, social_links = ?, is_demo = ?, last_write_source = ?, updated_at = ? WHERE id = ?`,
     ).bind(snapshot.person.org_id, snapshot.person.email, snapshot.person.name, snapshot.person.title, snapshot.person.company, snapshot.person.bio, snapshot.person.headshot_attachment_id, snapshot.person.social_links, snapshot.person.is_demo, snapshot.person.last_write_source, snapshot.person.updated_at, snapshot.person.id).run();
@@ -979,10 +1102,18 @@ export async function undoSessionizeImport(db: D1Database, eventId: string, impo
   const rows = await db.prepare("SELECT * FROM import_rows WHERE import_id = ? ORDER BY CASE WHEN entity = 'session' THEN 0 ELSE 1 END, row_index DESC").bind(importId).all<ImportRowRow>();
   let undone = 0;
   for (const row of rows.results) {
-    const snapshot = row.before_json ? JSON.parse(row.before_json) as ImportSnapshot : null;
+    let snapshot = row.before_json ? JSON.parse(row.before_json) as ImportSnapshot : null;
+    if (row.entity === "speaker" && snapshot?.kind === "speaker" && snapshot.person && snapshot.speaker_changes === undefined) {
+      const current = await db.prepare("SELECT * FROM people WHERE id = ?").bind(snapshot.person.id).first<PersonRow>();
+      snapshot = upgradeLegacySpeakerSnapshot(snapshot, current, row.created_at);
+    }
     const createdMarker = snapshot?.submission === null && snapshot?.person === null;
     const membershipCreatedMarker = row.entity === "speaker" && snapshot?.membership_created === true;
-    if (!row.target_id || row.outcome === "failed" || (row.outcome === "skipped" && !createdMarker && !membershipCreatedMarker)) continue;
+    const speakerChangesMarker = row.entity === "speaker" && (
+      Object.keys(snapshot?.speaker_changes ?? {}).length > 0
+      || snapshot?.speaker_attachment_changed === true
+    );
+    if (!row.target_id || row.outcome === "failed" || (row.outcome === "skipped" && !createdMarker && !membershipCreatedMarker && !speakerChangesMarker)) continue;
     if (snapshot && membershipCreatedMarker) await removeImportedSpeakerMembership(db, eventId, row.target_id, snapshot);
     if (snapshot && snapshot.submission === null && snapshot.person === null) {
       if (row.entity === "session") await deleteCreatedSubmission(db, row.target_id);

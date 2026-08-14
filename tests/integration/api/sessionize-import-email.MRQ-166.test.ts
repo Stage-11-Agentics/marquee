@@ -125,7 +125,7 @@ describe.sequential("CONTRACT · MRQ-166 · Sessionize speaker email", () => {
     expect(await env.DB.prepare("SELECT id FROM people WHERE org_id = ? AND email LIKE 'speaker+%@example.invalid'").bind(ORG_ID).first()).toBeNull();
   });
 
-  test("CONTRACT · MRQ-166 · a unique name match keeps its stored email while importing profile fields", async () => {
+  test("CONTRACT · MRQ-166 · a unique name match keeps its stored email and profile values", async () => {
     const imported = await upload([
       "Name,Email,Title,Company,Bio",
       "Unique Name Match,new-address@mrq166.test,Imported title,Imported company,Imported bio",
@@ -133,10 +133,11 @@ describe.sequential("CONTRACT · MRQ-166 · Sessionize speaker email", () => {
     const result = await mapAndRun(imported);
 
     const person = await env.DB.prepare("SELECT email, title, company, bio FROM people WHERE id = ?").bind(NAME_MATCH_ID).first<{ email: string; title: string; company: string; bio: string }>();
-    expect(person).toMatchObject({ email: "stored@mrq166.test", title: "Imported title", company: "Imported company", bio: "Imported bio" });
+    expect(person).toMatchObject({ email: "stored@mrq166.test", title: "Stored title", company: "Stored company", bio: "Stored bio" });
     const row = result.rows.find((candidate) => candidate.entity === "speaker");
     expect(row?.reason).toContain("matched by name");
     expect(row?.reason).toContain("kept email");
+    expect(row?.reason).toContain("kept title, company, bio (existing value)");
   });
 
   test("CONTRACT · MRQ-166 · duplicate names match neither existing person", async () => {
