@@ -174,7 +174,7 @@ describe.sequential("MRQ-170 submitter editing", () => {
     expect(acceptedBody.outcome).toBe("accepted");
     expect(acceptedBody.confirmation?.title).toBe("Your abstract was accepted");
     const acceptedPage = await request(`/f/mrq-170-cfp?resume=${encodeURIComponent(token)}`);
-    expect(await acceptedPage.text()).toContain('data-submission-outcome="accepted"');
+    expect(await acceptedPage.text()).toContain("<h2>Your abstract was accepted</h2>");
     const decidedPortal = await request("/api/v1/me/portal", {}, cookie);
     const decidedBody = await decidedPortal.json<{ submissions: Array<{ id: string; edit: { enabled: boolean; reason: string | null } }> }>();
     expect(decidedBody.submissions[0]).toMatchObject({ id: submissionId, edit: { enabled: false } });
@@ -185,13 +185,21 @@ describe.sequential("MRQ-170 submitter editing", () => {
     });
     expect(decidedEdit.status).toBe(409);
 
+    await env.DB.prepare("UPDATE submissions SET status = 'waitlisted' WHERE id = ?").bind(submissionId).run();
+    const waitlistedResume = await request(`/api/v1/public/forms/mrq-170-cfp?resume=${encodeURIComponent(token)}`);
+    const waitlistedBody = await waitlistedResume.json<PublicState>();
+    expect(waitlistedBody.outcome).toBe("waitlisted");
+    expect(waitlistedBody.confirmation?.title).toBe("Your abstract is a Maybe");
+    const waitlistedPage = await request(`/f/mrq-170-cfp?resume=${encodeURIComponent(token)}`);
+    expect(await waitlistedPage.text()).toContain("<h2>Your abstract is a Maybe</h2>");
+
     await env.DB.prepare("UPDATE submissions SET status = 'rejected' WHERE id = ?").bind(submissionId).run();
     const rejectedResume = await request(`/api/v1/public/forms/mrq-170-cfp?resume=${encodeURIComponent(token)}`);
     const rejectedBody = await rejectedResume.json<PublicState>();
     expect(rejectedBody.outcome).toBe("rejected");
     expect(rejectedBody.confirmation?.title).toBe("Your abstract was rejected");
     const rejectedPage = await request(`/f/mrq-170-cfp?resume=${encodeURIComponent(token)}`);
-    expect(await rejectedPage.text()).toContain('data-submission-outcome="rejected"');
+    expect(await rejectedPage.text()).toContain("<h2>Your abstract was rejected</h2>");
 
     const publicForm = await request("/api/v1/public/forms/mrq-170-cfp");
     const publicBody = await publicForm.json<PublicState>();

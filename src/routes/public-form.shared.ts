@@ -342,7 +342,7 @@ export function toPublicFormState(
   const confirmationCopy = record.submissionOutcome === "accepted"
     ? { title: "Your abstract was accepted", message: "The conference team accepted this abstract. Keep this private link for the next steps." }
     : record.submissionOutcome === "waitlisted"
-      ? { title: "Your abstract was waitlisted", message: "The conference team placed this abstract on the waitlist. Keep this private link for updates." }
+      ? { title: "Your abstract is a Maybe", message: "The conference team marked this abstract Maybe and placed it on the waitlist. Keep this private link for updates." }
       : record.submissionOutcome === "rejected"
         ? { title: "Your abstract was rejected", message: "The conference team rejected this abstract for the program. Keep this private link if you need to revisit the record." }
         : { title: "Your abstract is in", message: "The conference team has your response and will follow up at the address you entered." };
