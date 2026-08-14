@@ -192,18 +192,45 @@ function publicOutcomeForSubmission(submission: SubmissionRow | null): PublicFor
  * the outbox rather than re-deriving that decision, so the page promises a
  * receipt only when a row exists to send. Indexed by `idx_outbox_entity_status`
  * on `(event_id, entity_id, …)`.
+ *
+ * Three narrowings, each answering a way the plain query lies:
+ *
+ * - **The address is the submitter's own.** `comms.routes.ts` files organizer
+ *   sends under the submission's own `entity_id`, so another participant's row
+ *   can sit beside the receipt under the same key, and an unordered `LIMIT 1`
+ *   picks between them by accident. Matching the typed address means the page
+ *   can only ever name the person reading it.
+ * - **A failed or hard-bounced row is not on its way.** The delivery webhook
+ *   moves a hard bounce to `failed`; telling that submitter to watch their
+ *   inbox is the same untruth in a later tense.
+ * - **The template key is the one this form uses now.** An organizer may change
+ *   `thankyou_template_key` while submissions exist, and an older receipt then
+ *   goes unrecognised. That direction is deliberate: the page falls silent
+ *   about mail it cannot vouch for rather than claiming mail it cannot find.
  */
 async function findReceiptEmail(
   db: D1Database,
   form: FormRow,
   submission: SubmissionRow,
+  submitterEmail: string | null,
 ): Promise<string | null> {
+  if (!submitterEmail?.trim()) return null;
   const row = await db
     .prepare(
       `SELECT to_email FROM outbox
-       WHERE event_id = ? AND entity_id = ? AND template_key = ? LIMIT 1`,
+       WHERE event_id = ? AND entity_id = ? AND template_key = ?
+         AND lower(to_email) = lower(?)
+         AND status IN ('queued', 'sent')
+         AND delivery_state <> 'bounced_hard'
+       ORDER BY created_at ASC, id ASC
+       LIMIT 1`,
     )
-    .bind(form.event_id, submission.id, form.thankyou_template_key ?? "submission_confirmation")
+    .bind(
+      form.event_id,
+      submission.id,
+      form.thankyou_template_key ?? "submission_confirmation",
+      submitterEmail.trim(),
+    )
     .first<{ to_email: string }>();
   return row?.to_email ?? null;
 }
@@ -322,7 +349,7 @@ export async function loadPublicForm(
     submissionOutcome: publicOutcomeForSubmission(submission),
     submissionEditable: editability.enabled,
     submissionEditReason: editability.reason,
-    receiptEmail: state === "submitted" && submission ? await findReceiptEmail(db, form, submission) : null,
+    receiptEmail: state === "submitted" && submission ? await findReceiptEmail(db, form, submission, email) : null,
   };
 }
 

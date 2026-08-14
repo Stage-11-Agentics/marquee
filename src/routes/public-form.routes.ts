@@ -101,7 +101,8 @@ const publicFormSchema = z.object({
   submission_edit_reason: z.string().nullable(),
   turnstile_site_key: z.string().nullable(),
   confirmation: z.object({
-    title: z.string(), message: z.string(), email: z.string(), resume_url: z.string().nullable(), portal_url: z.string().nullable(),
+    title: z.string(), message: z.string(), email: z.string(), receipt_email: z.string().nullable(),
+    resume_url: z.string().nullable(), portal_url: z.string().nullable(),
   }).nullable(),
   message: z.string().nullable(),
 }).openapi("PublicForm");
