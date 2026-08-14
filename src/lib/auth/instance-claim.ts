@@ -91,6 +91,14 @@ async function resolveOrganization(
     logo_key: null,
     name: "Your organization",
     slug: `org-${newUlid(now).toLowerCase()}`,
+    // A brand-new organization has expressed no preferences. Every default
+    // stays null so it follows the product until someone sets one (§Amendment 21).
+    accent: null,
+    comms_from_name: null,
+    comms_reply_to: null,
+    default_theme: null,
+    default_timezone: null,
+    logo_key: null,
     created_at: now,
     updated_at: now,
   };

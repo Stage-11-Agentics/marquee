@@ -1,7 +1,9 @@
+import type { Context } from "hono";
 import { z } from "@hono/zod-openapi";
 
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import type { ApiEnv } from "../api/runtime";
 import { reconcileTaskSet } from "../jobs/cascade/decisions";
 import { auditStatement } from "../lib/audit";
 import { getAuth } from "../lib/auth/auth-middleware";
@@ -78,6 +80,14 @@ interface ParticipationRow {
   title: string;
   role: string;
   status: string;
+  /**
+   * `submissions.is_published`, plus any published agenda item for the same
+   * session. Both matter: the first is what puts a session on the public site,
+   * the second is what gives it a slot on the printed schedule, and a removal
+   * that quietly emptied either one would be the loud thing this preview exists
+   * to say out loud.
+   */
+  is_published: number;
   speaker_count: number;
 }
 
@@ -95,8 +105,12 @@ async function conferenceHoldings(
     .prepare(
       `SELECT part.submission_id AS submission_id, s.title AS title, part.role AS role,
               s.status AS status,
+              CASE WHEN s.is_published = 1 OR EXISTS (
+                SELECT 1 FROM agenda_items item
+                 WHERE item.submission_id = s.id AND item.kind = 'session' AND item.is_published = 1
+              ) THEN 1 ELSE 0 END AS is_published,
               (SELECT COUNT(*) FROM participations other
-                WHERE other.submission_id = s.id AND other.role IN ('speaker', 'submitter')
+                WHERE other.submission_id = s.id AND other.role IN ('speaker', 'co_speaker')
               ) AS speaker_count
          FROM participations part
          JOIN submissions s ON s.id = part.submission_id
@@ -108,13 +122,9 @@ async function conferenceHoldings(
   return rows.results;
 }
 
-/**
- * Published is the state that makes removal dangerous, so it is read from the
- * one enum that decides it rather than inferred. `scheduled` is not published;
- * a scheduled session is not yet on the public site.
- */
-function isPublished(status: string): boolean {
-  return status === "published";
+/** Published is the state that makes removal dangerous; the query above derives it. */
+function isPublished(row: ParticipationRow): boolean {
+  return Number(row.is_published) === 1;
 }
 
 async function requirePerson(db: D1Database, personId: string, orgId: string): Promise<{ id: string; name: string }> {
@@ -132,12 +142,23 @@ async function eventOrg(db: D1Database, eventId: string): Promise<string> {
   return event.org_id;
 }
 
-function actorOf(context: Parameters<typeof getAuth>[0]): { personId: string | null; requestId: string | null } {
+/**
+ * Who is doing this, resolved the same way the evaluation routes resolve it: a
+ * bearer credential is attributed to the human who issued it, because "a token
+ * removed this speaker" tells an organizer reading the history nothing they can
+ * act on.
+ */
+async function actorOf(
+  context: Context<ApiEnv>,
+): Promise<{ kind: "user" | "api_token"; personId: string | null; requestId: string | null }> {
   const auth = getAuth(context);
-  return {
-    personId: auth?.kind === "session" ? auth.personId : null,
-    requestId: (context.get("requestId") as string | undefined) ?? null,
-  };
+  const requestId = (context.get("requestId") as string | undefined) ?? null;
+  if (!auth) throw ApiError.unauthenticated();
+  if (auth.kind === "session") return { kind: "user", personId: auth.personId, requestId };
+  const token = await context.env.DB.prepare("SELECT created_by FROM api_tokens WHERE id = ?")
+    .bind(auth.tokenId)
+    .first<{ created_by: string }>();
+  return { kind: "api_token", personId: token?.created_by ?? null, requestId };
 }
 
 const previewConferenceRemoval = defineApiRoute(
@@ -178,7 +199,7 @@ const previewConferenceRemoval = defineApiRoute(
             title: row.title,
             role: row.role,
             status: row.status,
-            published: isPublished(row.status),
+            published: isPublished(row),
             sole_speaker: Number(row.speaker_count) <= 1,
           })),
           open_tasks: Number(openTasks?.total ?? 0),
@@ -209,7 +230,7 @@ const removeFromConference = defineApiRoute(
     const person = await requirePerson(context.env.DB, personId, orgId);
     const holdings = await conferenceHoldings(context.env.DB, eventId, personId);
     const now = Date.now();
-    const actor = actorOf(context);
+    const actor = await actorOf(context);
     const submissionIds = [...new Set(holdings.map((row) => row.submission_id))];
 
     // One transaction. Authority, work, and every credential end together:
@@ -239,7 +260,7 @@ const removeFromConference = defineApiRoute(
       ...revokeAccessStatements(context.env.DB, { orgId, personId, now }),
       auditStatement(context.env.DB, {
         eventId,
-        actorKind: actor.personId === null ? "api_token" : "user",
+        actorKind: actor.kind,
         actorPersonId: actor.personId,
         action: "person_removed_from_conference",
         entityType: "person",
@@ -258,11 +279,18 @@ const removeFromConference = defineApiRoute(
     // cancelled. Idempotent by contract (AC-266), and this is the same function
     // acceptance and re-acceptance traverse — not a parallel one.
     if (submissionIds.length > 0) {
-      await reconcileTaskSet(context.env.DB, eventId, submissionIds, now, {
-        kind: actor.personId === null ? "api_token" : "user",
-        personId: actor.personId,
-        requestId: actor.requestId,
-      });
+      await reconcileTaskSet(
+        context.env.DB,
+        eventId,
+        submissionIds,
+        now,
+        // The reconciler's actor names a person; a credential whose issuer we
+        // could not resolve is honestly nobody, and it takes the undefined
+        // rather than a fabricated id.
+        actor.personId === null
+          ? undefined
+          : { kind: actor.kind, personId: actor.personId, requestId: actor.requestId },
+      );
     }
 
     const changes = results.map((result) => Number(result.meta?.changes ?? 0));
@@ -275,7 +303,7 @@ const removeFromConference = defineApiRoute(
           removed_memberships: changes[2] ?? 0,
           revoked_sessions: changes[3] ?? 0,
           consumed_links: changes[4] ?? 0,
-          published_sessions_kept: holdings.filter((row) => isPublished(row.status)).map((row) => row.title),
+          published_sessions_kept: holdings.filter((row) => isPublished(row)).map((row) => row.title),
         },
       },
       200,

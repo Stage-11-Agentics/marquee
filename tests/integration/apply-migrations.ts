@@ -21,6 +21,7 @@ import agentEvaluatorSeatsMigrationSql from "../../migrations/0013_agent_evaluat
 import inboundDeliveryStateMigrationSql from "../../migrations/0014_inbound_delivery_state.sql?raw";
 import evaluationOverridesMigrationSql from "../../migrations/0015_evaluation_overrides.sql?raw";
 import peopleImportUndoReceiptsMigrationSql from "../../migrations/0016_people_import_undo_receipts.sql?raw";
+import orgSettingsMigrationSql from "../../migrations/0017_org_settings.sql?raw";
 import eventDeletionMigrationSql from "../../migrations/0018_event_deletion.sql?raw";
 import outreachTargetingMigrationSql from "../../migrations/0019_outreach_targeting.sql?raw";
 import portalInvitesMigrationSql from "../../migrations/0020_portal_invites.sql?raw";
@@ -104,6 +105,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(inboundDeliveryStateMigrationSql),
     ...splitStatements(evaluationOverridesMigrationSql),
     ...splitStatements(peopleImportUndoReceiptsMigrationSql),
+    ...splitStatements(orgSettingsMigrationSql),
     ...splitStatements(eventDeletionMigrationSql),
     ...splitStatements(outreachTargetingMigrationSql),
     ...splitStatements(portalInvitesMigrationSql),
