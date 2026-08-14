@@ -24,6 +24,7 @@
     "assemble:public": "node scripts/checks/assemble-public.mjs",
     "check:readme": "node scripts/checks/stub-command.mjs check:readme MRQ-57 \"self-host deploy sequence is not implemented\"",
     "trace:ac": "node scripts/checks/trace-ac.mjs",
+    "guard:merge": "bash scripts/checks/portal-merge-guard.sh",
     "check:mirror": "node scripts/checks/stub-command.mjs check:mirror MRQ-25/MRQ-26 \"Airtable mirror and dedicated test base are not implemented\"",
     "reset:demo": "node scripts/reset-demo.mjs",
     "smoke:mail": "node scripts/checks/stub-command.mjs smoke:mail MRQ-24 \"mail delivery and inbox oracle are not implemented\"",
