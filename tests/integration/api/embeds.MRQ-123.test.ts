@@ -43,8 +43,10 @@ test("CONTRACT · EMB-15 · the HTML snippet a saved embed hands over carries a 
   const { data } = await created.json() as { data: { snippet: string } };
 
   expect(data.snippet).toContain("<iframe");
+  // Twice: the attribute survives a host CSP that blocks inline styles and a
+  // host `!important` rule, both of which collapse the style alone.
+  expect(data.snippet).toMatch(/ height="\d+"/);
   expect(data.snippet).toMatch(/style="[^"]*height:\d+px/);
-  expect(data.snippet).toMatch(/style="[^"]*min-height:\d+px/);
   // The two it always had are still there.
   expect(data.snippet).toContain("width:100%");
   expect(data.snippet).toContain("border:0");

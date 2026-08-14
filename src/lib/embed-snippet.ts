@@ -1,4 +1,5 @@
 import type { EmbedKind } from "../db/schema";
+import { escapeHtml } from "../jobs/mail/render";
 
 /**
  * The height the generated snippet carries.
@@ -16,18 +17,55 @@ import type { EmbedKind } from "../db/schema";
  * no such failure mode: the widget scrolls inside whatever height it is given,
  * and a host who wants a different one edits a number they can see.
  *
- * The numbers are per kind because the content is: an agenda is a day of rows,
- * a call for speakers is a short card.
+ * The numbers are per kind because the content is, and they are measured rather
+ * than guessed — rendered against a seeded runtime in Chromium at a 600px and a
+ * 375px host. An agenda or sessions embed shows three complete cards at 720px.
+ * A call for speakers block is a promotional card and a link, not the form: its
+ * content ends around 174px, so 240px frames it without dead space beneath.
+ * A speakers gallery card is far taller than either, so it takes 900px.
+ *
+ * The gallery is the one kind a fixed height cannot fully satisfy: at a 600px
+ * host a single speaker card runs past 1100px, so two complete cards would need
+ * an iframe over 2300px tall — not an embed, a page. 900px shows one card whole
+ * with the next beginning under it, which is what tells a visitor the gallery
+ * scrolls. That the card is that tall at a narrow width is worth looking at on
+ * its own; it is not what this fix is about.
  */
 export const EMBED_SNIPPET_HEIGHT_PX: Readonly<Record<EmbedKind, number>> = {
   agenda: 720,
   sessions: 720,
-  speakers: 720,
-  cfp: 420,
+  speakers: 900,
+  cfp: 240,
 };
 
 /** The style attribute every generated HTML snippet carries. */
 export function embedSnippetStyle(kind: EmbedKind): string {
   const height = EMBED_SNIPPET_HEIGHT_PX[kind];
-  return `width:100%;height:${height}px;min-height:${height}px;border:0`;
+  return `width:100%;height:${height}px;border:0`;
+}
+
+/**
+ * The whole `<iframe>` a host pastes, so the three builders cannot disagree
+ * about anything in it — not the height, and not the escaping either.
+ *
+ * The height is stated TWICE, as an attribute and in the style, because the
+ * style alone is not a floor. Measured: under a host CSP that permits the frame
+ * and blocks inline styles the frame reverts to the 150px default, and a host
+ * `!important` rule collapses it outright. The attribute survives both, and is
+ * also the number a host most easily finds and edits.
+ *
+ * `title` and the calendar link's text are conference-controlled strings going
+ * into an HTML attribute and into HTML text. The snippet is delivered through a
+ * textarea, which decodes one layer of entities before anyone copies it, so an
+ * unescaped quote in a conference name is an executable attribute on whatever
+ * page it is pasted into.
+ */
+export function embedIframeSnippet(source: string, title: string, kind: EmbedKind): string {
+  const height = EMBED_SNIPPET_HEIGHT_PX[kind];
+  return `<iframe src="${escapeHtml(source)}" title="${escapeHtml(title)}" loading="lazy" width="100%" height="${height}" style="${embedSnippetStyle(kind)}"></iframe>`;
+}
+
+/** The calendar link, escaped on the same terms. */
+export function embedCalendarLink(source: string, label: string): string {
+  return `<a href="${escapeHtml(source)}">Add ${escapeHtml(label)} to calendar</a>`;
 }
