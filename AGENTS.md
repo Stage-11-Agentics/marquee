@@ -52,6 +52,9 @@ git fetch github
 git worktree add ../Marquee-worktrees/<branch> -b <branch> github/main
 ```
 
+`-b` creates the branch and fails loudly if the name exists. Resuming a branch that is
+already pushed? Drop `-b`, name the branch, then `git rebase github/main` in the worktree.
+
 **Cut from `github/main`, never from `main`.** The rule directly above is what makes
 local `main` untrustworthy: the primary checkout is parked and nobody pulls it. On
 2026-08-13 it was 29 commits behind and missing `a04f80b1`, so every worktree cut from

@@ -88,6 +88,14 @@ git fetch github
 git worktree add ../Marquee-worktrees/<branch> -b <branch> github/main
 ```
 
+`-b` creates the branch, so it fails loudly if that name already exists. Resuming a branch
+someone already pushed? Drop `-b`, name the branch, and bring it up to date before working:
+
+```sh
+git worktree add ../Marquee-worktrees/<branch> <branch>
+git -C ../Marquee-worktrees/<branch> rebase github/main
+```
+
 **Cut from `github/main`, never from `main`.** The rule above is precisely what makes the
 local `main` pointer untrustworthy: the primary checkout is parked by design and nobody
 pulls it, so it moves only when a human happens to. On 2026-08-13 it sat **29 commits
