@@ -2,6 +2,7 @@ import type { ComponentChildren, JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
+import { EVENT_TIMEZONES } from "../../lib/event-time";
 import { PageHeader } from "../shell/components";
 import { EVENT_NAME_CHANGED } from "../shell/identity";
 import { OrganizersCard } from "../setup/OrganizersCard";
@@ -266,7 +267,7 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
             <Field label="Tagline" className="span-2"><input value={model.event.tagline ?? ""} onInput={(event) => updateModel((current) => ({ ...current, event: { ...current.event, tagline: event.currentTarget.value } }))} /></Field>
             <Field label="Starts"><input type="date" value={model.event.starts_on} onInput={(event) => updateModel((current) => ({ ...current, event: { ...current.event, starts_on: event.currentTarget.value } }))} /></Field>
             <Field label="Ends"><input type="date" value={model.event.ends_on} onInput={(event) => updateModel((current) => ({ ...current, event: { ...current.event, ends_on: event.currentTarget.value } }))} /></Field>
-            <Field label="Timezone" className="span-2"><select value={model.event.timezone} onChange={(event) => updateModel((current) => ({ ...current, event: { ...current.event, timezone: event.currentTarget.value } }))}><option value="America/New_York">America/New_York</option><option value="America/Los_Angeles">America/Los_Angeles</option><option value="Europe/London">Europe/London</option><option value="UTC">UTC</option></select><small>Agenda and calendar invites inherit this timezone.</small></Field>
+            <Field label="Timezone" className="span-2"><select value={model.event.timezone} onChange={(event) => updateModel((current) => ({ ...current, event: { ...current.event, timezone: event.currentTarget.value } }))}>{[...new Set([model.event.timezone, ...EVENT_TIMEZONES])].map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select><small>Agenda and calendar invites inherit this timezone.</small></Field>
             <Field label="Venue" className="span-2"><input value={model.event.venue ?? ""} onInput={(event) => updateModel((current) => ({ ...current, event: { ...current.event, venue: event.currentTarget.value } }))} /></Field>
             <Field label="Conference logo" className="span-2"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) updateModel((current) => ({ ...current, event: { ...current.event, logo_key: file.name } })); }} /><small>{model.event.logo_key ? `Selected: ${model.event.logo_key}` : "PNG, JPG, or WebP"}</small></Field>
           </div>
