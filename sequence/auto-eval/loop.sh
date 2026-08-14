@@ -9,7 +9,12 @@
 #
 # See README.md for the structure and the rules these verbs enforce.
 
-set -euo pipefail
+# -E (errtrace) is load-bearing, not decoration: without it an ERR trap set
+# inside a function is NOT inherited by the functions that function calls, so
+# cmd_fire's cleanup trap never runs when the kickoff refuses inside atlas() —
+# errexit kills the script first and the deploy freeze is left on the whole
+# fleet with no diagnostic. tests/node/auto-eval-guards.test.mjs proves it.
+set -Eeuo pipefail
 
 # --- configuration ---------------------------------------------------------
 MARQUEE_ROOT=${MARQUEE_ROOT:-/Users/atin/Projects/Stage11/deployments/Marquee}
@@ -280,6 +285,10 @@ one mutable site interleave their data and both become unreadable."
     "$round" "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$FREEZE_FILE"
   say "deploy freeze declared at $FREEZE_FILE"
 
+  # The `die` in this trap body is load-bearing. Under -E the ERR trap fires
+  # twice — once inside atlas(), once here — and `die` exits on the first
+  # firing. Soften it to a bare `rm` and the second firing falls through to the
+  # success path, so a refused kickoff would report a round that never started.
   trap 'rm -f "$FREEZE_FILE"; die "kickoff refused — freeze lifted, no round started"' ERR
   atlas "chmod +x ~/$KIT_ATLAS/kickoff-round.sh && ~/$KIT_ATLAS/kickoff-round.sh $round $sha"
   trap - ERR
