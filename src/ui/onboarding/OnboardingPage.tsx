@@ -35,6 +35,7 @@ interface SendResponse {
   selected: number;
   queued: number;
   duplicate: number;
+  skipped: Array<{ person_id: string; name: string; reason: string }>;
   outbox_ids: string[];
   outbox_rows: Array<{ person_id: string; entity_id: string; outbox_id: string; inserted: boolean }>;
 }
@@ -189,7 +190,7 @@ function ComposeDrawer({ eventId, rows, onClose }: { eventId: string; rows: Onbo
     try {
       const next = await requestJson<{ subject: string; text: string; to_email: string }>(`/api/v1/events/${encodeURIComponent(eventId)}/comms/preview`, "/api/v1/events/{eventId}/comms/preview", {
         method: "POST",
-        body: JSON.stringify({ person_id: firstRecipient.row.person.id, submission_id: firstRecipient.submissionId ?? undefined, role: "speaker", ...message }),
+        body: JSON.stringify({ person_id: firstRecipient.row.person.id, submission_id: firstRecipient.submissionId ?? undefined, ...message }),
       });
       setPreview(next);
     } catch (caught) { setError(errorSummary(caught)); }
@@ -201,7 +202,7 @@ function ComposeDrawer({ eventId, rows, onClose }: { eventId: string; rows: Onbo
     try {
       const next = await requestJson<SendResponse>(`/api/v1/events/${encodeURIComponent(eventId)}/comms/send`, "/api/v1/events/{eventId}/comms/send", {
         method: "POST",
-        body: JSON.stringify({ selector: { recipient_pairs: recipientPairs, role: "speaker", task_state: "open" }, ...message }),
+        body: JSON.stringify({ selector: { recipient_pairs: recipientPairs, task_state: "open" }, ...message }),
       });
       setResult(next);
     } catch (caught) { setError(errorSummary(caught)); }
@@ -217,7 +218,7 @@ function ComposeDrawer({ eventId, rows, onClose }: { eventId: string; rows: Onbo
       <label class="onboarding-field">Body<textarea rows={8} value={body} readOnly={!custom} onInput={(event) => setBody((event.currentTarget as HTMLTextAreaElement).value)} /></label>
       <div class="onboarding-merge-note">Merge fields render once through the shared mail seam. Preview uses the first selected speaker and their outstanding task context.</div>
       {preview ? <section class="onboarding-preview"><span>Preview · {preview.to_email}</span><strong>{preview.subject}</strong><p>{preview.text}</p></section> : null}
-      {result ? <section class="onboarding-outbox-result" aria-live="polite"><strong>{result.queued} queued · {result.duplicate} already in outbox</strong>{result.outbox_rows.map((row) => <div key={`${row.person_id}-${row.outbox_id}`}><span>{rows.find((candidate) => candidate.person.id === row.person_id)?.person.name ?? row.person_id}</span><Chip tone={row.inserted ? "success" : "warning"}>{row.inserted ? "queued" : "duplicate"}</Chip></div>)}</section> : null}
+      <div class="onboarding-outbox-result-slot" aria-live="polite">{result ? <section class="onboarding-outbox-result"><strong>{result.selected} selected · {result.queued} queued · {result.duplicate} already in outbox · {result.skipped.length} skipped</strong>{result.outbox_rows.map((row) => <div key={`${row.person_id}-${row.outbox_id}`}><span>{rows.find((candidate) => candidate.person.id === row.person_id)?.person.name ?? row.person_id}</span><Chip tone={row.inserted ? "success" : "warning"}>{row.inserted ? "queued" : "duplicate"}</Chip></div>)}{result.skipped.map((row) => <div key={`skipped-${row.person_id}`}><span><strong>{row.name}</strong><small>{row.reason}</small></span><Chip tone="warning">skipped</Chip></div>)}</section> : null}</div>
       {error ? <div class="onboarding-inline-error" role="alert">{error}</div> : null}
     </div>
     <footer class="onboarding-drawer-foot"><Button small onClick={() => void previewMessage()} disabled={busy !== null || firstRecipient === undefined}>{busy === "preview" ? "Rendering…" : "Preview merge"}</Button><button class="onboarding-fixed-action" type="button" onClick={() => void queue()} disabled={busy !== null || personIds.length === 0}>{busy === "send" ? "Queueing…" : `Queue reminder (${personIds.length})`}</button></footer>

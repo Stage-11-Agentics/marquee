@@ -144,10 +144,16 @@ const previewResponse = z.object({
   text: z.string(),
   to_email: z.string(),
 });
+const skippedRecipientSchema = z.object({
+  person_id: z.string(),
+  name: z.string(),
+  reason: z.string(),
+});
 const sendResponse = z.object({
   selected: z.number(),
   queued: z.number(),
   duplicate: z.number(),
+  skipped: z.array(skippedRecipientSchema),
   outbox_ids: z.array(z.string()),
   outbox_rows: z.array(z.object({
     person_id: z.string(),
@@ -531,6 +537,127 @@ function mergeDataFor(row: RecipientRow): MergeData {
   });
 }
 
+interface SkippedRecipient {
+  person_id: string;
+  name: string;
+  reason: string;
+}
+
+interface ReminderPerson {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface ReminderParticipation {
+  person_id: string;
+  submission_id: string;
+  role: string;
+}
+
+interface ReminderMembership {
+  person_id: string;
+  role: string;
+}
+
+function recipientKey(personId: string, submissionId: string | null): string {
+  return `${personId}\u0000${submissionId ?? ""}`;
+}
+
+/**
+ * Exact board selections are a promise to account for every selected pair.
+ * `recipientsFor` intentionally returns only rows that satisfy its selector;
+ * this companion lookup supplies a human-readable outcome for each pair that
+ * did not survive that resolution.
+ */
+async function skippedRecipientsFor(
+  db: D1Database,
+  eventId: string,
+  selector: ReminderSelector,
+  requestedPairs: readonly ReminderRecipientPair[],
+  resolved: readonly RecipientRow[],
+): Promise<SkippedRecipient[]> {
+  const resolvedKeys = new Set(resolved.map((row) => recipientKey(row.person_id, row.submission_id)));
+  const missing = requestedPairs.filter((pair) => !resolvedKeys.has(recipientKey(pair.person_id, pair.submission_id)));
+  if (missing.length === 0) return [];
+
+  const personIds = unique(missing.map((pair) => pair.person_id));
+  const [people, participations, memberships] = await Promise.all([
+    db.prepare(
+      `SELECT id, name, email FROM people
+       WHERE id IN (SELECT CAST(value AS TEXT) FROM json_each(?))`,
+    ).bind(JSON.stringify(personIds)).all<ReminderPerson>(),
+    db.prepare(
+      `SELECT participation.person_id, participation.submission_id, participation.role
+       FROM participations participation
+       JOIN submissions submission ON submission.id = participation.submission_id
+       WHERE submission.event_id = ?
+         AND participation.person_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))`,
+    ).bind(eventId, JSON.stringify(personIds)).all<ReminderParticipation>(),
+    db.prepare(
+      `SELECT person_id, role FROM memberships
+       WHERE event_id = ?
+         AND person_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))`,
+    ).bind(eventId, JSON.stringify(personIds)).all<ReminderMembership>(),
+  ]);
+  const peopleById = new Map(people.results.map((person) => [person.id, person]));
+  const participationsByKey = new Set(participations.results.map((row) => recipientKey(row.person_id, row.submission_id)));
+  const participationRolesByKey = new Map<string, Set<string>>();
+  for (const row of participations.results) {
+    const key = recipientKey(row.person_id, row.submission_id);
+    const roles = participationRolesByKey.get(key) ?? new Set<string>();
+    roles.add(row.role);
+    participationRolesByKey.set(key, roles);
+  }
+  const membershipsByPerson = new Map<string, Set<string>>();
+  for (const row of memberships.results) {
+    const roles = membershipsByPerson.get(row.person_id) ?? new Set<string>();
+    roles.add(row.role);
+    membershipsByPerson.set(row.person_id, roles);
+  }
+  const participationPeople = new Set(participations.results.map((row) => row.person_id));
+
+  return missing.map((pair) => {
+    const person = peopleById.get(pair.person_id);
+    if (!person) return { person_id: pair.person_id, name: pair.person_id, reason: "person record was not found" };
+    if (!person.email.trim()) return { person_id: person.id, name: person.name, reason: "no email address on file" };
+    const inEvent = membershipsByPerson.has(person.id) || participationPeople.has(person.id);
+    if (!inEvent) return { person_id: person.id, name: person.name, reason: "not part of this conference" };
+    if (pair.submission_id !== null) {
+      const pairKey = recipientKey(pair.person_id, pair.submission_id);
+      if (!participationsByKey.has(pairKey)) return { person_id: person.id, name: person.name, reason: "not a participant on this Session" };
+      if (selector.role && !participationRolesByKey.get(pairKey)?.has(selector.role)) {
+        return { person_id: person.id, name: person.name, reason: `does not have the ${selector.role.replace(/_/g, " ")} role on this Session` };
+      }
+    } else {
+      const isSpeaker = membershipsByPerson.get(person.id)?.has("speaker")
+        || participations.results.some((row) => row.person_id === person.id && ["speaker", "co_speaker"].includes(row.role));
+      if (!isSpeaker) return { person_id: person.id, name: person.name, reason: "not a speaker on this conference" };
+    }
+    return { person_id: person.id, name: person.name, reason: "no open task remains" };
+  });
+}
+
+async function resolveReminderSelection(
+  db: D1Database,
+  eventId: string,
+  selector: ReminderSelector,
+): Promise<{ selected: number; recipients: RecipientRow[]; skipped: SkippedRecipient[] }> {
+  const resolved = await recipientsFor(db, eventId, selector);
+  const exactPairs = selector.recipient_pairs ? uniqueRecipientPairs(selector.recipient_pairs) : null;
+  const skipped = resolved
+    .filter((row) => !row.email.trim())
+    .map((row) => ({ person_id: row.person_id, name: row.name, reason: "no email address on file" }));
+  const recipients = resolved.filter((row) => Boolean(row.email.trim()));
+  if (!exactPairs) return { selected: resolved.length, recipients, skipped };
+  const unresolved = await skippedRecipientsFor(db, eventId, selector, exactPairs, resolved);
+  return {
+    selected: exactPairs.length,
+    recipients,
+    skipped: [...skipped, ...unresolved],
+  };
+}
+
 const getTemplates = defineApiRoute(
   {
     method: "get",
@@ -724,7 +851,8 @@ const sendComms = defineApiRoute(
     } else {
       rejectUnknownMergeFields(body.subject!, body.body!);
     }
-    const recipients = await recipientsFor(context.env.DB, eventId, body.selector);
+    const selection = await resolveReminderSelection(context.env.DB, eventId, body.selector);
+    const recipients = selection.recipients;
     const queued = await enqueueBulkReminder({
       db: context.env.DB,
       eventId,
@@ -770,7 +898,7 @@ const sendComms = defineApiRoute(
       })];
     });
     if (auditRows.length > 0) await context.env.DB.batch(auditRows);
-    return context.json({ selected: recipients.length, queued: outboxIds.length, duplicate, outbox_ids: outboxIds, outbox_rows: outboxRows }, 202);
+    return context.json({ selected: selection.selected, queued: outboxIds.length, duplicate, skipped: selection.skipped, outbox_ids: outboxIds, outbox_rows: outboxRows }, 202);
   },
 );
 

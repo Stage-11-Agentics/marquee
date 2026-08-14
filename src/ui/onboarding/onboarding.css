@@ -155,8 +155,12 @@
 .onboarding-preview > span { color: var(--muted); font: 9px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .onboarding-preview strong { font-size: 13px; }
 .onboarding-preview p { color: var(--ink-soft); font-size: 11px; line-height: 1.5; margin: 0; white-space: pre-wrap; }
+.onboarding-outbox-result-slot { min-height: 38px; }
 .onboarding-outbox-result > strong { font: 600 10px/1.2 var(--mono); }
 .onboarding-outbox-result > div { align-items: center; border-top: 1px solid var(--line); display: flex; font: 10px/1.2 var(--mono); justify-content: space-between; padding-top: 7px; }
+.onboarding-outbox-result > div > span { display: grid; gap: 3px; min-width: 0; }
+.onboarding-outbox-result > div > span > strong { font: 600 10px/1.2 var(--mono); }
+.onboarding-outbox-result > div > span small { color: var(--alarm); font: 10px/1.35 var(--sans); }
 .onboarding-inline-error { font-size: 11px; line-height: 1.4; }
 
 @media (max-width: 820px) {
