@@ -109,7 +109,8 @@
 .track-chips, .slot-row { align-items: center; display: flex; gap: 4px; min-width: 0; overflow: hidden; }
 .track-chip { border-left-width: 3px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 .slot-row { margin-top: 4px; }
-.slot-chip { background: var(--success-soft); border-color: #b6dcc7; color: #0c6b41; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.slot-chip { background: var(--success-soft); border-color: #b6dcc7; color: #0c6b41; max-width: 220px; min-width: 0; overflow: hidden; }
+.slot-chip > span { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .not-public { background: var(--warning-soft); border-color: #e3cda2; color: var(--warning); }
 .state-row td { height: 300px; text-align: center; }
 .state-row strong, .state-row span, .state-row .button { display: block; margin: 8px auto; }
