@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 
 import { formatFileSize, type FileAnswerView } from "../../lib/file-answers";
 import { eventTimeLabel, localDateTimeToInstant } from "../../lib/event-time";
@@ -125,6 +125,28 @@ interface RecordData {
 interface Props { eventId: string; submissionId: string; navigate: (target: string) => void; }
 
 type LoadState = { kind: "loading" } | { kind: "error"; message: string; notFound: boolean } | { kind: "ready"; record: RecordData };
+
+/**
+ * Which value an editable field should hold after the record reloads.
+ *
+ * `reload()` runs after every successful write on this page — assigning a
+ * reviewer, publishing, deciding, resending, overriding a score, editing
+ * participants — and it reseeded the content editor from the server every time.
+ * An organizer part-way through a long abstract lost it to any of those, with
+ * no failure and no message: the eval only caught the failed-save route, but
+ * there were eight.
+ *
+ * The signal is whether the operator has TOUCHED the field, not whether its
+ * text currently differs from the server's. Comparing text loses the one case
+ * that matters most: type something, save, then think better of it and put the
+ * original back while the save is still in flight — the field matches the old
+ * baseline again, so an equality test calls it untouched and replaces a
+ * deliberate undo with the value being saved. An edit is an edit even when it
+ * lands back where it started.
+ */
+export function adoptServerValue(edited: boolean, current: string, incoming: string): string {
+  return edited ? current : incoming;
+}
 
 /** A real 404 and a dropped connection call for different headlines — the
  * organizer's retry saw both as "not available" and repeated a request that
@@ -398,6 +420,19 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [busy, setBusy] = useState("");
   const [draftTitle, setDraftTitle] = useState("");
   const [draftAbstract, setDraftAbstract] = useState("");
+  const [contentError, setContentError] = useState("");
+  /**
+   * Keystrokes into the two content fields, and the count as of the last save
+   * of them that landed. Edited means the two disagree.
+   *
+   * A boolean cleared on success loses the operator who keeps typing WHILE the
+   * save is in flight: their keystrokes set the flag, the response clears it,
+   * and the refresh then overwrites the newer text with what was sent. The
+   * count taken at send is compared against the count now, so anything typed
+   * after the request left still reads as edited.
+   */
+  const contentEdits = useRef(0);
+  const contentSavedAtEdit = useRef(0);
   const [contentConfirming, setContentConfirming] = useState(false);
   const [selectedReviewers, setSelectedReviewers] = useState<Record<string, string>>({});
   const [schedule, setSchedule] = useState({ starts_at: "", duration_min: "30", room_id: "", track_id: "" });
@@ -430,10 +465,15 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
   useEffect(() => {
     const controller = new AbortController();
-    setState({ kind: "loading" });
+    // A refresh is not a first load. Blanking to "loading" unmounted the whole
+    // record, and with it every child's state — the score-override form's typed
+    // score and comment among them, which no page-level guard can protect
+    // because they do not live on the page. The record stays on screen while it
+    // refetches; only the first load has nothing to show.
+    setState((current) => (current.kind === "ready" ? current : { kind: "loading" }));
     apiFetch<RecordData>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}`, { signal: controller.signal, route: SUBMISSION_ROUTE })
-      .then((record) => { setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setDraftTitle(record.title); setDraftAbstract(record.abstract ?? ""); setMessageRecipientId((current) => current || record.participants.find((participant) => participant.role !== "submitter")?.id || record.participants[0]?.id || ""); setMessageSubject((current) => current || `A note about ${record.title}`); setMessageBody((current) => current || "Hi {{speaker.first_name}},\n\n"); setState({ kind: "ready", record }); })
-      .catch((error: unknown) => { if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) }); });
+      .then((record) => { setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setDraftTitle((current) => adoptServerValue(contentEdits.current !== contentSavedAtEdit.current, current, record.title)); setDraftAbstract((current) => adoptServerValue(contentEdits.current !== contentSavedAtEdit.current, current, record.abstract ?? "")); setMessageRecipientId((current) => current || record.participants.find((participant) => participant.role !== "submitter")?.id || record.participants[0]?.id || ""); setMessageSubject((current) => current || `A note about ${record.title}`); setMessageBody((current) => current || "Hi {{speaker.first_name}},\n\n"); setState({ kind: "ready", record }); setBusy(""); })
+      .catch((error: unknown) => { if (!controller.signal.aborted) { setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) }); setBusy(""); } });
     return () => controller.abort();
   }, [eventId, submissionId, reloadKey]);
 
@@ -467,16 +507,10 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
    * record" must not cost the organizer the record they were reading.
    */
   const participantWrite = async (name: string, path: string, init: RequestInit, route: string) => {
-    setBusy(name);
     setParticipantError("");
-    try {
-      await apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) }, route });
-      reload();
-      return true;
-    } catch (error: unknown) {
-      setParticipantError(errorSummary(error));
-      return false;
-    } finally { setBusy(""); }
+    return writeThenRefresh(name,
+      () => apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) }, route }).then(() => undefined),
+      (error) => setParticipantError(errorSummary(error)));
   };
 
   const addParticipant = async (event: Event) => {
@@ -508,16 +542,47 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
    * record being gone. Recoverable refusals now answer beside the control that
    * asked; everything else still takes the page, because then it is true.
    */
-  const act = async (name: string, path: string, init: RequestInit = {}, route = SUBMISSION_ROUTE) => {
+  /**
+   * THE rule for a write that refreshes this record: `busy` is held until the
+   * REFRESH lands, not until the write returns.
+   *
+   * Keeping the record rendered through a refresh is what protects child state
+   * — the score-override form's typed score and comment live in the row, not on
+   * the page — and it also leaves stale chips, status and actions on screen. A
+   * `finally { setBusy("") }` released them the instant the write returned, so
+   * for the length of the GET an operator could act on a record that had
+   * already changed. Five writes did that, and patching five `finally`s is how
+   * a sixth arrives wrong next week.
+   *
+   * So the lifecycle lives here and nowhere else: this sets busy, and the load
+   * effect clears it when the record lands — on success and on failure alike,
+   * or a failed refresh would leave the page disabled with nothing coming. The
+   * only path that clears busy itself is the one where no refresh is coming.
+   */
+  const writeThenRefresh = async (name: string, run: () => Promise<void>, onFailure: (error: unknown) => void): Promise<boolean> => {
     setBusy(name);
-    setActionError(null);
     try {
-      await apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) }, route });
+      await run();
       reload();
+      return true;
     } catch (error: unknown) {
-      if (isRefusal(error)) setActionError({ action: name, message: errorSummary(error) });
-      else setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) });
-    } finally { setBusy(""); }
+      onFailure(error);
+      setBusy("");
+      return false;
+    }
+  };
+
+  /** A child that does its own write and then asks the record to catch up. */
+  const refreshRecord = useCallback(() => { setBusy("refresh"); reload(); }, [reload]);
+
+  const act = async (name: string, path: string, init: RequestInit = {}, route = SUBMISSION_ROUTE): Promise<boolean> => {
+    setActionError(null);
+    return writeThenRefresh(name,
+      () => apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) }, route }).then(() => undefined),
+      (error) => {
+        if (isRefusal(error)) setActionError({ action: name, message: errorSummary(error) });
+        else setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) });
+      });
   };
 
   const changePublication = async (published: boolean) => {
@@ -533,8 +598,14 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const decide = async () => {
     if (!decisionRequest) return;
     const recommendation = decisionRequest;
+    // The feedback is the same words the speaker reads in the decision mail, so
+    // neither it nor the dialog holding it goes away until the decision is
+    // recorded. Keeping the text while closing the dialog was not enough: the
+    // words survived in state with nothing on screen to reach them, and the
+    // next action cleared them.
+    const decided = await act(recommendation, "/decision", { method: "POST", body: JSON.stringify({ recommendation, feedback_md: feedbackDraft.trim() || null }) }, DECISION_ROUTE);
+    if (!decided) return;
     setDecisionRequest(null);
-    await act(recommendation, "/decision", { method: "POST", body: JSON.stringify({ recommendation, feedback_md: feedbackDraft.trim() || null }) }, DECISION_ROUTE);
     setFeedbackDraft("");
   };
 
@@ -544,8 +615,8 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     const recipient = currentRecord?.participants.find((participant) => participant.id === messageRecipientId);
     if (!recipient) { setMessageError("Choose a participant before sending."); return; }
     if (!messageSubject.trim() || !messageBody.trim()) { setMessageError("Subject and message are required."); return; }
-    setBusy("message"); setMessageError(""); setMessageNotice("");
-    try {
+    setMessageError(""); setMessageNotice("");
+    await writeThenRefresh("message", async () => {
       const body = await apiFetch<{ queued?: number }>(`/api/v1/events/${encodeURIComponent(eventId)}/comms/send`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -553,16 +624,12 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         route: COMMS_SEND_ROUTE,
       });
       setMessageNotice(body.queued ? "Message queued in the conference outbox." : "That message was already queued for this participant.");
-      reload();
-    } catch (error: unknown) {
-      setMessageError(errorSummary(error));
-    } finally { setBusy(""); }
+    }, (error) => setMessageError(errorSummary(error)));
   };
 
   const resendDecision = async () => {
-    setBusy("resend");
     setResendNotice("");
-    try {
+    await writeThenRefresh("resend", async () => {
       const result = await apiFetch<{ outbox_inserted?: boolean }>(
         `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/decision/resend`,
         { method: "POST", headers: { "content-type": "application/json" }, route: RESEND_ROUTE },
@@ -570,10 +637,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
       setResendNotice(result.outbox_inserted === false
         ? "That decision was already queued."
         : "Decision queued in the conference outbox.");
-      reload();
-    } catch (error: unknown) {
-      setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) });
-    } finally { setBusy(""); }
+    }, (error) => setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) }));
   };
 
   const assign = async (roundId: string) => {
@@ -597,19 +661,13 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
    * dead link and the wrong one for "that score is off the plan's scale".
    */
   const writeOverride = async (evaluation: EvaluationEvidence, init: RequestInit): Promise<boolean> => {
-    setBusy(`override-${evaluation.id}`);
     setOverrideError("");
-    try {
-      await apiFetch<unknown>(
+    return writeThenRefresh(`override-${evaluation.id}`,
+      () => apiFetch<unknown>(
         `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${overridePath(evaluation)}`,
         { ...init, headers: { "content-type": "application/json" }, route: OVERRIDE_ROUTE },
-      );
-      reload();
-      return true;
-    } catch (error: unknown) {
-      setOverrideError(errorSummary(error));
-      return false;
-    } finally { setBusy(""); }
+      ).then(() => undefined),
+      (error) => setOverrideError(errorSummary(error)));
   };
 
   const overrideScore = async (evaluation: EvaluationEvidence, score: number, comment: string): Promise<boolean> =>
@@ -627,16 +685,41 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
    */
   const isDraftRecord = state.kind === "ready" && state.record.status === "draft";
 
+  /**
+   * This editor holds prose the organizer typed, so it does not go through
+   * `act`. `act` answers a refused write beside the control and gives the page
+   * to everything else — correct for assign or publish, where a lost page
+   * costs a click. Here the page IS the work: a dropped connection replaced the
+   * record with "Record unavailable · Your work is not lost", and Retry
+   * reloaded the record, which reseeds `draftTitle` and `draftAbstract` from
+   * the server and overwrites the edits with the values they replaced. The
+   * reassurance was false at the moment it was shown, and a long abstract went
+   * with it.
+   *
+   * The same reasoning already took the score override off `act`. A failed save
+   * now reports beside the button, the record stays on screen, and the typed
+   * title and abstract stay in the fields — so pressing Save again resubmits
+   * the same work rather than a reload having eaten it. `act`'s own policy is
+   * deliberately unchanged: a record that really is gone should still take the
+   * page.
+   */
   const saveContent = async (event: Event, confirmPublished: boolean) => {
     event.preventDefault();
     setContentConfirming(false);
+    setContentError("");
     const payload: Record<string, unknown> = { title: draftTitle, abstract: draftAbstract || null };
-    if (isDraftRecord) {
-      await act("content", "", { method: "PATCH", body: JSON.stringify(payload) }, SUBMISSION_ROUTE);
-      return;
-    }
-    if (confirmPublished) payload.confirm_published = true;
-    await act("content", "/content", { method: "PATCH", body: JSON.stringify(payload) }, CONTENT_ROUTE);
+    if (!isDraftRecord && confirmPublished) payload.confirm_published = true;
+    const path = isDraftRecord ? "" : "/content";
+    const route = isDraftRecord ? SUBMISSION_ROUTE : CONTENT_ROUTE;
+    // Taken BEFORE the request: anything typed while it is in flight leaves the
+    // count higher than this, and stays the operator's.
+    const editsAtSend = contentEdits.current;
+    await writeThenRefresh("content",
+      () => apiFetch<unknown>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`,
+        { method: "PATCH", body: JSON.stringify(payload), headers: { "content-type": "application/json" }, route },
+      ).then(() => { contentSavedAtEdit.current = editsAtSend; }),
+      (error) => setContentError(errorSummary(error)));
   };
 
   /**
@@ -714,7 +797,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     <div class="record-layout">
       <div class="record-main stack">
         <Card><CardBody><div class="record-summary"><div><span class="eyebrow">Program record</span><h2>{record.title}</h2><p>{record.abstract || "—"}</p></div><div class="record-summary-meta"><Chip>{statusLabel(record.status)}</Chip><span class="tabular">{record.time_in_stage}</span><span>{record.bypass_evaluation ? "Evaluation bypassed" : "Evaluation required"}</span></div></div><div class="record-meta-grid"><span><small>Origin</small><strong>{statusLabel(record.origin)}</strong></span><span><small>Submitted</small><strong>{moment(record.submitted_at)}</strong></span><span><small>Format</small><strong>{record.format?.name ?? "—"}</strong></span><span><small>Wave</small><strong>{record.wave?.name ?? "—"}</strong></span><span><small>Routing rule</small><strong>{record.routing?.name ?? "—"}</strong></span><span class="record-publication-status"><small>Public status</small><strong>{record.is_published ? "Live on the public site" : "Not yet public"}</strong><span>{record.is_published ? "Visible to attendees." : record.slot ? "Scheduled; publication is still off." : "Needs a room and time before it can go public."}</span></span></div>{record.slot && <div class="record-slot"><div class="record-slot-summary"><strong>{record.slot.day} · {record.slot.time} · {record.slot.room}</strong><span>{record.slot.building} · {record.slot.duration_min} min</span></div><div class="record-slot-publication"><Chip class="record-publication-chip" tone={record.slot.is_published ? "success" : "warning"}>{record.slot.is_published ? "Live on the public site" : "Not yet public"}</Chip><div class="record-publication-action" aria-live="polite">{publicationRequest ? <div class="record-publication-confirm" role="group" aria-labelledby="record-publication-confirm-title"><strong id="record-publication-confirm-title">{publicationRequest === "publish" ? "Publish this session?" : "Remove this session from the public site?"}</strong><span>{publicationRequest === "publish" ? "This Session's title, time, room, speakers, and description become public immediately." : "This Session disappears from the public agenda and embeds immediately."}</span><div class="record-publication-confirm-actions"><Button type="button" small variant={publicationRequest === "publish" ? "primary" : "danger"} disabled={Boolean(busy)} onClick={() => void changePublication(publicationRequest === "publish")}>{busy === publicationRequest ? (publicationRequest === "publish" ? "Publishing…" : "Removing…") : publicationRequest === "publish" ? "Publish this session" : "Remove from public site"}</Button><Button type="button" small variant="ghost" disabled={Boolean(busy)} onClick={() => setPublicationRequest(null)}>Cancel</Button></div></div> : publicationAction ? <Button type="button" small class="record-publication-trigger" variant={publicationAction === "publish" ? "primary" : "danger"} disabled={Boolean(busy)} onClick={() => setPublicationRequest(publicationAction)}>{publicationAction === "publish" ? "Publish this session" : "Remove from public site"}</Button> : <span class="record-publication-action-placeholder" aria-hidden="true" />}</div></div></div>}</CardBody></Card>
-        {canEditContent && <Card><CardHeader title="Session content"><span class="subtle">{contentNote(record)}</span></CardHeader><CardBody><form class="record-draft-form" onSubmit={(event) => { event.preventDefault(); if (isLivePublicly && !contentConfirming) { setContentConfirming(true); return; } void saveContent(event, isLivePublicly); }}><label class="field"><span>Title</span><input required value={draftTitle} onInput={(event) => setDraftTitle(event.currentTarget.value)} /></label><label class="field"><span>Abstract</span><textarea rows={6} value={draftAbstract} onInput={(event) => setDraftAbstract(event.currentTarget.value)} /></label><div class="record-action-row"><Button variant="primary" type="submit" class="record-content-save" disabled={Boolean(busy)}>{busy === "content" ? "Saving…" : isLivePublicly && contentConfirming ? "Confirm public update" : "Save changes"}</Button>{/* The live-record cue is said BEFORE the first click, not after it. A
+        {canEditContent && <Card><CardHeader title="Session content"><span class="subtle">{contentNote(record)}</span></CardHeader><CardBody><form class="record-draft-form" onSubmit={(event) => { event.preventDefault(); if (isLivePublicly && !contentConfirming) { setContentConfirming(true); return; } void saveContent(event, isLivePublicly); }}><label class="field"><span>Title</span><input required value={draftTitle} onInput={(event) => { contentEdits.current += 1; setDraftTitle(event.currentTarget.value); }} /></label><label class="field"><span>Abstract</span><textarea rows={6} value={draftAbstract} onInput={(event) => { contentEdits.current += 1; setDraftAbstract(event.currentTarget.value); }} /></label><div class="record-action-row"><Button variant="primary" type="submit" class="record-content-save" disabled={Boolean(busy)}>{busy === "content" ? "Saving…" : isLivePublicly && contentConfirming ? "Confirm public update" : "Save changes"}</Button>{/* The live-record cue is said BEFORE the first click, not after it. A
             published Session takes two deliberate clicks to save, and until the
             editor announced that up front the first click looked exactly like a
             silent write failure: enabled button, accepted click, no toast, and
@@ -722,7 +805,10 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
             button saw nothing happen and reloaded their typing away. The guard
             itself is a feature and is untouched; only its warning moved
             earlier. */}
-          <span class="subtle record-content-cue">{isLivePublicly && contentConfirming ? "This replaces what attendees see on the public agenda." : isDraftRecord ? "No submit action is available from this editor." : isLivePublicly ? "This Session is live on the public agenda; saving will ask you to confirm." : "Saved changes are recorded in the history below."}</span></div></form></CardBody></Card>}
+          <span class="subtle record-content-cue">{isLivePublicly && contentConfirming ? "This replaces what attendees see on the public agenda." : isDraftRecord ? "No submit action is available from this editor." : isLivePublicly ? "This Session is live on the public agenda; saving will ask you to confirm." : "Saved changes are recorded in the history below."}</span>
+          {/* Reserved height, so a failed save answers here without moving the
+              button the operator is about to press again. */}
+          <span class={`record-inline-message ${contentError ? "error" : ""}`} role={contentError ? "alert" : undefined}>{contentError || " "}</span></div></form></CardBody></Card>}
         {record.actions.can_decide && <Card><CardHeader title="Record action"><span class={record.decisions.length > 0 ? "record-decision-cue" : "subtle"}>{decidedNote(record.decisions[0])}</span></CardHeader><CardBody><div class="record-action-row">{record.status !== "accepted" && <Button variant="primary" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("approve"); setFeedbackDraft(""); }}>Accept</Button>}{record.status !== "waitlisted" && <Button disabled={Boolean(busy)} onClick={() => { setDecisionRequest("maybe"); setFeedbackDraft(""); }}>Maybe</Button>}{record.status !== "rejected" && <Button variant="danger" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("deny"); setFeedbackDraft(""); }}>Reject</Button>}<span class="subtle">Feedback (optional) is saved with the decision; accepted and rejected decisions also include it in the speaker email.</span></div></CardBody></Card>}
         {decisionRequest && <div class="record-decision-dialog" role="group" aria-labelledby="record-decision-heading"><div class="record-decision-dialog-head"><div><span class="eyebrow">Confirm record action</span><h2 id="record-decision-heading">{decisionRequest === "approve" ? "Accept this submission?" : decisionRequest === "maybe" ? "Waitlist this submission?" : "Reject this submission?"}</h2></div><button type="button" aria-label="Close decision dialog" onClick={() => setDecisionRequest(null)}>×</button></div><p>{decisionRequest === "maybe" ? "A waitlist does not send a message. Any feedback you add is saved with the decision." : "Feedback is optional. If you add it, the speaker will see the same words in the decision email."}</p><label class="field"><span>Feedback for the speaker (optional)</span><textarea rows={6} value={feedbackDraft} onInput={(event) => setFeedbackDraft(event.currentTarget.value)} placeholder="Share context the speaker can act on." /></label><div class="record-action-row"><Button type="button" onClick={() => setDecisionRequest(null)}>Cancel</Button><Button type="button" variant={decisionRequest === "deny" ? "danger" : "primary"} disabled={Boolean(busy)} onClick={() => void decide()}>{busy ? "Saving…" : decisionRequest === "approve" ? "Accept and notify" : decisionRequest === "maybe" ? "Waitlist" : "Reject and notify"}</Button></div></div>}
         {record.decisions.length > 0 && <Card><CardHeader title="Decision history"><span class="tabular">{record.decisions.length}</span></CardHeader><CardBody><div class="record-decision-list">{record.decisions.map((decision) => <article class="record-decision" key={decision.id}><div class="record-decision-head"><strong>{decision.kind === "reversal" ? `Acceptance reversed · ${statusLabel(decision.resulting_status)}` : statusLabel(decision.resulting_status)}</strong><span>{decision.decided_by_name || "Conference team"} · {moment(decision.decided_at)}</span></div><p>{decision.note || decision.feedback_md || "No feedback recorded."}</p></article>)}</div></CardBody></Card>}
@@ -745,7 +831,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           <div class="record-action-row"><Button onClick={() => navigate(speakerRecordHref)}>Edit speaker address</Button><Button variant="primary" disabled={Boolean(busy)} onClick={() => void resendDecision()}>{busy === "resend" ? "Queueing…" : "Send decision again"}</Button></div>
           {resendNotice && <p class="record-inline-message notice" role="status">{resendNotice}</p>}
         </CardBody></Card>}
-        {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={reload} />}
+        {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={refreshRecord} />}
         {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(submitEvent) => { submitEvent.preventDefault(); if (!timezone) return; const request = submissionScheduleRequest(schedule, timezone); if (!request) return; void act("schedule", request.path, request.init, request.route); }}><label class="field"><span>Starts at {eventTimeLabel(timezone)}</span><input required type="datetime-local" value={schedule.starts_at} disabled={!timezone} onInput={(inputEvent) => setSchedule({ ...schedule, starts_at: inputEvent.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(inputEvent) => setSchedule({ ...schedule, duration_min: inputEvent.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(inputEvent) => setSchedule({ ...schedule, room_id: inputEvent.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy) || !timezone}>Place on agenda</Button></form></CardBody></Card>}
         <Card><CardHeader title="Participants"><span class="tabular">{participantGroups.length}</span></CardHeader><CardBody>
           <div class="record-participants">{participantGroups.length ? participantGroups.map((group) => <div class="record-person" key={group.person_id}><strong>{participantNames.get(group.person_id) ?? group.name}</strong><span>{group.company || "Company not provided"}</span><small>{group.email}</small><div class="record-person-roles" aria-label={`${participantNames.get(group.person_id) ?? group.name} roles`}>{group.participants.map((participant) => <div class="record-person-role" key={participant.id}><span class="record-person-role-name">{statusLabel(participant.role)}</span><Chip tone={participantConfirmationTone(participant.confirmation_status)}>{participantConfirmationLabel(participant.confirmation_status)}</Chip>{canEditParticipants && participant.role !== "submitter" && <Button small variant="ghost" class="record-person-remove" aria-label={`Remove the ${statusLabel(participant.role)} role from ${participantNames.get(group.person_id) ?? group.name}`} disabled={Boolean(busy)} onClick={() => void removeParticipant(participant.id)}>Remove {statusLabel(participant.role)} role</Button>}</div>)}</div></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div>
