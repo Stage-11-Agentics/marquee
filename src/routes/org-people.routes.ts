@@ -3,6 +3,7 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { MagicLinkRow, MembershipRow, PersonRow } from "../db/schema";
+import { revokeAccessStatements } from "../lib/auth/access-revocation";
 import { INSTANCE_ORGANIZER_ROLE, mintOrganizerInvite } from "../lib/auth/instance-claim";
 import { requireOrgAdmin, requireOrgOwner } from "../lib/auth/org-admin";
 import { ORG_ACTIVITY_ACTIONS } from "../lib/activity-copy";
@@ -18,20 +19,47 @@ import { orgActivityStatement, orgActor, recordOrgActivity } from "../lib/org-ac
  * of "turn a token into a session" in this codebase (AC-282).
  */
 
+/**
+ * The roles an invite may offer.
+ *
+ * `owner` is deliberately absent: ownership moves by transfer, not by minting a
+ * second one from a link, and `speaker` is not an organizer seat at all — a
+ * speaker's way in is their participation, not a membership. Both remain legal
+ * values of `memberships.role`; this is the narrower question of what a *link*
+ * may hand out.
+ */
+const INVITABLE_ROLES = ["program_lead", "ops", "reviewer"] as const;
+
 const inviteSummary = z.object({
   id: z.string(),
   created_at: z.number(),
   expires_at: z.number(),
   used_at: z.number().nullable(),
+  /** The seat this link mints, so a pending row can say what it is for. */
+  role: z.string(),
+  /** Null is the whole organization; an id scopes the seat to one conference. */
+  event_id: z.string().nullable(),
+  event_name: z.string().nullable(),
 });
 const inviteListResponse = z.object({ data: z.array(inviteSummary) });
 const inviteCreateResponse = z.object({
   data: inviteSummary,
   /** Shown once. The row stores only the hash. */
   invite_url: z.string(),
+  /** The same row, spoken across a registration desk. Shown once, hashed at rest. */
+  short_code: z.string().nullable(),
   /** True only when a real Resend key is present; the link works either way. */
   mail_configured: z.boolean(),
 });
+const inviteCreateRequest = z
+  .object({
+    // The least authority that still means "organizer". A request that names no
+    // role must not mint the most powerful seat on the instance by omission.
+    role: z.enum(INVITABLE_ROLES).default("program_lead"),
+    /** Omitted or null is an organization-wide seat. */
+    event_id: z.string().trim().min(1).nullable().default(null),
+  })
+  .strict();
 const inviteParams = z.object({ inviteId: z.string().min(1) });
 
 const memberSummary = z.object({
@@ -41,9 +69,23 @@ const memberSummary = z.object({
   role: z.string(),
   is_you: z.boolean(),
   created_at: z.number(),
+  /** Null is the whole organization; an id is a seat that ends with one conference. */
+  event_id: z.string().nullable(),
+  event_name: z.string().nullable(),
 });
 const memberListResponse = z.object({ data: z.array(memberSummary) });
 const memberParams = z.object({ personId: z.string().min(1) });
+const removeMemberRequest = z
+  .object({
+    /**
+     * Which of the tokens they minted die with them. The dialog lists their
+     * tokens with revoke pre-checked (ruling O3) and sends back exactly what the
+     * human confirmed — some of those tokens power integrations the
+     * organization keeps, so this is show-and-choose, never a sweep.
+     */
+    revoke_token_ids: z.array(z.string().trim().min(1)).max(200).default([]),
+  })
+  .strict();
 
 const orgErrors = errorResponses([400, 401, 403, 404, 422, 429, 500]);
 
@@ -62,15 +104,41 @@ const listOrganizerInvites = defineApiRoute(
     requireOrgAdmin(context, "program:read");
     const now = Date.now();
     const rows = await context.env.DB.prepare(
-      `SELECT id, created_at, expires_at, used_at FROM magic_links
-        WHERE purpose = 'org_invite' AND used_at IS NULL AND expires_at > ?
-        ORDER BY created_at DESC, id DESC`,
+      `SELECT l.id AS id, l.created_at AS created_at, l.expires_at AS expires_at, l.used_at AS used_at,
+              l.invite_role AS invite_role, l.invite_event_id AS invite_event_id, e.name AS event_name
+         FROM magic_links l
+         LEFT JOIN events e ON e.id = l.invite_event_id
+        WHERE l.purpose = 'org_invite' AND l.used_at IS NULL AND l.expires_at > ?
+        ORDER BY l.created_at DESC, l.id DESC`,
     )
       .bind(now)
-      .all<Pick<MagicLinkRow, "id" | "created_at" | "expires_at" | "used_at">>();
-    return context.json({ data: rows.results }, 200);
+      .all<PendingInviteRow>();
+    return context.json({ data: rows.results.map(summarizeInvite) }, 200);
   },
 );
+
+type PendingInviteRow = Pick<
+  MagicLinkRow,
+  "id" | "created_at" | "expires_at" | "used_at" | "invite_role" | "invite_event_id"
+> & { event_name: string | null };
+
+/**
+ * A pending row says what seat it will mint. `invite_role` is null on invites
+ * minted before Amendment 21, which meant org-wide owner and still do — the
+ * default here is the same one `instance-claim` applies at exchange, so the
+ * list never promises a seat different from the one the link delivers.
+ */
+function summarizeInvite(row: PendingInviteRow) {
+  return {
+    id: row.id,
+    created_at: row.created_at,
+    expires_at: row.expires_at,
+    used_at: row.used_at,
+    role: row.invite_role ?? INSTANCE_ORGANIZER_ROLE,
+    event_id: row.invite_event_id,
+    event_name: row.event_name ?? null,
+  };
+}
 
 const createOrganizerInvite = defineApiRoute(
   {
@@ -79,20 +147,39 @@ const createOrganizerInvite = defineApiRoute(
     operationId: "createOrganizerInvite",
     summary: "Mint a one-time organizer invite link",
     description:
-      "Returns a single-use URL valid for seven days. Nothing is emailed; the link is handed over on whatever channel the organizers already share.",
+      "Returns a single-use URL valid for seven days, plus a speakable short code for the registration desk. The link carries the role and scope chosen here, so the recipient confirms who they are and never what they may do. Nothing is emailed; the link is handed over on whatever channel the organizers already share.",
     tags: ["Organizers"],
+    request: { body: { content: { "application/json": { schema: inviteCreateRequest } } } },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
     responses: { 201: jsonResponse(inviteCreateResponse, "The invite URL, returned once."), ...orgErrors },
   },
   async (context) => {
     const auth = requireOrgAdmin(context);
+    // The body is optional on this route by history — the CLI and the cold-start
+    // card both mint with no arguments — so an absent body means "the defaults",
+    // not a 400.
+    const parsed = inviteCreateRequest.safeParse(await readOptionalJson(context));
+    if (!parsed.success) throw ApiError.badRequest("invalid invite", parsed.error.issues[0]?.path.join("."));
+    const seat = { role: parsed.data.role, eventId: parsed.data.event_id };
+    if (seat.eventId !== null) {
+      // A scope is a promise about a conference this organization runs. Without
+      // this check an id from another tenant would mint a membership pointing
+      // into it.
+      const event = await context.env.DB.prepare("SELECT id FROM events WHERE id = ? AND org_id = ?")
+        .bind(seat.eventId, auth.orgId)
+        .first<{ id: string }>();
+      if (!event) throw ApiError.unprocessable("that conference is not on this organization", "event_id");
+    }
     const origin = new URL(context.req.url).origin;
-    const invite = await mintOrganizerInvite(context.env.DB, { origin });
+    const invite = await mintOrganizerInvite(context.env.DB, { origin, seat });
     const row = await context.env.DB.prepare(
-      "SELECT id, created_at, expires_at, used_at FROM magic_links WHERE id = ?",
+      `SELECT l.id AS id, l.created_at AS created_at, l.expires_at AS expires_at, l.used_at AS used_at,
+              l.invite_role AS invite_role, l.invite_event_id AS invite_event_id, e.name AS event_name
+         FROM magic_links l LEFT JOIN events e ON e.id = l.invite_event_id
+        WHERE l.id = ?`,
     )
       .bind(invite.id)
-      .first<Pick<MagicLinkRow, "id" | "created_at" | "expires_at" | "used_at">>();
+      .first<PendingInviteRow>();
     if (!row) throw new Error("minted_invite_disappeared");
     // The link itself is never recorded — the log says an invite exists and who
     // made it, which is what an owner reviewing access needs. A credential in an
@@ -111,14 +198,26 @@ const createOrganizerInvite = defineApiRoute(
     const resendKey = (context.env as { RESEND_API_KEY?: string }).RESEND_API_KEY;
     return context.json(
       {
-        data: row,
+        data: summarizeInvite(row),
         invite_url: invite.url,
+        short_code: invite.short_code,
         mail_configured: typeof resendKey === "string" && resendKey.trim().length > 0,
       },
       201,
     );
   },
 );
+
+/** An absent or empty body is `{}` here; malformed JSON is still a client error. */
+async function readOptionalJson(context: { req: { text: () => Promise<string> } }): Promise<unknown> {
+  const raw = (await context.req.text().catch(() => "")).trim();
+  if (raw.length === 0) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw ApiError.badRequest("body must be JSON");
+  }
+}
 
 const revokeOrganizerInvite = defineApiRoute(
   {
@@ -144,10 +243,13 @@ const revokeOrganizerInvite = defineApiRoute(
       .run();
     if ((revoked.meta.changes ?? 0) !== 1) throw ApiError.notFound("invite not found");
     const row = await context.env.DB.prepare(
-      "SELECT id, created_at, expires_at, used_at FROM magic_links WHERE id = ?",
+      `SELECT l.id AS id, l.created_at AS created_at, l.expires_at AS expires_at, l.used_at AS used_at,
+              l.invite_role AS invite_role, l.invite_event_id AS invite_event_id, e.name AS event_name
+         FROM magic_links l LEFT JOIN events e ON e.id = l.invite_event_id
+        WHERE l.id = ?`,
     )
       .bind(inviteId)
-      .first<Pick<MagicLinkRow, "id" | "created_at" | "expires_at" | "used_at">>();
+      .first<PendingInviteRow>();
     if (!row) throw ApiError.notFound("invite not found");
     // Recorded after the guarded UPDATE, so the row exists only for a revocation
     // that actually spent a live invite — a second DELETE on the same id 404s
@@ -162,7 +264,7 @@ const revokeOrganizerInvite = defineApiRoute(
       now,
       requestId: context.get("requestId") ?? null,
     });
-    return context.json({ data: row }, 200);
+    return context.json({ data: summarizeInvite(row) }, 200);
   },
 );
 
@@ -178,15 +280,30 @@ const listOrganizers = defineApiRoute(
   },
   async (context) => {
     const auth = requireOrgAdmin(context, "program:read");
+    // Conference-scoped organizer seats are listed beside the org-wide ones:
+    // ruling O4 mints them (a day-of volunteer is `ops` scoped to the event),
+    // and a seat the removal flow ends must be a seat the list shows, or the
+    // organizer cannot find what they are being asked to retire. `speaker` is
+    // excluded — it is a participation, not a seat on the instance.
     const rows = await context.env.DB.prepare(
-      `SELECT m.person_id AS person_id, p.name AS name, p.email AS email, m.role AS role, m.created_at AS created_at
+      `SELECT m.person_id AS person_id, p.name AS name, p.email AS email, m.role AS role,
+              m.created_at AS created_at, m.event_id AS event_id, e.name AS event_name
          FROM memberships m
          JOIN people p ON p.id = m.person_id
-        WHERE m.org_id = ? AND m.event_id IS NULL
+         LEFT JOIN events e ON e.id = m.event_id
+        WHERE m.org_id = ? AND m.role != 'speaker'
         ORDER BY m.created_at ASC, m.id ASC`,
     )
       .bind(auth.orgId)
-      .all<{ person_id: string; name: string; email: string; role: string; created_at: number }>();
+      .all<{
+        person_id: string;
+        name: string;
+        email: string;
+        role: string;
+        created_at: number;
+        event_id: string | null;
+        event_name: string | null;
+      }>();
     const you = auth.kind === "session" ? auth.personId : null;
     return context.json(
       { data: rows.results.map((row) => ({ ...row, is_you: row.person_id === you })) },
@@ -202,13 +319,21 @@ const removeOrganizer = defineApiRoute(
     operationId: "removeOrganizer",
     summary: "Remove an organizer's access to this instance",
     description:
-      "Deletes their organization-wide memberships and revokes their sessions in the same batch, so a link already in their inbox stops working. Their authored decisions and evaluations stay on the record. The last remaining owner cannot be removed.",
+      "Deletes every organizer membership they hold — organization-wide and conference-scoped alike — and in the same transaction revokes their sessions, consumes the unexpired sign-in links already in their inbox, and revokes the API tokens named in the request. Their authored decisions and evaluations stay on the record. A speaker participation is a different seat and is never touched. The last remaining owner cannot be removed.",
     tags: ["Organizers"],
-    request: { params: memberParams },
+    request: { params: memberParams, body: { content: { "application/json": { schema: removeMemberRequest } } } },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
     responses: {
       200: jsonResponse(
-        z.object({ data: z.object({ person_id: z.string(), removed_roles: z.array(z.string()) }) }),
+        z.object({
+          data: z.object({
+            person_id: z.string(),
+            removed_roles: z.array(z.string()),
+            revoked_sessions: z.number(),
+            consumed_links: z.number(),
+            revoked_tokens: z.number(),
+          }),
+        }),
         "Access ended",
       ),
       ...orgErrors,
@@ -217,8 +342,17 @@ const removeOrganizer = defineApiRoute(
   async (context) => {
     const auth = requireOrgOwner(context);
     const { personId } = context.req.valid("param");
+    const parsed = removeMemberRequest.safeParse(await readOptionalJson(context));
+    if (!parsed.success) {
+      throw ApiError.badRequest("invalid removal", parsed.error.issues[0]?.path.join("."));
+    }
+    // Every organizer seat, not only the org-wide ones (ruling O3): a fired
+    // volunteer's conference-scoped `ops` seat is exactly the access being
+    // ended, and leaving it behind would make the dialog a lie. `speaker` is
+    // excluded because it is not an organizer seat — the same human can hold
+    // both, and removing the organizer must never touch the speaker.
     const memberships = await context.env.DB.prepare(
-      "SELECT * FROM memberships WHERE org_id = ? AND person_id = ? AND event_id IS NULL",
+      "SELECT * FROM memberships WHERE org_id = ? AND person_id = ? AND role != 'speaker'",
     )
       .bind(auth.orgId, personId)
       .all<MembershipRow>();
@@ -255,17 +389,24 @@ const removeOrganizer = defineApiRoute(
     )
       .bind(personId)
       .first<{ total: number }>();
-    // One batch: access cannot end in the membership table and survive in the
-    // session table, however the request fails after the first statement — and
-    // the audit row rides along, because a removal recorded in a different
-    // transaction from the removal itself is free to disagree with it.
-    await context.env.DB.batch([
+    // One batch, four arms. Authority and every way back in end together or not
+    // at all: a request that failed between the membership delete and the
+    // session revoke would leave a fired organizer holding a live cookie, and a
+    // request that failed before the link arm would leave one holding a live
+    // sign-in link, which is the same defect with a longer fuse.
+    const results = await context.env.DB.batch([
       context.env.DB.prepare(
-        "DELETE FROM memberships WHERE org_id = ? AND person_id = ? AND event_id IS NULL",
+        "DELETE FROM memberships WHERE org_id = ? AND person_id = ? AND role != 'speaker'",
       ).bind(auth.orgId, personId),
-      context.env.DB.prepare(
-        "UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, ?), updated_at = ? WHERE person_id = ? AND revoked_at IS NULL",
-      ).bind(now, now, personId),
+      ...revokeAccessStatements(context.env.DB, {
+        orgId: auth.orgId,
+        personId,
+        now,
+        tokenIds: parsed.data.revoke_token_ids,
+        // Their own way back in. A speaker-side link belongs to a seat this
+        // action is not ending, so it is left alone.
+        purposes: ["login"],
+      }),
       orgActivityStatement(context.env.DB, {
         orgId: auth.orgId,
         ...orgActor(auth),
@@ -281,6 +422,7 @@ const removeOrganizer = defineApiRoute(
         requestId: context.get("requestId") ?? null,
       }),
     ]);
+    const changes = results.map((result) => Number(result.meta?.changes ?? 0));
     const person = await context.env.DB.prepare("SELECT id FROM people WHERE id = ?")
       .bind(personId)
       .first<Pick<PersonRow, "id">>();
@@ -289,6 +431,9 @@ const removeOrganizer = defineApiRoute(
         data: {
           person_id: person?.id ?? personId,
           removed_roles: memberships.results.map((membership) => membership.role),
+          revoked_sessions: changes[1] ?? 0,
+          consumed_links: changes[2] ?? 0,
+          revoked_tokens: parsed.data.revoke_token_ids.length === 0 ? 0 : (changes[3] ?? 0),
         },
       },
       200,

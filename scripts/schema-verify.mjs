@@ -311,8 +311,10 @@ try {
   assert.deepEqual(foreignKeyCheck, [], "Fresh migration has unresolved foreign keys");
 
   execute(`
-    INSERT INTO organizations VALUES ('org1','Org One','org-one',1,1);
-    INSERT INTO organizations VALUES ('org2','Org Two','org-two',1,1);
+    INSERT INTO organizations (id,name,slug,created_at,updated_at)
+      VALUES ('org1','Org One','org-one',1,1);
+    INSERT INTO organizations (id,name,slug,created_at,updated_at)
+      VALUES ('org2','Org Two','org-two',1,1);
     INSERT INTO events
       (id,org_id,name,slug,starts_on,ends_on,timezone,status,demo_mode,created_at,updated_at)
       VALUES ('event1','org1','Event One','event-one','2026-09-01','2026-09-03','UTC','draft',1,1,1);

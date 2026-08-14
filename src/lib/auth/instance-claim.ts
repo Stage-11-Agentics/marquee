@@ -18,6 +18,8 @@ import type {
   AuthSessionRow,
   Id,
   MagicLinkPurpose,
+  MagicLinkRow,
+  MembershipRole,
   MembershipRow,
   OrganizationRow,
   PersonRow,
@@ -26,6 +28,7 @@ import { ORG_ACTIVITY_ACTIONS } from "../activity-copy";
 import { recordOrgActivity } from "../org-activity";
 import { createSession } from "./auth-sessions";
 import { consumeMagicLink, mintMagicLink, readMagicLink } from "./magic-links";
+import { mintShortCode } from "./short-code";
 
 /** The role a claim and an invite both land on: everyone who can run the instance. */
 export const INSTANCE_ORGANIZER_ROLE = "owner" as const;
@@ -38,6 +41,18 @@ export interface MintedInstanceLink {
   /** Absolute URL, returned once. Never stored, never logged. */
   url: string;
   expires_at: number;
+  /**
+   * The speakable form of the same single-use row (ruling O4). Returned once,
+   * beside the URL; null on links that have no desk to be read across.
+   */
+  short_code: string | null;
+}
+
+/** What an invite mints when it is exchanged: a seat, and where that seat sits. */
+export interface InviteSeat {
+  role: MembershipRole;
+  /** Null is the whole organization; an id scopes the seat to one conference. */
+  eventId: Id | null;
 }
 
 /**
@@ -67,7 +82,13 @@ async function resolveOrganization(
     .first<OrganizationRow>();
   if (existing) return existing;
   const organization: OrganizationRow = {
+    accent: null,
+    comms_from_name: null,
+    comms_reply_to: null,
+    default_theme: null,
+    default_timezone: null,
     id: newUlid(now),
+    logo_key: null,
     name: "Your organization",
     slug: `org-${newUlid(now).toLowerCase()}`,
     created_at: now,
@@ -124,6 +145,9 @@ export async function mintClaimLink(
     id: link.id,
     url: absoluteLink(input.origin, `/claim/${link.token}`),
     expires_at: row?.expires_at ?? now,
+    // A claim link is read off a deploy terminal, where copy-paste works and
+    // nobody is standing at a desk. It gets no spoken form.
+    short_code: null,
   };
 }
 
@@ -135,14 +159,17 @@ export async function mintClaimLink(
  */
 export async function mintOrganizerInvite(
   db: D1Database,
-  input: { origin: string; now?: number },
+  input: { origin: string; seat: InviteSeat; now?: number },
 ): Promise<MintedInstanceLink> {
   const now = input.now ?? Date.now();
+  const shortCode = mintShortCode();
   const link = await mintMagicLink(db, {
     personId: null,
     purpose: "org_invite",
     redirectTo: CLAIM_REDIRECT,
     now,
+    invite: input.seat,
+    shortCode,
   });
   const row = await db
     .prepare("SELECT expires_at FROM magic_links WHERE id = ?")
@@ -152,12 +179,32 @@ export async function mintOrganizerInvite(
     id: link.id,
     url: absoluteLink(input.origin, `/join/${link.token}`),
     expires_at: row?.expires_at ?? now,
+    short_code: shortCode,
   };
 }
 
 export type InstanceLinkState =
-  | { status: "live"; purpose: Extract<MagicLinkPurpose, "claim" | "org_invite"> }
+  | {
+      status: "live";
+      purpose: Extract<MagicLinkPurpose, "claim" | "org_invite">;
+      /** The seat this link will mint. A claim link's is always the owner seat. */
+      seat: InviteSeat;
+    }
   | { status: "inert" };
+
+/**
+ * The seat a live link carries, defaulted for the links that pre-date the
+ * columns. An `org_invite` minted before SPEC Amendment 21 has no role and no
+ * scope on its row; it meant "org-wide owner", which is what it minted, so that
+ * is what it must keep meaning. Reading `null` as anything narrower would
+ * silently demote invites already in people's inboxes.
+ */
+function seatOf(link: MagicLinkRow): InviteSeat {
+  return {
+    role: link.invite_role ?? INSTANCE_ORGANIZER_ROLE,
+    eventId: link.invite_event_id ?? null,
+  };
+}
 
 /**
  * Read a claim or invite token WITHOUT consuming it, so the page a human lands
@@ -172,7 +219,13 @@ export async function readInstanceLink(
 ): Promise<InstanceLinkState> {
   const state = await readMagicLink(db, token, now, { purposes: [expectedPurpose] });
   if (state.status !== "live") return { status: "inert" };
-  return { status: "live", purpose: expectedPurpose };
+  return {
+    status: "live",
+    purpose: expectedPurpose,
+    // A claim token lands ownership by definition (ruling D2); only an invite
+    // carries a seat someone chose.
+    seat: expectedPurpose === "claim" ? { role: INSTANCE_ORGANIZER_ROLE, eventId: null } : seatOf(state.link),
+  };
 }
 
 export interface ExchangeResult {
@@ -223,7 +276,22 @@ export async function exchangeInstanceLink(
     .first<PersonRow>();
   const person = existingPerson ?? (await insertPerson(db, organization.id, name, email, now));
 
-  const membership = await upsertOrganizerMembership(db, organization.id, person.id, now);
+  // The seat comes off the consumed row, never off the request: the recipient
+  // types their name and email into this exchange, and if they could also name
+  // their own role the invite would be an invitation to choose one.
+  const seat = input.purpose === "claim" ? { role: INSTANCE_ORGANIZER_ROLE, eventId: null } : seatOf(link);
+  // A conference-scoped invite is only meaningful against a conference that
+  // still exists. If it was deleted between mint and exchange, the seat widens
+  // to nothing rather than silently to the whole organization.
+  if (seat.eventId !== null) {
+    const event = await db
+      .prepare("SELECT id FROM events WHERE id = ? AND org_id = ?")
+      .bind(seat.eventId, organization.id)
+      .first<{ id: string }>();
+    if (!event) return null;
+  }
+
+  const membership = await upsertMembership(db, organization.id, person.id, seat, now);
   // Who got in, and through which door. The claim is the first fact this
   // instance has about itself, and an invite exchange is the only admin action
   // whose actor is the person it is about — so both are recorded against the
@@ -244,7 +312,7 @@ export async function exchangeInstanceLink(
   });
   const session = await createSession(db, {
     personId: person.id,
-    roleHint: INSTANCE_ORGANIZER_ROLE,
+    roleHint: seat.role,
     userAgent: input.userAgent,
     now,
   });
@@ -286,17 +354,27 @@ async function insertPerson(
   return person;
 }
 
-async function upsertOrganizerMembership(
+/**
+ * The seat the exchange lands, org-wide or scoped to one conference.
+ *
+ * `uq_memberships_org` and `uq_memberships_event` both key on role, so the same
+ * person may legitimately hold several seats; this only ever adds the one the
+ * invite named, and returns the existing row when they already hold exactly it.
+ */
+async function upsertMembership(
   db: D1Database,
   orgId: Id,
   personId: Id,
+  seat: InviteSeat,
   now: number,
 ): Promise<MembershipRow> {
   const existing = await db
     .prepare(
-      "SELECT * FROM memberships WHERE org_id = ? AND person_id = ? AND event_id IS NULL AND role = ?",
+      seat.eventId === null
+        ? "SELECT * FROM memberships WHERE org_id = ? AND person_id = ? AND role = ? AND event_id IS NULL"
+        : "SELECT * FROM memberships WHERE org_id = ? AND person_id = ? AND role = ? AND event_id = ?",
     )
-    .bind(orgId, personId, INSTANCE_ORGANIZER_ROLE)
+    .bind(...[orgId, personId, seat.role, ...(seat.eventId === null ? [] : [seat.eventId])])
     .first<MembershipRow>();
   if (existing) return existing;
   const membership: MembershipRow = {
@@ -304,19 +382,27 @@ async function upsertOrganizerMembership(
     confirmed_at: null,
     id: newUlid(now),
     org_id: orgId,
-    event_id: null,
+    event_id: seat.eventId,
     invited_at: null,
     person_id: personId,
-    role: INSTANCE_ORGANIZER_ROLE,
+    role: seat.role,
     created_at: now,
     updated_at: now,
   };
   await db
     .prepare(
       `INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(membership.id, membership.org_id, membership.person_id, membership.role, now, now)
+    .bind(
+      membership.id,
+      membership.org_id,
+      membership.event_id,
+      membership.person_id,
+      membership.role,
+      now,
+      now,
+    )
     .run();
   return membership;
 }

@@ -24,28 +24,34 @@
 // and judged in daylight, and a visitor whose laptop happens to be in dark
 // mode should not silently get a palette nobody chose for them.
 
+// The registry itself lives in src/lib/theme-registry.ts, because the Worker
+// has to validate an organization's default theme and two copies of the list
+// would drift. Everything below is the half that needs a document.
+import {
+  isThemeId,
+  THEMES,
+  type ThemeDefinition,
+  type ThemeId,
+  type ThemeKind,
+} from "../../lib/theme-registry";
+
+export { isThemeId, THEMES };
+export type { ThemeDefinition, ThemeId, ThemeKind };
+
 export const THEME_STORAGE_KEY = "marquee-theme";
 export const SWYXY_MODE_STORAGE_KEY = "marquee-swyxy-mode";
+/**
+ * The organization's default, cached where the pre-paint script can read it.
+ *
+ * Falling back to an org default cannot mean "wait for an API call": the theme
+ * is stamped before first paint precisely so nothing flashes, and a fetch there
+ * would reintroduce the flash the pre-paint script exists to prevent. So the
+ * default is mirrored into storage whenever the shell reads org settings, and
+ * the boot script treats it as the layer under the user's own choice.
+ */
+export const ORG_DEFAULT_THEME_KEY = "marquee-org-default-theme";
 
-export type ThemeKind = "palette" | "register";
-export type ThemeId = "day" | "night" | "latent-space" | "ai-engineer" | "swyxy";
 export type SwyxyMode = "light" | "dark";
-
-export interface ThemeDefinition {
-  id: ThemeId;
-  label: string;
-  kind: ThemeKind;
-}
-
-export const THEMES: readonly ThemeDefinition[] = [
-  { id: "day", label: "Marquee Light", kind: "palette" },
-  { id: "night", label: "Marquee Night", kind: "palette" },
-  { id: "latent-space", label: "latent.space", kind: "register" },
-  { id: "ai-engineer", label: "AI Engineer", kind: "register" },
-  // Lowercase is deliberate: the register is swyx.io's, and the judges read
-  // the casing. Judge-facing, not a typo.
-  { id: "swyxy", label: "swyxy", kind: "register" },
-];
 
 /**
  * The themes the front door offers (operator ruling, 2026-08-13).
@@ -60,10 +66,6 @@ export const LANDING_THEME_IDS: readonly ThemeId[] = ["day", "night", "latent-sp
 export const LANDING_THEMES: readonly ThemeDefinition[] = THEMES.filter((theme) =>
   LANDING_THEME_IDS.includes(theme.id),
 );
-
-export function isThemeId(value: unknown): value is ThemeId {
-  return THEMES.some((theme) => theme.id === value);
-}
 
 /**
  * The tab dresses with the page.
@@ -135,15 +137,48 @@ function paramFromUrl(name: string): string | null {
   }
 }
 
+/**
+ * Three layers, in this order, and the order is the ruling (O7).
+ *
+ *   1. `?theme=` — a comparison link, deliberately winning over everything and
+ *      persisting nothing.
+ *   2. This person's own choice, once they have made one. It outranks the
+ *      organization's default forever after: an organization sets the
+ *      appearance someone gets *before* they choose, never instead of choosing.
+ *   3. The organization's default, mirrored into storage by `cacheOrgDefaultTheme`.
+ *
+ * Day remains the floor, so an instance with no organization and a browser with
+ * no storage still resolves to the designed light palette.
+ */
 export function readTheme(): ThemeId {
   const override = paramFromUrl("theme");
   if (isThemeId(override)) return override;
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return isThemeId(stored) ? stored : "day";
+    if (isThemeId(stored)) return stored;
+    const orgDefault = localStorage.getItem(ORG_DEFAULT_THEME_KEY);
+    return isThemeId(orgDefault) ? orgDefault : "day";
   } catch (_) {
     // Storage can throw outright in private mode — Day is the safe answer.
     return "day";
+  }
+}
+
+/**
+ * Keep the pre-paint script's copy of the organization's default current.
+ *
+ * Called by whoever has just read org settings. A null default clears the key
+ * rather than writing "day": an organization that has expressed no preference
+ * must stay distinguishable from one that chose the value the product would
+ * have picked anyway, or the day the product's default moves, every silent
+ * organization is silently pinned to the old one.
+ */
+export function cacheOrgDefaultTheme(theme: string | null): void {
+  try {
+    if (isThemeId(theme)) localStorage.setItem(ORG_DEFAULT_THEME_KEY, theme);
+    else localStorage.removeItem(ORG_DEFAULT_THEME_KEY);
+  } catch (_) {
+    // Private mode. The org default is a courtesy, never a requirement.
   }
 }
 

@@ -47,7 +47,13 @@
         // document wears one theme while the app reports another.
         var ids = { "day": 1, "night": 1, "latent-space": 1, "ai-engineer": 1, "swyxy": 1 };
         var t = params.get("theme");
+        // Three layers, matching readTheme() in src/ui/shell/theme.ts: a
+        // comparison link, then this person's own choice, then the
+        // organization's default as the shell last read it. The org default is
+        // mirrored into storage rather than fetched, because a fetch here is
+        // the flash this script exists to prevent.
         if (!ids[t]) t = localStorage.getItem("marquee-theme");
+        if (!ids[t]) t = localStorage.getItem("marquee-org-default-theme");
         if (ids[t] && t !== "day") {
           document.documentElement.dataset.theme = t;
           var dark = false;

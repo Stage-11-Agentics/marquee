@@ -40,7 +40,10 @@ const claimResponse = z.object({
   ok: z.literal(true),
   person: z.object({ id: z.string(), name: z.string(), email: z.string() }),
   org_id: z.string(),
-  role: z.literal("owner"),
+  /** The seat the link carried. A claim is always `owner`; an invite is whatever it was minted for. */
+  role: z.string(),
+  /** Null is an organization-wide seat; an id scopes it to one conference. */
+  event_id: z.string().nullable(),
   redirect_to: z.string(),
 });
 
@@ -125,7 +128,8 @@ const claimInstance = defineApiRoute(
           email: result.person.email,
         },
         org_id: result.organization.id,
-        role: "owner" as const,
+        role: result.membership.role,
+        event_id: result.membership.event_id,
         redirect_to: result.redirectTo,
       },
       200,
