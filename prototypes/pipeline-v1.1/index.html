@@ -20,7 +20,13 @@
        opens. Hovering that row raises a stage flyout (client idea,
        2026-08-14): jump straight to any of the seven stages, live counts
        included — the counts the old ladder rows never had. Click behavior
-       is unchanged, so the flyout is an accelerator, never the only path.
+       is unchanged, so the flyout is an accelerator, never the only path,
+       and it leads with an Overview row that points where clicking the row
+       points, so hover and click describe one map. The Organization group
+       (People · Sourcing; Lists folds into People per the same ruling) sits
+       above the conference switcher and links out to the People scoping
+       prototype (../crm/index.html), which owns that area's design — the
+       DESIGN.md pattern of areas extending the prototype in their own files.
        v1.12 (2026-08-12): the theme system (MRQ-103, operator directive
        overriding DESIGN.md's no-dark-mode-by-Wednesday ruling). Every color
        that was hardcoded in CSS/JS is now a token; a theme is one CSS block
@@ -288,6 +294,7 @@
     .stage-flyout .stage-num { width: 14px; flex: none; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 10px; font-variant-numeric: tabular-nums; }
     .stage-flyout .stage-count { margin-left: auto; color: var(--muted); font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; }
     .stage-flyout a:hover .stage-num, .stage-flyout a:hover .stage-count { color: var(--accent-dark); }
+    .stage-flyout a.flyout-overview { border-bottom: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; margin-bottom: 4px; }
     .sidebar-foot { margin-top: auto; display: grid; gap: 2px; padding-top: 16px; border-top: 1px solid var(--line); }
     .sidebar-foot button { border: 0; background: none; text-align: left; color: var(--muted); padding: 7px 10px; border-radius: var(--radius); font: 400 11.5px/1.2 var(--mono); }
     .sidebar-foot button:hover { background: var(--sunk); color: var(--ink); }
@@ -1871,7 +1878,12 @@
           document.body.appendChild(flyout);
         }
         flyout.classList.remove("open");
-        flyout.innerHTML = `<div class="stage-flyout-cap">Jump to a stage</div>` + stageFlyoutRows().map(([n, label, count, filter, route]) =>
+        // The Overview row leads: it points where clicking the row itself
+        // points, so the flyout is one map of the area rather than a second
+        // gesture with a different destination (Atin ruling, 2026-08-14).
+        flyout.innerHTML = `<div class="stage-flyout-cap">Program pipeline</div>`
+          + `<a href="#dashboard" class="flyout-overview" data-flyout-filter="" data-flyout-route="dashboard"><span class="stage-num"></span><span>Overview · all stages</span></a>`
+          + stageFlyoutRows().map(([n, label, count, filter, route]) =>
           `<a href="#${route}" data-flyout-filter="${esc(filter)}" data-flyout-route="${route}"><span class="stage-num">${n}</span><span>${esc(label)}</span><span class="stage-count">${count.toLocaleString()}</span></a>`).join("");
         flyout.querySelectorAll("[data-flyout-filter]").forEach(el => el.addEventListener("click", e => {
           e.preventDefault(); flyout.classList.remove("open");
@@ -1895,7 +1907,12 @@
         return `<div class="app-shell">
           <aside class="sidebar">
             <a class="brand" href="#dashboard"><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
-            <div class="event-switcher-row">
+            <div class="nav-label">Organization</div>
+            <nav class="nav" aria-label="Organization">
+              <a href="../crm/index.html"><span class="nav-icon"></span><span>People</span></a>
+              <a href="../crm/index.html"><span class="nav-icon"></span><span>Sourcing</span></a>
+            </nav>
+            <div class="event-switcher-row" style="margin-top:12px">
               <a class="event-switcher" href="#settings"><small>Conference${state.setup.active && state.demoPeek ? " · demo" : ""}</small><strong>${esc(state.event.name || "No conference yet")}</strong></a>
               <a class="event-add" href="#conferences/new" id="event-add" title="Create conference" aria-label="Create conference">＋</a>
             </div>
