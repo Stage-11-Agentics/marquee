@@ -51,7 +51,7 @@ function InlineError({ message, id }: { message?: string; id: string }): JSX.Ele
 
 function CreateSettings({ state }: { state: LoadState }): JSX.Element {
   if (state.kind === "loading") return <div class="record-picker-state" aria-busy="true">Reading conference formats and tracks…</div>;
-  if (state.kind === "error") return <div class="record-picker-state error" role="alert">{state.message}</div>;
+  if (state.kind === "error") return <div class="record-picker-state error" role="alert">{state.message} You can still create the record without an optional format or track, or reload if you need those choices.</div>;
   return <></>;
 }
 
@@ -119,7 +119,6 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
 
   const submit = async (event: JSX.TargetedSubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setState("saving");
     setError("");
     const nextFieldErrors: Record<string, string> = {};
     if (submitterMode === "existing" && !selectedSubmitter) nextFieldErrors.submitter = "Choose a person from the list, or create a new person.";
@@ -128,10 +127,11 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
     if (Object.keys(nextFieldErrors).length > 0) {
       setFieldErrors(nextFieldErrors);
       setState("error");
-      setError("Choose the submitter before creating the record.");
+      setError("Choose a submitter before creating the record.");
       return;
     }
     setFieldErrors({});
+    setState("saving");
     try {
       const record = await apiFetch<{ id: string }>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions`, {
         method: "POST",
@@ -171,14 +171,19 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
     }
   };
 
-  const model = settings.kind === "ready" ? settings.model : null;
+  // Formats and tracks are optional settings. They must not gate the core
+  // title/notes/submitter form: a fresh conference can legitimately have
+  // neither configured yet, and a slow settings read must never turn Create
+  // record into a disabled dead end.
+  const model = settings.kind === "ready" ? settings.model : { formats: [], tracks: [] };
+  const settingsReady = settings.kind === "ready";
   const submitterFieldError = fieldErrors.submitter;
   return <div class="submission-record-page">
     <PageHeader title="Create a submission" copy="Add an Abstract or Session directly to the conference program record. Choose the real person and conference options so the record is truthful." />
     <form onSubmit={submit} class="record-create-form">
       <Card><CardBody>
         <CreateSettings state={settings} />
-        {model && <div class="record-form-grid">
+        <div class="record-form-grid">
           <div class="field"><label for="submission-kind">Type</label><select id="submission-kind" value={kind} onChange={(event) => { const next = event.currentTarget.value as "abstract" | "session"; setKind(next); if (next === "abstract") setBypass(false); }}><option value="session">Session</option><option value="abstract">Abstract</option></select></div>
           <div class="field"><label for="submission-title">Title</label><input id="submission-title" required value={title} onInput={(event) => { setTitle(event.currentTarget.value); setFieldErrors((current) => ({ ...current, title: "" })); }} placeholder="A clear program title" aria-describedby="submission-title-error" />{<InlineError id="submission-title-error" message={fieldErrors.title} />}</div>
           <div class="field record-form-wide"><label for="submission-abstract">Abstract / description</label><textarea id="submission-abstract" rows={8} value={abstract} onInput={(event) => { setAbstract(event.currentTarget.value); setFieldErrors((current) => ({ ...current, abstract: "" })); }} placeholder="What should the program team know?" aria-describedby="submission-abstract-error" />{<InlineError id="submission-abstract-error" message={fieldErrors.abstract} />}</div>
@@ -207,12 +212,12 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
             </div>}
             <InlineError id="submission-submitter-error" message={submitterFieldError} />
           </fieldset>
-          <div class="field"><label for="submission-tracks">Tracks</label><select id="submission-tracks" multiple size={Math.min(Math.max(model.tracks.length, 3), 7)} onChange={(event) => { setTrackIds(Array.from(event.currentTarget.selectedOptions, (option) => option.value)); setFieldErrors((current) => ({ ...current, tracks: "" })); }} aria-describedby="submission-tracks-error">{model.tracks.map((track) => <option value={track.id} key={track.id} selected={trackIds.includes(track.id)}>{track.name}</option>)}</select><span class="field-note">Optional · hold ⌘ or Ctrl to choose more than one.</span><InlineError id="submission-tracks-error" message={fieldErrors.tracks} /></div>
-          <div class="field"><label for="submission-format">Format</label><select id="submission-format" value={formatId} onChange={(event) => { setFormatId(event.currentTarget.value); setFieldErrors((current) => ({ ...current, format: "" })); }} aria-describedby="submission-format-error"><option value="">No format selected</option>{model.formats.map((format) => <option value={format.id} key={format.id}>{format.name}</option>)}</select><span class="field-note">Live from Conference settings · Formats.</span><InlineError id="submission-format-error" message={fieldErrors.format} /></div>
+          <div class="field"><label for="submission-tracks">Tracks</label><select id="submission-tracks" multiple disabled={!settingsReady} size={Math.min(Math.max(model.tracks.length, 3), 7)} onChange={(event) => { setTrackIds(Array.from(event.currentTarget.selectedOptions, (option) => option.value)); setFieldErrors((current) => ({ ...current, tracks: "" })); }} aria-describedby="submission-tracks-error">{model.tracks.map((track) => <option value={track.id} key={track.id} selected={trackIds.includes(track.id)}>{track.name}</option>)}</select><span class="field-note">{settings.kind === "loading" ? "Loading optional tracks…" : settings.kind === "error" ? "Tracks are unavailable; you can leave this optional field empty." : "Optional · hold ⌘ or Ctrl to choose more than one."}</span><InlineError id="submission-tracks-error" message={fieldErrors.tracks} /></div>
+          <div class="field"><label for="submission-format">Format</label><select id="submission-format" disabled={!settingsReady} value={formatId} onChange={(event) => { setFormatId(event.currentTarget.value); setFieldErrors((current) => ({ ...current, format: "" })); }} aria-describedby="submission-format-error"><option value="">No format selected</option>{model.formats.map((format) => <option value={format.id} key={format.id}>{format.name}</option>)}</select><span class="field-note">{settings.kind === "loading" ? "Loading optional formats…" : settings.kind === "error" ? "Formats are unavailable; you can leave this optional field empty." : "Live from Conference settings · Formats."}</span><InlineError id="submission-format-error" message={fieldErrors.format} /></div>
           {kind === "session" && <label class="record-bypass-toggle"><input type="checkbox" checked={bypass} onChange={(event) => setBypass(event.currentTarget.checked)} /><span><strong>Bypass evaluation</strong><small>Ready for the working agenda after creation.</small></span></label>}
-        </div>}
+        </div>
       </CardBody></Card>
-      <div class="record-form-actions"><span class={`field-error ${state === "error" ? "visible" : ""}`} role="alert">{error || " "}</span><Button type="button" onClick={() => navigate("/submissions")} disabled={state === "saving"}>Cancel</Button><Button variant="primary" type="submit" disabled={state === "saving" || !model}>{state === "saving" ? "Creating…" : "Create record"}</Button></div>
+      <div class="record-form-actions"><span class={`field-error ${state === "error" ? "visible" : ""}`} role="alert">{error || " "}</span><Button type="button" onClick={() => navigate("/submissions")} disabled={state === "saving"}>Cancel</Button><Button variant="primary" type="submit" disabled={state === "saving"}>{state === "saving" ? "Creating…" : "Create record"}</Button></div>
     </form>
   </div>;
 }
