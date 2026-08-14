@@ -125,9 +125,11 @@ need to be distinguishable, because only one of them is about your branch. And `
 suppress the ref-lock error — it removes the ordinary output that makes anyone notice the
 fetch step at all, so nothing normal prints and nothing abnormal stands out.
 
-Lost the race? **Retry with `git fetch github main --force`** — a plain re-run loses the same
-way. The remote is the truth and the local ref is the thing that lost, so let it be
-overwritten.
+Lost the race? **Just re-run `git fetch github`.** And check the ref before assuming you
+needed to: if a concurrent fetch won the lock, it wrote the same remote truth you were
+asking for, so you may already be current. (`--force` is not the fix — git documents it as
+overriding the *non-fast-forward* refusal on a `<src>:<dst>` refspec, which is a different
+mechanism from a ref-transaction compare-and-swap failure.)
 
 That question — *is my base current?* — is the durable one. Checking for a specific
 rescue commit instead (`--is-ancestor a04f80b1 HEAD`) answers today's incident and then

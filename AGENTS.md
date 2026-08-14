@@ -73,7 +73,8 @@ else echo "FETCH FAILED — comparison not attempted"; fi
 fail — it answers about a stale ref. Worktrees share one `.git`, so concurrent fetches lose
 the ref lock, and "behind" must not print the same thing as "my fetch died". `-q` hides the
 ordinary fetch output, not the ref-lock error, so it only makes the step easier to ignore.
-Lost the race? Retry with `git fetch github main --force`; a plain re-run loses the same way.
+Lost the race? Just re-run `git fetch github` — and check the ref first, since the fetch that
+won the lock wrote the same remote truth, so you may already be current.
 
 Check *is my base current?*, not *do I have `a04f80b1`?* — the second answers today's
 incident and then expires, printing OK forever once that commit is deep in history. A
