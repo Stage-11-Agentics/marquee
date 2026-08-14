@@ -172,10 +172,8 @@ function ratingSteps(minValue: number | null, maxValue: number | null): number[]
   return steps;
 }
 
-function includeRecordedStep(steps: number[], minValue: number | null, maxValue: number | null, recordedValue: number | string | undefined): number[] {
-  const min = Math.round(minValue ?? DEFAULT_SCALE_MIN);
-  const max = Math.round(maxValue ?? DEFAULT_SCALE_MAX);
-  if (typeof recordedValue !== "number" || !Number.isFinite(recordedValue) || recordedValue < min || recordedValue > max || steps.includes(recordedValue)) return steps;
+function includeRecordedStep(steps: number[], recordedValue: number | string | undefined): number[] {
+  if (typeof recordedValue !== "number" || !Number.isFinite(recordedValue) || steps.includes(recordedValue)) return steps;
   return [...steps, recordedValue].sort((left, right) => left - right);
 }
 
@@ -184,11 +182,32 @@ function scaleSteps(criterion: Criterion): number[] {
 }
 
 function scaleStepsForReview(criterion: Criterion, recordedValue: number | string | undefined): number[] {
-  return includeRecordedStep(scaleSteps(criterion), criterion.scale_min, criterion.scale_max, recordedValue);
+  return includeRecordedStep(scaleSteps(criterion), recordedValue);
 }
 
 function overallScoreSteps(recordedValue: number | null): number[] {
-  return includeRecordedStep(ratingSteps(DEFAULT_SCALE_MIN, DEFAULT_SCALE_MAX), DEFAULT_SCALE_MIN, DEFAULT_SCALE_MAX, recordedValue ?? undefined);
+  return includeRecordedStep(ratingSteps(DEFAULT_SCALE_MIN, DEFAULT_SCALE_MAX), recordedValue ?? undefined);
+}
+
+function isOutsideScale(value: number | string | undefined, minValue: number | null, maxValue: number | null): boolean {
+  if (typeof value !== "number" || !Number.isFinite(value)) return false;
+  const min = Math.round(minValue ?? DEFAULT_SCALE_MIN);
+  const max = Math.round(maxValue ?? DEFAULT_SCALE_MAX);
+  return value < min || value > max;
+}
+
+function recordedScaleNotice(value: number | string | undefined, minValue: number | null, maxValue: number | null): string | null {
+  if (typeof value !== "number") return null;
+  if (!Number.isFinite(value)) return "Recorded value is not a finite number. Choose a replacement before saving.";
+  if (!isOutsideScale(value, minValue, maxValue)) return null;
+  const min = Math.round(minValue ?? DEFAULT_SCALE_MIN);
+  const max = Math.round(maxValue ?? DEFAULT_SCALE_MAX);
+  return `Recorded value ${value} is outside the current scale (${min}–${max}). Saving preserves it until you choose a replacement.`;
+}
+
+function RecordedScaleNote({ value, min, max }: { value: number | string | undefined; min: number | null; max: number | null }): JSX.Element {
+  const message = recordedScaleNotice(value, min, max);
+  return <p class="reviewer-recorded-scale-note" aria-hidden={message ? undefined : "true"}>{message ?? " "}</p>;
 }
 
 /**
@@ -710,13 +729,14 @@ export function ReviewerPage({ eventId, initialQueue, locationSearch: locationSe
             <div class="review-choice"><strong>{recommendationLabel(currentReview.recommendation)}</strong><span>{currentReview.recommendation ? `${recommendationLabel(currentReview.recommendation)} saves a proposal; only a program lead changes lifecycle status.` : "Approve, Maybe, and Deny do not require a scorecard."}</span></div>
             <div class="divider" />
             <div class="score-heading"><span class="subtle">Overall score (optional) · keys 1–5</span><button type="button" class="clear-score" onClick={() => updateReview({ score: null })} disabled={currentReview.score === null}>Clear</button></div>
-            <div class="score-buttons" data-reviewer-controls="score" role="group" aria-label="Numeric score (optional)">{overallScoreSteps(currentReview.score).map((score) => <button type="button" class={currentReview.score === score ? "active" : ""} aria-pressed={currentReview.score === score} onClick={() => updateReview({ score })}>{score}</button>)}</div>
+            <div class="score-buttons" data-reviewer-controls="score" role="group" aria-label="Numeric score (optional)">{overallScoreSteps(currentReview.score).map((score) => <button type="button" class={`${currentReview.score === score ? "active" : ""}${isOutsideScale(score, DEFAULT_SCALE_MIN, DEFAULT_SCALE_MAX) ? " recorded-out-of-range" : ""}`} aria-pressed={currentReview.score === score} onClick={() => updateReview({ score })}>{score}</button>)}</div>
+            <RecordedScaleNote value={currentReview.score ?? undefined} min={DEFAULT_SCALE_MIN} max={DEFAULT_SCALE_MAX} />
             {criteria.length > 0 && <div class="review-criteria" data-reviewer-controls="criteria">
               <div class="divider" />
               <span class="subtle">{roundName} scorecard</span>
               {criteria.map((criterion) => <div class="review-criterion" key={criterion.id}>
                 <span class="review-criterion-name">{criterion.name}{criterion.kind === "numeric" && criterion.weight_pct > 0 ? <span class="subtle tabular"> · {criterion.weight_pct}%</span> : null}</span>
-                {criterion.kind === "numeric" && <div class="score-buttons" role="group" aria-label={criterion.name}>{scaleStepsForReview(criterion, currentReview.criteria[criterion.id]).map((step) => <button type="button" key={step} class={currentReview.criteria[criterion.id] === step ? "active" : ""} aria-pressed={currentReview.criteria[criterion.id] === step} onClick={() => setCriterion(criterion.id, step)}>{step}</button>)}</div>}
+                {criterion.kind === "numeric" && <><div class="score-buttons" role="group" aria-label={criterion.name}>{scaleStepsForReview(criterion, currentReview.criteria[criterion.id]).map((step) => <button type="button" key={step} class={`${currentReview.criteria[criterion.id] === step ? "active" : ""}${isOutsideScale(step, criterion.scale_min, criterion.scale_max) ? " recorded-out-of-range" : ""}`} aria-pressed={currentReview.criteria[criterion.id] === step} onClick={() => setCriterion(criterion.id, step)}>{step}</button>)}</div><RecordedScaleNote value={currentReview.criteria[criterion.id]} min={criterion.scale_min} max={criterion.scale_max} /></>}
                 {criterion.kind === "select" && <select aria-label={criterion.name} value={String(currentReview.criteria[criterion.id] ?? "")} onChange={(event) => setCriterion(criterion.id, (event.currentTarget as HTMLSelectElement).value)}><option value="">Not answered</option>{(criterion.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}</select>}
                 {criterion.kind === "text" && <textarea aria-label={criterion.name} rows={3} value={String(currentReview.criteria[criterion.id] ?? "")} onInput={(event) => setCriterion(criterion.id, (event.currentTarget as HTMLTextAreaElement).value)} />}
               </div>)}

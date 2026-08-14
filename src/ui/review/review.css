@@ -106,6 +106,9 @@
 .score-buttons { display: grid; gap: 5px; grid-template-columns: repeat(5, 1fr); margin-top: 8px; }
 .score-buttons button { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--ink-soft); font: 600 12px/1 var(--mono); min-height: 34px; }
 .score-buttons button:hover, .score-buttons button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
+.score-buttons button.recorded-out-of-range { border-style: dashed; }
+.reviewer-recorded-scale-note { color: var(--accent-dark); font: 9px/1.35 var(--mono); margin: 6px 0 0; min-height: 24px; }
+.reviewer-recorded-scale-note[aria-hidden="true"] { visibility: hidden; }
 .review-comment { display: grid; gap: 6px; margin-top: 15px; }
 .review-comment span { color: var(--muted); font: 600 10px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .review-comment textarea { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: 12px; line-height: 1.45; min-height: 82px; outline: none; padding: 8px 9px; resize: vertical; width: 100%; }

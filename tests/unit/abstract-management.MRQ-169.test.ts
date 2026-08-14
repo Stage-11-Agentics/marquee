@@ -206,6 +206,33 @@ test("CONTRACT · MRQ-171 · a revision deep link is present on first render and
     locationSearch: "?revise=submission-target",
   }));
   expect(fractionalRevision).toContain('aria-pressed="true">4.5</button>');
+
+  const outOfRangeRevision = renderToString(h(ReviewerPage, {
+    eventId: "event-review",
+    initialQueue: {
+      ...revisionQueue,
+      completed: revisionQueue.completed?.map((item) => item.id === "submission-target" && item.review
+        ? { ...item, review: { ...item.review, criteria_scores: { fit: 25, audience: "operators" }, score: 7 } }
+        : item),
+    },
+    locationSearch: "?revise=submission-target",
+  }));
+  expect(outOfRangeRevision).toContain('aria-pressed="true">7</button>');
+  expect(outOfRangeRevision).toContain('aria-pressed="true">25</button>');
+  expect(outOfRangeRevision).toContain("Recorded value 7 is outside the current scale");
+  expect(outOfRangeRevision).toContain("Recorded value 25 is outside the current scale");
+
+  const nonFiniteRevision = renderToString(h(ReviewerPage, {
+    eventId: "event-review",
+    initialQueue: {
+      ...revisionQueue,
+      completed: revisionQueue.completed?.map((item) => item.id === "submission-target" && item.review
+        ? { ...item, review: { ...item.review, criteria_scores: { fit: Number.NaN, audience: "operators" }, score: Number.NaN } }
+        : item),
+    },
+    locationSearch: "?revise=submission-target",
+  }));
+  expect(nonFiniteRevision).toContain("Recorded value is not a finite number");
 });
 
 test("CONTRACT · MRQ-169 · co-presenters are named on the results table and in the speaker portal", () => {
