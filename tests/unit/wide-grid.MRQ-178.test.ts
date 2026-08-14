@@ -4,7 +4,7 @@ import { orderNewestFirst } from "../../src/ui/shell/wide-grid";
 
 type GridItem = { id: string; position: number };
 
-test("MRQ-178 · orderNewestFirst puts the highest authored position first", () => {
+test("CONTRACT · MRQ-178 · orderNewestFirst puts the highest authored position first", () => {
   const items: GridItem[] = [
     { id: "seeded", position: 0 },
     { id: "middle", position: 6 },
@@ -18,7 +18,7 @@ test("MRQ-178 · orderNewestFirst puts the highest authored position first", () 
   ]);
 });
 
-test("MRQ-178 · orderNewestFirst keeps authored order for equal positions", () => {
+test("CONTRACT · MRQ-178 · orderNewestFirst keeps authored order for equal positions", () => {
   const items: GridItem[] = [
     { id: "first-at-position", position: 8 },
     { id: "older", position: 2 },
