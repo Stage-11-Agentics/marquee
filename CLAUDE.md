@@ -84,8 +84,64 @@ design holds only while the primary checkout is a stable anchor.
 parked on `main`. All work happens in a linked worktree:
 
 ```sh
-git worktree add ../Marquee-worktrees/<branch> <branch>
+git fetch github
+git worktree add ../Marquee-worktrees/<branch> -b <branch> github/main
 ```
+
+`-b` creates the branch, so it fails loudly if that name already exists. Resuming a branch
+someone already pushed? Drop `-b`, name the branch, and bring it up to date before working:
+
+```sh
+git worktree add ../Marquee-worktrees/<branch> <branch>
+git -C ../Marquee-worktrees/<branch> rebase github/main
+```
+
+**Cut from `github/main`, never from `main`.** The rule above is precisely what makes the
+local `main` pointer untrustworthy: the primary checkout is parked by design and nobody
+pulls it, so it moves only when a human happens to. On 2026-08-13 it sat **29 commits
+behind** and was missing `a04f80b1` — the fix for test fixtures that minted auth sessions
+against a hardcoded date — so every worktree cut from local `main` inherited 22 expired-session
+failures on its first run. Four agents diagnosed them independently before anyone checked
+the base. The remote-tracking ref is the only trustworthy base here *because* of the
+board-home rule, not in spite of it.
+
+Already working and unsure? Verify rather than assume — a stale base is invisible until it
+costs you an hour, and re-running never clears it:
+
+```sh
+if git fetch github; then
+  if git merge-base --is-ancestor github/main HEAD; then echo "current"
+  else echo "behind github/main — rebase"; fi
+else echo "FETCH FAILED — comparison not attempted"; fi
+```
+
+**Three states, three messages, and never `-q`.** A failed fetch does not make `merge-base`
+fail — it makes it answer confidently about a stale remote-tracking ref. Every worktree here
+shares one `.git`, so two agents fetching at the same moment lose the ref lock
+(`cannot lock ref 'refs/remotes/github/main'`) and the comparison that follows is about
+whatever state happened to exist. Chaining with `&&` at least stops the comparison running,
+but it still prints one string for two different situations; "behind" and "my fetch died"
+need to be distinguishable, because only one of them is about your branch. And `-q` does not
+suppress the ref-lock error — it removes the ordinary output that makes anyone notice the
+fetch step at all, so nothing normal prints and nothing abnormal stands out.
+
+Lost the race? **Just re-run `git fetch github`.** And check the ref before assuming you
+needed to: if a concurrent fetch won the lock, it wrote the same remote truth you were
+asking for, so you may already be current. (`--force` is not the fix — git documents it as
+overriding the *non-fast-forward* refusal on a `<src>:<dst>` refspec, which is a different
+mechanism from a ref-transaction compare-and-swap failure.)
+
+That question — *is my base current?* — is the durable one. Checking for a specific
+rescue commit instead (`--is-ancestor a04f80b1 HEAD`) answers today's incident and then
+quietly expires: once that commit is deep in history every branch contains it, the check
+prints OK forever, and a check that can no longer fail is worse than none, because it
+still looks like reassurance.
+
+**"Behind" is the normal state on a busy day, not a defect** — a branch cut an hour ago
+will say so with nothing wrong with it. Rebase when your PR reports `CONFLICTING`, when you
+are about to merge, or when you are seeing a wave of auth 401s; not merely because you are
+behind, since every needless rebase throws away a gate run already queued. Behind *plus*
+those 401s is the expired-fixture case above, and only rebasing cures it.
 
 - **Launch agents with the board pinned:** `c11 launch-agent … --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee`.
   Board resolution then never depends on cwd or on what branch anything is on.
