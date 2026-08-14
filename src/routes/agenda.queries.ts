@@ -511,7 +511,8 @@ function toPublishCandidate(row: PublishCandidateRow): AgendaPublishCandidate {
  * does not already have a published agenda item and marks an unplaced one as
  * visible-but-not-yet-publishable. The explicit NOT EXISTS guard matters when
  * the legacy submission flag is stale: public visibility is owned by the
- * agenda item, so a live Session must not reappear as an unscheduled candidate.
+ * agenda item, so a live Session must not reappear as an unscheduled candidate
+ * and an unpublished Session must remain recoverable after an unpublish.
  * Keeping the candidate projection here means the builder counter, preview,
  * and batch command all share one answer about what is ready to go public.
  */
@@ -546,7 +547,6 @@ export async function readAgendaPublication(
       WHERE submission.event_id = ?
         AND submission.status = 'accepted'
         AND submission.kind = 'session'
-        AND submission.is_published = 0
         AND NOT EXISTS (
           SELECT 1 FROM agenda_items published_item
           WHERE published_item.event_id = submission.event_id
