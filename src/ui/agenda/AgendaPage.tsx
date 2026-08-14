@@ -170,9 +170,13 @@ function publicationDateTime(candidate: AgendaPublishCandidate, timezone: string
   }).format(new Date(candidate.starts_at));
 }
 
-function publicationSpeakerLine(candidate: AgendaPublishCandidate): string {
-  const hasOnStageParticipant = candidate.speakers.some((speaker) =>
+export function hasPublicSpeaker(candidate: AgendaPublishCandidate): boolean {
+  return candidate.speakers.some((speaker) =>
     speaker.role === undefined || isVisibleToAudience(speaker.role, "public"));
+}
+
+function publicationSpeakerLine(candidate: AgendaPublishCandidate): string {
+  const hasOnStageParticipant = hasPublicSpeaker(candidate);
   return hasOnStageParticipant
     ? candidate.speakers.map((speaker) => speaker.name).join(" · ")
     : PUBLIC_SPEAKER_EMPTY_LABEL;
@@ -829,6 +833,7 @@ export function PublicationCandidateRow({
       <span>{detail}</span>
       {!candidate.can_publish && <span class="agenda-publication-candidate-reason">{blockedReason}</span>}
       <span>{speakers}</span>
+      {!hasPublicSpeaker(candidate) && <span class="agenda-publication-candidate-warning" role="alert">No speaking participant attached · the public agenda will show “Speaker to be announced”.</span>}
     </div>
   </div>;
 }

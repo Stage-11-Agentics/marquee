@@ -97,7 +97,11 @@ describe.sequential("MRQ-164 co-speaker double-booking", () => {
       }),
     });
     expect(created.status).toBe(201);
-    const record = await created.json<{ id: string; participants: Array<{ name: string; role: string }> }>();
+    const record = await created.json<{ id: string; participants: Array<{ person_id: string; name: string; role: string }> }>();
+    expect(record.participants).toEqual(expect.arrayContaining([
+      expect.objectContaining({ person_id: "person-marcus-164", role: "speaker" }),
+      expect.objectContaining({ person_id: "person-marcus-164", role: "submitter" }),
+    ]));
 
     const placed = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/items`, {
       method: "POST",
@@ -117,5 +121,18 @@ describe.sequential("MRQ-164 co-speaker double-booking", () => {
       && conflict.person_id === "person-marcus-164"
       && conflict.session_ids.includes(lightning!.id),
     )).toBe(true);
+
+    const published = await request(`/api/v1/events/${DEMO_EVENT_ID}/submissions/${record.id}/publish`, { method: "POST" });
+    expect(published.status).toBe(200);
+    for (const path of [
+      `/api/v1/public/agenda?event=aie-nyc-2026`,
+      `/api/v1/public/embeds/aie-nyc-2026-agenda?event=aie-nyc-2026`,
+    ]) {
+      const response = await request(path);
+      expect(response.status).toBe(200);
+      const payload = await response.json<{ sessions: Array<{ title: string; speakers: Array<{ name: string }> }> }>();
+      const publicSession = payload.sessions.find((session) => session.title === "Second Lightning: Agents in Production Q&A");
+      expect(publicSession?.speakers.map((speaker) => speaker.name)).toContain("Marcus Okafor");
+    }
   });
 });

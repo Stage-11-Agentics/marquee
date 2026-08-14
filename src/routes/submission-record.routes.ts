@@ -1029,6 +1029,11 @@ const createSubmission = defineApiRoute(
     for (const [index, participant] of (body.participants ?? []).entries()) {
       addParticipant(await makePerson(participant), participant.role, participant.position ?? index);
     }
+    // A Session born on the organizer's builder has a person attached to it as
+    // its speaker of record. Keep the submitter role as authorship metadata,
+    // but never make a builder-created Session public-speaker empty by leaving
+    // that person submitter-only.
+    if (body.kind === "session") addParticipant(submitterId, "speaker", participants.length);
     addParticipant(submitterId, "submitter", participants.length);
 
     const participantIds = [...new Set(participants.map((participant) => participant.personId))];

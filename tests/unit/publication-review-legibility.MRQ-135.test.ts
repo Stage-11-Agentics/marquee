@@ -93,6 +93,7 @@ describe("MRQ-135 · the publication review row is readable", () => {
 
   it("CONTRACT · MRQ-185 · the review row warns when its program-only participant is not on stage", () => {
     expect(submitterOnlyRow).toContain("Speaker to be announced");
+    expect(submitterOnlyRow).toContain("No speaking participant attached");
     expect(submitterOnlyRow).not.toContain("Submitter Only");
   });
 
@@ -113,6 +114,7 @@ describe("MRQ-135 · the publication review row is readable", () => {
     expect(unscheduledSubmitterOnlyRow).toContain("disabled");
     expect(unscheduledSubmitterOnlyRow).toContain("needs a room and time before it can go public");
     expect(unscheduledSubmitterOnlyRow).toContain("Speaker to be announced");
+    expect(unscheduledSubmitterOnlyRow).toContain("No speaking participant attached");
     expect(unscheduledSubmitterOnlyRow).not.toContain("Submitter Only");
   });
 });
