@@ -182,19 +182,22 @@ export function ImportPeopleModal({
 }
 
 export function ComposeModal({
-  personIds,
+  people,
   onClose,
   onSent,
 }: {
-  personIds: string[];
+  people: Array<Pick<Person, "id" | "name" | "do_not_contact">>;
   onClose: () => void;
-  onSent: (result: { selected: number; queued: number; duplicate: number }) => void;
+  onSent: (result: { selected: number; queued: number; duplicate: number; excluded_people: string[] }) => void;
 }): JSX.Element {
+  const personIds = people.map((person) => person.id);
+  const excludedPeople = people.filter((person) => person.do_not_contact).map((person) => person.name);
+  const eligibleCount = people.length - excludedPeople.length;
   const [subject, setSubject] = useState("Speak at our next conference?");
   const [body, setBody] = useState(
-    "Hi {{speaker.first_name}},\n\nWe're building next year's program and would like you on it.\n\nWould you submit a talk?\n\n— The program team",
+    "Hi {{speaker.first_name}},\n\nWe're building the next program and would like you on it.\n\nWould you submit a talk?\n\n— The program team",
   );
-  const [preview, setPreview] = useState<{ to_email: string; subject: string; text: string } | null>(null);
+  const [preview, setPreview] = useState<{ to_email: string; subject: string; text: string; excluded_people: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -222,16 +225,19 @@ export function ComposeModal({
 
   return <Modal
     title="Email these people"
-    meta={`${personIds.length} recipient${personIds.length === 1 ? "" : "s"} selected · sends through the outbox and is logged`}
+    meta={`${eligibleCount} recipient${eligibleCount === 1 ? "" : "s"} ready · sends through the outbox and is logged`}
     onClose={onClose}
     foot={<>
       <Button onClick={onClose}>Cancel</Button>
       <Button onClick={() => void showPreview()}>Preview</Button>
-      <Button variant="primary" disabled={busy || personIds.length === 0} onClick={() => void send()}>
-        {busy ? "Queueing…" : `Send ${personIds.length} email${personIds.length === 1 ? "" : "s"}`}
+      <Button variant="primary" disabled={busy || eligibleCount === 0} onClick={() => void send()}>
+        {busy ? "Queueing…" : `Send ${eligibleCount} email${eligibleCount === 1 ? "" : "s"}`}
       </Button>
     </>}
   >
+    {(preview?.excluded_people ?? excludedPeople).length > 0 ? <p class="people-exclusion-notice" role="alert">
+      {(preview?.excluded_people ?? excludedPeople).length} excluded — marked do-not-contact: {(preview?.excluded_people ?? excludedPeople).join(", ")}
+    </p> : null}
     <label class="people-field">
       <span>Subject</span>
       <input value={subject} onInput={(event) => setSubject((event.currentTarget as HTMLInputElement).value)} />
@@ -247,7 +253,7 @@ export function ComposeModal({
         <div class="people-preview-subject">{preview.subject}</div>
         <div class="people-preview-body">{preview.text}</div>
       </div>
-      <p class="people-hint">Merge tags resolve per recipient — this is recipient 1 of {personIds.length}.</p>
+      <p class="people-hint">Merge tags resolve per recipient — this is recipient 1 of {eligibleCount}.</p>
     </div> : <p class="people-hint">Preview renders recipient 1 with their merge tags filled in, exactly as it will send.</p>}
     {error ? <div class="people-state error" role="alert">{error}</div> : <div />}
   </Modal>;

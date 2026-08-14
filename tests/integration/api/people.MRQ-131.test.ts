@@ -25,6 +25,7 @@ const SESSION_EXPIRES_AT = Date.now() + 86_400_000;
 const ORG_ID = "org_mrq131";
 const OTHER_ORG_ID = "org_mrq131_other";
 const EVENT_ID = "evt_mrq131";
+const TARGET_EVENT_ID = "evt_mrq205_target";
 const ORIGIN = "https://marquee.stage11.dev";
 const ORGANIZER = "per_mrq131_organizer";
 const AUTH_SESSION = "sess_mrq131";
@@ -223,6 +224,80 @@ test("CONTRACT · MRQ-131 · CRM-07/08 · a stage move survives a reload and the
   expect(record.stage_history.map((entry) => entry.stage)).toEqual(["identified", "contacted"]);
   // And the board is filterable from People by the same stage.
   expect((await people("?stage=contacted")).data.map((row) => row.name)).toEqual(["Marcus Okafor"]);
+});
+
+test("CONTRACT · MRQ-205 · Outreach targets round-trip, legacy cards stay nullable, and DNC names exclusions", async () => {
+  await env.DB.prepare(`INSERT INTO events
+    (id, org_id, name, slug, tagline, starts_on, ends_on, timezone, venue, accent, status, demo_mode, created_at, updated_at)
+    VALUES (?, ?, 'AIE NYC 2026', 'aie-nyc-2026', 'A stage for practical ideas', '2026-10-19', '2026-10-21', 'America/New_York', 'Javits Center', '#635bff', 'draft', 0, ?, ?)`)
+    .bind(TARGET_EVENT_ID, ORG_ID, NOW, NOW)
+    .run();
+
+  const moved = await post(`/api/v1/org/people/${SUBMITTER}/stage`, {
+    stage: "contacted",
+    target_event_id: TARGET_EVENT_ID,
+    next_touch_on: "2026-08-11",
+  });
+  expect(moved.status).toBe(200);
+
+  const board = await json<{
+    cards: Array<{
+      person_id: string;
+      target_event_id: string | null;
+      target_event_name: string | null;
+      next_touch_on: string | null;
+    }>;
+    target_events: Array<{ id: string; name: string }>;
+  }>("/api/v1/org/pipeline");
+  const targeted = board.cards.find((card) => card.person_id === SUBMITTER)!;
+  expect(targeted).toMatchObject({
+    target_event_id: TARGET_EVENT_ID,
+    target_event_name: "AIE NYC 2026",
+    next_touch_on: "2026-08-11",
+  });
+  expect(board.target_events.map((event) => event.name)).toEqual(["AIE NYC 2026", "DevFlow Conf 2027"]);
+
+  const record = await json<{
+    person: { outreach_target_event_id: string | null; outreach_target_event_name: string | null; outreach_next_touch_on: string | null };
+    card: { target_event_id: string | null; target_event_name?: string | null; next_touch_on: string | null } | null;
+    target_events: Array<{ id: string; name: string }>;
+  }>(`/api/v1/org/people/${SUBMITTER}`);
+  expect(record.person).toMatchObject({
+    outreach_target_event_id: TARGET_EVENT_ID,
+    outreach_target_event_name: "AIE NYC 2026",
+    outreach_next_touch_on: "2026-08-11",
+  });
+  expect(record.card).toMatchObject({ target_event_id: TARGET_EVENT_ID, target_event_name: "AIE NYC 2026" });
+  expect(record.target_events).toHaveLength(2);
+
+  // A pre-MRQ-205 stage row has no target and remains readable as a legacy card.
+  await env.DB.prepare(`INSERT INTO person_events
+    (id, org_id, person_id, kind, value_json, actor_person_id, created_at)
+    VALUES ('pev_mrq205_legacy', ?, ?, 'stage', '{"stage":"identified"}', NULL, ?)`)
+    .bind(ORG_ID, SPEAKER, NOW)
+    .run();
+  const legacy = await json<{ card: { target_event_id: string | null; next_touch_on: string | null } | null }>(`/api/v1/org/people/${SPEAKER}`);
+  expect(legacy.card).toEqual(expect.objectContaining({ target_event_id: null, next_touch_on: null }));
+
+  await json<{ person: unknown }>(`/api/v1/org/people/${SPEAKER}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ do_not_contact: true }),
+  });
+  const preview = await json<{ recipients: number; excluded_people: string[] }>("/api/v1/org/comms/preview", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ person_ids: [SPEAKER, SUBMITTER], subject: "Hello", body: "Hi there" }),
+  });
+  expect(preview).toMatchObject({ recipients: 1, excluded_people: ["Priya Raman"] });
+  const send = await json<{ selected: number; queued: number; excluded_people: string[] }>("/api/v1/org/comms/send", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ person_ids: [SPEAKER, SUBMITTER], subject: "Hello", body: "Hi there" }),
+  });
+  expect(send).toMatchObject({ selected: 1, queued: 1, excluded_people: ["Priya Raman"] });
+  const recipients = await env.DB.prepare("SELECT person_id FROM outbox WHERE subject = 'Hello'").all<{ person_id: string }>();
+  expect(recipients.results.map((row) => row.person_id)).toEqual([SUBMITTER]);
 });
 
 test("CONTRACT · MRQ-131 · CRM-09 · both kinds of List save and resolve as metadata", async () => {

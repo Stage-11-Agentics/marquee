@@ -1,6 +1,7 @@
 import { seed as agenda } from "../../../scripts/seed/agenda.ts";
 import { seed as acceptedCore } from "../../../scripts/seed/accepted-core.ts";
 import { seed as ugliness } from "../../../scripts/seed/ugliness.ts";
+import { seed as outreach } from "../../../scripts/seed/outreach.ts";
 import { seed as evaluations } from "../../../scripts/seed/evaluations.ts";
 import { seed as event } from "../../../scripts/seed/event.ts";
 import { FROZEN_NOW } from "../../../scripts/seed/event.ts";
@@ -21,6 +22,7 @@ export const DEMO_SEED_MODULES: readonly SeedModule[] = [
   submissionContent,
   agenda,
   ugliness,
+  outreach,
 ].sort((left, right) =>
   left.order === right.order ? left.name.localeCompare(right.name) : left.order - right.order,
 );

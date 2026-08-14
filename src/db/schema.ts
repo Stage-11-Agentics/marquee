@@ -267,6 +267,7 @@ export interface PersonRow extends MutableRecord {
   bio: string | null;
   company: string | null;
   custom_fields: JsonText;
+  do_not_contact: 0 | 1;
   email: string;
   headshot_attachment_id: Id | null;
   is_demo: 0 | 1;
@@ -283,7 +284,9 @@ export interface PersonEventRow extends ImmutableRecord {
   kind: "note" | "tag" | "stage";
   org_id: Id;
   person_id: Id;
+  target_event_id: Id | null;
   value_json: JsonText;
+  next_touch_on: CalendarDate | null;
 }
 
 export interface PersonListRow extends MutableRecord {

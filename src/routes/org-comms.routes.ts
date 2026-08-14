@@ -38,6 +38,12 @@ interface RecipientPerson {
   name: string;
   email: string;
   company: string | null;
+  do_not_contact: number;
+}
+
+interface Audience {
+  people: RecipientPerson[];
+  excluded_people: string[];
 }
 
 /**
@@ -49,25 +55,25 @@ async function audienceFor(
   db: D1Database,
   orgId: string,
   audience: z.infer<typeof audienceSchema>,
-): Promise<RecipientPerson[]> {
+): Promise<Audience> {
+  let people: RecipientPerson[];
   if (audience.person_ids && audience.person_ids.length > 0) {
     // One binding for the whole selection, the way the conference-scoped
     // selector already does it: a placeholder per id would put a 500-person
     // send straight through D1's binding cap.
     const rows = await db
       .prepare(
-        `SELECT id, name, email, company FROM people
+        `SELECT id, name, email, company, do_not_contact FROM people
          WHERE org_id = ? AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
          ORDER BY name COLLATE NOCASE, id`,
       )
       .bind(orgId, JSON.stringify([...new Set(audience.person_ids)]))
       .all<RecipientPerson>();
-    return rows.results;
-  }
-  if (audience.list_id) {
+    people = rows.results;
+  } else if (audience.list_id) {
     const rows = await db
       .prepare(
-        `SELECT person.id, person.name, person.email, person.company
+        `SELECT person.id, person.name, person.email, person.company, person.do_not_contact
          FROM person_list_members member
          JOIN people person ON person.id = member.person_id
          JOIN person_lists saved ON saved.id = member.list_id
@@ -76,9 +82,14 @@ async function audienceFor(
       )
       .bind(audience.list_id, orgId, orgId)
       .all<RecipientPerson>();
-    return rows.results;
+    people = rows.results;
+  } else {
+    throw ApiError.badRequest("a send needs person_ids or a list_id", "person_ids");
   }
-  throw ApiError.badRequest("a send needs person_ids or a list_id", "person_ids");
+  return {
+    people: people.filter((person) => Number(person.do_not_contact) !== 1),
+    excluded_people: people.filter((person) => Number(person.do_not_contact) === 1).map((person) => person.name),
+  };
 }
 
 function mergeDataFor(person: RecipientPerson) {
@@ -117,6 +128,7 @@ const previewOrgMail = defineApiRoute(
           text: z.string(),
           html: z.string(),
           recipients: z.number().int(),
+          excluded_people: z.array(z.string()),
         }),
         "Rendered preview",
       ),
@@ -126,11 +138,19 @@ const previewOrgMail = defineApiRoute(
   async (context) => {
     const access = requireOrgAccess(context);
     const body = context.req.valid("json");
-    const people = await audienceFor(context.env.DB, access.orgId, body);
-    const first = people[0];
-    if (!first) throw ApiError.notFound("that selection resolves to nobody in this organization");
-    const rendered = renderAdHocMail(body.subject, body.body, mergeDataFor(first));
-    return context.json({ ...rendered, to_email: first.email, recipients: people.length }, 200);
+    const audience = await audienceFor(context.env.DB, access.orgId, body);
+    if (audience.people.length === 0 && audience.excluded_people.length === 0) {
+      throw ApiError.notFound("that selection resolves to nobody in this organization");
+    }
+    const first = audience.people[0];
+    const rendered = first ? renderAdHocMail(body.subject, body.body, mergeDataFor(first)) : { text: "", html: "" };
+    return context.json({
+      ...rendered,
+      to_email: first?.email ?? "",
+      subject: body.subject,
+      recipients: audience.people.length,
+      excluded_people: audience.excluded_people,
+    }, 200);
   },
 );
 
@@ -163,6 +183,7 @@ const sendOrgMail = defineApiRoute(
           queued: z.number().int(),
           duplicate: z.number().int(),
           outbox_ids: z.array(z.string()),
+          excluded_people: z.array(z.string()),
         }),
         "Messages queued",
       ),
@@ -174,15 +195,20 @@ const sendOrgMail = defineApiRoute(
     const body = context.req.valid("json");
     const unknown = unknownMergeFieldsForCommunication(body.subject, body.body);
     if (unknown.length > 0) throw ApiError.badRequest(mergeFieldErrorMessage(unknown), "template");
-    const people = await audienceFor(context.env.DB, access.orgId, body);
-    if (people.length === 0) throw ApiError.notFound("that selection resolves to nobody in this organization");
+    const audience = await audienceFor(context.env.DB, access.orgId, body);
+    if (audience.people.length === 0 && audience.excluded_people.length === 0) {
+      throw ApiError.notFound("that selection resolves to nobody in this organization");
+    }
+    if (audience.people.length === 0) {
+      return context.json({ selected: 0, queued: 0, duplicate: 0, outbox_ids: [], excluded_people: audience.excluded_people }, 202);
+    }
     const eventId = await orgAttributionEventId(context.env.DB, access.orgId);
     const queued = await enqueueBulkReminder({
       db: context.env.DB,
       eventId,
       // Same ad-hoc key the conference-scoped send uses for a typed message.
       templateKey: "custom" as MailTemplateKey,
-      recipients: people.map((person) => ({
+      recipients: audience.people.map((person) => ({
         entityId: person.id,
         personId: person.id,
         toEmail: person.email,
@@ -201,7 +227,13 @@ const sendOrgMail = defineApiRoute(
         duplicate += 1;
       }
     }
-    return context.json({ selected: people.length, queued: outboxIds.length, duplicate, outbox_ids: outboxIds }, 202);
+    return context.json({
+      selected: audience.people.length,
+      queued: outboxIds.length,
+      duplicate,
+      outbox_ids: outboxIds,
+      excluded_people: audience.excluded_people,
+    }, 202);
   },
 );
 

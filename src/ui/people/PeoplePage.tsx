@@ -26,6 +26,7 @@ import {
   fetchLists,
   fetchPeople,
   fetchSummary,
+  exportPeople,
   formatDay,
   formatMoment,
   hasFilters,
@@ -116,6 +117,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
   const [modal, setModal] = useState<"" | "import" | "compose" | "savelist" | "addperson">("");
   const [toast, setToast] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
+  const [exporting, setExporting] = useState(false);
   // Four states, and telling them apart is the point. "Deleted" and "the
   // request failed" look identical to a `.catch`, and reporting a network blip
   // as "this list no longer exists" tells an organizer their work is gone.
@@ -246,6 +248,25 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
   // width when the number arrives, or when a list is created or deleted.
   const listsLabel = lists === null ? "—" : lists.length.toLocaleString();
 
+  const downloadCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const csv = await exportPeople(filters);
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "marquee-people.csv";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      announce("People exported as CSV");
+    } catch (caught) {
+      announce(`Export failed: ${errorSummary(caught)}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return <div class="people-page">
     <PageHeader
       title="People CRM"
@@ -257,6 +278,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
             ? `Everyone this organization has worked with, across every conference — ${payload.total.toLocaleString()} speakers, submitters, chairs and contacts, carrying their history, notes and tags. A returning speaker is already here; nobody re-keys anything.`
             : "Reading everyone this organization has worked with…"}
       actions={<>
+        <Button onClick={() => void downloadCsv()} disabled={exporting}>{exporting ? "Exporting…" : "Export CSV"}</Button>
         <Button onClick={() => setModal("import")}>Import people</Button>
         <Button variant="primary" onClick={() => setModal("addperson")}>Add person</Button>
       </>}
@@ -309,7 +331,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
       <span class="people-toolbar-spacer" />
       <Button small onClick={() => navigate?.("/lists")}>Lists · {listsLabel}</Button>
       <Button small class="people-save-control" onClick={() => setModal("savelist")}>{control.label}</Button>
-      <Button small onClick={() => navigate?.("/pipeline")}>Sourcing pipeline</Button>
+      <Button small onClick={() => navigate?.("/pipeline")}>Outreach</Button>
     </div>
 
     {/* The list you are inside, said in the name you gave it. Rendered from the
@@ -439,6 +461,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
             <th scope="col">Email</th>
             <th scope="col">Company</th>
             <th scope="col">Job title</th>
+            <th scope="col">Outreach</th>
             <th scope="col">Tags</th>
             <th scope="col">Confs</th>
             <th scope="col">Last contact</th>
@@ -462,6 +485,14 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
             <td><span class="people-cell-mail people-cell-trunc">{row.email}</span></td>
             <td><span class="people-cell-trunc">{row.company ?? "—"}</span></td>
             <td><span class="people-cell-trunc">{row.title ?? "—"}</span></td>
+            <td class="people-cell-outreach">
+              <strong title={row.outreach_target_event_name ? `→ ${row.outreach_target_event_name}` : "No conference target"}>
+                {row.stage ? row.stage.replaceAll("_", " ") : "Not enrolled"}
+              </strong>
+              <span class={row.outreach_next_touch_on && row.outreach_next_touch_on < new Date().toISOString().slice(0, 10) ? "overdue" : ""}>
+                {row.outreach_target_event_name ? `→ ${row.outreach_target_event_name}` : "→ No target"}
+              </span>
+            </td>
             <td>
               <span class="people-tagset">
                 {row.tags.length === 0
@@ -490,6 +521,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
     {openPersonId ? <PersonDrawer
       personId={openPersonId}
       onClose={closePerson}
+      navigate={navigate}
       onChanged={() => setReloadToken((token) => token + 1)}
     /> : null}
 
@@ -506,12 +538,12 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
     /> : null}
 
     {modal === "compose" ? <ComposeModal
-      personIds={[...selected]}
+      people={rows.filter((row) => selected.has(row.id))}
       onClose={() => setModal("")}
       onSent={(result) => {
         setModal("");
         setSelected(new Set());
-        announce(`${result.queued} message${result.queued === 1 ? "" : "s"} queued — every one is logged in the outbox`);
+        announce(`${result.queued} message${result.queued === 1 ? "" : "s"} queued — every one is logged in the outbox${result.excluded_people.length ? ` · excluded: ${result.excluded_people.join(", ")}` : ""}`);
       }}
     /> : null}
 

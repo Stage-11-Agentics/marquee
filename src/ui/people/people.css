@@ -525,6 +525,10 @@
 
 .people-bio { font-size: 12.5px; line-height: 1.6; color: var(--ink-soft); margin: var(--s2) 0 0; }
 
+.people-drawer-action-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-top: var(--s3); min-height: 30px; }
+.people-outreach-status p { margin: 0; color: var(--ink-soft); font-size: 12.5px; line-height: 1.5; }
+.people-outreach-status a { color: var(--accent-ink); font-weight: 600; }
+
 .people-notebox { display: grid; gap: var(--s2); margin-top: var(--s2); }
 
 /* Text entries only. A bare `.people-field input` also catches the radios and
@@ -756,11 +760,18 @@
   padding: 9px 10px;
   display: grid;
   gap: 5px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .people-card:hover { border-color: var(--accent); background: var(--accent-wash); }
-.people-card .people-card-name { font-size: 12.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.people-card .people-card-company { font: 400 10.5px/1.3 var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.people-card .people-rowlink { display: block; min-width: 0; max-width: 100%; width: 100%; overflow: hidden; text-align: left; }
+.people-card .people-card-name { display: block; min-width: 0; max-width: 100%; font-size: 12.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.people-card .people-card-company,
+.people-card .people-card-target,
+.people-card .people-card-next { display: block; min-width: 0; max-width: 100%; font: 400 10.5px/1.3 var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.people-card .people-card-target { color: var(--ink-soft); }
+.people-card .people-card-next.overdue { color: var(--alarm); font-weight: 600; }
 .people-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
 .people-card-score { font: 600 10.5px/1 var(--mono); color: var(--accent-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
@@ -773,9 +784,23 @@
   font: 400 10px/1 var(--mono);
   padding: 0 4px;
   color: var(--ink-soft);
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .people-moveto:focus { border-color: var(--accent); outline: none; }
+
+.people-cell-outreach { min-width: 0; max-width: 190px; }
+.people-cell-outreach strong,
+.people-cell-outreach span { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.people-cell-outreach strong { font-weight: 600; color: var(--ink-soft); }
+.people-cell-outreach span { margin-top: 3px; font: 400 10px/1.2 var(--mono); color: var(--muted); }
+.people-cell-outreach span.overdue { color: var(--alarm); font-weight: 600; }
+
+.people-exclusion-notice { margin: 0; border: var(--hair) solid var(--alarm); border-radius: var(--radius); padding: var(--s2) var(--s3); color: var(--alarm); font: 400 11px/1.45 var(--mono); }
 
 /* ── Lists ───────────────────────────────────────────────────────────────── */
 .people-list-row {
