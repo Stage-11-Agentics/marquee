@@ -146,9 +146,10 @@ export type ClaimVerifyOutcome =
       personId: Id;
       alreadyVerified: boolean;
       /**
-       * The write key, handed to the browser that just proved it can read the
-       * mailbox — and erased from the row in the same write. Null on a second
-       * open of the same mail: the first one already collected it.
+       * The write key, handed to whoever proves — by presenting the mailed
+       * token — that they can read the mailbox. Returned on every valid open,
+       * not just the first: the same link in the same inbox has to keep
+       * working, which is the whole recovery promise.
        */
       writeKey: string | null;
       /** The read-only handle the owner's calendar feed carries. */
@@ -175,14 +176,6 @@ export async function verifyClaim(
   const presented = await hashClaimToken(input.token);
   if (!constantTimeEqualHex(presented, row.token_hash)) return { ok: false, reason: "bad_token" };
   if (row.verified_at !== null && row.person_id) {
-    // A repeat open still collects the key a resend left waiting, and still
-    // erases it: the row must not keep a credential once it has been handed on.
-    if (row.pending_write_key) {
-      await database
-        .prepare("UPDATE schedule_claims SET pending_write_key = NULL, updated_at = ? WHERE code = ?")
-        .bind(input.now, row.code)
-        .run();
-    }
     return {
       ok: true, row, personId: row.person_id, alreadyVerified: true,
       writeKey: row.pending_write_key, feedToken: row.feed_token,
@@ -235,15 +228,20 @@ export async function verifyClaim(
     now: input.now,
   });
 
-  // The key leaves the database in the same statement that records the
-  // verification: it existed only to survive the trip through a mailbox. The
-  // feed token arrives in the same write, because pins exist from this moment.
+  // The key is NOT burned on first use.
+  //
+  // Erasing it on collection looked tidy and made the feature's own promise
+  // false: people open their own link on the device they sent it from, and mail
+  // clients preview links, so the second open — often the human's first —
+  // received a null key and a page that silently never synced again. Whoever
+  // holds this token can obtain the key regardless, so keeping it until the
+  // claim is unlinked (which deletes the row) or a resend replaces it costs no
+  // security and makes "open it on any device" true.
   const feedToken = row.feed_token ?? mintToken(16);
   await database
     .prepare(
       `UPDATE schedule_claims
-          SET person_id = ?, minted_person = ?, verified_at = ?, pending_write_key = NULL,
-              feed_token = ?, updated_at = ?
+          SET person_id = ?, minted_person = ?, verified_at = ?, feed_token = ?, updated_at = ?
         WHERE code = ?`,
     )
     .bind(personId, mintedPerson, input.now, feedToken, input.now, row.code)

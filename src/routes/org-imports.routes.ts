@@ -311,7 +311,7 @@ const undoPeopleImport = defineApiRoute(
     // Which conference this import marked people as attending, if any.
     const attendanceEventId = readAttendanceEventId(imported.mapping);
     const statements: D1PreparedStatement[] = [];
-    const operations: Array<{ resultIndex: number; kind: "restore" | "delete" | "attendance" }> = [];
+    const operations: Array<{ resultIndex: number; kind: "restore" | "delete" }> = [];
     const skippedRows: UndoSkip[] = [];
     const now = Date.now();
 
@@ -332,15 +332,27 @@ const undoPeopleImport = defineApiRoute(
     // people are coming"; undoing the import withdraws that assertion, for the
     // people it touched, at that conference, and nowhere else.
     let attendancesRemoved = 0;
+    let attendanceIndex = -1;
     if (attendanceEventId) {
-      const targets = rows.results.map((row) => row.target_id).filter((id): id is string => Boolean(id));
-      for (const personId of targets) {
-        const resultIndex = statements.length;
-        statements.push(context.env.DB.prepare(
-          "DELETE FROM event_attendances WHERE person_id = ? AND event_id = ? AND source = 'import'",
-        ).bind(personId, attendanceEventId));
-        operations.push({ resultIndex, kind: "attendance" });
-      }
+      attendanceIndex = statements.length;
+      // One statement, not one per person: a three-thousand-row ticket export
+      // would otherwise queue three thousand extra deletes into a batch that
+      // already carries a receipt per row.
+      //
+      // `created_at = imports.created_at` is what keeps this honest. The
+      // attendance upsert only stamps `created_at` on insert, so this matches
+      // exactly the rows THIS import brought into being — re-running an updated
+      // export (the loop SKILL.md teaches) touches nothing new, and undoing the
+      // re-run must not withdraw the attendance the first run created.
+      statements.push(context.env.DB.prepare(
+        `DELETE FROM event_attendances
+          WHERE event_id = ? AND source = 'import'
+            AND created_at = (SELECT created_at FROM imports WHERE id = ?)
+            AND person_id IN (
+              SELECT target_id FROM import_rows
+               WHERE import_id = ? AND entity = 'person' AND target_id IS NOT NULL
+            )`,
+      ).bind(attendanceEventId, importId, importId));
     }
 
     for (const row of rows.results) {
@@ -406,8 +418,8 @@ const undoPeopleImport = defineApiRoute(
     const results = await context.env.DB.batch(statements);
     const changed = (operation: { resultIndex: number }): boolean =>
       Number(results[operation.resultIndex]?.meta?.changes ?? 0) > 0;
-    const undone = operations.filter((operation) => operation.kind !== "attendance").filter(changed).length;
-    attendancesRemoved = operations.filter((operation) => operation.kind === "attendance").filter(changed).length;
+    const undone = operations.filter(changed).length;
+    attendancesRemoved = attendanceIndex >= 0 ? Number(results[attendanceIndex]?.meta?.changes ?? 0) : 0;
     return context.json({
       undone,
       attendances_removed: attendancesRemoved,

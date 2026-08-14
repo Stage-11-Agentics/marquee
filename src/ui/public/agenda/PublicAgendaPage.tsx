@@ -28,6 +28,10 @@ export const PUBLIC_SITE_STYLES = `
   --public-rule: #c8d2da;
   --public-rule-soft: #dde4ea;
   --public-accent: #0b6a72;
+  /* Accent text ON the wash, from the ratified skin. Four rules referenced it
+     and nothing defined it, so every one of them silently inherited body ink —
+     including .claim-done, which is new here. */
+  --public-accent-ink: #084f55;
   --public-accent-wash: #e2f0f1;
   --public-warn: #8a5c00;
   --public-warn-wash: #fdf1dd;
@@ -208,14 +212,20 @@ export const PUBLIC_SITE_STYLES = `
 
 /* The email claim row, inside the share sheet. Every state is the same height:
    the input, the pending line, the linked line, and the unlink confirmation. */
-.claim-line { min-height: 36px; }
+/* The challenge is 300px wide and lands beside a 96px button — on a phone that
+   leaves the address field about eighty pixels, narrower than the address being
+   typed into it, and the widget itself wider than the sheet. It gets its own
+   row instead, and the row keeps the height of its tallest state so pressing
+   Send changes the sentence and not the layout. */
+.claim-line { min-height: 36px; flex-wrap: wrap; }
+.claim-line.has-challenge { min-height: 109px; align-content: flex-start; }
 .claim-input { flex: 1 1 auto; min-width: 0; height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-surface); padding: 0 9px; font-size: 12px; }
 .claim-done { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-accent-wash); padding: 4px 10px; font: 600 11.5px/1.4 var(--public-sans); color: var(--public-accent-ink); }
 .claim-done.quiet-state { background: var(--public-sunk); color: var(--public-soft); }
 .claim-actions { display: inline-flex; gap: 12px; flex: 0 0 auto; }
 /* The challenge mounts asynchronously from a third-party script. Its slot is
    reserved at the size it will take, so arriving late moves nothing. */
-.claim-turnstile { flex: 0 0 auto; min-width: 300px; min-height: 65px; }
+.claim-turnstile { flex: 1 0 100%; min-height: 65px; }
 .claim-done .quiet { background: none; border: 0; padding: 0; min-width: 46px; text-align: center; color: var(--public-accent); font: 650 10.5px/1 var(--public-mono); letter-spacing: .04em; }
 .claim-done .quiet:hover, .claim-done .quiet:focus-visible { text-decoration: underline; outline: none; }
 
@@ -549,7 +559,7 @@ function speakerHref(slug: string): string {
   return `/p/${encodeURIComponent(slug)}`;
 }
 
-function TrackChips({ session, starCount }: { session: PublicSession; starCount?: number }): JSX.Element {
+function TrackChips({ session, starCount, reserveCount = true }: { session: PublicSession; starCount?: number; reserveCount?: boolean }): JSX.Element {
   return (
     <div class="public-track-list">
       {session.tracks.length > 0 ? session.tracks.map((track) => (
@@ -559,7 +569,7 @@ function TrackChips({ session, starCount }: { session: PublicSession; starCount?
           ruled rather than on a grid row of its own beneath them — and so the
           uppercase, letter-spaced rule on `.public-meta-row > span` cannot
           claim it and eat its tabular figures. */}
-      <StarCountChip count={starCount} />
+      {reserveCount ? <StarCountChip count={starCount} /> : null}
     </div>
   );
 }
@@ -932,7 +942,7 @@ export function PublicAgendaPage({
           code is fetched, so the strip ships at its final size and the script
           fills the sentence — the same reserve-then-fill rule as the summary.
         */}
-        <div class="sched-note" data-schedule-import hidden>
+        <div class="sched-note" data-schedule-import role="status" aria-live="polite" hidden>
           <span data-schedule-import-message>Someone shared a schedule with you.</span>{" "}
           <button type="button" class="public-button" data-schedule-action="import">Import a copy into my schedule</button>
         </div>
@@ -1042,7 +1052,10 @@ export function PublicSessionPage({ event, venue, session, origin, starCounts = 
           data-public-session-speakers={session.speakers.map((speaker) => speaker.name).join(", ")}
         >
           <div class="public-kicker">{venueName}</div>
-          <div class="public-track-list" style={{ justifyContent: "flex-start" }}><FormatChip session={session} /><TrackChips session={session} /></div>
+          {/* No reserved count slot here: the detail page states the number in
+              its own line below, so an always-empty 52px chip would be furniture
+              for something that never arrives. */}
+          <div class="public-track-list" style={{ justifyContent: "flex-start" }}><FormatChip session={session} /><TrackChips session={session} reserveCount={false} /></div>
           <h1>{session.title}</h1>
           <p class="public-detail-meta">{session.day} · {session.time}–{session.endTime} · {session.roomLabel} · {session.durationMin} minutes</p>
           <p class="public-detail-meta">Format: {session.format?.name ?? "—"} · Track: {session.tracks.map((track) => track.name).join(", ") || "—"}</p>
@@ -1144,8 +1157,19 @@ GET  /api/v1/public/schedules/{code}
 PUT  /api/v1/public/schedules/{code}
      (X-Schedule-Write-Key header) → replace the set
 
-GET  /api/v1/public/schedules/{code}/calendar.ics
-     → the live calendar feed; webcal:// is the same URL
+GET  /api/v1/public/schedules/{code}/calendar.ics[?f=…]
+     → the live calendar feed; webcal:// is the same URL.
+       The optional f= handle comes back from a verified claim
+       and adds the sessions its owner is speaking at; without
+       it the feed is exactly the starred picks.
+
+POST /api/v1/public/schedules/{code}/claim/verify
+     { "token": "…from the mailed link" }
+     → completes a claim and returns the write key once,
+       plus the feed handle
+
+DELETE /api/v1/public/schedules/{code}/claim
+     (X-Schedule-Write-Key header) → detach the email again
 
 GET  /api/v1/public/sessions/{slug}/calendar.ics
      → one session as a calendar file
@@ -1184,7 +1208,7 @@ POST /api/v1/public/stars
           <div class="public-divider" />
           <h2>Rules worth knowing</h2>
           <p>
-            Session ids and slugs are both accepted, so it does not matter whether you read the API or the page. Only published sessions of the named event resolve; anything else is a 422 that names it. A set is capped at 200 sessions. Overlaps are computed server-side and returned as id pairs — touching sessions are not overlapping. Losing the write key makes a code permanently read-only; it is stored only as a hash.
+            Session ids and slugs are both accepted, so it does not matter whether you read the API or the page. Only published sessions of the named event resolve; anything else is a 422 that names it. A set is capped at 200 sessions. Overlaps are computed server-side and returned as id pairs — touching sessions are not overlapping. Losing the write key makes a code read-only — unless an email is attached to it, in which case opening the mailed link returns the key again. It is stored on the schedule only as a hash.
           </p>
           <div class="public-divider" />
           <h2>Driving the UI instead</h2>

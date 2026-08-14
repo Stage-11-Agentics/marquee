@@ -527,10 +527,18 @@ test("CONTRACT · MRQ-208 the claim mail carries a verification token and never 
   const payload = await verified.json<{ writeKey: string | null; feedToken: string | null }>();
   expect(payload.writeKey).toBe(schedule.writeKey);
   expect(payload.feedToken).toBeTruthy();
-  // And it is gone from the row the moment it is collected.
-  const row = await env.DB.prepare("SELECT pending_write_key FROM schedule_claims WHERE code = ?")
-    .bind(schedule.code).first<{ pending_write_key: string | null }>();
-  expect(row?.pending_write_key).toBeNull();
+
+  // It stays on the row — deliberately. Burning it on first collection made the
+  // second open of the same mail silently read-only. What matters is that no
+  // surface hands it out: the read WITHOUT the write key carries neither the
+  // key nor the claim, and unlinking deletes the row entirely.
+  const shared = await (await request(`/api/v1/public/schedules/${schedule.code}`)).json<Record<string, unknown>>();
+  expect(JSON.stringify(shared)).not.toContain(schedule.writeKey);
+  const owner = await (await request(`/api/v1/public/schedules/${schedule.code}`, { headers: { "x-schedule-write-key": schedule.writeKey } })).json<Record<string, unknown>>();
+  expect(JSON.stringify(owner)).not.toContain(schedule.writeKey);
+
+  await request(`/api/v1/public/schedules/${schedule.code}/claim`, { method: "DELETE", headers: { "x-schedule-write-key": schedule.writeKey } });
+  expect(await env.DB.prepare("SELECT code FROM schedule_claims WHERE code = ?").bind(schedule.code).first()).toBeNull();
 });
 
 test("CONTRACT · MRQ-208 an attendee import can still be undone, and its attendance rows go with it", async () => {
@@ -558,4 +566,76 @@ test("CONTRACT · MRQ-208 an attendee import can still be undone, and its attend
   expect(Number(left?.n)).toBe(0);
   const people = await env.DB.prepare("SELECT COUNT(*) AS n FROM people WHERE lower(email) IN ('tom@meridian.cap', 'maya@copperline.dev')").first<{ n: number }>();
   expect(Number(people?.n)).toBe(0);
+});
+
+/* ── The recovery regressions the second review found ── */
+
+test("CONTRACT · MRQ-208 the same mailed link keeps working: every valid open returns the write key", async () => {
+  const schedule = await createSchedule(["sub-keynote"]);
+  await request(
+    `/api/v1/public/schedules/${schedule.code}/claim`,
+    { ...json({ email: "maya@copperline.dev" }), headers: { "content-type": "application/json", "x-schedule-write-key": schedule.writeKey } },
+  );
+  const token = await tokenFromMail();
+
+  // People open their own link on the device they sent it from, and mail
+  // clients preview links. Burning the key on first collection made the second
+  // open — often the human's first — silently read-only: no error, no sync.
+  const first = await (await request(`/api/v1/public/schedules/${schedule.code}/claim/verify`, json({ token })))
+    .json<{ writeKey: string | null }>();
+  const second = await (await request(`/api/v1/public/schedules/${schedule.code}/claim/verify`, json({ token })))
+    .json<{ writeKey: string | null; feedToken: string | null }>();
+  expect(first.writeKey).toBe(schedule.writeKey);
+  expect(second.writeKey).toBe(schedule.writeKey);
+  expect(second.feedToken).toBeTruthy();
+});
+
+test("CONTRACT · MRQ-208 verification refuses a wrong token without spending the owner's budget", async () => {
+  const schedule = await createSchedule(["sub-keynote"]);
+  await request(
+    `/api/v1/public/schedules/${schedule.code}/claim`,
+    { ...json({ email: "maya@copperline.dev" }), headers: { "content-type": "application/json", "x-schedule-write-key": schedule.writeKey } },
+  );
+  const token = await tokenFromMail();
+
+  // The code travels in a share link. If successes counted against a per-code
+  // ceiling, anyone holding one could lock the real owner out of their own
+  // claim; only wrong tokens are counted.
+  const wrong = await request(`/api/v1/public/schedules/${schedule.code}/claim/verify`, json({ token: "not-the-token" }));
+  expect(wrong.status).toBe(403);
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const ok = await request(`/api/v1/public/schedules/${schedule.code}/claim/verify`, json({ token }));
+    expect(ok.status).toBe(200);
+  }
+});
+
+test("CONTRACT · MRQ-208 undoing a re-run import leaves the first run's attendance rows alone", async () => {
+  const token = await orgToken();
+  const csv = "name,email,company\nTom Brandt,tom@meridian.cap,Meridian\n";
+  const post = () => request("/api/v1/org/imports", {
+    ...json({ csv, filename: "attendees.csv", event: EVENT_SLUG }),
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+  });
+
+  const first = await (await post()).json<{ import_id: string }>();
+  const second = await (await post()).json<{ import_id: string; created: number }>();
+  expect(second.created).toBe(0);
+
+  // Re-running an updated export is the loop SKILL.md teaches. The second run
+  // inserted no attendance row — it upserted — so undoing it must withdraw
+  // nothing, or an organizer correcting a typo silently un-attends everybody.
+  const undone = await request(`/api/v1/org/imports/${second.import_id}/undo`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(await undone.json<{ attendances_removed: number }>()).toMatchObject({ attendances_removed: 0 });
+  const kept = await env.DB.prepare("SELECT COUNT(*) AS n FROM event_attendances WHERE source = 'import'").first<{ n: number }>();
+  expect(Number(kept?.n)).toBe(1);
+
+  // Undoing the run that actually created it does withdraw it.
+  const firstUndone = await request(`/api/v1/org/imports/${first.import_id}/undo`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(await firstUndone.json<{ attendances_removed: number }>()).toMatchObject({ attendances_removed: 1 });
 });

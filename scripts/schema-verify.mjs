@@ -149,6 +149,8 @@ const requiredIndexes = [
   "idx_session_star_beacons_event",
   "idx_event_attendances_event_source",
   "uq_event_attendances_person_event_source",
+  "idx_schedule_claims_token",
+  "idx_schedule_claims_event",
   "idx_attachments_draft_files",
   "idx_attachments_owner",
   "idx_attachments_submission_files",

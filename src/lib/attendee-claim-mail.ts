@@ -1,10 +1,11 @@
 /**
  * The one mail this feature sends.
  *
- * It carries the sync link — the code plus the write key in the fragment — so
- * the address it reaches can open the schedule on any device and keep editing
- * it. That is the recovery gap R2-2 exists to close, and it is why the mail is
- * worth sending at all rather than being a receipt.
+ * It carries the code and a one-use verification token — and deliberately not
+ * the write key, which the verification hands back instead (see below). The
+ * address it reaches can therefore open the schedule on any device and keep
+ * editing it, which is the recovery gap R2-2 exists to close and the reason
+ * this mail is worth sending at all rather than being a receipt.
  *
  * It is also the verification. The link carries a claim token, and opening it
  * is what writes the person and the attendance row; until then the claim is a

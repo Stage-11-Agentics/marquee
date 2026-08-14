@@ -1107,6 +1107,13 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
    * the answer ours: without it the same endpoint returns the schedule and
    * nothing about who owns it, which is exactly what a shared link should see.
    */
+  /**
+   * Set when a claim arrival adopted a code this device did not have. The
+   * owner read is the authoritative list and always follows the verify, so the
+   * union happens here rather than racing the shared-link fetch.
+   */
+  let adoptOnOwnerRead = false;
+
   function loadOwnerState() {
     if (!state.code || !state.writeKey) return Promise.resolve();
     return fetch(CLAIM_BASE(), { headers: { accept: 'application/json', 'x-schedule-write-key': state.writeKey } })
@@ -1118,6 +1125,17 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         if (payload.feedToken && payload.feedToken !== state.feedToken) {
           state.feedToken = payload.feedToken;
           writeState();
+        }
+        if (adoptOnOwnerRead) {
+          // Union, never replace: recovering a schedule must not delete a star
+          // this device already had. Only ever on the arrival that adopted it —
+          // doing this on every read would resurrect a star just removed.
+          adoptOnOwnerRead = false;
+          const before = starred.size;
+          for (const session of payload.sessions ?? []) starred.add(session.id);
+          state.sessionIds = [...starred];
+          writeState();
+          if (starred.size !== before) pushUpdate(0);
         }
         paint();
         renderClaimRow();
@@ -1261,6 +1279,11 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     send.dataset.scheduleClaimSend = 'true';
     controls.append(input, send);
     if (config.turnstileSiteKey) {
+      // The row is told it carries a challenge so it reserves that height in
+      // EVERY state — the widget arriving late is not the only way this moves;
+      // pressing Send swaps a 101px input row for a 36px sentence, and the
+      // sheet's Done button would slide up under the finger.
+      controls.classList.add('has-challenge');
       const holder = document.createElement('div');
       holder.dataset.scheduleTurnstile = 'true';
       holder.className = 'claim-turnstile';
@@ -1317,13 +1340,19 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   }
 
   /**
-   * The verification. The mail's link carries the token in the query and the
-   * write key in the fragment; both are read once and taken out of the address
-   * bar, so a screenshot or a shared URL cannot carry either.
+   * The verification. The mail's link carries the code and a one-use token, and
+   * never the write key; the token is read once and taken out of the address
+   * bar so a screenshot or a forwarded URL cannot carry it.
+   *
+   * The code is passed in rather than read from state, because the whole point
+   * of a recovery mail is that it may arrive on a device that already has a
+   * schedule of its own. Verifying against whatever this browser happened to be
+   * holding would post the mail's token to a stranger's code and answer 404 —
+   * on the one journey this feature exists for.
    */
-  function verifyClaimToken(token) {
-    if (!state.code || !token) return Promise.resolve();
-    return fetch(CLAIM_BASE() + '/claim/verify', {
+  function verifyClaimToken(code, token) {
+    if (!code || !token) return Promise.resolve();
+    return fetch(SCHEDULES + '/' + encodeURIComponent(code) + '/claim/verify', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token }),
@@ -1342,15 +1371,26 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         }
         claim = result.payload.claim ?? null;
         speaking = new Set(Array.isArray(result.payload.speakingSessionIds) ? result.payload.speakingSessionIds : []);
+        // Adopting the verified code, the way arriving with a write key in the
+        // fragment used to: this device now edits THAT schedule. The union is
+        // deliberate and matches the fragment path — recovering a schedule must
+        // never silently delete a star this device already had.
+        const switching = state.code !== code;
+        state.code = code;
         // The mail deliberately does not carry the write key; verifying is how
-        // this device earns it. Storing it here is what makes "open it on a new
-        // device and keep editing" true.
-        if (result.payload.writeKey && !state.writeKey) {
-          state.code = state.code || sharedCode;
-          state.writeKey = result.payload.writeKey;
-        }
+        // this device earns it. Storing it is what makes "open it on any device
+        // and keep editing" true.
+        if (result.payload.writeKey) state.writeKey = result.payload.writeKey;
+        else if (switching) state.writeKey = null;
         if (result.payload.feedToken) state.feedToken = result.payload.feedToken;
+        if (switching) adoptOnOwnerRead = true;
         writeState();
+        if (switching) {
+          // The more consequential of the two arrivals, so it is the one that
+          // must not happen in silence — the same rule the shared-link path
+          // already follows.
+          announceArrival('This device now edits schedule ' + code + ' — your own stars were kept.');
+        }
         paint();
         renderClaimRow();
       })
@@ -1364,13 +1404,20 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
    * the message lands there rather than in a sheet nobody opened.
    */
   function claimArrivalError(message) {
+    // Deliberately NOT also showError('share', …): openSheet clears errors
+    // unconditionally, so the copy telling somebody to open Subscribe / share
+    // was wiped by the act of following it.
+    announceArrival(message);
+  }
+
+  /** The strip this page already reserves for "something happened when you arrived". */
+  function announceArrival(message) {
     const banner = document.querySelector('[data-schedule-import]');
     const copy = document.querySelector('[data-schedule-import-message]');
     const button = document.querySelector('[data-schedule-action="import"]');
     if (button) button.hidden = true;
     if (copy) copy.textContent = message;
     if (banner) banner.hidden = false;
-    showError('share', message);
   }
 
   /* ── Interaction ───────────────────────────────────────────────────── */
@@ -1526,11 +1573,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
    * write key comes back from the verify itself.
    */
   if (claimToken) {
-    if (sharedCode && !state.code) {
-      state.code = sharedCode;
-      writeState();
-    }
-    verifyClaimToken(claimToken).then(loadOwnerState);
+    verifyClaimToken(sharedCode || state.code, claimToken).then(loadOwnerState);
   } else {
     loadOwnerState();
   }

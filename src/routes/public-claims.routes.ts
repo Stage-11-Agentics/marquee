@@ -66,7 +66,7 @@ const codeParams = z.object({ code: z.string().regex(CODE_PATTERN) });
  * spams one mailbox, and the ceiling stops it.
  */
 const CLAIM_LIMIT = 6;
-/** A code has one mail out at a time; a caller trying twenty tokens against it is not its owner. */
+/** A code has one mail out at a time; a caller who gets twenty tokens WRONG is not its owner. */
 const VERIFY_LIMIT = 20;
 const CLAIM_WINDOW_SECONDS = 3600;
 
@@ -87,6 +87,27 @@ async function checkClaimLimit(
     .put(key, JSON.stringify(count + 1), { expirationTtl: CLAIM_WINDOW_SECONDS * 2 })
     .catch(() => { /* an uncounted request beats a refused one */ });
   return { allowed: true, retryAfterSeconds };
+}
+
+function verifyFailureKey(code: string, now: number): string {
+  const windowStart = Math.floor(now / (CLAIM_WINDOW_SECONDS * 1000)) * CLAIM_WINDOW_SECONDS * 1000;
+  return `schedule-claim-verify-fail:${code}:${windowStart}`;
+}
+
+async function readClaimFailures(store: KVNamespace | undefined, code: string, now: number): Promise<number> {
+  if (!store) return 0;
+  const seen = await store.get(verifyFailureKey(code, now), "json").catch(() => null);
+  return typeof seen === "number" ? seen : 0;
+}
+
+async function recordClaimFailure(store: KVNamespace | undefined, code: string, now: number): Promise<void> {
+  if (!store) return;
+  const key = verifyFailureKey(code, now);
+  const seen = await store.get(key, "json").catch(() => null);
+  const count = typeof seen === "number" ? seen : 0;
+  await store
+    .put(key, JSON.stringify(count + 1), { expirationTtl: CLAIM_WINDOW_SECONDS * 2 })
+    .catch(() => { /* an uncounted miss beats a refused open */ });
 }
 
 /** The write key is the proof that this caller owns the code. */
@@ -250,22 +271,24 @@ const verifyScheduleClaim = defineApiRoute(
   async (context) => {
     const code = context.req.valid("param").code;
     // The only claim endpoint a caller reaches without proving they own the
-    // code, so it is the only one where guessing a token is even a shape. The
-    // token is 256 bits; this is belt and braces, and the stated contract that
-    // every anonymous endpoint brings its own limiter.
+    // code, so it is the only one where guessing a token is even a shape.
     //
-    // Keyed on the code, like the send. Keyed on the IP it would be the venue
-    // NAT again: every attendee at a conference verifies from the same address,
-    // and a ceiling meant to slow a guesser would instead stop the tenth person
-    // that hour from ever completing their claim.
-    const limit = await checkClaimLimit(context.env.CACHE, `verify:${code}`, Date.now(), VERIFY_LIMIT);
-    if (!limit.allowed) throw ApiError.rateLimited(limit.retryAfterSeconds);
+    // Only FAILURES are counted, and that is the whole design. Keyed on the IP
+    // this would be the venue NAT again — every attendee verifies from one
+    // address. Keyed on the code and counting successes, it is the mirror
+    // image: the code travels in a share link, so anyone holding one could burn
+    // the budget and lock the real owner out of completing their own claim.
+    // Counting only wrong tokens leaves a guesser bounded and an owner
+    // untouched, however many times they open their mail.
+    const spent = await readClaimFailures(context.env.CACHE, code, Date.now());
+    if (spent >= VERIFY_LIMIT) throw ApiError.rateLimited(CLAIM_WINDOW_SECONDS);
     const outcome = await verifyClaim(context.env.DB, {
       code,
       token: context.req.valid("json").token,
       now: Date.now(),
     });
     if (!outcome.ok) {
+      await recordClaimFailure(context.env.CACHE, code, Date.now());
       if (outcome.reason === "unknown") throw ApiError.notFound("schedule not found");
       throw ApiError.forbidden("that link has been replaced by a newer one — ask for it again from your schedule");
     }

@@ -138,8 +138,11 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   // reset that left them behind would leave codes resolving to sessions that
   // no longer exist.
   public_schedules: {
-    sql: "DELETE FROM public_schedules WHERE event_id = ?",
-    bindings: [DEMO_EVENT_ID],
+    // ORG_EVENTS, like every neighbour: scoped to the seeded event id alone, a
+    // schedule on a demo conference created at runtime survived the wipe and
+    // then FK-aborted the trailing DELETE FROM events, wedging reset:demo.
+    sql: `DELETE FROM public_schedules WHERE event_id IN (${ORG_EVENTS})`,
+    bindings: ORG,
   },
   webhook_endpoints: {
     sql: `DELETE FROM webhook_endpoints WHERE event_id IN (${ORG_EVENTS})`,

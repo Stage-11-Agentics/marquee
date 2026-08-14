@@ -67,16 +67,15 @@ CREATE TABLE schedule_claims (
   event_id TEXT NOT NULL REFERENCES events(id),
   email TEXT NOT NULL,
   token_hash TEXT NOT NULL,
-  -- The write key, in the clear, for exactly as long as one unopened mail.
+  -- The write key, in the clear, for as long as this claim lives.
   --
   -- The mail has to be able to hand a new device write access — that is the
   -- recovery gap the claim exists to close — but the composed mail body lives
   -- in `outbox`, which organizers can list. A credential that opens somebody's
   -- schedule must not sit in a table the conference staff can read, so the mail
-  -- carries only the verification token and this column carries the key, to be
-  -- handed to the browser that proves it can read the mailbox and NULLed in the
-  -- same write. Between those two moments it is readable by nothing that has a
-  -- surface. `public_schedules` still stores only the hash.
+  -- carries only the verification token and this column carries the key, handed
+  -- to whoever presents that token. No API surface selects it, and unlinking
+  -- deletes the row. `public_schedules` still stores only the hash.
   pending_write_key TEXT,
   -- A read-only handle for the owner's own calendar feed.
   --
