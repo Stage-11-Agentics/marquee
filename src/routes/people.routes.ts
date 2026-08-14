@@ -101,9 +101,6 @@ const noteSchema = z.object({
   actor_person_id: z.string().nullable(),
   actor_name: z.string().nullable(),
   created_at: z.number().int(),
-  target_event_id: z.string().nullable().optional(),
-  target_event_name: z.string().nullable().optional(),
-  next_touch_on: z.string().nullable(),
 });
 const targetEventSchema = z.object({ id: z.string(), name: z.string() });
 const stageEntrySchema = z.object({
@@ -115,6 +112,9 @@ const stageEntrySchema = z.object({
   actor_person_id: z.string().nullable(),
   actor_name: z.string().nullable(),
   created_at: z.number().int(),
+  target_event_id: z.string().nullable(),
+  target_event_name: z.string().nullable().optional(),
+  next_touch_on: z.string().nullable(),
 });
 const connectionSchema = z.object({
   submission_id: z.string(),

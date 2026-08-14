@@ -239,6 +239,10 @@ test("CONTRACT · MRQ-205 · Outreach targets round-trip, legacy cards stay null
     next_touch_on: "2026-08-11",
   });
   expect(moved.status).toBe(200);
+  const movedBody = await moved.json() as {
+    card: { target_event_id: string | null; next_touch_on: string | null };
+  };
+  expect(movedBody.card).toMatchObject({ target_event_id: TARGET_EVENT_ID, next_touch_on: "2026-08-11" });
 
   const board = await json<{
     cards: Array<{

@@ -48,7 +48,7 @@ function Modal({
 }: {
   title: string;
   meta: string;
-  children: JSX.Element | JSX.Element[];
+  children: JSX.Element | JSX.Element[] | null;
   foot: JSX.Element;
   onClose: () => void;
 }): JSX.Element {
@@ -235,6 +235,7 @@ export function ComposeModal({
       </Button>
     </>}
   >
+    <>
     {(preview?.excluded_people ?? excludedPeople).length > 0 ? <p class="people-exclusion-notice" role="alert">
       {(preview?.excluded_people ?? excludedPeople).length} excluded — marked do-not-contact: {(preview?.excluded_people ?? excludedPeople).join(", ")}
     </p> : null}
@@ -256,6 +257,7 @@ export function ComposeModal({
       <p class="people-hint">Merge tags resolve per recipient — this is recipient 1 of {eligibleCount}.</p>
     </div> : <p class="people-hint">Preview renders recipient 1 with their merge tags filled in, exactly as it will send.</p>}
     {error ? <div class="people-state error" role="alert">{error}</div> : <div />}
+    </>
   </Modal>;
 }
 

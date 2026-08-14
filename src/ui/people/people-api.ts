@@ -48,9 +48,6 @@ export interface PersonNote {
   actor_person_id: string | null;
   actor_name: string | null;
   created_at: number;
-  target_event_id: string | null;
-  target_event_name?: string | null;
-  next_touch_on: string | null;
 }
 
 export interface StageEntry {
@@ -62,6 +59,9 @@ export interface StageEntry {
   actor_person_id: string | null;
   actor_name: string | null;
   created_at: number;
+  target_event_id: string | null;
+  target_event_name?: string | null;
+  next_touch_on: string | null;
 }
 
 export interface PersonConnection {
