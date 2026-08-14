@@ -10,6 +10,10 @@ export const PUBLIC_FORM_STATES = [
 
 export type PublicFormStateName = (typeof PUBLIC_FORM_STATES)[number];
 
+export const PUBLIC_FORM_OUTCOMES = ["accepted", "waitlisted", "rejected"] as const;
+
+export type PublicFormOutcome = (typeof PUBLIC_FORM_OUTCOMES)[number];
+
 export interface PublicFormField {
   id: string;
   key: string;
@@ -56,6 +60,7 @@ export interface PublicFormState {
     max_sponsors: number;
   };
   state: PublicFormStateName;
+  outcome: PublicFormOutcome | null;
   fields: PublicFormField[];
   answers: Record<string, unknown>;
   files: PublicFormFile[];
