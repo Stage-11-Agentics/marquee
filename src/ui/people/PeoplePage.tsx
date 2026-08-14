@@ -411,7 +411,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
         <span class="people-selcount">{selected.size} selected</span>
         <Button small onClick={() => setModal("compose")}>Communicate</Button>
         <Button small onClick={() => setModal("savelist")}>{control.label}</Button>
-        <button type="button" class="people-chip" onClick={() => setSelected(new Set())}>
+        <button type="button" class="people-chip" onClick={() => setSelected(new Map())}>
           <span class="people-chip-x" aria-hidden="true">×</span> Clear selection
         </button>
       </> : <>
@@ -550,7 +550,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
       onClose={() => setModal("")}
       onSent={(result) => {
         setModal("");
-        setSelected(new Set());
+        setSelected(new Map());
         announce(`${result.queued} message${result.queued === 1 ? "" : "s"} queued — every one is logged in the outbox${result.excluded_people.length ? ` · excluded: ${result.excluded_people.join(", ")}` : ""}`);
       }}
     /> : null}
