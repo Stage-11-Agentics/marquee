@@ -26,6 +26,7 @@ import { errorFields } from "../lib/observability/log";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 import { auditStatement, auditStatementFromSelect, writeAudit } from "../lib/audit";
 import { contentOf, isContentAction, isRestorable, recordHistoryFor } from "../lib/history";
+import { isVisibleToAudience } from "../lib/participants";
 import { purgePublicEmbedCache } from "../lib/public-site";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -1030,10 +1031,20 @@ const createSubmission = defineApiRoute(
       addParticipant(await makePerson(participant), participant.role, participant.position ?? index);
     }
     // A Session born on the organizer's builder has a person attached to it as
-    // its speaker of record. Keep the submitter role as authorship metadata,
-    // but never make a builder-created Session public-speaker empty by leaving
-    // that person submitter-only.
-    if (body.kind === "session") addParticipant(submitterId, "speaker", participants.length);
+    // its speaker of record, unless that attachment is explicitly a private
+    // sponsor contact and a distinct on-stage participant is supplied. Keep
+    // the submitter role as authorship metadata, but never make a builder-
+    // created Session public-speaker empty by leaving its only attached person
+    // submitter-only.
+    const submitterIsSponsorContact = participants.some((participant) =>
+      participant.personId === submitterId && participant.role === "sponsor_contact",
+    );
+    const hasDistinctSpeakingParticipant = participants.some((participant) =>
+      participant.personId !== submitterId && isVisibleToAudience(participant.role, "public"),
+    );
+    if (body.kind === "session" && (!submitterIsSponsorContact || !hasDistinctSpeakingParticipant)) {
+      addParticipant(submitterId, "speaker", participants.length);
+    }
     addParticipant(submitterId, "submitter", participants.length);
 
     const participantIds = [...new Set(participants.map((participant) => participant.personId))];

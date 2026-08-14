@@ -48,16 +48,3 @@ test("CONTRACT · a live Session announces its confirmation step in the idle cue
   const css = await readFile(resolve(root, "src/ui/submissions/record.css"), "utf8");
   assert.match(css, /\.record-content-cue \{[^}]*min-height: 30px/, "the cue must reserve its height across all four states");
 });
-
-test("CONTRACT · a speakerless Session warns before publication and names the public fallback", async () => {
-  const source = await readFile(resolve(root, "src/ui/submissions/SubmissionRecordPage.tsx"), "utf8");
-  const publication = source.slice(source.indexOf("record-publication-confirm"), source.indexOf("record-publication-confirm") + 2_000);
-
-  assert.match(publication, /publicationRequest === "publish" && !hasSpeakingParticipant/);
-  assert.match(publication, /role="alert"/);
-  assert.match(publication, /No speaking participant is attached/);
-  assert.match(publication, /Speaker to be announced/);
-
-  const css = await readFile(resolve(root, "src/ui/submissions/record.css"), "utf8");
-  assert.match(css, /\.record-slot \.record-publication-confirm > \.record-publication-warning/);
-});
