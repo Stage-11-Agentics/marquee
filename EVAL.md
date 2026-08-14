@@ -5,6 +5,29 @@
 (its own git checkout, ignored by this repo). Everything below runs from that
 directory. Orient there first: its `AGENTS.md` is the full workflow contract.
 
+This document governs the **Eval Runner**: the one seat allowed to start, watch,
+score, reset, or finish a round. Product defects found by a running round go to a
+separate **Eval Triage** seat governed by [`EVAL-TRIAGE.md`](EVAL-TRIAGE.md).
+Keeping those permissions separate is load-bearing: the Runner preserves one
+measurement; Triage changes the next build.
+
+## One round, one fixed build
+
+An iterative round is a measurement of one deployed commit. At fire time, the Runner
+records the target URL, `/health` build SHA, and freeze text; as soon as the harness
+assigns a run stamp, the Runner completes the round brief handed to Triage. From
+`fire` until the round is complete:
+
+- **No deploys and no live reset.** Merging fixes is safe because merging does not
+  ship. A deploy or reset changes the object under measurement and voids the round.
+- The `.deploy-freeze` marker is operational state, not source. Only the Runner's
+  `loop.sh fire`/`loop.sh barrier` lifecycle may create or lift it.
+- Triage validates fixes locally. It never points a browser at the frozen live URL
+  expecting to see an unshipped fix, and never runs `loop.sh`.
+- If the deployed SHA changes anyway, stop treating the output as a comparable
+  round. Record the drift and disposition the run as void; do not blend areas from
+  two builds into one headline.
+
 ## Before any run, either way
 
 - `evalconfig.json` — `url` is the target; `submissionNotes` is injected into every
@@ -16,9 +39,9 @@ directory. Orient there first: its `AGENTS.md` is the full workflow contract.
 - Coverage is an adversary: below 60% of rubric weight judged, the headline score is
   withheld. `cannot_judge` (run never got there) drains coverage; `not_found`
   (product lacks it) scores zero. Confusing the two is the worst available mistake.
-- **After scoring: mandatory manual cleanup.** The run fills the live demo with the
-  DevFlow Conf fixture. Enter the organizer seat and click **Reset demo**, then
-  verify the header reads "AI Engineer New York 2026" again.
+- **Cleanup belongs to the Runner.** A one-off manual run resets the demo after
+  scoring. In the iterative auto-eval loop, reset/deploy/verify happens only inside
+  the Runner's next `loop.sh barrier`; Triage never performs it during the freeze.
 
 ## Path A — in-context (no API key; a Claude Code session is agent and judge)
 
@@ -51,9 +74,9 @@ Open the session in `.eval-kit-agent/` so the local-scope `sbek` MCP server and 
    `npx --no-install tsx src/cli.ts score`. Missing areas score as `cannot_judge`,
    so gaps are visible, not silent.
 
-Wall-clock ≈ browse time + one judge (~3h for the six required areas). Mid-run
-deploys happen; snapshot `/health` at area boundaries and record drift in
-`area_notes`, don't restart.
+Wall-clock ≈ browse time + one judge (~3h for the six required areas). Snapshot
+`/health` at area boundaries as an integrity check. Any drift is a void condition,
+not an expected event to normalize in `area_notes`.
 
 ## Path B — official (API-driven agent and judge)
 
