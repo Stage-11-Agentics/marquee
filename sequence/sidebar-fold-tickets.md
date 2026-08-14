@@ -1,11 +1,14 @@
-# Sidebar-reorg round — build-fold ticket drafts
+# Sidebar-reorg round — build-fold tickets
 
-**Status: DRAFTS.** Written 2026-08-14 for the orchestrator to mint (ticket minting is
-single-writer; these are not Lattice tickets yet). Grouping ruled by Atin the same day:
-inventory items B1+B2+B3 are one ticket, B4 one, B5 one, B6 one. All four gate on
-**Atin's love pass over the prototype** (v1.15+, still being driven). The org-settings,
-attendee-schedules, and sponsor rounds carry their own fold plans in their design docs
-and are deliberately not duplicated here.
+**Status: MINTED 2026-08-14 — the love pass is signed.** Atin signed off on the
+prototype (v1.15) the same day and ruled the minimum ticket set. Minted serially by
+the round's intake session (Sidebar-Round-1): **MRQ-203** (T1, + the centered
+page-column fix found at sign-off — crm pages pinned left while pipeline pages
+centered; one shared `.page` column rule), **MRQ-204** (T2), **MRQ-205** (T3, now
+including the v1.15 org-concept CRM items: next-touch/overdue, do-not-contact,
+Export CSV), **MRQ-206** (T4), and **MRQ-207** (the Organization-settings fold per
+`sequence/org-settings-design.md` §Build implications). The attendee-schedules and
+sponsor rounds still carry their own fold plans and are not covered here.
 
 Every ruling referenced below is logged in `sequence/run-state.md` (2026-08-14, sidebar
 round) and demonstrated in the prototypes: `prototypes/pipeline-v1.1/` (live draft),

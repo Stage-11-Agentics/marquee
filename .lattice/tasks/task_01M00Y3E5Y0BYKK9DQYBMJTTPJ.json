@@ -1,0 +1,39 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": "medium",
+  "created_at": "2026-08-14T20:06:05Z",
+  "created_by": {
+    "agent_type": "intake",
+    "base_name": "Sidebar-Round",
+    "framework": "claude-code",
+    "model": "claude-fable-5",
+    "name": "Sidebar-Round-1",
+    "serial": 1,
+    "session": "sess_01M00Y2GZCP9X5VQ7CNDC6HENP"
+  },
+  "custom_fields": {},
+  "description": "Per sequence/sidebar-fold-tickets.md \u00a7T3. Rename the Sourcing pipeline surface to Outreach (nav rename lands with MRQ-203; this ticket owns page title, breadcrumb, copy \u2014 no baked-in years anywhere, grep-able). Schema: outreach cards gain target_event_id (nullable for legacy rows); cards render '\u2192 <conference>'; org-level placement stands (one funnel can aim at two conferences \u2014 demonstrated in the signed prototype seed). Card hygiene: name truncates with full-name tooltip, target line truncates, stage selector never escapes the card (von-Habsburg-length fixture in tests); button reads '+ Add prospect'. Person drawer shows outreach status when a live card exists: 'Outreach: <stage> \u2192 <target> \u00b7 Open board' linking to the funnel. Also ruled in at the love pass (demonstrated in prototypes/crm v1.15 org-concept): next-touch dates with overdue tint and sort; do-not-contact (drawer toggle + compose exclusion that names excluded people); Export CSV beside Import. Design contract: prototypes/crm/index.html.",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01M00Y3E5Y0BYKK9DQYBMJTTPJ",
+  "last_event_id": "ev_01M00Y3E5ZXFF1DT4WW99Q1ZJG",
+  "last_status_changed_at": "2026-08-14T20:06:05Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-205",
+  "status": "backlog",
+  "tags": [
+    "sidebar-reorg",
+    "design-fold",
+    "people-crm"
+  ],
+  "title": "Outreach: rename, target conference on cards, overflow hygiene, person-record linkage",
+  "type": "task",
+  "updated_at": "2026-08-14T20:06:05Z",
+  "urgency": null
+}

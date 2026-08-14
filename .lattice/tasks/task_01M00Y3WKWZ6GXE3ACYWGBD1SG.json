@@ -1,0 +1,38 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": "low",
+  "created_at": "2026-08-14T20:06:20Z",
+  "created_by": {
+    "agent_type": "intake",
+    "base_name": "Sidebar-Round",
+    "framework": "claude-code",
+    "model": "claude-fable-5",
+    "name": "Sidebar-Round-1",
+    "serial": 1,
+    "session": "sess_01M00Y2GZCP9X5VQ7CNDC6HENP"
+  },
+  "custom_fields": {},
+  "description": "Per sequence/sidebar-fold-tickets.md \u00a7T4. A segmented All \u00b7 Abstracts \u00b7 Sessions control leads the submissions list toolbar, replacing the buried kind dropdown; fixed button widths (elements never jump); round-trips through the existing kind query param and saved views. When the program board is filtered to Sessions, a quiet explainer band: 'Sessions are guaranteed \u2014 they skip evaluation and enter at Ready to place. The earlier columns are empty by design.' Judges' language ruling: chips stay Abstract/Session. Server-side filtering unchanged (R7); no new query shape. Design contract: prototypes/pipeline-v1.1 submissions + board views (v1.15).",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01M00Y3WKWZ6GXE3ACYWGBD1SG",
+  "last_event_id": "ev_01M00Y3WKXXXD140CTATBB99SN",
+  "last_status_changed_at": "2026-08-14T20:06:20Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-206",
+  "status": "backlog",
+  "tags": [
+    "sidebar-reorg",
+    "design-fold"
+  ],
+  "title": "Sessions vs abstracts legibility: kind segment leads the list, board explains the Sessions filter",
+  "type": "task",
+  "updated_at": "2026-08-14T20:06:20Z",
+  "urgency": null
+}

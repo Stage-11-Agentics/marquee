@@ -135,7 +135,10 @@
     letter-spacing:.06em; color:var(--ink-soft); }
 
   /* ── Page ────────────────────────────────────────────────────────────── */
-  .page { padding:var(--s5) var(--s5) var(--s7); max-width:1460px; width:100%; }
+  /* Same centered content column as pipeline-v1.1's .page — the missing
+     margin:auto was why People CRM/Outreach/Speakers pinned left on wide
+     windows while conference pages centered. One column rule, everywhere. */
+  .page { padding:var(--s5) var(--s5) var(--s7); max-width:1500px; width:100%; margin:0 auto; }
   .page-head { display:flex; align-items:flex-end; justify-content:space-between; gap:var(--s5); margin-bottom:var(--s4); }
   .page-head h1 { margin:0 0 6px; font:600 21px/1.2 var(--sans); letter-spacing:-.018em; }
   .page-head p { margin:0; max-width:74ch; font-size:12.5px; line-height:1.55; color:var(--ink-soft);
