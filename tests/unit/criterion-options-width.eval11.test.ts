@@ -2,7 +2,14 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, test } from "vitest";
 
-const styles = readFileSync(new URL("../../src/ui/evaluation/evaluation.css", import.meta.url), "utf8");
+/**
+ * Comments are stripped before anything is matched. The fix's own comment names
+ * both selectors involved, so a regex run over the raw file can match the
+ * explanation of the rule instead of the rule — and would keep passing if
+ * someone deleted the declaration but left the paragraph describing it.
+ */
+const styles = readFileSync(new URL("../../src/ui/evaluation/evaluation.css", import.meta.url), "utf8")
+  .replace(/\/\*[\s\S]*?\*\//g, "");
 
 /**
  * sbek round 11 filed this against the scorecard editor: the dropdown
