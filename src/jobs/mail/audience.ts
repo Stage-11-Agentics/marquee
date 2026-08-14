@@ -7,6 +7,7 @@ import {
   selectSubmissionIds,
   type SubmissionFilter,
   hasSpeakerTaskCancellationColumn,
+  type SubmissionTaskFilter,
 } from "../../routes/submissions.queries";
 
 /**
@@ -36,6 +37,7 @@ export type AudienceSort = keyof typeof AUDIENCE_SORTS;
 
 export interface CommsAudienceFilters extends SubmissionFilter {
   eventId: Id;
+  task?: SubmissionTaskFilter;
   page?: number;
   per_page?: number;
   sort?: AudienceSort;
