@@ -90,6 +90,20 @@ expired-fixture case, which only rebasing cures.
 - **Minting tickets is single-writer** — orchestrator/intake only. Concurrent
   `lattice create` calls corrupt the ID counter. Delegators updating their *own*
   task's status, plan, and comments is fine; those touch disjoint files.
+- **Merging a change to `CLAUDE.md` or `AGENTS.md` does not deliver it.** Both are
+  auto-loaded from the primary checkout's *working copy*, which the rule above keeps
+  parked — so the fix sits on the ref while every session reads the old text. **Whoever
+  merges a change to these two files fast-forwards the board home as part of that merge**,
+  then greps the working copy rather than trusting the ref:
+
+  ```sh
+  cd /Users/atin/Projects/Stage11/deployments/Marquee
+  git fetch github && git merge --ff-only github/main
+  grep -n "<what you changed>" CLAUDE.md AGENTS.md
+  ```
+
+  A refused fast-forward means untracked `.lattice` files the incoming commits also add:
+  back up, remove, ff, restore byte-identical, verify with `diff`. Never `git clean`.
 - **Never "clean up" state you cannot attribute.** Unfamiliar uncommitted changes
   are almost always a sibling agent's live work. Ask, or leave it; raise a c11 flag
   rather than reaching for `stash` or `reset`.
