@@ -231,6 +231,33 @@ jump, nothing dead (toast), honest empty states, self-contained file://.
 
 ---
 
+## Iteration 2 — style pass (Atin's first drive, same day)
+
+Five refinements ruled on the drive-through, all built and live (they shipped
+inside commit `79376656` alongside a sibling agent's conference Danger-zone
+work — two agents in the one board-home checkout share an index, so the
+sibling's whole-file `git add` swept this pass into their commit; content
+complete, attribution merged):
+
+- **Theme picker is a gallery, opinionated.** Each theme renders as a card
+  wearing its own palette (inline paint from the production CSS) — a mini
+  panel with its accent (latent.space carries its orange→pink gradient and a
+  serif wordmark, AI Engineer its `>_` prompt, swyxy lowercase indigo) plus a
+  one-line voice for each. The unselected chip is an explicit **Select**, the
+  selected one **Selected** (both fixed-width — the "little slashes" were
+  placeholder em-dashes, now gone).
+- **Branding says where the logo goes:** shown wherever a conference hasn't
+  set its own — public site header, speaker portal, outbound mail, embeds;
+  the per-conference logo is the override.
+- **"Mocked to judge" → "Proposed"** on the two unruled cards (comms
+  defaults, branding): built so they can be judged rendered, kept or struck.
+- **Organizer removal is two-step and safety-biased.** The removal dialog's
+  default action is **Keep access** (primary, focused); "Remove organizer…"
+  is a red outline. Confirming raises a second dialog — "Really remove X?"
+  restating the blast radius (tokens to revoke, dual-seat note) — whose
+  destructive button ("Yes — remove X now") is the product's only
+  filled-red button. Keep access exits either stage untouched.
+
 ## Build implications (for eventual tickets — not prototype scope)
 
 - `organizations` gains profile/default columns (name exists; default
