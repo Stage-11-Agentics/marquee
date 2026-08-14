@@ -97,7 +97,7 @@ notes injected into *every* scenario brief. They were last written at 16:12 toda
 MRQ-164/165/166 and everything merged since. `EVAL.md` is explicit that a stale claim
 steers the browsing agent away from evidence and costs real points — and unlike the other
 failure modes this one does not void the run, it just makes a valid run score below what
-the product deserves, which is worse because you will believe it. Diff `main` against what
+the product deserves, which is worse because you will believe it. Diff `github/main` against what
 the notes describe, correct anything that has changed, and verify every claim against the
 live build before you fire. Notes that say a capability is missing when it now exists are
 the expensive kind.

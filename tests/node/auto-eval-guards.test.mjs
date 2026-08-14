@@ -95,6 +95,21 @@ test("CONTRACT · a refused kickoff lifts the deploy freeze it declared", () => 
   assert.equal(failed, true, "fire must exit non-zero when the kickoff refuses");
   assert.match(stderr, /kickoff refused/, "the trap's diagnostic must reach the operator");
 
+  // PRESENCE FIRST. Asserting only that the sandbox marker is absent is
+  // vacuous: if the env overrides ever stop being honoured, the freeze is
+  // written to the REAL primary checkout, the sandbox path is never created,
+  // `existsSync` is trivially false, and this test PASSES while orphaning a
+  // marker that blocks every other agent's deploy. An assertion that something
+  // is gone means nothing without evidence it was there. cmd_fire announces the
+  // path it declared, so require that path to be the sandbox one.
+  const declared = stderr.match(/deploy freeze declared at (\S+)/);
+  assert.ok(declared, "fire must announce the freeze path it declared");
+  assert.equal(
+    declared[1],
+    box.freeze,
+    "the freeze must have been declared INSIDE the sandbox — otherwise this test proves nothing and has written to the real checkout",
+  );
+
   // The other half, and the one that was broken: the marker must be gone. It
   // gates every other agent's check:deploy, so an orphan freezes the fleet.
   assert.equal(
@@ -118,4 +133,85 @@ test("CONTRACT · loop.sh sets -E, without which the trap above cannot fire", as
   // once in cmd_fire — and only `die` stops the second firing falling through
   // to the success path.
   assert.match(source, /trap '[^']*rm -f "\$FREEZE_FILE"; die /, "the ERR trap must still exit, not merely clean up");
+});
+
+/**
+ * The other half of the same lesson: a guard that answers "no round is running"
+ * when it could not ask at all. Both callers respond to that answer by mutating
+ * the thing a round is measuring — cmd_barrier resets the demo and deploys,
+ * cmd_fire starts a second round against one mutable site — so an unreachable
+ * Atlas must read as "busy", never as "idle".
+ *
+ * Proved by running it, for the same reason as above: the broken form is a
+ * perfectly ordinary-looking pipe into grep, and reading it is what missed it.
+ */
+function unreachableSandbox() {
+  const dir = mkdtempSync(join(tmpdir(), "auto-eval-failopen-"));
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  const state = join(dir, "state");
+  mkdirSync(state);
+  // Every ssh fails, as it does when the link to Atlas drops.
+  writeFileSync(join(bin, "ssh"), "#!/bin/sh\nexit 255\n", { mode: 0o755 });
+  writeFileSync(join(bin, "scp"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  chmodSync(join(bin, "ssh"), 0o755);
+  chmodSync(join(bin, "scp"), 0o755);
+  writeFileSync(
+    join(state, "state.json"),
+    JSON.stringify({ round: 9, anchor: null, anchorPct: null, runStamp: null, sha: null, halted: false }),
+  );
+  return {
+    freeze: join(dir, ".deploy-freeze"),
+    env: {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH}`,
+      MARQUEE_ROOT: dir,
+      KIT_LOCAL: join(dir, "kit"),
+      STATE_DIR: state,
+      FREEZE_FILE: join(dir, ".deploy-freeze"),
+    },
+  };
+}
+
+test("CONTRACT · fire refuses outright when Atlas cannot be asked", () => {
+  const box = unreachableSandbox();
+  let stderr = "";
+  try {
+    execFileSync("bash", [LOOP, "fire", "deadbeef1234"], { env: box.env, encoding: "utf8" });
+    assert.fail("fire must not start a round while Atlas is unreachable");
+  } catch (error) {
+    stderr = `${error.stderr ?? ""}`;
+  }
+
+  // The distinction under test is which refusal this is. On the unfixed script
+  // the round-in-flight guard reads a dropped ssh as "nothing running", falls
+  // through, declares the freeze, and only then fails at the kickoff — so it
+  // reports "kickoff refused". Fixed, it never gets that far.
+  assert.match(
+    stderr,
+    /REFUSING: a round is already in flight/,
+    "an unreachable Atlas must be refused as 'a round may be running', not treated as idle",
+  );
+  assert.equal(
+    existsSync(box.freeze),
+    false,
+    "a refusal this early must not have declared a freeze at all",
+  );
+});
+
+test("CONTRACT · loop.sh's own guards keep unreachable apart from stopped", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(LOOP, "utf8");
+
+  // The defect was piping ssh straight into grep, which collapses "could not
+  // ask" into "answered no".
+  assert.doesNotMatch(
+    source,
+    /atlas "~\/bin\/atlas-job status[^"]*"\s*\|\s*grep/,
+    "job status must not be read by piping ssh into grep — a dropped link then reads as 'not running'",
+  );
+  assert.match(source, /job_state\(\) \{/, "the three-valued helper must exist");
+  assert.match(source, /\[\[ \$state == running \|\| \$state == unreachable \]\]/, "round_running must fail closed");
+  assert.match(source, /unreachable\) stopped=0; say "atlas unreachable/, "watch must not complete on silence");
+  assert.match(source, /\(\( stopped >= 2 \)\)/, "watch must require two consecutive stopped readings");
 });

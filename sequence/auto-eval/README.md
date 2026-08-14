@@ -70,9 +70,22 @@ loop.sh fire <sha>        kick the next round on Atlas against a known sha
   measurement while following DEPLOY.md correctly.
 - **Migrations stay gated on the operator.** A bad merge costs a `git revert`. A
   migration applied to the live D1 does not come back that way.
-- **One gate at a time.** Same branch, three runs on 2026-08-12: load 14 → 78s,
-  load 48 → 135s, load 164 → 276s against a 120s budget. Under fleet load the
-  gate false-fails and the warden will believe it. Lockfile, no exceptions.
+- **One gate at a time — and a red still means a red.** Same branch, three runs
+  on 2026-08-12: load 14 → 78s, load 48 → 135s, load 164 → 276s against a 120s
+  budget. Serialize gates through the shared lock at
+  `Marquee-worktrees/.gate-lock/gate-lock.sh`, so those numbers stay meaningful.
+  **Slowness does not fail anything**, so serialize for honest measurements, not
+  to prevent false reds — `run-test.mjs` and `pr-gate.mjs` both report an
+  over-budget run as `pass-over-budget`, a loud warn, and `process.exitCode` is
+  set from the test outcome. Only `HARD_LIMIT_MS` (600s, a hang detector) turns
+  slowness into a failure. That 276s run was a warn.
+  Read the `status` field rather than guessing at load:
+  `fail` is load-invariant — **believe it**; `pass-over-budget` is a warn;
+  `timeout` is unknown, so re-run. And read it per script: `check:seed` and
+  `check:speed` derive status from wall clock and *can* red on contention alone,
+  where every other check derives status from findings and cannot.
+  Never dismiss failing tests as a known baseline without naming the commit that
+  made them pass.
 - **Deadline barrier, not completion barrier.** Never wait on "all tickets done" —
   one stuck implementer ends the run. At T+window, deploy what merged and fire.
   Unfinished tickets roll forward.

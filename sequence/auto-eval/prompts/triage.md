@@ -46,7 +46,7 @@ cost an evening of confusion.
 
 ## Every implementer gets its own worktree
 
-`git worktree add ../Marquee-worktrees/<branch> -b <branch> main`, created by the
+`git fetch github && git worktree add ../Marquee-worktrees/<branch> -b <branch> github/main`, created by the
 implementer as its first act, verified with `pwd` and `git branch --show-current`. Never
 the primary checkout — it is the board's home. Never `mrq-auto-eval` — it is the loop's
 machinery and its branch is under review.
