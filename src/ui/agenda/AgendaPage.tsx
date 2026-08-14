@@ -891,7 +891,7 @@ function PublicationPanel({
       <a class="button ghost small" href={publication.public_agenda_url}>View public agenda ↗</a>
     </header>
     {step === "select" ? <>
-      <div class="agenda-publication-intro">Every accepted Session is listed here. Select a scheduled Session to make its title, time, room, and speakers visible on the public agenda.</div>
+      <div class="agenda-publication-intro">Every accepted Session that is not yet public is listed here. Select a scheduled Session to make its title, time, room, and speakers visible on the public agenda.</div>
       {publication.candidates.length ? <div class="agenda-publication-list" role="list" aria-label="Accepted Sessions and publication readiness">
         <div class="agenda-publication-select-all">
           <label><input type="checkbox" checked={allSelectableSelected} disabled={!selectableCandidates.length} aria-label={selectAllLabel} onChange={toggleAll} />{selectAllLabel}</label>

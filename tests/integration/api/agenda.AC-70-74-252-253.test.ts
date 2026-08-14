@@ -115,6 +115,24 @@ describe.sequential("MRQ-20 agenda API", () => {
     expect(publicBody.sessions.some((session) => session.title === "Accepted session")).toBe(false);
   });
 
+  test("CONTRACT · AIA-07 · a published agenda item is not reported as an unpublished candidate", async () => {
+    await env.DB.prepare("UPDATE agenda_items SET is_published = 1 WHERE id = ? AND event_id = ?")
+      .bind("agenda-already-placed", DEMO_EVENT_ID)
+      .run();
+    try {
+      const response = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
+      expect(response.status).toBe(200);
+      const body = await response.json<{ publication: { live: number; not_yet_public: number; candidates: Array<{ submission_id: string }> } }>();
+      expect(body.publication).toMatchObject({ live: 1, not_yet_public: 1 });
+      expect(body.publication.candidates.some((candidate) => candidate.submission_id === "sub-agenda-placed")).toBe(false);
+      expect(body.publication.candidates.some((candidate) => candidate.submission_id === "sub-agenda-accepted")).toBe(true);
+    } finally {
+      await env.DB.prepare("UPDATE agenda_items SET is_published = 0 WHERE id = ? AND event_id = ?")
+        .bind("agenda-already-placed", DEMO_EVENT_ID)
+        .run();
+    }
+  });
+
   test("CONTRACT · MRQ-179 · accepted abstracts are not publication candidates", async () => {
     const before = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
     const beforeBody = await before.json<{ publication: { candidates: Array<{ submission_id: string }> } }>();
