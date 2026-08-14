@@ -11,6 +11,7 @@ import {
   type PublicSession,
   type PublicTrack,
 } from "../../lib/public-site";
+import { EMBED_SNIPPET_HEIGHT_PX, embedCalendarLink, embedIframeSnippet, embedSnippetNote, embedSnippetStyle } from "../../lib/embed-snippet";
 import { PUBLIC_SPEAKER_EMPTY_LABEL } from "../../lib/participants";
 import { PublicShell, PUBLIC_SITE_STYLES, PublicSpeakerAvatar } from "../public/agenda/PublicAgendaPage";
 
@@ -98,6 +99,7 @@ export const EMBED_STYLES = `
 .embed-format-segment button:last-child, .embed-layout-segment button:last-child { border-right: 0; }
 .embed-format-segment button.active, .embed-layout-segment button.active { background: var(--public-accent-wash); color: var(--public-accent); }
 .embed-format-segment button:disabled, .embed-layout-segment button:disabled { color: var(--public-soft); cursor: not-allowed; opacity: .55; }
+.embed-preview-note { color: var(--public-muted, inherit); font-size: 11px; margin: 0 0 8px; }
 .embed-preview { min-height: 420px; border: 1px solid var(--public-rule); background: var(--public-sunk); padding: 14px; }
 .embed-preview iframe { width: 100%; min-height: 380px; display: block; border: 1px solid var(--public-rule); background: white; }
 .embed-copy { display: flex; justify-content: flex-end; margin-top: 7px; }
@@ -155,8 +157,22 @@ export const EMBED_CONFIG_SCRIPT = `
   const trackNote = document.querySelector('[data-track-note]');
   const statusNote = document.querySelector('[data-status-note]');
   const layoutNote = document.querySelector('[data-layout-note]');
+  const previewNote = document.querySelector('[data-preview-note]');
   if (!form || !code || !preview) return;
   const KIND_LABEL = { agenda: 'Agenda', sessions: 'Sessions', speakers: 'Speakers', cfp: 'Call for speakers' };
+  // Interpolated from EMBED_SNIPPET_HEIGHT_PX so the snippet this page copies
+  // and the one the saved-embed API returns cannot drift apart.
+  const SNIPPET_STYLE = ${JSON.stringify(Object.fromEntries(EMBED_KINDS.map((kind) => [kind, embedSnippetStyle(kind)])))};
+  const SNIPPET_HEIGHT = ${JSON.stringify(EMBED_SNIPPET_HEIGHT_PX)};
+  const SNIPPET_NOTE = ${JSON.stringify(Object.fromEntries(EMBED_KINDS.map((kind) => [kind, {
+    html: embedSnippetNote(kind, "html"),
+    other: embedSnippetNote(kind, "json"),
+  }])))};
+  // The conference name reaches an HTML attribute here, and this textarea
+  // decodes one layer of entities before anyone copies what is in it.
+  const escapeAttr = (value) => String(value)
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
   const OUTPUT_LABEL = { html: 'Styled HTML', basic: 'Basic HTML', json: 'JSON feed', xml: 'XML feed', ical: 'iCal feed' };
   const allFieldsFor = (kind) => {
     const group = fieldGroups.find((candidate) => candidate.dataset.embedFieldsFor === kind);
@@ -226,11 +242,14 @@ export const EMBED_CONFIG_SCRIPT = `
     const src = pathFor(slug, state.output, params);
     const absolute = window.location.origin + src;
     code.value = state.output === 'html'
-      ? '<iframe src="' + absolute + '" title="' + event + ' ' + KIND_LABEL[kind].toLowerCase() + '" loading="lazy" style="width:100%;border:0"></iframe>'
-      : state.output === 'ical' ? '<a href="' + absolute + '">Add ' + event + ' to calendar</a>' : absolute;
+      ? '<iframe src="' + escapeAttr(absolute) + '" title="' + escapeAttr(event + ' ' + KIND_LABEL[kind].toLowerCase()) + '" loading="lazy" width="100%" height="' + SNIPPET_HEIGHT[kind] + '" style="' + SNIPPET_STYLE[kind] + '"></iframe>'
+      : state.output === 'ical' ? '<a href="' + escapeAttr(absolute) + '">Add ' + escapeAttr(event) + ' to calendar</a>' : absolute;
     const previewSrc = src + (src.includes('?') ? '&' : '?') + 'preview=' + encodeURIComponent(state.output);
     preview.src = previewSrc;
     preview.setAttribute('data-preview-output', state.output);
+    // The note follows the kind AND the output: only the HTML snippet is a
+    // frame with a height, and the others are a link.
+    if (previewNote) previewNote.textContent = SNIPPET_NOTE[kind][state.output === 'html' ? 'html' : 'other'];
   };
   kindButtons.forEach((b) => b.addEventListener('click', () => { saveFieldSelection(); state.kind = b.dataset.embedKind; state.savedSlug = null; paintControls(); update(); }));
   outputButtons.forEach((b) => b.addEventListener('click', () => { state.output = b.dataset.embedOutput; outputButtons.forEach((item) => { const active = item.dataset.embedOutput === state.output; item.classList.toggle('active', active); item.setAttribute('aria-pressed', String(active)); }); update(); }));
@@ -519,8 +538,8 @@ function embedPath(event: PublicEvent, kind: EmbedKind, output: EmbedOutputForma
 function snippet(event: PublicEvent, kind: EmbedKind, track: string, status: string, layout: EmbedLayout, accent: string, fields: readonly EmbedField[], output: EmbedOutputFormat): string {
   const source = `https://marquee.stage11.dev${embedPath(event, kind, output, embedParams(kind, track, status, layout, accent, fields))}`;
   if (output === "json" || output === "xml" || output === "basic") return source;
-  if (output === "ical") return `<a href="${source}">Add ${event.name} to calendar</a>`;
-  return `<iframe src="${source}" title="${event.name} ${EMBED_KIND_LABEL[kind].toLowerCase()}" loading="lazy" style="width:100%;border:0"></iframe>`;
+  if (output === "ical") return embedCalendarLink(source, event.name);
+  return embedIframeSnippet(source, `${event.name} ${EMBED_KIND_LABEL[kind].toLowerCase()}`, kind);
 }
 
 function previewSrc(event: PublicEvent, kind: EmbedKind, track: string, status: string, layout: EmbedLayout, accent: string, fields: readonly EmbedField[], output: EmbedOutputFormat): string {
@@ -638,6 +657,10 @@ export function EmbedConfigPage({
           </section>
           <section class="embed-config-panel">
             <h2>Live preview</h2>
+            {/* The preview is its own viewport and always has been. Saying so
+                stops an organizer reading its height as the one they are about
+                to paste — the snippet states that number itself. */}
+            <p class="embed-preview-note" data-preview-note>{embedSnippetNote(kind, output)}</p>
             <div class="embed-preview"><iframe data-embed-preview title={`${event.name} ${EMBED_KIND_LABEL[kind].toLowerCase()} live preview`} src={previewSrc(event, kind, track, status, layout, accent, selectedFields, output)} /></div>
             <p style={{ margin: "10px 0 0", fontSize: "11px" }}>Published changes are served anonymously and refreshed from a 30-second edge cache.</p>
           </section>
