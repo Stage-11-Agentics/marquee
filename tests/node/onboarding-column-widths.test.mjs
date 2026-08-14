@@ -98,3 +98,13 @@ test("CONTRACT · the matrix declares its hidden columns and keeps the speaker p
   // unstarted — both are em dashes in the grid, so the row says which it is.
   assert.match(page, /No tasks assigned/);
 });
+
+test("CONTRACT · CNT-07 · newest task columns render first and the speaker identity stays pinned", async () => {
+  const css = await read("src/ui/onboarding/onboarding.css");
+  const page = await read("src/ui/onboarding/OnboardingPage.tsx");
+
+  assert.match(page, /orderOnboardingTaskTemplates\(state\.snapshot\.task_templates\)/);
+  assert.match(page, /ready\.task_templates\.map/);
+  assert.match(css, /\.onboarding-matrix th\.onboarding-speaker-column \{[^}]*left: var\(--select-column-width\)[^}]*position: sticky/);
+  assert.match(css, /\.onboarding-matrix tbody \.onboarding-select-column, \.onboarding-matrix tbody th\.onboarding-speaker-column \{[^}]*background: var\(--panel\)/);
+});

@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 
 import { extensionOf, parseUploadOwnerConfig, policyFor, sanitizeFilename, validateDeclared } from "../../../src/lib/r2/policy";
 import { classify, readPngDimensions } from "../../../src/lib/r2/sniff";
-import { compareOnboardingRows, deriveTaskState, rowMatchesOnboardingFilters, taskGlyph, type OnboardingRow } from "../../../src/routes/onboarding.queries";
+import { compareOnboardingRows, deriveTaskState, orderOnboardingTaskTemplates, rowMatchesOnboardingFilters, taskGlyph, type OnboardingRow, type OnboardingTaskTemplate } from "../../../src/routes/onboarding.queries";
 import { acceptedExtensions, formatBytes, validateClientUpload } from "../../../src/ui/upload/upload-policy";
 
 test("AC-232 · extension and MIME are rejected independently at sign time", () => {
@@ -131,6 +131,20 @@ test("AC-92 · chase ordering puts the most overdue owed work first and ignores 
   expect(compareOnboardingRows(row("per-late", "Late", 30, 0), row("per-risk", "Risk", 1, 4))).toBeLessThan(0);
   expect(compareOnboardingRows(row("per-risk-more", "Risk More", 0, 2), row("per-risk-less", "Risk Less", 0, 1))).toBeLessThan(0);
   expect(compareOnboardingRows(row("per-clear", "Clear", 0, 0), row("per-clear-done", "Clear Done", 0, 0))).toBeLessThan(0);
+});
+
+test("CONTRACT · CNT-07 · the newest authored task column is visible first", () => {
+  const templates: OnboardingTaskTemplate[] = [
+    { id: "task-seeded", name: "Presentation upload", kind: "file", description: "", position: 0 },
+    { id: "task-middle", name: "Travel details", kind: "form", description: "", position: 6 },
+    { id: "task-newest", name: "Final headshot", kind: "file", description: "", position: 8 },
+  ];
+
+  expect(orderOnboardingTaskTemplates(templates).map((template) => template.id)).toEqual([
+    "task-newest",
+    "task-middle",
+    "task-seeded",
+  ]);
 });
 
 test("AC-146 · slide task choices advertise PDF, PPTX, and KEY before sign", () => {

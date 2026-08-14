@@ -1,7 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
-import type { OnboardingFilter, OnboardingRow, OnboardingSnapshot, OnboardingSpeakerDetail } from "../../routes/onboarding.queries";
+import { orderOnboardingTaskTemplates, type OnboardingFilter, type OnboardingRow, type OnboardingSnapshot, type OnboardingSpeakerDetail } from "../../routes/onboarding.queries";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
@@ -236,7 +236,9 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
   const matrixRef = useRef<HTMLDivElement>(null);
   const [matrixOverflows, setMatrixOverflows] = useState(false);
   const filterIdentity = JSON.stringify(filters);
-  const ready = state.kind === "ready" ? state.snapshot : null;
+  const ready = state.kind === "ready"
+    ? { ...state.snapshot, task_templates: orderOnboardingTaskTemplates(state.snapshot.task_templates) }
+    : null;
   const rows = ready?.rows ?? [];
   const selectedRows = rows.filter((row) => selected.has(row.id));
   const allVisibleSelected = rows.length > 0 && rows.every((row) => selected.has(row.id));

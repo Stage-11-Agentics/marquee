@@ -19,6 +19,18 @@ export interface OnboardingTaskTemplate {
   position: number;
 }
 
+/**
+ * Task authoring appends new templates at the highest position. The chase
+ * board is a live queue, so its first columns should be the work most recently
+ * added rather than setup-time columns furthest to the right. Keep this as a
+ * pure display helper so API consumers retain authored order.
+ */
+export function orderOnboardingTaskTemplates(
+  templates: readonly OnboardingTaskTemplate[],
+): OnboardingTaskTemplate[] {
+  return [...templates].sort((left, right) => right.position - left.position || left.id.localeCompare(right.id));
+}
+
 export interface OnboardingTrack {
   id: string;
   name: string;
