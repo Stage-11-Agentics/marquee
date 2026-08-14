@@ -235,6 +235,25 @@ test("CONTRACT · MRQ-171 · a revision deep link is present on first render and
   expect(nonFiniteRevision).toContain("Recorded value is not a finite number");
 });
 
+test("CONTRACT · reviewer round close uses the configured calendar day", () => {
+  const originalTimeZone = process.env.TZ;
+  process.env.TZ = "America/New_York";
+  try {
+    const home = renderToString(h(ReviewerPage, {
+      eventId: "event-review",
+      initialQueue: {
+        ...revisionQueue,
+        round: { ...revisionQueue.round, closes_at: Date.UTC(2026, 9, 15) },
+      },
+      mode: "home",
+    }));
+    expect(home).toContain("Closes Oct 15, 2026");
+  } finally {
+    if (originalTimeZone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimeZone;
+  }
+});
+
 test("CONTRACT · MRQ-169 · co-presenters are named on the results table and in the speaker portal", () => {
   expect(submissionsPage).toContain("participationRoleLabel(speaker.role)");
   expect(portalPage).toContain("portal-copresenters");
