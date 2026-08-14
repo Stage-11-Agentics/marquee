@@ -433,12 +433,15 @@ function rowJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function upgradeLegacySpeakerSnapshot(snapshot: ImportSnapshot, current: PersonRow | null, importRowUpdatedAt: number): ImportSnapshot {
+function upgradeLegacySpeakerSnapshot(snapshot: ImportSnapshot, current: PersonRow | null, importRowCreatedAt: number): ImportSnapshot {
   if (snapshot.kind !== "speaker" || snapshot.speaker_changes !== undefined || !snapshot.person) return snapshot;
   // Old snapshots do not contain the value written by the import. If the
   // person changed after the row was recorded, restoring the old whole row is
   // unsafe; an empty change set makes this legacy undo a no-op instead.
-  if (!current || current.updated_at > importRowUpdatedAt) return { ...snapshot, speaker_changes: {} };
+  // created_at is intentionally immutable across same-import reruns. Using
+  // updated_at here would move the receipt's boundary forward on every rerun
+  // and could mistake an earlier organizer edit for the import's own write.
+  if (!current || current.updated_at > importRowCreatedAt) return { ...snapshot, speaker_changes: {} };
   const speakerChanges: Partial<Record<SpeakerField, SpeakerFieldChange>> = {};
   for (const field of ["email", "name", "title", "company", "bio"] as const) {
     if (snapshot.person[field] !== current[field]) {
@@ -460,9 +463,9 @@ async function eventFor(db: D1Database, eventId: string): Promise<EventRow> {
 }
 
 async function saveImportRow(db: D1Database, input: ImportRowInput): Promise<void> {
-  const existing = await db.prepare("SELECT before_json, outcome, target_id, updated_at FROM import_rows WHERE import_id = ? AND row_index = ?")
+  const existing = await db.prepare("SELECT before_json, outcome, target_id, created_at FROM import_rows WHERE import_id = ? AND row_index = ?")
     .bind(input.importId, input.rowIndex)
-    .first<Pick<ImportRowRow, "before_json" | "outcome" | "target_id" | "updated_at">>();
+    .first<Pick<ImportRowRow, "before_json" | "outcome" | "target_id" | "created_at">>();
   let beforeJson = existing
     ? existing.before_json ?? (existing.outcome === "failed" && input.before ? rowJson(input.before) : null)
     : (input.before ? rowJson(input.before) : null);
@@ -470,7 +473,7 @@ async function saveImportRow(db: D1Database, input: ImportRowInput): Promise<voi
     try {
       const prior = JSON.parse(existing.before_json) as ImportSnapshot;
       if (prior.kind === "speaker" && prior.speaker_changes === undefined) {
-        beforeJson = rowJson(upgradeLegacySpeakerSnapshot(prior, input.before.person, existing.updated_at));
+        beforeJson = rowJson(upgradeLegacySpeakerSnapshot(prior, input.before.person, existing.created_at));
       }
     } catch {
       // Keep an existing receipt intact if a historical snapshot is malformed.
@@ -1102,7 +1105,7 @@ export async function undoSessionizeImport(db: D1Database, eventId: string, impo
     let snapshot = row.before_json ? JSON.parse(row.before_json) as ImportSnapshot : null;
     if (row.entity === "speaker" && snapshot?.kind === "speaker" && snapshot.person && snapshot.speaker_changes === undefined) {
       const current = await db.prepare("SELECT * FROM people WHERE id = ?").bind(snapshot.person.id).first<PersonRow>();
-      snapshot = upgradeLegacySpeakerSnapshot(snapshot, current, row.updated_at);
+      snapshot = upgradeLegacySpeakerSnapshot(snapshot, current, row.created_at);
     }
     const createdMarker = snapshot?.submission === null && snapshot?.person === null;
     const membershipCreatedMarker = row.entity === "speaker" && snapshot?.membership_created === true;

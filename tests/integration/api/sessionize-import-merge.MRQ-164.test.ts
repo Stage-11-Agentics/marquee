@@ -189,13 +189,14 @@ describe.sequential("MRQ-164 Sessionize import merge", () => {
     expect(await env.DB.prepare("SELECT title, company, bio FROM people WHERE id = ?").bind(LEGACY_ID).first()).toMatchObject({ title: null, company: null, bio: null });
 
     const secondImport = await runLegacyImport();
-    const secondRow = await env.DB.prepare("SELECT before_json, updated_at FROM import_rows WHERE import_id = ? AND entity = 'speaker'").bind(secondImport).first<{ before_json: string; updated_at: number }>();
+    const secondRow = await env.DB.prepare("SELECT before_json, created_at, updated_at FROM import_rows WHERE import_id = ? AND entity = 'speaker'").bind(secondImport).first<{ before_json: string; created_at: number; updated_at: number }>();
     const secondLegacySnapshot = JSON.parse(secondRow?.before_json ?? "{}") as Record<string, unknown>;
     delete secondLegacySnapshot.speaker_changes;
     delete secondLegacySnapshot.speaker_attachment_changed;
     delete secondLegacySnapshot.speaker_attachment_after_id;
     await env.DB.prepare("UPDATE import_rows SET before_json = ? WHERE import_id = ? AND entity = 'speaker'").bind(JSON.stringify(secondLegacySnapshot), secondImport).run();
-    await env.DB.prepare("UPDATE people SET title = ?, updated_at = ? WHERE id = ?").bind("Legacy organizer edit", Number(secondRow?.updated_at ?? 0) + 1, LEGACY_ID).run();
+    await env.DB.prepare("UPDATE people SET title = ?, updated_at = ? WHERE id = ?").bind("Legacy organizer edit", Number(secondRow?.created_at ?? 0) + 1, LEGACY_ID).run();
+    expect((await request(`/api/v1/events/${EVENT_ID}/imports/${secondImport}/run`, { method: "POST" })).status).toBe(200);
     expect((await request(`/api/v1/events/${EVENT_ID}/imports/${secondImport}/undo`, { method: "POST" })).status).toBe(200);
     expect(await env.DB.prepare("SELECT title, company, bio FROM people WHERE id = ?").bind(LEGACY_ID).first()).toMatchObject({ title: "Legacy organizer edit", company: "Imported company", bio: "Imported bio" });
   });
