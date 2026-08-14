@@ -3,6 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary, fieldError, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, PageHeader } from "../shell/components";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import "./record.css";
 
 const SUBMISSIONS_ROUTE = "/api/v1/events/{eventId}/submissions";
@@ -178,6 +179,9 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
   const model = settings.kind === "ready" ? settings.model : { formats: [], tracks: [] };
   const settingsReady = settings.kind === "ready";
   const submitterFieldError = fieldErrors.submitter;
+  // Two people can share a name, and this control decides who the submission
+  // belongs to. Search results key on `title`, which is the person's name.
+  const submitterNames = disambiguatedNames(submitterResults.map((person) => ({ id: person.id, name: person.title })));
   return <div class="submission-record-page">
     <PageHeader title="Create a submission" copy="Add an Abstract or Session directly to the conference program record. Choose the real person and conference options so the record is truthful." />
     <form onSubmit={submit} class="record-create-form">
@@ -202,7 +206,7 @@ export function CreateSubmissionPage({ eventId, navigate }: Props): JSX.Element 
                   {submitterSearchState === "error" && <span class="record-picker-placeholder error">People search unavailable. Try again.</span>}
                   {submitterSearchState === "idle" && submitterQuery.trim().length < 2 && <span class="record-picker-placeholder">Type at least 2 characters to search.</span>}
                   {submitterSearchState === "idle" && submitterQuery.trim().length >= 2 && submitterResults.length === 0 && <span class="record-picker-placeholder">No matching people. Create a new person if this is a new contact.</span>}
-                  {submitterResults.map((person) => <button type="button" role="option" class="record-person-suggestion" key={person.id} onClick={() => { setSelectedSubmitter(person); setSubmitterQuery(person.title); setSubmitterResults([]); setFieldErrors((current) => ({ ...current, submitter: "" })); }}><strong>{person.title}</strong><small>{person.subtitle}</small></button>)}
+                  {submitterResults.map((person) => <button type="button" role="option" class="record-person-suggestion" key={person.id} onClick={() => { setSelectedSubmitter(person); setSubmitterQuery(person.title); setSubmitterResults([]); setFieldErrors((current) => ({ ...current, submitter: "" })); }}><strong>{submitterNames.get(person.id) ?? person.title}</strong><small>{person.subtitle}</small></button>)}
                 </div>
               </>}
             </div>}

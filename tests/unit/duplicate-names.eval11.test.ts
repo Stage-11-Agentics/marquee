@@ -7,11 +7,17 @@ import {
   disambiguatedNames,
   duplicateNameOrdinals,
 } from "../../src/lib/duplicate-names";
-import { AssigneePicker, type Assignee } from "../../src/ui/settings/TaskTemplatesPage";
+import { AssigneePicker, SessionChoicePicker, type Assignee } from "../../src/ui/settings/TaskTemplatesPage";
 import peoplePageSource from "../../src/ui/people/PeoplePage.tsx?raw";
 import onboardingSource from "../../src/ui/onboarding/OnboardingPage.tsx?raw";
 import speakersSource from "../../src/ui/speakers/SpeakersPage.tsx?raw";
 import submissionRecordSource from "../../src/ui/submissions/SubmissionRecordPage.tsx?raw";
+import taskTemplatesSource from "../../src/ui/settings/TaskTemplatesPage.tsx?raw";
+import createSubmissionSource from "../../src/ui/submissions/CreateSubmissionPage.tsx?raw";
+import quickSearchSource from "../../src/ui/shell/QuickSearch.tsx?raw";
+import evaluationSource from "../../src/ui/evaluation/EvaluationPage.tsx?raw";
+import sourcingSource from "../../src/ui/people/SourcingPipelinePage.tsx?raw";
+import filesSource from "../../src/ui/files/FilesPage.tsx?raw";
 
 /**
  * sbek round 11, speaker-management: a CSV import created two "Marcus Okafor"
@@ -75,6 +81,28 @@ describe("duplicate person names", () => {
     expect(names.get("d")).toBe("");
   });
 
+  test("CONTRACT · a name that already ends in a suffix does not get a twin minted for it", () => {
+    // "Alex (2)" is a name a real person can carry. Handing the second Alex that
+    // same label produces the one outcome this exists to prevent.
+    const names = disambiguatedNames([
+      { id: "a", name: "Alex" },
+      { id: "b", name: "Alex" },
+      { id: "c", name: "Alex (2)" },
+    ]);
+    expect(names.get("b")).not.toBe(names.get("c"));
+    expect(new Set(names.values()).size).toBe(3);
+  });
+
+  test("CONTRACT · canonically equivalent names collide even when their bytes differ", () => {
+    // An import can carry a decomposed "José" beside a composed one: identical
+    // on screen, different byte for byte, and unmarked without NFC folding.
+    const names = disambiguatedNames([
+      { id: "a", name: "Jos\u00e9 Alvarez" },
+      { id: "b", name: "Jose\u0301 Alvarez" },
+    ]);
+    expect(names.get("b")).toMatch(/ \(2\)$/);
+  });
+
   test("CONTRACT · a record absent from the list keeps its plain name", () => {
     const ordinals = duplicateNameOrdinals([MARCUS_A, MARCUS_B]);
     expect(disambiguatedName({ id: "person_elsewhere", name: "Marcus Okafor" }, ordinals)).toBe("Marcus Okafor");
@@ -101,18 +129,80 @@ describe("duplicate person names", () => {
     expect(new Set(labels).size).toBe(labels.length);
   });
 
-  test("CONTRACT · every surface that lists people by name reads the shared derivation", () => {
-    // A page that renders the raw name reopens the defect on its own screen, so
-    // the wiring is asserted rather than assumed.
-    const surfaces = [
-      ["PeoplePage", peoplePageSource],
-      ["OnboardingPage", onboardingSource],
-      ["SpeakersPage", speakersSource],
-      ["SubmissionRecordPage", submissionRecordSource],
-    ] as const;
-    for (const [name, source] of surfaces) {
-      expect(source, `${name} imports the shared derivation`).toContain("lib/duplicate-names");
-      expect(source, `${name} calls it`).toContain("disambiguatedNames(");
+  test("CONTRACT · the session control beside the picker names the same people the same way", async () => {
+    const withSession: Assignee = { ...MARCUS_B, sessions: [{ id: "sub_1", title: "Shipping agents" }, { id: "sub_2", title: "CI at scale" }] };
+    const html = renderToString(h(SessionChoicePicker, {
+      assignees: [MARCUS_A, withSession],
+      displayNames: disambiguatedNames([MARCUS_A, withSession]),
+      selected: [MARCUS_A.id, withSession.id],
+      choices: {},
+      onChange: () => undefined,
+      idPrefix: "task-assign-test",
+    }));
+    expect(html).toContain("Marcus Okafor (2)");
+    expect(html).toContain("Session for Marcus Okafor (2)");
+  });
+
+  test("CONTRACT · someone who holds a task but is no longer assignable keeps their label", () => {
+    // Removing a co-speaker deletes the participation and keeps the task, so a
+    // person can hold work while dropping out of the assignable list. Deriving
+    // from the assignable list alone dropped exactly those people back to a raw
+    // name in the table where their task still sits.
+    expect(taskTemplatesSource).toContain("assignments.filter((task) => !assignees.some((person) => person.id === task.person.id))");
+    const stillHeld = disambiguatedNames([MARCUS_A, { id: MARCUS_B.id, name: MARCUS_B.name }]);
+    expect(stillHeld.get(MARCUS_B.id)).toBe("Marcus Okafor (2)");
+  });
+
+  /**
+   * Every place a person is chosen or acted on by name, named individually.
+   *
+   * A test that only checks each file imports the helper passes while a raw
+   * picker sits three lines below one that was fixed — which is exactly the
+   * shape of the defect. Each entry below pins one render site, so reverting any
+   * single one fails here.
+   *
+   * Deliberately absent, and not an oversight: attendee-facing surfaces (the
+   * public speaker directory, embeds, the speaker's own portal), where the
+   * reader has no records to confuse and a disambiguator is noise on a
+   * conference's public face; and card-level lists that carry one session's own
+   * speakers (program board cards, agenda pool rows), where the ambiguity would
+   * have to be derived board-wide and the card is not a control that acts on a
+   * person.
+   */
+  const WIRED_SITES: ReadonlyArray<readonly [string, string, readonly string[]]> = [
+    ["the roster", peoplePageSource, ["displayNames.get(row.id) ?? row.name"]],
+    ["the speaker roster", speakersSource, ["displayNames.get(row.id) ?? row.name"]],
+    ["the onboarding grid, compose drawer, and invite results", onboardingSource, [
+      "displayNames.get(row.person.id) ?? row.person.name",
+      "displayNames.get(row.person_id)",
+      "displayNames.get(item.person_id) ?? item.name",
+    ]],
+    ["the task assignee picker and assignment table", taskTemplatesSource, [
+      "displayNames.get(person.id) ?? person.name",
+      "assigneeNames.get(row.person.id) ?? row.person.name",
+    ]],
+    ["the reviewer picker, participants card, and message recipient", submissionRecordSource, [
+      "reviewerNames.get(reviewer.id) ?? reviewer.name",
+      "reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name",
+      "participantNames.get(group.person_id) ?? group.name",
+      "participantNames.get(participant.person_id) ?? participant.name",
+    ]],
+    ["the submitter picker", createSubmissionSource, ["submitterNames.get(person.id) ?? person.title"]],
+    ["global search speaker results", quickSearchSource, ["speakerNames.get(result.id) ?? result.title"]],
+    ["the committee rows and reviewer pool drawer", evaluationSource, [
+      "memberNames.get(member.id) ?? member.name",
+      "poolNames.get(member.id) ?? member.name",
+    ]],
+    ["the sourcing pipeline cards and stage control", sourcingSource, ["cardNames.get(card.person_id) ?? card.name"]],
+    ["the files board", filesSource, ["personNames.get(row.person.id) ?? row.person.name"]],
+  ];
+
+  test("CONTRACT · every surface where a person is chosen or acted on by name reads the shared derivation", () => {
+    for (const [what, source, expressions] of WIRED_SITES) {
+      expect(source, `${what} imports the shared derivation`).toContain("lib/duplicate-names");
+      for (const expression of expressions) {
+        expect(source, `${what} renders through it: ${expression}`).toContain(expression);
+      }
     }
   });
 });

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 
 import type { SearchResult } from "../../api/search";
 import { apiFetch, errorSummary } from "./api-client";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import { useEventContext } from "./event-context";
 import { useDialogLifecycle } from "./OverlayHosts";
 import "./quick-search.css";
@@ -33,6 +34,11 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
+  // Only the Speaker rows are people; an abstract and a speaker sharing a title
+  // are not a name collision and must not be marked as one.
+  const speakerNames = disambiguatedNames(
+    results.filter((result) => result.type === "Speaker").map((result) => ({ id: result.id, name: result.title })),
+  );
   const [state, setState] = useState<SearchState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [paintedQuery, setPaintedQuery] = useState("");
@@ -166,7 +172,7 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
         {state === "ready" && results.length > 0 && results.map((result, index) => <button
           type="button"
           role="option"
-          aria-label={`${result.type}: ${result.title}`}
+          aria-label={`${result.type}: ${speakerNames.get(result.id) ?? result.title}`}
           class="quick-search-result"
           data-search-result
           data-result-type={result.type}
@@ -174,7 +180,7 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
           onClick={() => selectResult(result)}
         >
           <span class="quick-search-result-type">{result.type}</span>
-          <span class="quick-search-result-copy"><strong>{result.title}</strong><small>{result.subtitle}</small></span>
+          <span class="quick-search-result-copy"><strong>{speakerNames.get(result.id) ?? result.title}</strong><small>{result.subtitle}</small></span>
           <kbd>{index + 1}</kbd>
         </button>)}
       </div>

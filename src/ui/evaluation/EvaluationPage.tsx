@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader, ReviewerName } from "../shell/components";
 import { TokenSecretPanel } from "../shell/TokenSecretPanel";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import "./evaluation.css";
 
 
@@ -734,6 +735,8 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
 
   const renderCommitteeRound = (round: Round): JSX.Element => {
     const roundCommittee = committeeForRound(round);
+    // Two reviewers can share a name, and each row carries Remind and Remove.
+    const memberNames = disambiguatedNames(roundCommittee?.members ?? []);
     const roundProgressAll = reviewerProgress[round.id];
     // "Behind" is the same number the rows show, read once for the round so the
     // header and every Remind button can never disagree about who is chased.
@@ -777,12 +780,12 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
           disabled={outstanding === 0}
           title={progress
             ? outstanding
-              ? `Email ${member.name} about ${outstanding} outstanding abstract${outstanding === 1 ? "" : "s"}`
-              : `${member.name} has nothing outstanding in ${round.name}`
+              ? `Email ${memberNames.get(member.id) ?? member.name} about ${outstanding} outstanding abstract${outstanding === 1 ? "" : "s"}`
+              : `${memberNames.get(member.id) ?? member.name} has nothing outstanding in ${round.name}`
             : "Reviewer coverage is not loaded yet"}
           onClick={() => void remindReviewer(round, member.id)}
         >Remind</Button>;
-        return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong><ReviewerName name={member.name} kind={member.kind} /></strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{coverageLabel}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{action}</span></div>;
+        return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong><ReviewerName name={memberNames.get(member.id) ?? member.name} kind={member.kind} /></strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{coverageLabel}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{action}</span></div>;
       })}</div><Button class="full-width ghost" onClick={openPools}>View all {roundCommittee.members.length} reviewers →</Button></> : <div class="inline-empty"><span>Choose a reviewer pool on this round card before distributing assignments.</span><Button small variant="primary" onClick={openPools}>Manage pools</Button></div>}
     </section>;
   };
@@ -875,6 +878,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
           ? <div class="message-preview">No reviewer pool exists yet. Name one below, then invite reviewers into it.</div>
           : <div class="pool-list">{plan.committees.map((pool) => {
             const usedBy = plan.rounds.filter((round) => round.committee_id === pool.id);
+            const poolNames = disambiguatedNames(pool.members);
             return <section class="pool-block" key={pool.id}>
               <header class="pool-head">
                 <div><strong>{pool.name}</strong><span class="subtle">{usedBy.length ? `Reviewer pool for ${usedBy.map((round) => round.name).join(" and ")}` : "Not attached to a round yet"}</span></div>
@@ -885,11 +889,11 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
                 : <div class="committee-list">{pool.members.map((member) => <div class="committee-person" key={`${pool.id}-${member.id}`}>
                   <span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span>
                   <div>
-                    <strong><ReviewerName name={member.name} kind={member.kind} /></strong>
+                    <strong><ReviewerName name={poolNames.get(member.id) ?? member.name} kind={member.kind} /></strong>
                     <div class="scope-chips">{member.track_scopes.length ? member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>) : <span class="subtle">No track responsibilities · nothing can be assigned</span>}</div>
                     <span class="subtle"><span class="tabular">{member.progress}</span> review{member.progress === 1 ? "" : "s"} recorded</span>
                   </div>
-                  <span class="committee-person-action"><Button small variant="ghost" disabled={poolBusy !== null} title={`Remove ${member.name} from ${pool.name}`} onClick={() => void removePoolMember(pool.id, member)}>{poolBusy === `${pool.id}:${member.id}` ? "Removing…" : "Remove"}</Button></span>
+                  <span class="committee-person-action"><Button small variant="ghost" disabled={poolBusy !== null} title={`Remove ${poolNames.get(member.id) ?? member.name} from ${pool.name}`} onClick={() => void removePoolMember(pool.id, member)}>{poolBusy === `${pool.id}:${member.id}` ? "Removing…" : "Remove"}</Button></span>
                 </div>)}</div>}
             </section>;
           })}</div>}

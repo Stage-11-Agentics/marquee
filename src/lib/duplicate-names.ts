@@ -7,10 +7,16 @@
  * The fix is display-level: mark the collision so a human or an agent can tell
  * the rows apart. Nothing is written back; the stored name never changes.
  *
- * The suffix is ordered by the record id, not by list position, so a given
- * person carries the same label under every sort. Position-ordering would hand
- * "(2)" to a different human each time the list was re-sorted, which is worse
- * than no marker at all.
+ * The marker is a statement about ONE RENDERED LIST: this view is showing more
+ * than one person by this name. It is not an identity — a roster page that
+ * happens to hold only one Marcus Okafor prints him plain, correctly, because
+ * nothing on that screen is ambiguous. Reading it as a permanent second name
+ * would be reading in something the display cannot know.
+ *
+ * Within a list, the suffix is ordered by record id rather than by list
+ * position, so re-sorting or reversing the same set never moves "(2)" onto a
+ * different human. Position-ordering would, and a marker that means a different
+ * person each time you look is worse than no marker at all.
  */
 
 export interface NamedRecord {
@@ -18,8 +24,14 @@ export interface NamedRecord {
   name: string;
 }
 
+/**
+ * Two names collide when they are indistinguishable to a reader: case, stray
+ * whitespace, and Unicode composition all have to be folded away first. NFC
+ * matters because an import can carry a decomposed "José" beside a composed one
+ * — identical on screen, different byte for byte, and unmarked without this.
+ */
 function collationKey(name: string): string {
-  return name.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+  return name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase();
 }
 
 /**
@@ -29,21 +41,29 @@ function collationKey(name: string): string {
  */
 export function duplicateNameOrdinals(records: readonly NamedRecord[]): Map<string, number> {
   const groups = new Map<string, string[]>();
+  const taken = new Set<string>();
   for (const record of records) {
     const key = collationKey(record.name);
     if (key === "") continue;
+    taken.add(key);
     const group = groups.get(key);
     if (group) group.push(record.id);
     else groups.set(key, [record.id]);
   }
   const ordinals = new Map<string, number>();
-  for (const ids of groups.values()) {
-    if (ids.length < 2) continue;
+  for (const [key, ids] of groups) {
     const ordered = [...new Set(ids)].sort();
     if (ordered.length < 2) continue;
-    ordered.forEach((id, index) => {
-      if (index > 0) ordinals.set(id, index + 1);
-    });
+    // Skip an ordinal whose label a real person already carries. Alex, Alex and
+    // "Alex (2)" in one list would otherwise mint a second "Alex (2)" — the one
+    // outcome this function exists to prevent.
+    let ordinal = 1;
+    for (const id of ordered.slice(1)) {
+      do {
+        ordinal += 1;
+      } while (taken.has(collationKey(`${key} (${ordinal})`)));
+      ordinals.set(id, ordinal);
+    }
   }
   return ordinals;
 }

@@ -248,7 +248,7 @@ export function AssigneePicker({
  * session is answered before the organizer arrives; the rest get one control
  * each, right where they were selected.
  */
-function SessionChoicePicker({
+export function SessionChoicePicker({
   assignees,
   displayNames,
   selected,
@@ -418,7 +418,18 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
   // Two speakers may share a name. Assigning work to the wrong record is the
   // failure this guards, so the picker, the session control, and the list of
   // who is already assigned all read from one derivation.
-  const assigneeNames = useMemo(() => disambiguatedNames(assignees), [assignees]);
+  //
+  // Derived from BOTH populations: removing a co-speaker deletes the
+  // participation but keeps the task, so someone can hold a task while no
+  // longer being assignable. Deriving from assignees alone dropped exactly those
+  // people back to a raw name in the table where their task still sits.
+  const assigneeNames = useMemo(
+    () => disambiguatedNames([
+      ...assignees,
+      ...assignments.filter((task) => !assignees.some((person) => person.id === task.person.id)).map((task) => task.person),
+    ]),
+    [assignees, assignments],
+  );
 
   const assignmentsByTemplate = useMemo(() => {
     const map = new Map<string, SpeakerTask[]>();

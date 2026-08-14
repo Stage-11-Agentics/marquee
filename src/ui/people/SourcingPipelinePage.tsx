@@ -12,6 +12,7 @@ import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
 import { errorSummary } from "../shell/api-client";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import { Button, EmptyState, PageHeader } from "../shell/components";
 import { PersonDrawer } from "./PersonDrawer";
 import { fetchPipeline, setStage, type PipelineCard, type PipelineStage } from "./people-api";
@@ -54,6 +55,9 @@ export function SourcingPipelinePage({
 
   const stages = board?.stages ?? [];
   const cards = board?.cards ?? [];
+  // Derived across the whole board, not per column: the two namesakes are most
+  // likely to sit in different stages, and each card carries a stage control.
+  const cardNames = disambiguatedNames(cards.map((card) => ({ id: card.person_id, name: card.name })));
 
   return <div class="people-page">
     <PageHeader
@@ -88,13 +92,13 @@ export function SourcingPipelinePage({
                 type="button"
                 class="people-rowlink"
                 onClick={() => navigate?.(`/pipeline?person=${encodeURIComponent(card.person_id)}`)}
-              ><span class="people-card-name">{card.name}</span></button>
+              ><span class="people-card-name">{cardNames.get(card.person_id) ?? card.name}</span></button>
               <div class="people-card-company">{card.company ?? "—"}</div>
               <div class="people-card-foot">
                 <span class="people-card-score">{card.score === null ? "—" : `Score ${card.score}`}</span>
                 <select
                   class="people-moveto"
-                  aria-label={`Move ${card.name} to another stage`}
+                  aria-label={`Move ${cardNames.get(card.person_id) ?? card.name} to another stage`}
                   disabled={busy}
                   value={card.stage}
                   onChange={(event) => void move(card.person_id, (event.currentTarget as HTMLSelectElement).value)}
