@@ -20,6 +20,7 @@ import {
   SHIPPED_DEMO_EVENT_ID,
   SHIPPED_DEMO_ORGANIZATION_ID,
   SHIPPED_DEMO_ORGANIZER_PERSON_ID,
+  SHIPPED_DEMO_TARGET_EVENT_ID,
 } from "../../src/lib/reset-demo/demo-fixture";
 import { reseedDemo } from "../../src/lib/reset-demo/reseed-demo";
 import { applyMigrations, env } from "./apply-migrations";
@@ -305,8 +306,10 @@ test("CONTRACT · MRQ-129 the reset sweeps the demo organization, and the demo o
 
   await reseedDemo(env.DB, seedClock + 1_000, env.MEDIA);
 
-  const survivor = await env.DB.prepare("SELECT COUNT(*) AS total FROM events WHERE org_id = ? AND id <> ?")
-    .bind(SHIPPED_DEMO_ORGANIZATION_ID, SHIPPED_DEMO_EVENT_ID)
+  // Outreach deliberately ships a second target conference. Zero here means
+  // no event outside the complete canonical seed survived the reset.
+  const survivor = await env.DB.prepare("SELECT COUNT(*) AS total FROM events WHERE org_id = ? AND id NOT IN (?, ?)")
+    .bind(SHIPPED_DEMO_ORGANIZATION_ID, SHIPPED_DEMO_EVENT_ID, SHIPPED_DEMO_TARGET_EVENT_ID)
     .first<{ total: number }>();
   expect(Number(survivor?.total)).toBe(0);
   // Deleting the attachments rows and leaving the partition behind is how the
@@ -314,4 +317,6 @@ test("CONTRACT · MRQ-129 the reset sweeps the demo organization, and the demo o
   expect(await env.MEDIA.get(uploadKey)).toBeNull();
   const seeded = await env.DB.prepare("SELECT COUNT(*) AS total FROM events WHERE id = ?").bind(SHIPPED_DEMO_EVENT_ID).first<{ total: number }>();
   expect(Number(seeded?.total)).toBe(1);
+  const seededTarget = await env.DB.prepare("SELECT COUNT(*) AS total FROM events WHERE id = ?").bind(SHIPPED_DEMO_TARGET_EVENT_ID).first<{ total: number }>();
+  expect(Number(seededTarget?.total)).toBe(1);
 });
