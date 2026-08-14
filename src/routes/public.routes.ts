@@ -3,11 +3,13 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { publicSessionCalendar } from "../lib/public-calendar";
+import { buildPublicXml } from "../lib/public-xml";
 import {
   loadPublicAgenda,
   loadPublicEmbed,
   loadPublicSession,
   loadPublicSpeaker,
+  publicEmbedPayload,
   publicEmbedCacheKey,
   readPublicEmbedCache,
   resolvePublicEmbed,
@@ -25,6 +27,8 @@ const publicQuery = z.object({
   status: z.string().min(1).max(40).optional(),
   accent: z.string().regex(/^#[0-9a-f]{3,8}$/i).optional(),
   layout: z.enum(["cards", "list"]).optional(),
+  fields: z.string().max(300).optional(),
+  preview: z.string().max(20).optional(),
 });
 
 const publicPayload = z.any();
@@ -177,6 +181,7 @@ const getPublicEmbed = defineApiRoute(
       status: query.status ?? null,
       accent: query.accent ?? null,
       layout: query.layout ?? null,
+      fields: query.fields ?? null,
     };
     const key = publicEmbedCacheKey(resolved.event.id, resolved.slug, filters);
     const cached = await readPublicEmbedCache(context.env.CACHE, key);
@@ -187,7 +192,50 @@ const getPublicEmbed = defineApiRoute(
     const data = await loadPublicEmbed(context.env.DB, resolved, filters);
     await writePublicEmbedCache(context.env.CACHE, key, data);
     context.header("Cache-Control", "public, max-age=30, s-maxage=30");
-    return context.json(data, 200);
+    return context.json(publicEmbedPayload(data), 200);
+  },
+);
+
+const getPublicEmbedXml = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/public/embeds/{slug}/xml",
+    operationId: "getPublicEmbedXml",
+    summary: "Read a published embed as XML",
+    description: "Anonymous-only XML representation of a published embed with the selected fields.",
+    tags: ["Public"],
+    request: { params: publicSlugParams, query: publicQuery },
+    policy: { auth: { kind: "public" }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: {
+      200: { content: { "application/xml": { schema: z.string() } }, description: "Published embed XML" },
+      ...errorResponses([404, 429, 500]),
+    },
+  },
+  async (context) => {
+    const query = context.req.valid("query");
+    const slug = context.req.valid("param").slug;
+    const resolved = await resolvePublicEmbed(context.env.DB, {
+      slug,
+      eventSlug: query.event ?? query.event_slug,
+    });
+    if (!resolved) throw ApiError.notFound("public embed not found");
+    const filters = {
+      track: query.track ?? null,
+      format: query.format ?? null,
+      room: query.room ?? null,
+      status: query.status ?? null,
+      accent: query.accent ?? null,
+      layout: query.layout ?? null,
+      fields: query.fields ?? null,
+    };
+    const key = publicEmbedCacheKey(resolved.event.id, resolved.slug, filters);
+    const cached = await readPublicEmbedCache(context.env.CACHE, key);
+    const data = cached ?? await loadPublicEmbed(context.env.DB, resolved, filters);
+    if (!cached) await writePublicEmbedCache(context.env.CACHE, key, data);
+    return context.body(buildPublicXml(data), 200, {
+      "Cache-Control": "public, max-age=30, s-maxage=30",
+      "Content-Type": "application/xml; charset=utf-8",
+    }) as never;
   },
 );
 
@@ -197,4 +245,5 @@ export const apiRoutes = [
   getPublicSessionCalendar,
   getPublicSpeaker,
   getPublicEmbed,
+  getPublicEmbedXml,
 ];

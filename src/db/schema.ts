@@ -124,7 +124,7 @@ export const MIRROR_OPERATIONS = ["upsert", "delete"] as const;
 export const IMPORT_OUTCOMES = ["created", "updated", "skipped", "failed"] as const;
 export const EMBED_KINDS = ["agenda", "sessions", "speakers", "cfp"] as const;
 export const EMBED_LAYOUTS = ["cards", "list"] as const;
-export const EMBED_OUTPUT_FORMATS = ["html", "json", "ical"] as const;
+export const EMBED_OUTPUT_FORMATS = ["html", "basic", "json", "xml", "ical"] as const;
 export const AUDIT_ACTOR_KINDS = ["user", "api_token", "system", "airtable"] as const;
 
 export type EventStatus = (typeof EVENT_STATUSES)[number];
