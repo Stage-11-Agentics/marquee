@@ -5,7 +5,7 @@ import test from "node:test";
 const root = new URL("../../", import.meta.url);
 const source = async (path) => readFile(new URL(path, root), "utf8");
 
-test("MRQ-210 · the standalone server route mounts the shared panel and redirects the legacy path", async () => {
+test("CONTRACT · the standalone server route mounts the shared panel and redirects the legacy path", async () => {
   const page = await source("src/ui/settings/ServerPage.tsx");
   const panel = await source("src/ui/setup/ServerPanel.tsx");
   const instance = await source("src/ui/setup/InstancePanel.tsx");

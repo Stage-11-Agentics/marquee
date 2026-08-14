@@ -5,7 +5,7 @@ import { readInstanceStatus, type InstanceStatusEnvironment } from "../../src/li
 
 const URL = "https://marquee.example.test/dashboard";
 
-test("MRQ-210 · server rows lead with the four organizer jobs in fixed order", () => {
+test("CONTRACT · server rows lead with the four organizer jobs in fixed order", () => {
   const rows = readInstanceStatus({}, URL);
   expect(rows.map((row) => row.key)).toEqual(["mail", "uploads", "spam", "domain"]);
   expect(rows.map((row) => row.label)).toEqual([
@@ -18,7 +18,7 @@ test("MRQ-210 · server rows lead with the four organizer jobs in fixed order", 
   expect(rows[0]).toMatchObject({ sender: null, account: null });
 });
 
-test("MRQ-210 · mail status and identity come from bindings, never a stored flag", () => {
+test("CONTRACT · mail status and identity come from bindings, never a stored flag", () => {
   const withoutBinding = readInstanceStatus(
     { INSTANCE_MAIL_CONFIGURED: "true" } as unknown as InstanceStatusEnvironment,
     URL,
