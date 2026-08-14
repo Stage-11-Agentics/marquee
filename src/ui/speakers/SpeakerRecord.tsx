@@ -24,12 +24,20 @@ const STATUS_LABELS: Record<SpeakerStatus, string> = {
  * somewhere to put "arrives the 11th, vegetarian, aisle seat" and needs it to
  * still be there tomorrow. A field-definition engine is a different product.
  */
-const LOGISTICS_FIELDS: Array<{ key: string; label: string; placeholder: string }> = [
-  { key: "Arrival", label: "Arrival", placeholder: "May 11, evening" },
-  { key: "Departure", label: "Departure", placeholder: "May 15, midday" },
-  { key: "Travel", label: "Travel preferences", placeholder: "Aisle seat; no red-eyes" },
-  { key: "Dietary", label: "Dietary", placeholder: "Vegetarian" },
-  { key: "Accessibility", label: "Accessibility", placeholder: "Step-free stage access" },
+/**
+ * The placeholders are prompts, not specimens. Written as sample values —
+ * "May 11, evening", "Step-free stage access" — an untouched panel reads at a
+ * glance as though travel and access needs are already on file, and the one
+ * thing an organizer must never wrongly believe is that a speaker's access
+ * requirement has been captured. Each line now asks for the answer in the same
+ * voice the Notes field already used, so an empty field looks empty.
+ */
+export const LOGISTICS_FIELDS: Array<{ key: string; label: string; placeholder: string }> = [
+  { key: "Arrival", label: "Arrival", placeholder: "When they arrive, once you know" },
+  { key: "Departure", label: "Departure", placeholder: "When they leave" },
+  { key: "Travel", label: "Travel preferences", placeholder: "Seat, timing, anything they have asked for" },
+  { key: "Dietary", label: "Dietary", placeholder: "Anything they cannot eat" },
+  { key: "Accessibility", label: "Accessibility", placeholder: "What they need to take part" },
   { key: "Notes", label: "Notes", placeholder: "Anything the conference should hold on to" },
 ];
 
