@@ -36,12 +36,43 @@ Never work in the primary checkout — it is the board's home and it stays on `m
 work in `Marquee-worktrees/mrq-auto-eval`, which is the loop's own machinery.
 
 - `npm test` (45s budget), `npm run pr-gate` (120s) before the PR.
-- **The gate is load-sensitive.** Same branch, same night: load 14 → 78s, load 164 →
-  276s. If it fails on time alone, check the machine load before believing it. A red
-  suite must mean a real defect.
+- **A red gate is real; slowness is not a failure.** Same branch, same night: load 14 →
+  78s, load 164 → 276s against a 120s budget — and that 276s run **passed**.
+  `run-test.mjs` and `pr-gate.mjs` report an over-budget run as `pass-over-budget`, a loud
+  warn, and set the exit code from the test outcome; only `HARD_LIMIT_MS` (600s, a hang
+  detector) turns slow into failed. So read the `status` field rather than guessing at load:
+  `fail` is load-invariant — **believe it**; `pass-over-budget` is a warn; `timeout` is
+  unknown, so re-run under the shared lock at
+  `Marquee-worktrees/.gate-lock/gate-lock.sh`. The exceptions are `check:seed` and
+  `check:speed`, which derive status from wall clock and *can* red on contention alone.
+  **Never dismiss failing tests as a known baseline without naming the commit that made
+  them pass.**
 - Every fix ships with a regression test that fails against `github/main` and passes on your
   branch. If you cannot write that test, you have not found the defect yet.
 - `gh pr create --repo Stage-11-Agentics/marquee --base main`.
+
+## Push when the work is done, before the verification run
+
+**Commit and push the moment the change is written — not after the gate is green.** Every agent
+that has stalled on this project ran out of context during final verification: the gate run, the
+browser drive, the tidy-up. That is precisely when the work is finished and unpushed, which is the
+worst possible moment to disappear.
+
+A green gate on unpushed work is worth nothing to whoever picks it up. The verification can be
+re-run by anyone; the work cannot be reconstructed. So: push, then verify, then amend if the
+verification finds something. If you are running low on context at any point, push first and say
+so in one line — a pushed partial is recoverable, an unpushed complete is not.
+
+## Read your own context correctly before you act on it
+
+The status line carries two different numbers. `Context NN% used` is the percentage of your
+**current window** consumed and it resets every time you compact. The `NNNK used` figure is
+cumulative across the whole session and never resets. Neither one means anything alone.
+
+The danger shape is **high percentage with low cumulative** — a large window filled once and never
+compacted. Every agent that has stalled on this project looked like that. **Low percentage with
+high cumulative is the opposite**: an agent that has just compacted and has most of its window
+free. Read them together, or you will rescue a healthy agent and miss a dying one.
 
 ## Root-cause before you fix
 
