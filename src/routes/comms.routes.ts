@@ -18,6 +18,7 @@ import {
 } from "../jobs/mail/templates";
 import { renderAdHocMail, renderMail, type MergeData } from "../jobs/mail/render";
 import { mergeDataForRecipient, firstName } from "../jobs/mail/merge-data";
+import { mergeFieldErrorMessage, unknownMergeFields } from "../lib/mail-merge-fields";
 import type { OutboxRow } from "../db/schema";
 import {
   arrivalForSession,
@@ -167,6 +168,11 @@ function requireComms(context: Parameters<NonNullable<ApiRouteEntry["handler"]>>
   if (!tokenHasGrant(auth, required, eventId)) {
     throw ApiError.forbidden(`communications requires ${required}`);
   }
+}
+
+function rejectUnknownMergeFields(subject: string, body: string): void {
+  const unknown = unknownMergeFields(subject, body);
+  if (unknown.length > 0) throw ApiError.badRequest(mergeFieldErrorMessage(unknown), "template");
 }
 
 async function commsActor(
@@ -564,6 +570,7 @@ const createTemplate = defineApiRoute(
     requireComms(context, eventId, true);
     const body = context.req.valid("json");
     if (!(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(body.key)) throw ApiError.badRequest("unknown template key", "key");
+    rejectUnknownMergeFields(body.subject, body.body_md);
     const now = Date.now();
     const id = crypto.randomUUID();
     try {
@@ -596,11 +603,13 @@ const updateTemplate = defineApiRoute(
     const body = context.req.valid("json");
     let persistedId = templateId;
     let current = await context.env.DB.prepare("SELECT * FROM email_templates WHERE id = ? AND event_id = ?").bind(templateId, eventId).first<{ key: string; name: string; subject: string; body_md: string; enabled: 0 | 1 }>();
+    let fallbackId: string | null = null;
     if (!current) {
       const defaultKey = defaultTemplateKeyFromId(eventId, templateId);
       if (!defaultKey) throw ApiError.notFound("template not found");
       const fallback = await findTemplate(context.env.DB, eventId, defaultKey);
-      persistedId = crypto.randomUUID();
+      fallbackId = crypto.randomUUID();
+      persistedId = fallbackId;
       current = {
         key: fallback.key,
         name: fallback.name,
@@ -608,18 +617,22 @@ const updateTemplate = defineApiRoute(
         body_md: fallback.body_md,
         enabled: fallback.enabled,
       };
-      const now = Date.now();
+    }
+    const nextKey = body.key ?? current.key;
+    if (!(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(nextKey)) throw ApiError.badRequest("unknown template key", "key");
+    const nextSubject = body.subject ?? current.subject;
+    const nextBody = body.body_md ?? current.body_md;
+    rejectUnknownMergeFields(nextSubject, nextBody);
+    const now = Date.now();
+    if (fallbackId) {
       await context.env.DB.prepare(
         `INSERT INTO email_templates (id, event_id, key, name, subject, body_md, enabled, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(persistedId, eventId, current.key, current.name, current.subject, current.body_md, current.enabled, now, now).run();
     }
-    const nextKey = body.key ?? current.key;
-    if (!(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(nextKey)) throw ApiError.badRequest("unknown template key", "key");
-    const now = Date.now();
     await context.env.DB.prepare(
       `UPDATE email_templates SET key = ?, name = ?, subject = ?, body_md = ?, enabled = ?, updated_at = ? WHERE id = ? AND event_id = ?`,
-    ).bind(nextKey, body.name ?? current.name, body.subject ?? current.subject, body.body_md ?? current.body_md, body.enabled === undefined ? current.enabled : body.enabled ? 1 : 0, now, persistedId, eventId).run();
+    ).bind(nextKey, body.name ?? current.name, nextSubject, nextBody, body.enabled === undefined ? current.enabled : body.enabled ? 1 : 0, now, persistedId, eventId).run();
     const row = await context.env.DB.prepare("SELECT id, event_id, key, name, subject, body_md, enabled, updated_at FROM email_templates WHERE id = ?").bind(persistedId).first();
     return context.json(row, 200);
   },
@@ -704,6 +717,12 @@ const sendComms = defineApiRoute(
     }
     if (body.template_key && !(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(body.template_key)) {
       throw ApiError.badRequest("unknown template key", "template_key");
+    }
+    if (body.template_key) {
+      const template = await findTemplate(context.env.DB, eventId, body.template_key);
+      rejectUnknownMergeFields(template.subject, template.body_md);
+    } else {
+      rejectUnknownMergeFields(body.subject!, body.body!);
     }
     const recipients = await recipientsFor(context.env.DB, eventId, body.selector);
     const queued = await enqueueBulkReminder({

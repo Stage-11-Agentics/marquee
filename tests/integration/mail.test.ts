@@ -457,3 +457,131 @@ test("AC-126 · the manifest route exposes authenticated template storage throug
   expect(persisted?.enabled).toBe(0);
   expect(await enqueueTrigger({ db: env.DB, eventId: "evt_mail", templateKey: "rejection", entityId: "sub_mail", personId: "per_mail", toEmail: "speaker@example.com" })).toBeNull();
 });
+
+test("CONTRACT · MRQ-175 · preview preserves an unknown token but the bulk queue refuses it by name", async () => {
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-unknown-token" });
+  const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+  const message = {
+    subject: "Your speaker portal",
+    body: "Your speaker portal is here: {{portal.link}}",
+  };
+  const preview = await app.request(
+    "/api/v1/events/evt_mail/comms/preview",
+    {
+      method: "POST",
+      headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+      body: JSON.stringify({ person_id: "per_mail", submission_id: "sub_mail", role: "speaker", ...message }),
+    },
+    env,
+    requestContext,
+  );
+  expect(preview.status).toBe(200);
+  expect((await preview.json<{ text: string }>()).text).toContain("{{portal.link}}");
+
+  const before = await env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE event_id = 'evt_mail'").first<{ total: number }>();
+  const queued = await app.request(
+    "/api/v1/events/evt_mail/comms/send",
+    {
+      method: "POST",
+      headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+      body: JSON.stringify({ selector: { submission_ids: ["sub_mail"], person_ids: ["per_mail"], role: "speaker" }, ...message }),
+    },
+    env,
+    requestContext,
+  );
+  expect(queued.status).toBe(400);
+  expect(await queued.text()).toContain("portal.link");
+  const after = await env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE event_id = 'evt_mail'").first<{ total: number }>();
+  expect(after?.total).toBe(before?.total);
+});
+
+test("CONTRACT · MRQ-175 · known merge fields queue and known missing values remain literal", async () => {
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-known-token" });
+  const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+  const known = await app.request(
+    "/api/v1/events/evt_mail/comms/send",
+    {
+      method: "POST",
+      headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        selector: { submission_ids: ["sub_mail"], person_ids: ["per_mail"], role: "speaker" },
+        subject: "Hello {{speaker.first_name}}",
+        body: "Hi {{speaker.first_name}}.",
+      }),
+    },
+    env,
+    requestContext,
+  );
+  expect(known.status).toBe(202);
+  const knownPayload = await known.json<{ outbox_ids: string[] }>();
+  const knownRow = await env.DB.prepare("SELECT text FROM outbox WHERE id = ?").bind(knownPayload.outbox_ids[0]).first<{ text: string }>();
+  expect(knownRow?.text).toBe("Hi Ada.");
+
+  const missing = await enqueueBulkReminder({
+    db: env.DB,
+    eventId: "evt_mail",
+    templateKey: "custom",
+    recipients: [{ entityId: "missing-field", personId: "per_mail", toEmail: "speaker@example.com", data: { "decision.feedback": null } }],
+    subject: "A known field is absent",
+    body: "Feedback: {{decision.feedback}}",
+  });
+  const missingRow = await env.DB.prepare("SELECT text FROM outbox WHERE id = ?").bind(missing[0]?.id).first<{ text: string }>();
+  expect(missingRow?.text).toBe("Feedback: {{decision.feedback}}");
+});
+
+test("CONTRACT · MRQ-175 · template save refuses an unknown merge field before persisting it", async () => {
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-save" });
+  const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+  const response = await app.request(
+    "/api/v1/events/evt_mail/templates",
+    {
+      method: "POST",
+      headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+      body: JSON.stringify({ key: "custom", name: "Custom", subject: "Hello", body_md: "{{portal.link}}", enabled: true }),
+    },
+    env,
+    requestContext,
+  );
+  expect(response.status).toBe(400);
+  expect(await response.text()).toContain("portal.link");
+  const persisted = await env.DB.prepare("SELECT COUNT(*) AS total FROM email_templates WHERE event_id = 'evt_mail' AND key = 'custom'").first<{ total: number }>();
+  expect(persisted?.total).toBe(0);
+
+  const update = await app.request(
+    "/api/v1/events/evt_mail/templates/default_evt_mail_reminder_generic",
+    {
+      method: "PATCH",
+      headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+      body: JSON.stringify({ body_md: "{{portal.link}}" }),
+    },
+    env,
+    requestContext,
+  );
+  expect(update.status).toBe(400);
+  expect(await update.text()).toContain("portal.link");
+  const defaultPersisted = await env.DB.prepare("SELECT COUNT(*) AS total FROM email_templates WHERE event_id = 'evt_mail' AND key = 'reminder_generic'").first<{ total: number }>();
+  expect(defaultPersisted?.total).toBe(0);
+});
+
+test("CONTRACT · MRQ-175 · queue revalidates a stored template before creating any outbox row", async () => {
+  await env.DB.prepare(
+    `INSERT INTO email_templates (id, event_id, key, name, subject, body_md, enabled, created_at, updated_at)
+     VALUES ('tpl_mrq175_invalid', 'evt_mail', 'custom', 'Custom', 'Hello', '{{portal.link}}', 1, ?, ?)`,
+  ).bind(NOW, NOW).run();
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-175-stored" });
+  const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+  const response = await app.request(
+    "/api/v1/events/evt_mail/comms/send",
+    {
+      method: "POST",
+      headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+      body: JSON.stringify({ selector: { submission_ids: ["sub_mail"], person_ids: ["per_mail"], role: "speaker" }, template_key: "custom" }),
+    },
+    env,
+    requestContext,
+  );
+  expect(response.status).toBe(400);
+  expect(await response.text()).toContain("portal.link");
+  const outbox = await env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE event_id = 'evt_mail'").first<{ total: number }>();
+  expect(outbox?.total).toBe(0);
+});
