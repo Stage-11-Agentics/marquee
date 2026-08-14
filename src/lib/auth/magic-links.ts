@@ -136,7 +136,7 @@ export type MagicLinkConsumption =
  * `changes = 0` and fails. Lookup is by token hash (unique index); the raw
  * token never touches the database or the logs.
  */
-export async function consumeMagicLinkWithStatus(
+async function consumeMagicLinkState(
   db: D1Database,
   token: string,
   now = Date.now(),
@@ -164,12 +164,21 @@ export async function consumeMagicLinkWithStatus(
     : afterRace;
 }
 
+export async function consumeMagicLinkWithStatus(
+  db: D1Database,
+  token: string,
+  now = Date.now(),
+  options: { purposes?: readonly MagicLinkPurpose[] } = {},
+): Promise<MagicLinkConsumption> {
+  return consumeMagicLinkState(db, token, now, options);
+}
+
 export async function consumeMagicLink(
   db: D1Database,
   token: string,
   now = Date.now(),
   options: { purposes?: readonly MagicLinkPurpose[] } = {},
 ): Promise<MagicLinkRow | null> {
-  const result = await consumeMagicLinkWithStatus(db, token, now, options);
+  const result = await consumeMagicLinkState(db, token, now, options);
   return result.status === "consumed" ? result.link : null;
 }
