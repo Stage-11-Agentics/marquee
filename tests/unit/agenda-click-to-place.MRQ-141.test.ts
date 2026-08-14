@@ -20,6 +20,7 @@ import {
 const DAY = { value: "2026-10-12", label: "Mon · Oct 12" };
 const START = Date.UTC(2026, 9, 12, 9);
 const source = readFileSync(resolve(process.cwd(), "src/ui/agenda/AgendaPage.tsx"), "utf8");
+const styles = readFileSync(resolve(process.cwd(), "src/ui/agenda/agenda.css"), "utf8");
 
 const poolItem: AgendaPoolItem = {
   submission_id: "submission-pool",
@@ -86,6 +87,10 @@ function scheduledSession(): AgendaSession {
 }
 
 describe("CONTRACT · MRQ-141 click-to-place", () => {
+  test("CONTRACT · the agenda toolbar clears the sticky shell topbar before receiving clicks", () => {
+    expect(styles).toMatch(/\.agenda-toolbar \{[^}]*position: sticky;[^}]*top: 52px;[^}]*z-index: 6;/);
+  });
+
   test("CONTRACT · MRQ-142 · the builder keeps a named empty-day status beside the day selector", () => {
     const emptyDay = renderToString(h(AgendaDayStatus, {
       snapshot: { ...snapshot, event: { ...snapshot.event, ends_on: "2026-10-14" }, sessions: [scheduledSession()] },
