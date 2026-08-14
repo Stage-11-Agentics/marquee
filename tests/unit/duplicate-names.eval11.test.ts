@@ -217,9 +217,14 @@ describe("duplicate person names", () => {
     ]],
     ["the submitter picker", createSubmissionSource, ["submitterNames.get(person.id) ?? person.title"]],
     ["global search speaker results", quickSearchSource, ["speakerNames.get(result.id) ?? result.title"]],
-    ["the committee rows and reviewer pool drawer", evaluationSource, [
+    ["the committee rows, reviewer pool drawer, and distribution result", evaluationSource, [
       "memberNames.get(member.id) ?? member.name",
       "poolNames.get(member.id) ?? member.name",
+      "coverageNames.get(reviewer.person_id) ?? reviewer.name",
+      // Remind and Remove repeat their own words; the person has to be in the
+      // ACCESSIBLE name, not only in a hover title a screen reader never reads.
+      "aria-label={`Remind ${memberLabel}`}",
+      "aria-label={`Remove ${poolNames.get(member.id) ?? member.name} from ${pool.name}`}",
     ]],
     ["the sourcing pipeline cards and stage control", sourcingSource, ["cardNames.get(card.person_id) ?? card.name"]],
     ["the files board", filesSource, ["personNames.get(row.person.id) ?? row.person.name", "personNames={personNames}"]],

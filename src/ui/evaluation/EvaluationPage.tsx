@@ -224,6 +224,9 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
   const [maxPerReviewer, setMaxPerReviewer] = useState("");
   const [distributing, setDistributing] = useState(false);
   const [coverage, setCoverage] = useState<CoverageReport | null>(null);
+  // The distribution result lists reviewers by name with a count each; two
+  // namesakes there leave an organizer unable to say whose load is whose.
+  const coverageNames = disambiguatedNames((coverage?.reviewers ?? []).map((reviewer) => ({ id: reviewer.person_id, name: reviewer.name })));
   /**
    * A refusal belongs in the dialog that caused it. The page-level banner sits
    * behind the backdrop, so a 422 rendered there is a click that did nothing
@@ -774,18 +777,20 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
          * column is a fixed 104px so neither state moves anything.
          */
         const outstanding = progress?.outstanding_count ?? 0;
+        const memberLabel = memberNames.get(member.id) ?? member.name;
         const action = <Button
+          aria-label={`Remind ${memberLabel}`}
           small
           variant="ghost"
           disabled={outstanding === 0}
           title={progress
             ? outstanding
-              ? `Email ${memberNames.get(member.id) ?? member.name} about ${outstanding} outstanding abstract${outstanding === 1 ? "" : "s"}`
-              : `${memberNames.get(member.id) ?? member.name} has nothing outstanding in ${round.name}`
+              ? `Email ${memberLabel} about ${outstanding} outstanding abstract${outstanding === 1 ? "" : "s"}`
+              : `${memberLabel} has nothing outstanding in ${round.name}`
             : "Reviewer coverage is not loaded yet"}
           onClick={() => void remindReviewer(round, member.id)}
         >Remind</Button>;
-        return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong><ReviewerName name={memberNames.get(member.id) ?? member.name} kind={member.kind} /></strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{coverageLabel}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{action}</span></div>;
+        return <div class="committee-person" key={`${round.id}-${member.id}`}><span class="mini-avatar">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><strong><ReviewerName name={memberLabel} kind={member.kind} /></strong><div class="scope-chips">{member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>)}</div><span class="subtle">{coverageLabel}{progress?.recusal_count ? ` · ${progress.recusal_count} recusal${progress.recusal_count === 1 ? "" : "s"}` : ""}</span></div><span class="committee-person-action">{action}</span></div>;
       })}</div><Button class="full-width ghost" onClick={openPools}>View all {roundCommittee.members.length} reviewers →</Button></> : <div class="inline-empty"><span>Choose a reviewer pool on this round card before distributing assignments.</span><Button small variant="primary" onClick={openPools}>Manage pools</Button></div>}
     </section>;
   };
@@ -893,7 +898,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
                     <div class="scope-chips">{member.track_scopes.length ? member.track_scopes.map((scope) => <Chip key={scope.id}>{scope.name}</Chip>) : <span class="subtle">No track responsibilities · nothing can be assigned</span>}</div>
                     <span class="subtle"><span class="tabular">{member.progress}</span> review{member.progress === 1 ? "" : "s"} recorded</span>
                   </div>
-                  <span class="committee-person-action"><Button small variant="ghost" disabled={poolBusy !== null} title={`Remove ${poolNames.get(member.id) ?? member.name} from ${pool.name}`} onClick={() => void removePoolMember(pool.id, member)}>{poolBusy === `${pool.id}:${member.id}` ? "Removing…" : "Remove"}</Button></span>
+                  <span class="committee-person-action"><Button small variant="ghost" disabled={poolBusy !== null} aria-label={`Remove ${poolNames.get(member.id) ?? member.name} from ${pool.name}`} title={`Remove ${poolNames.get(member.id) ?? member.name} from ${pool.name}`} onClick={() => void removePoolMember(pool.id, member)}>{poolBusy === `${pool.id}:${member.id}` ? "Removing…" : "Remove"}</Button></span>
                 </div>)}</div>}
             </section>;
           })}</div>}
@@ -928,7 +933,7 @@ export function EvaluationPage({ eventId }: EvaluationPageProps): JSX.Element {
                   : <span class="subtle">Every abstract in this round has a reviewer.</span>}
                 {coverage.cap_reached ? <span class="coverage-gap">The per-reviewer limit stopped some abstracts short. Raise it or add reviewers to close the gap.</span> : null}
                 <span class="subtle">Reviewer counts are total assignments in this round, including work already assigned.</span>
-                <div class="coverage-reviewers">{coverage.reviewers.map((reviewer) => <span class="coverage-reviewer" key={reviewer.person_id}><span>{reviewer.name}</span><strong class="tabular">{reviewer.assigned_count.toLocaleString()} assigned total</strong></span>)}</div>
+                <div class="coverage-reviewers">{coverage.reviewers.map((reviewer) => <span class="coverage-reviewer" key={reviewer.person_id}><span>{coverageNames.get(reviewer.person_id) ?? reviewer.name}</span><strong class="tabular">{reviewer.assigned_count.toLocaleString()} assigned total</strong></span>)}</div>
               </div>
               : <div class="message-preview">Assignments belong to the selected round and respect each reviewer's track responsibilities. Re-running is idempotent: it tops up coverage and never replaces recorded review evidence.</div>}
         </div>
