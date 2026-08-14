@@ -107,6 +107,12 @@ const BULK_ACTIONS = [
 
 type BulkAction = (typeof BULK_ACTIONS)[number]["action"];
 
+const KIND_FILTERS = [
+  ["", "All"],
+  ["abstract", "Abstracts"],
+  ["session", "Sessions"],
+] as const;
+
 const SORT_OPTIONS = [
   ["newest", "Newest"],
   ["updated", "Recently updated"],
@@ -154,6 +160,17 @@ function queryValue(params: URLSearchParams, key: string, fallback = ""): string
   return params.get(key) ?? fallback;
 }
 
+type QueryUpdates = Record<string, string | number | undefined>;
+
+export function submissionsQuerySuffix(search: string, updates: QueryUpdates): string {
+  const next = new URLSearchParams(search);
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === undefined || value === "" || value === 1 && key === "page") next.delete(key);
+    else next.set(key, String(value));
+  }
+  return next.size ? `?${next.toString()}` : "";
+}
+
 /** The control and the request agree on one normaliser; see list-request.ts. */
 function sortValue(params: URLSearchParams): SavedView["config"]["sort"] {
   return normaliseSubmissionSort(params.get("sort"));
@@ -177,7 +194,7 @@ function storedColumns(eventId: string): SubmissionColumnId[] {
   }
 }
 
-function viewConfigFromParams(params: URLSearchParams, columns: SubmissionColumnId[]): SavedView["config"] {
+export function viewConfigFromParams(params: URLSearchParams, columns: SubmissionColumnId[]): SavedView["config"] {
   const filters: Record<string, string> = {};
   for (const key of ["kind", "status", "track", "format", "wave", "task", "placement"]) {
     const value = params.get(key);
@@ -189,6 +206,25 @@ function viewConfigFromParams(params: URLSearchParams, columns: SubmissionColumn
     sort: sortValue(params),
     columns: columnsWithTitle(columns),
   };
+}
+
+export function savedViewSearch(config: SavedView["config"]): string {
+  const next = new URLSearchParams();
+  if (config.q) next.set("q", config.q);
+  for (const [key, value] of Object.entries(config.filters)) if (value) next.set(key, value);
+  if (config.sort !== "newest") next.set("sort", config.sort);
+  return next.size ? `?${next.toString()}` : "";
+}
+
+export function KindSegment({ kind, onChange }: { kind: string; onChange: (value: string) => void }): JSX.Element {
+  return <div class="segment" id="kind-segment" role="group" aria-label="Filter by kind">
+    {KIND_FILTERS.map(([value, label]) => <button key={value || "all"} type="button" class={kind === value ? "active" : ""} aria-pressed={kind === value} onClick={() => onChange(value)}>{label}</button>)}
+  </div>;
+}
+
+export function SubmissionsKindSegment({ search, navigate }: Pick<Props, "search" | "navigate">): JSX.Element {
+  const kind = queryValue(new URLSearchParams(search), "kind");
+  return <KindSegment kind={kind} onChange={(value) => navigate(`/submissions${submissionsQuerySuffix(search, { kind: value, page: 1 })}`)} />;
 }
 
 function Cell({ item, column, navigate }: { item: SubmissionListItem; column: SubmissionColumnId; navigate: (target: string) => void }): JSX.Element {
@@ -369,12 +405,7 @@ export function SubmissionsPage({
   }, [eventId, notifiedQueue, reloadKey]);
 
   const updateQuery = (updates: Record<string, string | number | undefined>, options?: NavigationOptions) => {
-    const next = new URLSearchParams(params);
-    for (const [key, value] of Object.entries(updates)) {
-      if (value === undefined || value === "" || value === 1 && key === "page") next.delete(key);
-      else next.set(key, String(value));
-    }
-    navigate(`/submissions${next.size ? `?${next.toString()}` : ""}`, options);
+    navigate(`/submissions${submissionsQuerySuffix(search, updates)}`, options);
   };
 
   const persistColumns = (next: SubmissionColumnId[]) => {
@@ -384,13 +415,9 @@ export function SubmissionsPage({
   };
 
   const applyView = (view: SavedView) => {
-    const next = new URLSearchParams();
-    if (view.config.q) next.set("q", view.config.q);
-    for (const [key, value] of Object.entries(view.config.filters)) if (value) next.set(key, value);
-    if (view.config.sort !== "newest") next.set("sort", view.config.sort);
     persistColumns(view.config.columns);
     setActiveViewId(view.id);
-    navigate(`/submissions${next.size ? `?${next.toString()}` : ""}`);
+    navigate(`/submissions${savedViewSearch(view.config)}`);
   };
 
   const saveCurrentView = async () => {
@@ -832,9 +859,9 @@ export function SubmissionsPage({
         {activeView && !activeView.built_in && <span class="column-panel-note">Save current view again to capture this column order in “{activeView.name}”.</span>}
       </div>}
       <form class="submissions-toolbar" onSubmit={(event) => { event.preventDefault(); updateQuery({ q: searchDraft.trim(), page: 1 }); }}>
+        <SubmissionsKindSegment search={search} navigate={navigate} />
         <label class="search-field"><span class="sr-only">Search submissions</span><input ref={searchInputRef} value={searchDraft} onInput={(event) => setSearchDraft(event.currentTarget.value)} placeholder={envelope ? `Search ${envelope.total.toLocaleString()} submissions…` : "Search submissions…"} /><button class="button small" type="submit">Search</button></label>
         <label><span class="sr-only">Status</span><select class={`status-filter ${status ? "has-selection" : "is-default"}`} value={status} onChange={(event) => updateQuery({ status: event.currentTarget.value, page: 1 })}><option value="">All statuses</option>{STATUS_OPTIONS.map((group) => <optgroup label={group.label}>{group.options.map(([value, label]) => <option value={value}>{label}</option>)}</optgroup>)}</select></label>
-        <label><span class="sr-only">Type</span><select value={kind} onChange={(event) => updateQuery({ kind: event.currentTarget.value, page: 1 })}><option value="">All types</option><option value="abstract">Abstract</option><option value="session">Session</option></select></label>
         <label><span class="sr-only">Track</span><select value={track} onChange={(event) => updateQuery({ track: event.currentTarget.value, page: 1 })}><option value="">All tracks</option>{[...knownTracks.values()].sort((left, right) => left.name.localeCompare(right.name)).map((itemTrack) => <option value={itemTrack.id}>{itemTrack.name}</option>)}</select></label>
         <span class="toolbar-spacer" />
         <label><span class="sr-only">Sort</span><select value={sort} onChange={(event) => updateQuery({ sort: event.currentTarget.value, page: 1 })}>{SORT_OPTIONS.map(([value, label]) => <option value={value}>{label}</option>)}</select></label>

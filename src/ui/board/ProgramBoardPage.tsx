@@ -35,6 +35,12 @@ interface FilterState {
 
 const EMPTY_FILTERS: FilterState = { q: "", kind: "", track: "", format: "", wave: "" };
 
+export function BoardKindNote({ kind }: { kind: FilterState["kind"] }): JSX.Element | null {
+  return kind === "session"
+    ? <div class="board-kind-note" role="note">Sessions are guaranteed — they skip evaluation and enter at Ready to place. The earlier columns are empty by design.</div>
+    : null;
+}
+
 function BoardCardButton({ card, navigate }: { card: BoardCard; navigate: (target: string) => void }): JSX.Element {
   return <button
     class="program-board-card"
@@ -143,6 +149,7 @@ export function ProgramBoardPage({ eventId, navigate }: Props): JSX.Element {
         <label><span class="sr-only">Wave</span><select value={filters.wave} onChange={(event) => updateFilter("wave", event.currentTarget.value)}><option value="">All waves</option>{ready?.facets.waves.map((wave) => <option value={wave.id}>{wave.name}</option>)}</select></label>
         <span class="program-board-filter-summary tabular">{ready ? `${ready.cards.length.toLocaleString()} matching` : "—"}</span>
       </form>
+      <BoardKindNote kind={filters.kind} />
       {state.kind === "loading" && <div class="program-board-state">Loading the program board…</div>}
       {state.kind === "error" && <div class="program-board-state error"><strong>Program board did not load</strong><span>{state.message}</span><Button small onClick={() => setFilters({ ...filters })}>Retry</Button></div>}
       {ready && ready.cards.length === 0
