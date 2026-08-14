@@ -29,6 +29,19 @@
 
   Simulated clock for the NEXT marker: Wed Oct 14, 2026 · 13:40.
   Starring really persists (localStorage key marquee:proto:attendee-schedule).
+
+  ROUND 2 (design doc §7, rulings 2026-08-14) — added in v0.2:
+    · STAR COUNTS: anonymous per-session demand counts. Public display is an
+      organizer setting, shown only at ≥ n stars (default 3). Your own star
+      does not bump the public number (it is a server aggregate, not a like
+      button). Signal, not a vote.
+    · ORGANIZER DEMAND VIEW (footer → "Organizer demand ↗"): exact counts for
+      every session incl. sub-threshold, ranked, against room capacity —
+      the advance room-planning signal — plus the public-counts setting and
+      the agent-native attendee import block ("a task for your agent").
+    · EMAIL CLAIM ("Get it by email", in Subscribe/share): opt-in recovery.
+      Attaches an email to the schedule code; plain-language disclosure that
+      the organizers can then see your picks. No account, no password.
   ════════════════════════════════════════════════════════════════════════════
 -->
 <!doctype html>
@@ -86,7 +99,7 @@ body { margin: 0; min-width: 320px; }
 .public-search::placeholder { color: var(--public-muted); }
 .public-agenda-list { min-height: 430px; border: 1px solid var(--public-rule); background: var(--public-surface); }
 .public-agenda-row { display: grid; grid-template-columns: 40px 118px minmax(0,1fr) minmax(150px,.5fr); align-items: start; gap: 13px; min-height: 104px; padding: 16px 16px 16px 12px; border-bottom: 1px solid var(--public-rule-soft); }
-.public-agenda-row > .star-btn { margin-top: -2px; }
+.public-agenda-row > .star-cell { margin-top: -2px; }
 .public-agenda-row:last-child { border-bottom: 0; }
 .public-time { color: var(--public-muted); font: 650 11px/1.35 var(--public-mono); }
 .public-day { display: block; margin-bottom: 3px; color: var(--public-accent); font-size: 10px; }
@@ -133,6 +146,12 @@ body { margin: 0; min-width: 320px; }
 .star-btn[aria-pressed="true"] .glyph::before { content: "★"; }
 .star-btn.just-starred { transform: scale(1.12); }
 
+/* Star count: the anonymous demand aggregate, under the star. Space is always
+   reserved (sub-threshold shows nothing but the slot) — elements never jump. */
+.star-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 40px; }
+.star-cell .star-count { min-height: 13px; color: var(--public-muted); font: 650 9.5px/1.35 var(--public-mono); font-variant-numeric: tabular-nums; }
+.star-count-inline { color: var(--public-muted); font: 650 11px/1.4 var(--public-mono); font-variant-numeric: tabular-nums; }
+
 /* Header entry: my schedule is one tap from everywhere. Count is fixed-width — never jumps. */
 .view-seg { gap: 0; }
 .view-seg .seg { border-radius: 0; }
@@ -178,6 +197,50 @@ body { margin: 0; min-width: 320px; }
 .agents-pre { margin: 8px 0 0; border: 1px solid var(--public-rule); background: var(--public-sunk); border-radius: 2px; padding: 10px 12px; overflow-x: auto; font: 600 10.5px/1.7 var(--public-mono); color: var(--public-soft); }
 .agents-pre b { color: var(--public-accent-ink); font-weight: 700; }
 
+/* ── Organizer demand view (round 2) ────────────────────────────────── */
+.demand-note { margin: 0 0 14px; color: var(--public-muted); font-size: 12.5px; }
+.demand-board { border: 1px solid var(--public-rule); background: var(--public-surface); }
+.demand-row { display: grid; grid-template-columns: 44px minmax(0,1.4fr) 130px minmax(90px,.9fr) 120px; align-items: center; gap: 12px; min-height: 52px; padding: 9px 14px; border-bottom: 1px solid var(--public-rule-soft); }
+.demand-row:last-child { border-bottom: 0; }
+.demand-row.head { min-height: 34px; background: var(--public-sunk); color: var(--public-muted); font: 700 9.5px/1.3 var(--public-mono); letter-spacing: .1em; text-transform: uppercase; }
+.demand-count { color: var(--public-ink); font: 700 15px/1 var(--public-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.demand-title { min-width: 0; }
+.demand-title strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 13px/1.3 var(--public-sans); letter-spacing: -.01em; }
+.demand-title small { color: var(--public-muted); font: 600 10px/1.5 var(--public-mono); }
+.demand-room { color: var(--public-muted); font: 600 10px/1.5 var(--public-mono); }
+.demand-room strong { display: block; color: var(--public-soft); font-weight: 650; }
+.demand-bar { position: relative; height: 10px; border: 1px solid var(--public-rule-soft); background: var(--public-sunk); }
+.demand-bar i { position: absolute; inset: 0 auto 0 0; background: var(--public-accent); opacity: .75; }
+.demand-cap { justify-self: end; display: inline-flex; align-items: center; min-height: 22px; border: 1px solid transparent; border-radius: 2px; padding: 2px 7px; font: 650 9.5px/1.3 var(--public-mono); font-variant-numeric: tabular-nums; color: var(--public-muted); }
+.demand-cap.near { border-color: var(--public-warn); background: var(--public-warn-wash); color: var(--public-warn); }
+.demand-cap.over { border-color: #b02a1f; background: #fbe9e7; color: #b02a1f; }
+.org-grid { display: grid; grid-template-columns: minmax(0,1.5fr) minmax(280px,1fr); gap: 14px; align-items: start; margin-top: 14px; }
+.org-panel { border: 1px solid var(--public-rule); background: var(--public-surface); padding: 16px; }
+.org-panel h2 { margin: 0 0 4px; font: 650 13px/1.2 var(--public-mono); letter-spacing: .05em; text-transform: uppercase; }
+.org-panel .hint { margin: 0 0 12px; color: var(--public-muted); font-size: 11.5px; line-height: 1.55; }
+.org-setting { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; border-top: 1px solid var(--public-rule-soft); padding: 8px 0; }
+.org-setting label { font: 650 12px/1.35 var(--public-sans); }
+.org-setting small { display: block; color: var(--public-muted); font: 400 11px/1.45 var(--public-sans); }
+.org-toggle { flex: 0 0 auto; width: 46px; height: 26px; position: relative; border: 1px solid var(--public-rule); border-radius: 13px; background: var(--public-sunk); transition: background 110ms, border-color 110ms; }
+.org-toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--public-surface); border: 1px solid var(--public-rule); transition: left 110ms; }
+.org-toggle[aria-pressed="true"] { border-color: var(--public-accent); background: var(--public-accent); }
+.org-toggle[aria-pressed="true"]::after { left: 22px; border-color: var(--public-accent-ink); }
+.org-n { width: 58px; height: 32px; border: 1px solid var(--public-rule); border-radius: 2px; padding: 0 8px; font: 650 13px/1 var(--public-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.attendee-mini { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.attendee-mini td { border-top: 1px solid var(--public-rule-soft); padding: 7px 8px 7px 0; font-size: 11.5px; vertical-align: top; }
+.attendee-mini .num { color: var(--public-muted); font-size: 10.5px; }
+.crm-chip { display: inline-flex; align-items: center; min-height: 18px; border: 1px solid var(--public-accent); border-radius: 2px; padding: 1px 6px; margin-left: 6px; background: var(--public-accent-wash); color: var(--public-accent-ink); font: 650 9px/1.3 var(--public-mono); letter-spacing: .04em; }
+.org-stat { display: inline-block; margin-right: 16px; }
+.org-stat strong { display: block; font: 700 19px/1.1 var(--public-mono); font-variant-numeric: tabular-nums; }
+.org-stat span { color: var(--public-muted); font: 600 9.5px/1.6 var(--public-mono); letter-spacing: .08em; text-transform: uppercase; }
+
+/* Email claim row (round 2) */
+.claim-line { min-height: 36px; }
+.claim-input { flex: 1 1 auto; min-width: 0; height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-surface); padding: 0 9px; font-size: 12px; }
+.claim-done { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-accent-wash); padding: 0 10px; font: 600 11.5px/1.4 var(--public-sans); color: var(--public-accent-ink); }
+.claim-done .quiet { background: none; border: 0; padding: 0; color: var(--public-accent); font: 650 10.5px/1 var(--public-mono); letter-spacing: .04em; cursor: pointer; }
+.claim-done .quiet:hover { text-decoration: underline; }
+
 /* Prototype chrome */
 .prototype-badge { position: fixed; z-index: 1000; right: 12px; bottom: 12px; background: var(--public-ink); color: #dff2f3; border: 1px solid var(--public-accent); padding: 6px 10px; border-radius: 3px; font: 600 10px/1 var(--public-mono); letter-spacing: .14em; text-transform: uppercase; pointer-events: none; }
 .proto-note { margin-bottom: 18px; border: 1px dashed var(--public-rule); background: var(--public-surface); padding: 10px 14px; color: var(--public-muted); font-size: 12px; line-height: 1.6; }
@@ -206,7 +269,10 @@ body { margin: 0; min-width: 320px; }
   .public-days { grid-column: 1 / -1; }
   .public-search::placeholder { color: var(--public-muted); }
   .public-agenda-row { grid-template-columns: 40px minmax(0,1fr); min-height: 132px; padding: 14px 14px 14px 10px; }
-  .public-agenda-row > .star-btn { grid-row: 1 / span 3; }
+  .public-agenda-row > .star-cell { grid-row: 1 / span 3; }
+  .demand-row { grid-template-columns: 40px minmax(0,1fr) 96px; }
+  .demand-row .demand-bar, .demand-row .demand-room, .demand-row.head .h-bar, .demand-row.head .h-room { display: none; }
+  .org-grid { grid-template-columns: 1fr; }
   .public-time, .public-track-list, .public-agenda-row > div { grid-column: 2; }
   .public-session-title { font-size: 16px; }
   .sched-summary { padding: 9px; }
@@ -260,7 +326,10 @@ body { margin: 0; min-width: 320px; }
   <footer class="public-footer">
     <div class="public-footer-inner">
       <span>AIE NYC 2026 · Oct 13 – 15 · Sheraton Times Square + Marriott Marquis</span>
-      <button id="agentsLink">For agents ↗</button>
+      <span style="display:inline-flex;gap:18px">
+        <button id="orgLink">Organizer demand ↗</button>
+        <button id="agentsLink">For agents ↗</button>
+      </span>
     </div>
   </footer>
 </div>
@@ -284,6 +353,14 @@ body { margin: 0; min-width: 320px; }
     <div class="url-line">
       <code>https://marquee.stage11.dev/agenda?sched=MQ-K7TQM3RA</code>
       <button class="copy-btn" data-copy="https://marquee.stage11.dev/agenda?sched=MQ-K7TQM3RA">Copy</button>
+    </div>
+  </div>
+  <div class="sheet-row" id="claimRow">
+    <h3>Get it by email</h3>
+    <p class="hint" id="claimHint">We'll email you this schedule's link, so you can always find your way back — even on a new device with nothing saved. Your email and your picks become visible to the AIE NYC organizers. No account, no password, nothing else.</p>
+    <div class="url-line claim-line" id="claimControls">
+      <input class="claim-input" id="claimEmail" type="email" placeholder="you@example.com" aria-label="Your email address">
+      <button class="copy-btn" id="claimSend" style="flex-basis:96px;width:96px">Send link</button>
     </div>
   </div>
   <button class="public-button sheet-close" data-close>Done</button>
@@ -337,7 +414,7 @@ body { margin: 0; min-width: 320px; }
   <button class="public-button sheet-close" data-close>Done</button>
 </div>
 
-<div class="prototype-badge">Prototype · v0.1</div>
+<div class="prototype-badge">Prototype · v0.2</div>
 
 <script>
 /* ══════════════ Mock program — realistic AIE NYC 2026 seed shape ══════════ */
@@ -442,12 +519,31 @@ const SESSIONS = [
     "Every trend from three days of talks, synthesized — by the retrieval-and-writing pipeline we built to do exactly that, running on the conference's own session transcripts. The program committee grades its output live on stage, argues with its conclusions, and closes with the honest case for what conference programming looks like when the program can read itself."),
 ];
 
+/* ── Round 2: anonymous demand counts (server aggregate; distinct devices).
+   Your own star does NOT bump these live — it's a signal, not a like button. */
+const STARS = {
+  "ses-keynote-1":412, "ses-eval-pipe":168, "ses-rag-graveyard":141, "ses-fin-risk":87,
+  "ses-workshop-tools":96, "ses-open-slm":2, "ses-sec-injection":203, "ses-infra-inference":118,
+  "ses-agents-memory":176, "ses-evals-judges":131, "ses-leadership-org":152, "ses-rag-live":74,
+  "ses-fin-agents":1, "ses-closing":189,
+};
+const ROOM_CAPACITY = {
+  "Metropolitan Ballroom":800, "Central Park Ballroom":400, "New York Ballroom":500,
+  "Expo Stage":250, "Marquis Room A":120, "Marquis Room B":120,
+};
+
 /* ══════════════ State ══════════════ */
 const LS_KEY = "marquee:proto:attendee-schedule";
+const ORG_KEY = LS_KEY + ":org";
+const CLAIM_KEY = LS_KEY + ":claim";
 const NOW = { date:"2026-10-14", time:"13:40" };            // simulated hallway moment
 let starred = new Set(JSON.parse(localStorage.getItem(LS_KEY) || "[]"));
-let view = { name:"agenda" };                                // agenda | mine | session
+let view = { name:"agenda" };                                // agenda | mine | session | organizer
 let filters = { day:"all", track:"", fmt:"", room:"", q:"" };
+/* Organizer setting: ships default-OFF in product; ON here so the demo shows it. */
+let orgSettings = Object.assign({ showCounts:true, minStars:3 }, JSON.parse(localStorage.getItem(ORG_KEY) || "{}"));
+let claimedEmail = localStorage.getItem(CLAIM_KEY) || "";
+const saveOrg = () => localStorage.setItem(ORG_KEY, JSON.stringify(orgSettings));
 
 const $ = (s, el=document) => el.querySelector(s);
 const byId = id => SESSIONS.find(s => s.id === id);
@@ -479,13 +575,22 @@ function starBtn(s) {
   const on = starred.has(s.id);
   return `<button class="star-btn" data-star="${s.id}" aria-pressed="${on}" aria-label="${on ? "Remove from" : "Add to"} my schedule: ${esc(s.title)}"><span class="glyph" aria-hidden="true"></span></button>`;
 }
+/* Public count: organizer setting + threshold. null = show nothing (slot stays). */
+function publicStars(s) {
+  const n = STARS[s.id] ?? 0;
+  return orgSettings.showCounts && n >= orgSettings.minStars ? n : null;
+}
+function starCell(s) {
+  const n = publicStars(s);
+  return `<span class="star-cell">${starBtn(s)}<span class="star-count num" ${n !== null ? `title="${n} attendees have starred this session"` : ""}>${n !== null ? n : ""}</span></span>`;
+}
 function card(s, { showDay=true, inMine=false } = {}) {
   const d = dayOf(s);
   const ov = inMine ? overlapsFor(s, SESSIONS.filter(x => starred.has(x.id))) : [];
   const next = inMine && s.id === nextUpId();
   return `<article class="public-agenda-row" data-public-session-id="${s.id}" data-public-session-slug="${s.slug}"
       data-public-session-start="${d.date}T${s.start}" data-public-session-end="${d.date}T${s.end}" data-public-session-day="${s.day}">
-    ${starBtn(s)}
+    ${starCell(s)}
     <time class="public-time" datetime="${d.date}T${s.start}">
       ${showDay ? `<span class="public-day">${d.label.split(",")[0]}, ${d.label.split(" ").slice(1).join(" ")}</span>` : ""}
       <strong class="num">${s.start} – ${s.end}</strong>
@@ -519,7 +624,7 @@ function renderAgenda() {
       <h1>Agenda</h1>
       <p>Practical sessions for people building and operating AI. Star what you want to go to — your schedule follows you.</p>
     </div></div>
-    <div class="proto-note"><b>Prototype.</b> Try: star a few sessions → open <b>★ My schedule</b> (top right) → on Wednesday, star both the <b>14:00</b> and <b>14:30</b> talks to see the overlap note → then <b>Share</b>. Stars persist across reloads. Simulated clock: Wed Oct 14, 13:40.</div>
+    <div class="proto-note"><b>Prototype v0.2.</b> Try: star a few sessions → open <b>★ My schedule</b> (top right) → on Wednesday, star both the <b>14:00</b> and <b>14:30</b> talks to see the overlap note → then <b>Subscribe / share</b>, where <b>Get it by email</b> is the new opt-in claim. New in round 2: the quiet <b>★ counts</b> under the stars (only ≥ 3 — two sessions sit below the threshold on purpose), and in the footer, <b>Organizer demand ↗</b>: exact counts vs room capacity, the public-counts setting (flip it and come back), and the agent-native attendee import. Stars persist across reloads. Simulated clock: Wed Oct 14, 13:40.</div>
     <form class="public-filters" onsubmit="return false">
       <div class="public-days" role="tablist" aria-label="Agenda day">
         <button type="button" data-day="all" class="${filters.day==="all"?"active":""}" role="tab" aria-selected="${filters.day==="all"}">All days</button>
@@ -625,9 +730,10 @@ function renderSession(id) {
     : "Photo ID required at the main entrance. Allow ten minutes for building security.";
   const address = marquis ? "New York Marriott Marquis, 1535 Broadway, New York, NY 10036" : "Sheraton New York Times Square, 811 7th Ave, New York, NY 10019";
   const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
-  const from = view.from === "mine" ? "mine" : "agenda";
+  const from = ["mine","organizer"].includes(view.from) ? view.from : "agenda";
+  const fromLabel = { mine:"My schedule", organizer:"Session demand" }[from] ?? "Agenda";
   $("#view").innerHTML = `
-    <button class="back-link" data-nav="${from}">← ${from === "mine" ? "My schedule" : "Agenda"}</button>
+    <button class="back-link" data-nav="${from}">← ${fromLabel}</button>
     <div class="public-card" data-public-session-id="${s.id}" data-public-session-slug="${s.slug}"
          data-public-session-start="${d.date}T${s.start}" data-public-session-end="${d.date}T${s.end}" data-public-session-day="${s.day}">
       <p class="public-detail-meta">${d.label} · <span class="num">${s.start} – ${s.end}</span> · ${esc(s.room)}, ${esc(s.building)} · ${esc(s.fmt)}</p>
@@ -637,6 +743,7 @@ function renderSession(id) {
         <button class="public-button" data-ics-one="${s.id}">Add to calendar (.ics)</button>
         <a class="public-button" target="_blank" rel="noopener" href="${gcalUrl(s)}">Google</a>
         <a class="public-button" target="_blank" rel="noopener" href="${outlookUrl(s)}">Outlook</a>
+        ${publicStars(s) !== null ? `<span class="star-count-inline">★ ${publicStars(s)} attendees</span>` : ""}
       </div>
       <div class="public-divider"></div>
       <p>${esc(s.abstract)}</p>
@@ -655,6 +762,122 @@ function renderSession(id) {
         ${esc(access)}</p>
     </div>`;
   $(`[data-ics-one]`)?.addEventListener("click", () => downloadIcs([s]));
+  wireCommon();
+}
+
+/* ══════════════ Organizer demand view (round 2) ══════════════ */
+const IMPORT_PROMPT = `You are importing attendees into Marquee for AIE NYC 2026.
+
+Source: wherever our tickets were sold (Luma, Tito, Eventbrite, a CSV
+export - you work out the export; ask me for access if you need it).
+
+Rails:
+  API base:  https://marquee.stage11.dev/api/v1
+  Token:     mint one at Settings -> API tokens, scope people:write
+             (I'll paste it when you're ready)
+
+The loop:
+  1. Pull the attendee export from the source (name, email, company).
+  2. POST /orgs/aie/people/import - upsert by email. Re-running is
+     safe; nothing duplicates.
+  3. Every imported person gets an attendance row for event
+     aie-nyc-2026 (source: "import").
+  4. Verify: GET /orgs/aie/people?event=aie-nyc-2026&kind=attendee -
+     the count should match the export.
+
+Rules: email is the identity key - never create a second person for
+an email that already exists (many attendees are past speakers).
+Report back: rows imported, matched to existing people, skipped.`;
+
+const CLAIMED_MOCK = [
+  { name:"Maya Okafor", email:"maya@copperline.dev", starredN:7, src:"claim", crm:"spoke 2025" },
+  { name:"Tom Brandt", email:"tom.brandt@meridian.cap", starredN:4, src:"claim", crm:"" },
+  { name:"Ines Fujimori", email:"ines@fathom.systems", starredN:11, src:"claim", crm:"reviewer" },
+];
+
+function renderOrganizer() {
+  const ranked = [...SESSIONS].sort((a,b) => (STARS[b.id]??0) - (STARS[a.id]??0));
+  const maxN = STARS[ranked[0].id] ?? 1;
+  const rows = ranked.map(s => {
+    const n = STARS[s.id] ?? 0, cap = ROOM_CAPACITY[s.room] ?? 0, d = dayOf(s);
+    const ratio = cap ? n / cap : 0;
+    const capCls = ratio >= 1 ? "over" : ratio >= .8 ? "near" : "";
+    const capTxt = ratio >= 1 ? `${Math.round(ratio*100)}% of room` : ratio >= .8 ? `${Math.round(ratio*100)}% of room` : `${Math.round(ratio*100)}%`;
+    return `<div class="demand-row">
+      <span class="demand-count num">${n}</span>
+      <span class="demand-title"><strong><a href="#" data-open="${s.id}">${esc(s.title)}</a></strong><small class="num">${d.tab} · ${s.start}–${s.end} · ${esc(s.fmt)}</small></span>
+      <span class="demand-room"><strong>${esc(s.room)}</strong>capacity <span class="num">${cap}</span></span>
+      <span class="demand-bar" aria-hidden="true"><i style="width:${(n/maxN*100).toFixed(1)}%"></i></span>
+      <span class="demand-cap ${capCls}" title="Advance stars against room capacity">${capTxt}${ratio >= 1 ? " — bigger room?" : ""}</span>
+    </div>`;
+  }).join("");
+  $("#view").innerHTML = `
+    <button class="back-link" data-nav="agenda">← Agenda</button>
+    <div class="public-kicker">Organizer · demand signal</div>
+    <div class="public-heading"><div>
+      <h1>Session demand</h1>
+      <p>Anonymous star counts from attendee schedules — the room-planning signal you normally get when a room overflows, weeks early. A signal, not a vote: counts are distinct devices, lightly rate-limited, spoofable by someone determined.</p>
+    </div></div>
+    <p class="demand-note">
+      <span class="org-stat"><strong class="num">1,847</strong><span>attendees imported</span></span>
+      <span class="org-stat"><strong class="num">641</strong><span>synced schedules</span></span>
+      <span class="org-stat"><strong class="num">213</strong><span>claimed with email</span></span>
+      <span class="org-stat"><strong class="num">2,570</strong><span>stars placed</span></span>
+    </p>
+    <div class="demand-board" aria-label="Sessions ranked by advance demand">
+      <div class="demand-row head"><span>★</span><span>Session</span><span class="h-room">Room</span><span class="h-bar"></span><span style="justify-self:end">vs capacity</span></div>
+      ${rows}
+    </div>
+    <div class="org-grid">
+      <div class="org-panel">
+        <h2>Attendees in your CRM</h2>
+        <p class="hint">Every claimed schedule and imported ticket-holder is an org-level person — the same table as your speakers, with notes, tags, and lists. This year's attendee is next year's speaker prospect.</p>
+        <table class="attendee-mini">
+          ${CLAIMED_MOCK.map(a => `<tr>
+            <td><strong>${esc(a.name)}</strong>${a.crm ? `<span class="crm-chip">already in CRM — ${esc(a.crm)}</span>` : ""}<br><span class="num">${esc(a.email)}</span></td>
+            <td style="text-align:right;white-space:nowrap"><span class="num">${a.starredN} starred</span><br><span class="num" style="color:var(--public-muted)">${a.src}</span></td>
+          </tr>`).join("")}
+          <tr><td colspan="2" style="color:var(--public-muted)">… and <span class="num">2,057</span> more — People → list “AIE NYC 2026 attendees”</td></tr>
+        </table>
+      </div>
+      <div>
+        <div class="org-panel" style="margin-bottom:14px">
+          <h2>Public star counts</h2>
+          <p class="hint">What attendees see on the agenda. Exact counts here are always yours.</p>
+          <div class="org-setting">
+            <label>Show counts on the public agenda<small>Ships off by default — popularity is a choice, not a given.</small></label>
+            <button class="org-toggle" id="orgShowCounts" role="switch" aria-pressed="${orgSettings.showCounts}" aria-label="Show star counts on the public agenda"></button>
+          </div>
+          <div class="org-setting">
+            <label>Only show once a session has at least<small>Below this, attendees see no number at all.</small></label>
+            <input class="org-n" id="orgMinStars" type="number" min="0" max="99" value="${orgSettings.minStars}" aria-label="Minimum stars before the count is public">
+          </div>
+        </div>
+        <div class="org-panel">
+          <h2>Import attendees — a task for your agent</h2>
+          <p class="hint">No per-platform integrations. Copy this brief into your agent; it bridges from wherever your tickets live to Marquee's documented import API.</p>
+          <pre class="agents-pre" id="importPrompt" style="max-height:230px;overflow-y:auto;white-space:pre-wrap">${esc(IMPORT_PROMPT)}</pre>
+          <div class="url-line" style="margin-top:10px">
+            <code style="border:0;background:none;padding-left:0">Paste into Claude, Codex, or your own agent</code>
+            <button class="copy-btn" id="importCopy" style="flex-basis:110px;width:110px">Copy prompt</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  $("#orgShowCounts").addEventListener("click", () => {
+    orgSettings.showCounts = !orgSettings.showCounts; saveOrg();
+    $("#orgShowCounts").setAttribute("aria-pressed", orgSettings.showCounts);
+  });
+  $("#orgMinStars").addEventListener("change", e => {
+    orgSettings.minStars = Math.max(0, Math.min(99, +e.target.value || 0)); saveOrg();
+    e.target.value = orgSettings.minStars;
+  });
+  $("#importCopy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(IMPORT_PROMPT); } catch {}
+    const b = $("#importCopy");
+    b.classList.add("done"); b.textContent = "Copied";
+    setTimeout(() => { b.classList.remove("done"); b.textContent = "Copy prompt"; }, 1400);
+  });
   wireCommon();
 }
 
@@ -761,6 +984,7 @@ function route() {
   $("#myschedBtn").setAttribute("aria-selected", effective === "mine");
   if (view.name === "mine") renderMine();
   else if (view.name === "session") renderSession(view.id);
+  else if (view.name === "organizer") renderOrganizer();
   else renderAgenda();
 }
 
@@ -809,6 +1033,43 @@ document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click"
   setTimeout(() => { b.classList.remove("done"); b.textContent = "Copy"; }, 1400);
 }));
 $("#agentsLink").addEventListener("click", () => openSheet("agentsSheet"));
+$("#orgLink").addEventListener("click", () => { view = { name:"organizer" }; route(); window.scrollTo(0,0); });
+
+/* Email claim (round 2): opt-in recovery. Attach an email to the code; the
+   organizers can then see your picks — said plainly, at the moment it happens. */
+function maskEmail(e) {
+  const [u, d] = e.split("@");
+  return (u.length > 2 ? u[0] + "…" + u[u.length-1] : u) + "@" + d;
+}
+function renderClaimRow() {
+  const box = $("#claimControls");
+  if (claimedEmail) {
+    box.innerHTML = `<div class="claim-done" style="flex:1 1 auto">
+      <span>Linked to <b>${esc(maskEmail(claimedEmail))}</b> — link sent. The organizers can see your picks.</span>
+      <span style="display:inline-flex;gap:12px;flex:0 0 auto">
+        <button class="quiet" id="claimResend">Resend</button>
+        <button class="quiet" id="claimUnlink">Unlink</button>
+      </span>
+    </div>`;
+    $("#claimResend").addEventListener("click", e => {
+      e.target.textContent = "Sent"; setTimeout(() => { const b = $("#claimResend"); if (b) b.textContent = "Resend"; }, 1400);
+    });
+    $("#claimUnlink").addEventListener("click", () => {
+      claimedEmail = ""; localStorage.removeItem(CLAIM_KEY); renderClaimRow();
+    });
+  } else {
+    box.innerHTML = `
+      <input class="claim-input" id="claimEmail" type="email" placeholder="you@example.com" aria-label="Your email address">
+      <button class="copy-btn" id="claimSend" style="flex-basis:96px;width:96px">Send link</button>`;
+    $("#claimSend").addEventListener("click", () => {
+      const v = $("#claimEmail").value.trim();
+      if (!v || !v.includes("@")) { $("#claimEmail").focus(); return; }
+      claimedEmail = v; localStorage.setItem(CLAIM_KEY, v); renderClaimRow();
+    });
+    $("#claimEmail").addEventListener("keydown", e => { if (e.key === "Enter") $("#claimSend").click(); });
+  }
+}
+renderClaimRow();
 $("#briefCopy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText($("#briefText").textContent); } catch {}
   const b = $("#briefCopy");
