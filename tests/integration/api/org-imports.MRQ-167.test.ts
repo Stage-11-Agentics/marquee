@@ -138,7 +138,7 @@ describe.sequential("MRQ-167 org people import receipt", () => {
     });
   });
 
-  test("REGRESSION · MRQ-167 · undo keeps a field corrected after the import", async () => {
+  test("CONTRACT · MRQ-167 · undo keeps a field corrected after the import", async () => {
     const csv = [
       "Full Name,Email,Company,Job Title,Bio",
       "Imported Name,PRIYA@mrq167.test,Imported Co,Imported Title,Imported bio.",
@@ -171,7 +171,7 @@ describe.sequential("MRQ-167 org people import receipt", () => {
     });
   });
 
-  test("REGRESSION · MRQ-167 · references skip only their created rows", async () => {
+  test("CONTRACT · MRQ-167 · references skip only their created rows", async () => {
     const csv = [
       "Full Name,Email,Company",
       "Annotated Speaker,annotated@mrq167.test,Notes Co",
