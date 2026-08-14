@@ -50,6 +50,22 @@ const submitterOnlyRow = renderToString(h(PublicationCandidateRow, {
   review: true,
   selected: true,
 }));
+const unscheduledSubmitterOnlyRow = renderToString(h(PublicationCandidateRow, {
+  candidate: {
+    ...candidate,
+    agenda_item_id: null,
+    starts_at: null,
+    duration_min: null,
+    room: null,
+    building: null,
+    scheduled: false,
+    can_publish: false,
+    blocked_reason: "needs a room and time before it can go public",
+    speakers: [{ id: "per_submitter", name: "Submitter Only", company: "Conference Co", role: "submitter" }],
+  },
+  timezone: "America/New_York",
+  selected: false,
+}));
 
 /**
  * The review step drops the checkbox. The row's grid still reserved a 20px
@@ -91,5 +107,12 @@ describe("MRQ-135 · the publication review row is readable", () => {
     expect(unscheduledRow).toContain("disabled");
     expect(unscheduledRow).toContain("needs a room and time before it can go public");
     expect(unscheduledRow).toContain("Agents that answer to somebody");
+  });
+
+  it("CONTRACT · an unscheduled speakerless Session keeps both its disabled reason and honest speaker state", () => {
+    expect(unscheduledSubmitterOnlyRow).toContain("disabled");
+    expect(unscheduledSubmitterOnlyRow).toContain("needs a room and time before it can go public");
+    expect(unscheduledSubmitterOnlyRow).toContain("Speaker to be announced");
+    expect(unscheduledSubmitterOnlyRow).not.toContain("Submitter Only");
   });
 });
