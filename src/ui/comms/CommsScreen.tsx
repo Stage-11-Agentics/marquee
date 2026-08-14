@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { COMMUNICATION_MERGE_FIELDS, mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../../lib/mail-merge-fields";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
+import { useEventContext } from "../shell/event-context";
+import { DemoMailAllowlist } from "./DemoMailAllowlist";
 import "./comms.css";
 
 interface Template {
@@ -119,6 +121,19 @@ function formatDate(value: number): string {
   return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+/**
+ * The consumer records why a message was held as a machine reason. An organizer
+ * reading their own outbox should be told what happened, not shown the enum —
+ * and the words have to point at the control that changes it.
+ */
+const SUPPRESSED_REASON_WORDS: Record<string, string> = {
+  demo_mode_not_allowlisted: "held because this address is not on the real-email list",
+};
+
+function suppressedReasonWords(reason: string): string {
+  return SUPPRESSED_REASON_WORDS[reason] ?? reason;
+}
+
 export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -138,6 +153,11 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
   const [reloadKey, setReloadKey] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [sendResult, setSendResult] = useState<SendResult | null>(null);
+  // Read from the conference the shell already resolved rather than fetched
+  // here: this screen only mounts once that list has answered, so the allowlist
+  // panel is present or absent on the first paint instead of appearing late and
+  // shoving the outbox down the page.
+  const demoMode = useEventContext().event?.demo_mode === 1;
 
   const activeTemplate = useMemo(
     () => templates.find((template) => template.key === selectedKey) ?? null,
@@ -300,12 +320,18 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
   const triggers = templates.filter(isTrigger);
 
   return <section class="comms-screen" aria-label="Communications">
+    {/* The banner states which of the two worlds this conference is in. On a
+        live conference "demo-safe outbox" would be a lie: nothing is held and
+        every queued message is sent to whoever it names. */}
     <div class="comms-banner">
       <span class="status-dot" aria-hidden="true" />
-      <div><strong>Demo-safe outbox</strong><span>Messages render and log here. Non-allowlisted addresses are never delivered.</span></div>
+      {demoMode
+        ? <div><strong>Demo-safe outbox</strong><span>Messages render and log here. Only the addresses named under Real email are delivered.</span></div>
+        : <div><strong>Live outbox</strong><span>Messages render and log here, and every one of them is sent to the person it names.</span></div>}
       <span class="comms-policy">default: demo_safe</span>
       <AgentBriefLauncher surface="chase" eventId={eventId} small />
     </div>
+    {demoMode && <DemoMailAllowlist eventId={eventId} />}
     {error && <div class="inline-error" role="alert"><span>{error}</span><button class="button small" type="button" onClick={() => { setError(null); setReloadKey((value) => value + 1); }}>Retry communications</button></div>}
 
     <section class="comms-section panel" aria-labelledby="comms-templates-heading">
@@ -376,7 +402,7 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
         {messages.length === 0 && <div class="empty-log comms-empty-copy"><span>{messagesLoading ? "Loading the delivery log…" : error ? "The delivery log is unavailable. Retry communications above to try again." : "No messages queued yet. The first queued message will appear here with its rendered body and honest delivery outcome."}</span>{!messagesLoading && !error && <a class="button-secondary comms-empty-action" href="#comms-compose-heading">Compose the first message</a>}</div>}
         {messages.map((message) => <details class="message-row" key={message.id}>
           <summary><div><strong>{message.subject}</strong><span>{message.to_email} · {message.template_key}{message.person_id ? ` · ${message.person_id}` : ""}</span></div><span class={`message-status status-${message.status}`}>{message.status === "suppressed" ? "held in demo outbox · would send in production" : message.status}</span></summary>
-          <div class="message-detail"><p>{message.text}</p><small>{message.send_policy} · queued {formatDate(message.created_at)}{message.suppressed_reason ? ` · ${message.suppressed_reason}` : ""}</small></div>
+          <div class="message-detail"><p>{message.text}</p><small>{message.send_policy} · queued {formatDate(message.created_at)}{message.suppressed_reason ? ` · ${suppressedReasonWords(message.suppressed_reason)}` : ""}</small></div>
         </details>)}
       </div>
     </section>

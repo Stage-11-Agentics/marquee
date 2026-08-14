@@ -332,17 +332,20 @@ An allowlisted edit applies within one webhook cycle; **an edit to any other fie
 
 **`audit_log`** — `event_id`, `actor_person_id` NULL, `actor_kind` ∈ `user\|api_token\|system\|airtable`, `action`, `entity_type`, `entity_id`, `before_json`, `after_json`, `created_at`. Writer: every status transition and destructive action. Reader: record history, un-accept dialog, AC-178.
 
-**`event_settings`** — key/value JSON per event: `schedulable_statuses`, `demo_safe_allowlist`, `ai_assist_enabled` (**default false**, AC-167), `anonymized_default`, `airtable`, `search_weights`. Writer: settings screens + seed. Reader: the code paths named above.
+**`event_settings`** — key/value JSON per event: `schedulable_statuses`, `demo_safe_allowlist`, `ai_assist_enabled` (**default false**, AC-167), `anonymized_default`, `airtable`, `search_weights`. Writer: settings screens (`demo_safe_allowlist` from Communications) + seed. Reader: the code paths named above.
 
-> **`demo_safe_allowlist` has no writer.** Nothing in `src/`, no route, and not the
-> seed ever sets this key; its only appearance in the codebase is the `SELECT` in
-> `src/jobs/mail/consumer.ts`. It is therefore always empty in every deployment, and
-> in demo mode every `demo_safe` message is written `suppressed` rather than sent.
-> The outbox, the queued counts and the per-recipient log all render correctly while
-> nothing leaves — the confirmations describe the queue, not delivery. `always_live`
-> messages (the public CFP confirmation) are unaffected and do dispatch, which is how
-> we know the credential and payload are sound and only the gate is closed.
-> One query settles it for any deployment:
+> **`demo_safe_allowlist` starts empty, and there is one way to fill it.** The key is
+> read by `src/lib/demo-mail-allowlist.ts` — the single reader and writer, used by the
+> mail consumer, the reviewer-invite honesty check, and the API — and written through
+> `PUT /api/v1/events/{eventId}/demo-mail-allowlist` (`program:write`; read at
+> `program:read`). The organizer's way in is **Communications → Real email**, beside
+> the outbox that would otherwise hold the message. Nothing seeds it, so an untouched
+> deployment holds an empty list and in demo mode every `demo_safe` message is written
+> `suppressed` rather than sent; an address on the list is delivered for real and its
+> row reads `sent`. `always_live` messages (the public CFP confirmation) never consult
+> the list and dispatch either way, which is how we know the credential and payload
+> are sound independently of this gate.
+> One query settles what a deployment has actually sent:
 > `SELECT count(*) FROM outbox WHERE provider_message_id IS NOT NULL` — zero means
 > nothing has ever left. See `code/platform/resend.md` for the general pattern.
 
