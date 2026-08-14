@@ -43,9 +43,16 @@ Open-source speaker/session-management platform for conference organizers, built
 every linked worktree resolves to it via Lattice's `find_root()`, so the fleet shares
 one board instead of diverging copies.
 
-**No code work in the primary checkout.** No branching, stashing, checkouts,
-`git clean`, rebasing, or editing source. It stays parked on `main`. All work
-happens in a linked worktree:
+**No branch work in the primary checkout.** No branching, stashing, checkouts,
+`git clean`, or rebasing. It stays parked on `main`. **Quick edits are the
+exception — interactive sessions only** (operator ruling, 2026-08-14): an agent in
+live conversation with the operator may make a small, low-risk change (docs,
+config, or a one-concern code fix; run the relevant tests if code is touched)
+directly here, committed straight to `main` — `git pull --ff-only github main`
+first, stage only your own paths (never sibling agents' live `.lattice` changes),
+push immediately, never leave the tree dirty. If it grows beyond small, move to a
+worktree + PR. Fleet delegators do not get this path; their contract stays
+worktree → PR → review → merge. Everything larger happens in a linked worktree:
 
 ```sh
 git fetch github

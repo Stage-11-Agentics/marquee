@@ -88,9 +88,30 @@ Every linked worktree resolves to it — Lattice's `find_root()` deliberately ju
 the primary worktree so the fleet shares one board instead of diverging copies. That
 design holds only while the primary checkout is a stable anchor.
 
-**So: no code work in the primary checkout.** No branching, no `git stash`, no
-`git checkout <branch>`, no `git clean`, no rebasing, no editing source. It stays
-parked on `main`. All work happens in a linked worktree:
+**So: no branch work in the primary checkout.** No branching, no `git stash`, no
+`git checkout <branch>`, no `git clean`, no rebasing. It stays parked on `main`.
+
+**Quick edits are the exception — interactive sessions only** (operator ruling,
+2026-08-14). An agent in live conversation with the operator may make a small,
+low-risk change — docs, guidance, config, or a one-concern code fix with a small
+blast radius — directly in the primary checkout, committed straight to `main`:
+
+```sh
+git pull --ff-only github main   # the checkout is usually behind; catch up first
+# edit; run the relevant tests if code was touched
+git add <specific paths> && git commit && git push github main
+```
+
+What keeps this safe is that HEAD never leaves `main` and the tree never stays
+dirty: pull `--ff-only` before starting, stage only your own paths (sibling agents'
+live `.lattice` changes are not yours to commit), push immediately. If the change
+grows beyond small — multiple concerns, a wide diff, an uncertain blast radius —
+stop and move it to a worktree + PR instead. **Fleet delegators and orchestrated
+agents do not get this path**; their contract stays worktree → PR → review → merge.
+A side benefit: a quick edit to `CLAUDE.md`/`AGENTS.md` made this way is live for
+every session immediately, with no fast-forward step to remember.
+
+Everything larger happens in a linked worktree:
 
 ```sh
 git fetch github
