@@ -29,7 +29,7 @@ import {
   type OrgSummary,
   type PeopleFilters,
   type PeoplePage as PeoplePayload,
-  type SavedPersonList,
+  type PersonListDetail,
 } from "./people-api";
 import "./people.css";
 
@@ -51,6 +51,7 @@ function peopleUrl(listId: string, personId?: string): string {
 type LoadState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
+  | { kind: "list_missing" }
   | { kind: "ready"; payload: PeoplePayload };
 
 function KpiStrip({ summary }: { summary: OrgSummary | null }): JSX.Element {
@@ -109,7 +110,7 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
   // request failed" look identical to a `.catch`, and reporting a network blip
   // as "this list no longer exists" tells an organizer their work is gone.
   const [listState, setListState] = useState<
-    { kind: "resolving" } | { kind: "named"; list: SavedPersonList } | { kind: "missing" } | { kind: "error"; message: string }
+    { kind: "resolving" } | { kind: "named"; list: PersonListDetail } | { kind: "missing" } | { kind: "error"; message: string }
   >({ kind: "resolving" });
   const filterIdentity = JSON.stringify(filters);
 
@@ -148,7 +149,14 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
       fetchPeople(filters, page, PER_PAGE, controller.signal)
         .then((payload) => setState({ kind: "ready", payload }))
         .catch((caught: unknown) => {
-          if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(caught) });
+          if (controller.signal.aborted) return;
+          if (filters.listId && caught instanceof MarqueeApiError && caught.code === "not_found") {
+            // The list band owns the missing-list explanation. Do not add a
+            // second generic People error underneath it for the same 404.
+            setState({ kind: "list_missing" });
+            return;
+          }
+          setState({ kind: "error", message: errorSummary(caught) });
         });
     }, debounceMs);
     return () => { window.clearTimeout(timer); controller.abort(); };

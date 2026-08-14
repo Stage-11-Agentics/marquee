@@ -132,6 +132,15 @@ export interface SavedPersonList {
   updated_at: number;
 }
 
+export interface PersonListDetail {
+  id: string;
+  name: string;
+  kind: "live" | "fixed";
+  member_count: number;
+  created_by_name: string | null;
+  created_at: number;
+}
+
 export interface PipelineStage {
   id: string;
   name: string;
@@ -254,7 +263,7 @@ export function fetchLists(signal?: AbortSignal): Promise<{ data: SavedPersonLis
   return apiFetch("/api/v1/org/lists", { route: "/api/v1/org/lists", ...(signal ? { signal } : {}) });
 }
 
-export function fetchList(listId: string, signal?: AbortSignal): Promise<{ list: SavedPersonList }> {
+export function fetchList(listId: string, signal?: AbortSignal): Promise<{ list: PersonListDetail }> {
   return apiFetch(`/api/v1/org/lists/${encodeURIComponent(listId)}`, {
     route: "/api/v1/org/lists/{listId}",
     ...(signal ? { signal } : {}),

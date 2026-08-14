@@ -204,6 +204,7 @@ test("CONTRACT · MRQ-131 · a list is never rendered as its id, and still count
   for (const state of ["resolving", "named", "missing", "error"]) {
     expect(page, `the band must handle the "${state}" state`).toContain(`"${state}"`);
   }
+  expect(page).toContain('kind: "list_missing"');
   // Reserved height: the name and its meta line arrive from a second request
   // and the table below must not move when they land.
   const css = readFileSync(new URL("../../src/ui/people/people.css", import.meta.url), "utf8");
@@ -228,6 +229,7 @@ test("CONTRACT · MRQ-200 · shared field sizing excludes radios and checkboxes"
   const settings = readFileSync(new URL("../../src/ui/settings/settings.css", import.meta.url), "utf8");
   const forms = readFileSync(new URL("../../src/ui/forms/forms.css", import.meta.url), "utf8");
   expect(components).toMatch(/\.field input:not\(\[type="radio"\]\):not\(\[type="checkbox"\]\)/);
+  expect(settings).toContain('.field input:where(:not([type="radio"]):not([type="checkbox"]))');
   expect(evaluation).not.toMatch(/\.scope-check input \{[^}]*min-height: 0; width: auto;/);
   for (const css of [components, evaluation, settings, forms]) {
     expect(css).not.toMatch(/\.field input(?:\s*[,{}])/);
