@@ -51,7 +51,7 @@ The command registry is:
 - `node cli/marquee.mjs people show <person-id>`
 - `node cli/marquee.mjs people note <person-id> --set body=<text>`
 - `node cli/marquee.mjs people tag <person-id> --set tag=<tag>`
-- `node cli/marquee.mjs people import --file <path.csv>`
+- `node cli/marquee.mjs people import --file <path.csv> [--set event=<id|slug>]`
 - `node cli/marquee.mjs people email --filter person_ids=<a,b> --subject <text> --body <text>`
 - `node cli/marquee.mjs lists list`
 - `node cli/marquee.mjs lists save --set name=<name> --set kind=<live|fixed>`
@@ -193,12 +193,10 @@ Marquee ships no ticketing integrations. The loop is export → map → bulk ups
 ```sh
 # Upsert people AND record them as attending the conference, in one request.
 # Matched on email, so re-running an updated export duplicates nobody.
-node cli/marquee.mjs people import --file attendees.csv --set event=aie-nyc-2026 \
-  --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs people import --file attendees.csv --set event=aie-nyc-2026 --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 
 # Verify: the attendee population of that conference, counted on the server.
-node cli/marquee.mjs people list --filter event_id=aie-nyc-2026 --filter kind=attendee \
-  --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs people list --filter event_id=aie-nyc-2026 --filter kind=attendee --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 ```
 
 `event` accepts an id or a slug. `kind` chooses which population `event_id` means — `roster` (who speaks, the default), `attendee` (who is coming), or `any`. Nothing about an attendance row grants a seat: attendees never touch `memberships` and have no role, no login, and nothing to sign in to.
