@@ -1058,6 +1058,21 @@ export async function writeSubmissionDecision(
     after: { status: target.status, decision_id: decisionId, operation_id: input.operationId ?? null },
     now,
   });
+  if (mail.inserted && mail.id !== null) {
+    // "Mail sent" on the timeline (MRQ-211), worded as what actually happened:
+    // the message is QUEUED here and the send is the consumer's own later fact.
+    // A row claiming it was sent would be the timeline's first lie, on the one
+    // moment a speaker will quote back at an organizer.
+    await writeAudit(input.db, {
+      eventId: input.eventId,
+      actor: input.actor,
+      action: "submission.decision_mail_queued",
+      entityType: "submission",
+      entityId: submission.id,
+      after: { outbox_id: mail.id, status: target.status },
+      now,
+    });
+  }
   return {
     id: submission.id,
     outcome: "succeeded",

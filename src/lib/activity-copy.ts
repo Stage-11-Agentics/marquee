@@ -79,6 +79,7 @@ const SUMMARIES: Readonly<Record<string, string>> = {
   "bulk.reject": "Declined in a bulk action",
   "bulk.withdraw": "Withdrawn in a bulk action",
   "submission.acceptance_reversed": "Acceptance reversed",
+  "submission.decision_mail_queued": "Decision email queued",
   "submission.decision_resent": "Decision email resent",
   "submission.message_sent": "Message sent",
   "submission.tasks_reconciled": "Speaker tasks updated",
@@ -150,6 +151,31 @@ function joinDetail(parts: readonly (string | null)[]): string | null {
  * go stale the moment a conference is renamed.
  */
 
+const CONTENT_FIELDS = ["title", "abstract", "description"] as const;
+
+/**
+ * The content fields that actually differ between the two payloads.
+ *
+ * `description` is the portal's name for the abstract, so both map to one word
+ * — the reader is told what changed about the talk, not which writer wrote the
+ * row.
+ */
+function changedFields(before: unknown, after: unknown): string | null {
+  if (!after || typeof after !== "object") return null;
+  const previous = (before ?? {}) as Record<string, unknown>;
+  const current = after as Record<string, unknown>;
+  const changed = new Set<string>();
+  for (const field of CONTENT_FIELDS) {
+    if (!(field in current)) continue;
+    if (before && field in previous && previous[field] === current[field]) continue;
+    changed.add(field === "description" ? "abstract" : field);
+  }
+  if (changed.size === 0) return null;
+  const words = [...changed];
+  const sentence = words.length === 1 ? words[0]! : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+}
+
 /**
  * The line one audit row becomes. `before`/`after` are the parsed payloads —
  * whatever the writer recorded — so a lens never has to know a payload shape.
@@ -202,7 +228,12 @@ export function describeActivity(entry: {
     case "content_updated":
     case "content_restored":
     case "speaker_talk_updated":
-      return { summary, detail: payloadField(after, "title") };
+      // WHICH fields moved, not the record's title: the title is already at the
+      // top of the record the reader is looking at, so repeating it says
+      // nothing, and it says the same nothing for an edit that only touched the
+      // abstract. Naming the changed fields is the part that is not already on
+      // screen.
+      return { summary, detail: changedFields(before, after) };
     case "submission.received":
       return { summary, detail: payloadField(after, "title") };
     case "submission.routed":

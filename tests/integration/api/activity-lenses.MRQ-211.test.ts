@@ -234,6 +234,9 @@ test("MRQ-211 · lens three · a submission's timeline reads its own audit rows 
   expect(timeline.status).toBe(200);
   const page = await timeline.json() as { data: Array<ActivityEvent & { restorable: boolean }>; total: number };
   expect(page.data[0]?.summary).toBe("Content edited");
+  // The detail names what moved. Repeating the record's own title would say
+  // nothing, and would say the same nothing for an abstract-only edit.
+  expect(page.data[0]?.detail).toBe("Title");
   // The decision writer records `submission.approve`; the timeline says
   // "Accepted", which is the word the rest of the pipeline uses.
   expect(page.data.some((entry) => entry.summary === "Accepted")).toBe(true);
