@@ -25,7 +25,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
 
   /* ── State ─────────────────────────────────────────────────────────── */
 
-  const emptyState = () => ({ v: 1, sessionIds: [], code: null, writeKey: null });
+  const emptyState = () => ({ v: 1, sessionIds: [], code: null, writeKey: null, feedToken: null });
 
   function readState() {
     try {
@@ -36,6 +36,8 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         sessionIds: raw.sessionIds.filter((id) => typeof id === 'string'),
         code: typeof raw.code === 'string' ? raw.code : null,
         writeKey: typeof raw.writeKey === 'string' ? raw.writeKey : null,
+        // The read-only handle that puts the owner's own talks in their feed.
+        feedToken: typeof raw.feedToken === 'string' ? raw.feedToken : null,
       };
     } catch { return emptyState(); }
   }
@@ -503,14 +505,17 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     ].filter((line) => line !== '').join('\\n');
   }
 
+  /** Present only for the owner of a verified claim; a share link never has it. */
+  const feedSuffix = () => (state.feedToken ? '?f=' + encodeURIComponent(state.feedToken) : '');
+
   function liveUrls() {
     const origin = window.location.origin;
     const base = origin + '/api/v1/public/schedules/';
     return {
       program: origin + '/api/v1/public/agenda?event=' + encodeURIComponent(config.eventSlug),
       schedule: state.code ? base + state.code : null,
-      webcal: state.code ? 'webcal://' + window.location.host + '/api/v1/public/schedules/' + state.code + '/calendar.ics' : null,
-      ics: state.code ? base + state.code + '/calendar.ics' : null,
+      webcal: state.code ? 'webcal://' + window.location.host + '/api/v1/public/schedules/' + state.code + '/calendar.ics' + feedSuffix() : null,
+      ics: state.code ? base + state.code + '/calendar.ics' + feedSuffix() : null,
       share: state.code ? origin + '/agenda?event=' + encodeURIComponent(config.eventSlug) + '&sched=' + state.code : null,
       sync: state.code && state.writeKey
         ? origin + '/agenda?event=' + encodeURIComponent(config.eventSlug) + '&sched=' + state.code + '#k=' + state.writeKey
@@ -826,7 +831,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     copy.textContent = '';
     if (claim && claim.status === 'verified') {
       line.classList.add('linked');
-      copy.append('Linked to ', strong(claim.maskedEmail), ' — recoverable on any device.');
+      copy.append('Linked to ', strong(claim.maskedEmail), ' — recoverable by email, on any device.');
       if (speaking.size > 0) {
         copy.append(" You're speaking at ");
         copy.append(strong(String(speaking.size)));
@@ -841,7 +846,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       // line sits above the whole itinerary, and a state change that adds a
       // wrapped line on a phone pushes the attendee's day down the screen.
       // What opening the link actually does is said in full in the sheet.
-      copy.append('Check your email — the link is on its way to ', strong(claim.maskedEmail), '.');
+      copy.append('Check your email — link sent to ', strong(claim.maskedEmail), '.');
       action.textContent = 'Manage';
       return;
     }
@@ -1051,6 +1056,10 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
 
   function loadShared() {
     if (!sharedCode) return;
+    // Arriving on your own claim link is not somebody sharing their picks with
+    // you, and the strip that says so is the slot the arrival's own message
+    // needs. The verify path owns this banner when a token is present.
+    const ownArrival = Boolean(claimToken);
     fetch(SCHEDULES + '/' + encodeURIComponent(sharedCode), { headers: { accept: 'application/json' } })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error('unknown code'))))
       .then((payload) => {
@@ -1076,6 +1085,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
           if (banner) banner.hidden = false;
           return;
         }
+        if (ownArrival) return;
         const banner = document.querySelector('[data-schedule-import]');
         const message = document.querySelector('[data-schedule-import-message]');
         if (message) {
@@ -1105,6 +1115,10 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         if (!payload) return;
         claim = payload.claim ?? null;
         speaking = new Set(Array.isArray(payload.speakingSessionIds) ? payload.speakingSessionIds : []);
+        if (payload.feedToken && payload.feedToken !== state.feedToken) {
+          state.feedToken = payload.feedToken;
+          writeState();
+        }
         paint();
         renderClaimRow();
       })
@@ -1178,6 +1192,10 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   function renderClaimRow(justUnlinked) {
     const { controls } = claimRowElements();
     if (!controls) return;
+    // The row replaces itself wholesale on every state change, so a reader who
+    // is not looking at it needs to be told what it now says.
+    controls.setAttribute('role', 'status');
+    controls.setAttribute('aria-live', 'polite');
     controls.textContent = '';
 
     if (justUnlinked) {
@@ -1245,7 +1263,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     if (config.turnstileSiteKey) {
       const holder = document.createElement('div');
       holder.dataset.scheduleTurnstile = 'true';
-      holder.style.flex = '0 0 auto';
+      holder.className = 'claim-turnstile';
       controls.append(holder);
       mountTurnstile();
     }
@@ -1291,6 +1309,8 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       if (!response.ok) { claimError('That did not reach the server. Try again in a moment.'); return; }
       claim = null;
       speaking = new Set();
+      state.feedToken = null;
+      writeState();
       renderClaimRow(wasPending ? 'pending' : 'verified');
       paint();
     }, () => claimError('That did not reach the server. Try again in a moment.'));
@@ -1308,15 +1328,49 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token }),
     })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload) => {
-        if (!payload) return;
-        claim = payload.claim ?? null;
-        speaking = new Set(Array.isArray(payload.speakingSessionIds) ? payload.speakingSessionIds : []);
+      .then((response) => response.json().then((payload) => ({ ok: response.ok, payload })))
+      .then((result) => {
+        if (!result.ok) {
+          // A link that has been superseded by a resend is the ordinary way
+          // this fails, and the server has a sentence for it. Swallowing that
+          // left the page anonymous with no explanation and no way forward —
+          // and the token is already out of the address bar, so a refresh
+          // cannot retry. Say what happened, and open the door back.
+          claimArrivalError(result.payload?.error?.message
+            ?? 'That link could not be checked just now. Ask for a new one from Subscribe / share.');
+          return;
+        }
+        claim = result.payload.claim ?? null;
+        speaking = new Set(Array.isArray(result.payload.speakingSessionIds) ? result.payload.speakingSessionIds : []);
+        // The mail deliberately does not carry the write key; verifying is how
+        // this device earns it. Storing it here is what makes "open it on a new
+        // device and keep editing" true.
+        if (result.payload.writeKey && !state.writeKey) {
+          state.code = state.code || sharedCode;
+          state.writeKey = result.payload.writeKey;
+        }
+        if (result.payload.feedToken) state.feedToken = result.payload.feedToken;
+        writeState();
         paint();
         renderClaimRow();
       })
-      .catch(() => {});
+      .catch(() => claimArrivalError('That link could not be checked just now — you may be offline. Your picks are safe on this device.'));
+  }
+
+  /**
+   * An arrival that failed has nowhere to put an error yet: the share sheet is
+   * closed and the claim row is not on screen. The import strip is the one slot
+   * this page already reserves for "something happened when you arrived", so
+   * the message lands there rather than in a sheet nobody opened.
+   */
+  function claimArrivalError(message) {
+    const banner = document.querySelector('[data-schedule-import]');
+    const copy = document.querySelector('[data-schedule-import-message]');
+    const button = document.querySelector('[data-schedule-action="import"]');
+    if (button) button.hidden = true;
+    if (copy) copy.textContent = message;
+    if (banner) banner.hidden = false;
+    showError('share', message);
   }
 
   /* ── Interaction ───────────────────────────────────────────────────── */
@@ -1466,10 +1520,16 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   loadShared();
   renderClaimRow();
   /**
-   * Order matters on arrival: verify first when the mail sent us here, so the
-   * identity the page then reads is the one the click just created.
+   * Arriving from the mail. The code has to be adopted before the verify call,
+   * because a device that has never seen this schedule has nothing in
+   * localStorage to address — that is the whole point of the recovery link. The
+   * write key comes back from the verify itself.
    */
   if (claimToken) {
+    if (sharedCode && !state.code) {
+      state.code = sharedCode;
+      writeState();
+    }
     verifyClaimToken(claimToken).then(loadOwnerState);
   } else {
     loadOwnerState();

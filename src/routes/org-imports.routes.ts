@@ -96,6 +96,21 @@ function restoreSnapshot(value: string): OrgPersonImportSnapshot {
   return { name: candidate.name, title: text("title"), company: text("company"), bio: text("bio") };
 }
 
+/**
+ * The attendance conference recorded on an import receipt. Anything unreadable
+ * means "this import did not mark anyone as attending" rather than an error:
+ * a receipt written before this field existed is not a corrupt receipt.
+ */
+function readAttendanceEventId(mapping: string | null): string | null {
+  if (!mapping) return null;
+  try {
+    const parsed = JSON.parse(mapping) as { attendance_event_id?: unknown };
+    return typeof parsed.attendance_event_id === "string" ? parsed.attendance_event_id : null;
+  } catch {
+    return null;
+  }
+}
+
 async function personHasReferences(db: D1Database, personId: string): Promise<string[]> {
   return personReferences(db, personId);
 }
@@ -115,6 +130,8 @@ const importResponse = z.object({
 
 const undoResponse = z.object({
   undone: z.number().int().nonnegative(),
+  attendances_removed: z.number().int().nonnegative()
+    .describe("Attendance rows withdrawn at the conference this import named; zero when it named none."),
   skipped: z.number().int().nonnegative(),
   skipped_rows: z.array(z.object({
     target_id: z.string(),
@@ -177,7 +194,16 @@ const importPeople = defineApiRoute(
       importId,
       eventId,
       body.filename ?? "people.csv",
-      JSON.stringify({ auto_mapped: true, unmapped: plan.unmapped, headers: plan.headers }),
+      // The attendance event rides the receipt: undo has to know which
+      // conference this import said these people were coming to, and
+      // `imports.event_id` is the organization's attribution event rather than
+      // the one the caller named.
+      JSON.stringify({
+        auto_mapped: true,
+        unmapped: plan.unmapped,
+        headers: plan.headers,
+        ...(attendanceEvent ? { attendance_event_id: attendanceEvent.id } : {}),
+      }),
       now,
       now,
     ).run();
@@ -267,13 +293,13 @@ const undoPeopleImport = defineApiRoute(
     const access = requireOrgAccess(context, true);
     const { importId } = context.req.valid("param");
     const imported = await context.env.DB.prepare(
-      `SELECT imports.id, imports.status, imports.undone_at
+      `SELECT imports.id, imports.status, imports.undone_at, imports.mapping
        FROM imports JOIN events ON events.id = imports.event_id
        WHERE imports.id = ? AND imports.source = 'people_csv' AND events.org_id = ?`,
-    ).bind(importId, access.orgId).first<{ id: string; status: string; undone_at: number | null }>();
+    ).bind(importId, access.orgId).first<{ id: string; status: string; undone_at: number | null; mapping: string | null }>();
     if (!imported) throw ApiError.notFound("people import not found");
     if (imported.undone_at !== null || imported.status === "undone") {
-      return context.json({ undone: 0, skipped: 0, skipped_rows: [], retained_manifest: true }, 200);
+      return context.json({ undone: 0, attendances_removed: 0, skipped: 0, skipped_rows: [], retained_manifest: true }, 200);
     }
 
     const rows = await context.env.DB.prepare(
@@ -282,8 +308,10 @@ const undoPeopleImport = defineApiRoute(
        WHERE import_id = ? AND entity = 'person' AND outcome IN ('created', 'updated')
        ORDER BY row_index DESC`,
     ).bind(importId).all<OrgPeopleImportRow>();
+    // Which conference this import marked people as attending, if any.
+    const attendanceEventId = readAttendanceEventId(imported.mapping);
     const statements: D1PreparedStatement[] = [];
-    const operations: Array<{ resultIndex: number; kind: "restore" | "delete" }> = [];
+    const operations: Array<{ resultIndex: number; kind: "restore" | "delete" | "attendance" }> = [];
     const skippedRows: UndoSkip[] = [];
     const now = Date.now();
 
@@ -298,6 +326,22 @@ const undoPeopleImport = defineApiRoute(
         "UPDATE import_rows SET reason = ?, updated_at = ? WHERE import_id = ? AND row_index = ?",
       ).bind(reason, now, importId, row.row_index));
     };
+
+    // Reversed FIRST, so the person deletes below run against a person nothing
+    // points at any more. An import that named a conference asserted "these
+    // people are coming"; undoing the import withdraws that assertion, for the
+    // people it touched, at that conference, and nowhere else.
+    let attendancesRemoved = 0;
+    if (attendanceEventId) {
+      const targets = rows.results.map((row) => row.target_id).filter((id): id is string => Boolean(id));
+      for (const personId of targets) {
+        const resultIndex = statements.length;
+        statements.push(context.env.DB.prepare(
+          "DELETE FROM event_attendances WHERE person_id = ? AND event_id = ? AND source = 'import'",
+        ).bind(personId, attendanceEventId));
+        operations.push({ resultIndex, kind: "attendance" });
+      }
+    }
 
     for (const row of rows.results) {
       if (!row.target_id) continue;
@@ -329,7 +373,22 @@ const undoPeopleImport = defineApiRoute(
       // A newly imported person is safe to remove only while no later workflow
       // has attached to them. Undo must not erase a roster, submission, or
       // reviewer's history that appeared after the import.
-      const references = await personHasReferences(context.env.DB, row.target_id);
+      //
+      // The attendance row this same import wrote is excluded by name — it is
+      // queued for deletion a few lines below, in the same batch and before the
+      // person delete, so by execution time it is gone. Counting it would make
+      // every attendee import permanently un-undoable, which is precisely the
+      // shape of the bug this exclusion exists to prevent. Attendances at any
+      // OTHER conference, and claim rows anywhere, still block.
+      const references = (await personHasReferences(context.env.DB, row.target_id))
+        .filter((label) => label !== "event_attendances" || !attendanceEventId);
+      const strandedAttendance = attendanceEventId
+        ? await context.env.DB.prepare(
+            `SELECT COUNT(*) AS n FROM event_attendances
+              WHERE person_id = ? AND NOT (event_id = ? AND source = 'import')`,
+          ).bind(row.target_id, attendanceEventId).first<{ n: number }>()
+        : null;
+      if (Number(strandedAttendance?.n ?? 0) > 0) references.push("event_attendances");
       if (references.length > 0) {
         addSkip(row, { target_id: row.target_id, reason: "has_references", fields: [], references });
         continue;
@@ -345,11 +404,17 @@ const undoPeopleImport = defineApiRoute(
       "UPDATE imports SET status = 'undone', undone_at = ?, updated_at = ? WHERE id = ?",
     ).bind(now, now, importId));
     const results = await context.env.DB.batch(statements);
-    const undone = operations.reduce(
-      (count, operation) => count + (Number(results[operation.resultIndex]?.meta?.changes ?? 0) > 0 ? 1 : 0),
-      0,
-    );
-    return context.json({ undone, skipped: skippedRows.length, skipped_rows: skippedRows, retained_manifest: true }, 200);
+    const changed = (operation: { resultIndex: number }): boolean =>
+      Number(results[operation.resultIndex]?.meta?.changes ?? 0) > 0;
+    const undone = operations.filter((operation) => operation.kind !== "attendance").filter(changed).length;
+    attendancesRemoved = operations.filter((operation) => operation.kind === "attendance").filter(changed).length;
+    return context.json({
+      undone,
+      attendances_removed: attendancesRemoved,
+      skipped: skippedRows.length,
+      skipped_rows: skippedRows,
+      retained_manifest: true,
+    }, 200);
   },
 );
 

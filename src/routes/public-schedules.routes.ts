@@ -97,6 +97,10 @@ async function scheduleResponse(
   if (options.owner) {
     const claim = await readClaim(database as D1Database, code);
     payload.claim = claim ? claimState(claim) : null;
+    // Re-issued with the feed handle, so the owner's Subscribe link is the one
+    // that carries their own talks and the Share link stays free of them.
+    if (claim?.feed_token) payload.urls = scheduleUrls(view.code, view.event.slug, origin, undefined, claim.feed_token);
+    payload.feedToken = claim?.feed_token ?? null;
     // Derived here, stored nowhere: the pins are a projection of who the
     // verified email turned out to be, recomputed on every read.
     payload.speakingSessionIds = claim?.verified_at
@@ -278,7 +282,13 @@ const getPublicScheduleCalendar = defineApiRoute(
     summary: "Subscribe to a schedule as a calendar feed",
     description: "Anonymous live VCALENDAR of the code's current set, plus any session the code's verified owner is speaking at. The same URL under webcal:// is the subscription.",
     tags: ["Public"],
-    request: { params: codeParams },
+    request: {
+      params: codeParams,
+      query: z.object({
+        f: z.string().min(1).max(200).optional()
+          .describe("The owner's read-only feed handle. With it the feed also carries the sessions the owner is speaking at; without it, exactly the starred picks."),
+      }),
+    },
     policy: { auth: { kind: "public" }, rateLimit: { bucket: "read" }, concurrency: "none" },
     responses: {
       200: { content: { "text/calendar": { schema: z.string() } }, description: "The schedule as a VCALENDAR" },
@@ -297,11 +307,20 @@ const getPublicScheduleCalendar = defineApiRoute(
 
     // The feed is the one export the pins ride (round-4 ruling): a speaker who
     // claimed their schedule should find their own talk in the calendar they
-    // subscribed to, without having starred themselves. It is derived from the
-    // claim on this code, so it appears and disappears with the identity.
+    // subscribed to, without having starred themselves.
+    //
+    // But the same ruling keeps them out of the shared read-only link, and a
+    // share URL carries the code this feed is addressed by — so the code alone
+    // is not enough. The owner's feed URL carries a read-only token minted at
+    // verification; without it a subscriber gets exactly the picks, which is
+    // what a read-only link promises.
     const claim = await readClaim(context.env.DB, code);
-    const sessions = claim?.verified_at
-      ? withSpeakingPins(view.sessions, view.allSessions, claim.person_id)
+    const presentedFeedToken = context.req.query("f") ?? "";
+    const isOwnerFeed = Boolean(
+      claim?.verified_at && claim.feed_token && timingSafeEqual(presentedFeedToken, claim.feed_token),
+    );
+    const sessions = isOwnerFeed
+      ? withSpeakingPins(view.sessions, view.allSessions, claim?.person_id)
       : view.sessions;
 
     const body = publicSessionCalendar({

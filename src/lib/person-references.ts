@@ -39,6 +39,10 @@ export const PERSON_REFERENCE_CHECKS = [
   // organizer imported as a ticket-holder must survive unlinking a claim, and a
   // person who attends two conferences must survive unlinking one of them.
   { label: "event_attendances", predicate: "EXISTS (SELECT 1 FROM event_attendances WHERE event_attendances.person_id = PERSON_ID)" },
+  // And the claim itself carries a real foreign key to people. Leaving it out
+  // made unlinking one of two codes claimed by the same address throw on the
+  // person delete — after the other two deletes had already landed.
+  { label: "schedule_claims", predicate: "EXISTS (SELECT 1 FROM schedule_claims WHERE schedule_claims.person_id = PERSON_ID)" },
 ] as const;
 
 export function personReferencePredicates(personExpression: string): string[] {

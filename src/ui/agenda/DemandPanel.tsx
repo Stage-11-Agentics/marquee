@@ -66,6 +66,11 @@ export function capacityLabel(session: DemandSession): string {
   return `${Math.round(ratio * 100)}% of room${ratio >= 1 ? " — bigger room?" : ""}`;
 }
 
+/** A number once it is known, an em-dash while it is not. */
+export function gauge(value: number | undefined): string {
+  return typeof value === "number" ? String(value) : "—";
+}
+
 function timeLabel(session: DemandSession, timezone: string): string {
   if (session.starts_at === null) return "Not scheduled";
   return new Intl.DateTimeFormat("en-US", {
@@ -171,12 +176,18 @@ export function DemandPanel({ eventId, timezone }: { eventId: string; timezone: 
         <Button small onClick={() => void load()}>Refresh</Button>
       </header>
 
+      {/*
+        An em-dash, not a zero, until the numbers are real. "0 attendees
+        imported" is a claim about the conference; a dash is a statement about
+        this panel, and the slots are the same width either way so the arriving
+        figures change a number rather than a layout.
+      */}
       <div class="agenda-demand-stats">
-        <span class="agenda-demand-stat"><strong>{snapshot?.stats.imported ?? 0}</strong><span>attendees imported</span></span>
-        <span class="agenda-demand-stat"><strong>{snapshot?.stats.synced ?? 0}</strong><span>synced schedules</span></span>
-        <span class="agenda-demand-stat"><strong>{snapshot?.stats.via_agents ?? 0}</strong><span>via agents</span></span>
-        <span class="agenda-demand-stat"><strong>{snapshot?.stats.claimed ?? 0}</strong><span>claimed with email</span></span>
-        <span class="agenda-demand-stat"><strong>{snapshot?.stats.advance_picks ?? 0}</strong><span>advance picks</span></span>
+        <span class="agenda-demand-stat"><strong>{gauge(snapshot?.stats.imported)}</strong><span>attendees imported</span></span>
+        <span class="agenda-demand-stat"><strong>{gauge(snapshot?.stats.synced)}</strong><span>synced schedules</span></span>
+        <span class="agenda-demand-stat"><strong>{gauge(snapshot?.stats.via_agents)}</strong><span>via agents</span></span>
+        <span class="agenda-demand-stat"><strong>{gauge(snapshot?.stats.claimed)}</strong><span>claimed with email</span></span>
+        <span class="agenda-demand-stat"><strong>{gauge(snapshot?.stats.advance_picks)}</strong><span>advance picks</span></span>
       </div>
 
       {message && <div class="agenda-notice" role="status"><span>{message}</span></div>}

@@ -29,15 +29,21 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * The link is the sync URL with the claim token on it: `?…&claim=<token>#k=<key>`.
- * The key rides the fragment, which no browser sends to a server — it is in the
- * mail because the attendee needs it, not because anything on our side reads it.
+ * The link carries the code and a one-use verification token, and deliberately
+ * NOT the write key.
+ *
+ * The key would have to travel inside the composed mail body, and that body is
+ * stored in `outbox` — a table the conference's own organizers can list. A
+ * credential that opens an attendee's schedule must not be readable by the
+ * people the claim is disclosing that attendee to. So the key waits on the
+ * claim row instead and is handed to the browser that proves, by presenting
+ * this token, that it can read the mailbox. What the attendee gets is
+ * identical: open the link on a new device, and that device can edit.
  */
 export function claimLinkUrl(input: {
   origin: string;
   eventSlug: string;
   code: string;
-  writeKey: string;
   token: string;
 }): string {
   const base = input.origin.replace(/\/+$/, "");
@@ -46,7 +52,7 @@ export function claimLinkUrl(input: {
     sched: input.code,
     claim: input.token,
   });
-  return `${base}/agenda?${query.toString()}#k=${input.writeKey}`;
+  return `${base}/agenda?${query.toString()}`;
 }
 
 export function renderClaimMail(input: {
@@ -65,14 +71,14 @@ export function renderClaimMail(input: {
     "",
     `Following the link also tells the ${input.eventName} organizers that you are coming, and lets them see which sessions you picked. That is the only thing it shares, there is no account, and you can undo it from the schedule page at any time.`,
     "",
-    "Keep this link private — anyone who has it can edit your schedule.",
+    "Keep this link private — it opens your schedule for editing on whatever device you use it on.",
   ].join("\n");
   const html = [
     `<p>Here is your ${escapeHtml(input.eventName)} schedule — ${picks} so far.</p>`,
     `<p><a href="${escapeHtml(input.link)}">Open my schedule</a></p>`,
     "<p>Open it on any device and your picks come with you; star something new and this same link keeps up.</p>",
     `<p>Following the link also tells the ${escapeHtml(input.eventName)} organizers that you are coming, and lets them see which sessions you picked. That is the only thing it shares, there is no account, and you can undo it from the schedule page at any time.</p>`,
-    "<p>Keep this link private — anyone who has it can edit your schedule.</p>",
+    "<p>Keep this link private — it opens your schedule for editing on whatever device you use it on.</p>",
   ].join("\n");
   return { subject, text, html };
 }

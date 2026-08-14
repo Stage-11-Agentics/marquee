@@ -72,7 +72,7 @@ export function claimState(row: ScheduleClaimRow): ClaimState {
 export async function readClaim(database: D1Database, code: string): Promise<ScheduleClaimRow | null> {
   return database
     .prepare(
-      `SELECT code, event_id, email, token_hash, person_id, minted_person,
+      `SELECT code, event_id, email, token_hash, pending_write_key, feed_token, person_id, minted_person,
               requested_at, verified_at, created_at, updated_at
          FROM schedule_claims WHERE code = ? LIMIT 1`,
     )
@@ -97,7 +97,7 @@ export type ClaimRequestOutcome =
  */
 export async function requestClaim(
   database: D1Database,
-  input: { code: string; eventId: Id; email: string; now: number },
+  input: { code: string; eventId: Id; email: string; writeKey: string; now: number },
 ): Promise<ClaimRequestOutcome> {
   const email = normalizeClaimEmail(input.email);
   const token = newClaimToken();
@@ -113,11 +113,15 @@ export async function requestClaim(
   await database
     .prepare(
       `INSERT INTO schedule_claims
-         (code, event_id, email, token_hash, person_id, minted_person, requested_at, verified_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, NULL, 0, ?, NULL, ?, ?)
+         (code, event_id, email, token_hash, pending_write_key, feed_token, person_id, minted_person, requested_at, verified_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, ?, NULL, ?, ?)
        ON CONFLICT(code) DO UPDATE SET
          email = excluded.email,
          token_hash = excluded.token_hash,
+         pending_write_key = excluded.pending_write_key,
+         -- A resend must not rotate a feed the owner's calendar already
+         -- subscribes to, so the token survives one that keeps verification.
+         feed_token = CASE WHEN ? THEN schedule_claims.feed_token ELSE NULL END,
          requested_at = excluded.requested_at,
          person_id = CASE WHEN ? THEN schedule_claims.person_id ELSE NULL END,
          minted_person = CASE WHEN ? THEN schedule_claims.minted_person ELSE 0 END,
@@ -125,7 +129,8 @@ export async function requestClaim(
          updated_at = excluded.updated_at`,
     )
     .bind(
-      input.code, input.eventId, email, tokenHash, input.now, input.now, input.now,
+      input.code, input.eventId, email, tokenHash, input.writeKey, input.now, input.now, input.now,
+      keepsVerification ? 1 : 0,
       keepsVerification ? 1 : 0, keepsVerification ? 1 : 0, keepsVerification ? 1 : 0,
     )
     .run();
@@ -135,7 +140,20 @@ export async function requestClaim(
 }
 
 export type ClaimVerifyOutcome =
-  | { ok: true; row: ScheduleClaimRow; personId: Id; alreadyVerified: boolean }
+  | {
+      ok: true;
+      row: ScheduleClaimRow;
+      personId: Id;
+      alreadyVerified: boolean;
+      /**
+       * The write key, handed to the browser that just proved it can read the
+       * mailbox — and erased from the row in the same write. Null on a second
+       * open of the same mail: the first one already collected it.
+       */
+      writeKey: string | null;
+      /** The read-only handle the owner's calendar feed carries. */
+      feedToken: string | null;
+    }
   | { ok: false; reason: "unknown" | "bad_token" };
 
 /**
@@ -157,7 +175,18 @@ export async function verifyClaim(
   const presented = await hashClaimToken(input.token);
   if (!constantTimeEqualHex(presented, row.token_hash)) return { ok: false, reason: "bad_token" };
   if (row.verified_at !== null && row.person_id) {
-    return { ok: true, row, personId: row.person_id, alreadyVerified: true };
+    // A repeat open still collects the key a resend left waiting, and still
+    // erases it: the row must not keep a credential once it has been handed on.
+    if (row.pending_write_key) {
+      await database
+        .prepare("UPDATE schedule_claims SET pending_write_key = NULL, updated_at = ? WHERE code = ?")
+        .bind(input.now, row.code)
+        .run();
+    }
+    return {
+      ok: true, row, personId: row.person_id, alreadyVerified: true,
+      writeKey: row.pending_write_key, feedToken: row.feed_token,
+    };
   }
 
   const event = await database
@@ -171,7 +200,19 @@ export async function verifyClaim(
     .bind(event.org_id, normalizeClaimEmail(row.email))
     .first<{ id: string }>();
   const personId = existingPerson?.id ?? newUlid(input.now);
-  const mintedPerson = existingPerson ? 0 : 1;
+  // "This person exists because of the claim flow", not "this particular row
+  // inserted them". A second device claiming the same address matches the
+  // person the first claim minted, and inheriting the flag is what lets the
+  // LAST unlink remove someone no organizer ever imported — otherwise the
+  // minting claim goes first and the person is stranded, while the attendee is
+  // told their email was removed from the organizers' records.
+  const mintedByClaim = existingPerson
+    ? await database
+        .prepare("SELECT 1 AS found FROM schedule_claims WHERE person_id = ? AND minted_person = 1 LIMIT 1")
+        .bind(existingPerson.id)
+        .first<{ found: number }>()
+    : null;
+  const mintedPerson = existingPerson ? (mintedByClaim ? 1 : 0) : 1;
   if (!existingPerson) {
     // The name is the address until the person tells us otherwise. Inventing a
     // display name from the local part would put a guess in the organizer's
@@ -194,17 +235,25 @@ export async function verifyClaim(
     now: input.now,
   });
 
+  // The key leaves the database in the same statement that records the
+  // verification: it existed only to survive the trip through a mailbox. The
+  // feed token arrives in the same write, because pins exist from this moment.
+  const feedToken = row.feed_token ?? mintToken(16);
   await database
     .prepare(
       `UPDATE schedule_claims
-          SET person_id = ?, minted_person = ?, verified_at = ?, updated_at = ?
+          SET person_id = ?, minted_person = ?, verified_at = ?, pending_write_key = NULL,
+              feed_token = ?, updated_at = ?
         WHERE code = ?`,
     )
-    .bind(personId, mintedPerson, input.now, input.now, row.code)
+    .bind(personId, mintedPerson, input.now, feedToken, input.now, row.code)
     .run();
 
   const verified = await readClaim(database, row.code);
-  return { ok: true, row: verified ?? row, personId, alreadyVerified: false };
+  return {
+    ok: true, row: verified ?? row, personId, alreadyVerified: false,
+    writeKey: row.pending_write_key, feedToken,
+  };
 }
 
 export interface UnlinkOutcome {
@@ -218,8 +267,9 @@ export interface UnlinkOutcome {
  * depend on:
  *
  *   1. the email↔code linkage, always — it is what the attendee attached;
- *   2. the claim-sourced attendance row, always — an import-sourced row for the
- *      same person and conference is a different row and is never touched;
+ *   2. the claim-sourced attendance row — but only when no OTHER verified claim
+ *      still needs it. An import-sourced row for the same person and conference
+ *      is a different row and is never touched;
  *   3. the person, only if this claim minted them and nothing else now points
  *      at them. Someone the organizer imported, or who spoke last year, or who
  *      is attending a second conference, stays.
@@ -227,6 +277,17 @@ export interface UnlinkOutcome {
  * The attendance row goes before the reference check on purpose: attendances
  * are themselves a reference, so checking first would always answer "something
  * still points at this person" and rule 3 would never fire.
+ *
+ * One address can own two codes — claiming on a laptop and again on a phone is
+ * the recovery story this feature exists for — and the attendance uniqueness is
+ * (person, event, source), so those two codes SHARE one row. Unlinking either
+ * one must not take the other's attendance with it; when a sibling survives,
+ * the row is re-pointed at it rather than deleted.
+ *
+ * Every write goes in one batch. Halfway through this is the worst place to
+ * fail: the linkage gone, the attendance gone, the person still there, and an
+ * attendee reading "your email and picks are removed from the organizers'
+ * records" — the one sentence in this feature that must never be a lie.
  */
 export async function unlinkClaim(
   database: D1Database,
@@ -235,25 +296,65 @@ export async function unlinkClaim(
   const row = await readClaim(database, input.code);
   if (!row) return { unlinked: false, attendanceRemoved: false, personRemoved: false };
 
-  await database.prepare("DELETE FROM schedule_claims WHERE code = ?").bind(row.code).run();
+  const statements: D1PreparedStatement[] = [
+    database.prepare("DELETE FROM schedule_claims WHERE code = ?").bind(row.code),
+  ];
 
   let attendanceRemoved = false;
   let personRemoved = false;
   if (row.person_id) {
-    const removal = await database
-      .prepare("DELETE FROM event_attendances WHERE person_id = ? AND event_id = ? AND source = 'claim'")
-      .bind(row.person_id, row.event_id)
-      .run();
-    attendanceRemoved = (removal.meta?.changes ?? 0) > 0;
+    const sibling = await database
+      .prepare(
+        `SELECT code FROM schedule_claims
+          WHERE person_id = ? AND event_id = ? AND code <> ? AND verified_at IS NOT NULL
+          ORDER BY verified_at DESC LIMIT 1`,
+      )
+      .bind(row.person_id, row.event_id, row.code)
+      .first<{ code: string }>();
 
-    if (row.minted_person === 1) {
-      const references = await personReferences(database, row.person_id);
-      if (references.length === 0) {
-        await database.prepare("DELETE FROM people WHERE id = ?").bind(row.person_id).run();
-        personRemoved = true;
+    if (sibling) {
+      statements.push(
+        database
+          .prepare(
+            `UPDATE event_attendances SET schedule_code = ?, updated_at = ?
+              WHERE person_id = ? AND event_id = ? AND source = 'claim'`,
+          )
+          .bind(sibling.code, Date.now(), row.person_id, row.event_id),
+      );
+    } else {
+      statements.push(
+        database
+          .prepare("DELETE FROM event_attendances WHERE person_id = ? AND event_id = ? AND source = 'claim'")
+          .bind(row.person_id, row.event_id),
+      );
+      attendanceRemoved = true;
+
+      if (row.minted_person === 1) {
+        // The two rows this unlink removes are still present while the check
+        // runs, so they are excluded by name; every other reference — including
+        // a second claim at a different conference — still protects the person.
+        const references = (await personReferences(database, row.person_id))
+          .filter((label) => label !== "event_attendances" && label !== "schedule_claims");
+        const otherClaims = await database
+          .prepare("SELECT COUNT(*) AS n FROM schedule_claims WHERE person_id = ? AND code <> ?")
+          .bind(row.person_id, row.code)
+          .first<{ n: number }>();
+        const otherAttendances = await database
+          .prepare(
+            `SELECT COUNT(*) AS n FROM event_attendances
+              WHERE person_id = ? AND NOT (event_id = ? AND source = 'claim')`,
+          )
+          .bind(row.person_id, row.event_id)
+          .first<{ n: number }>();
+        if (references.length === 0 && Number(otherClaims?.n ?? 0) === 0 && Number(otherAttendances?.n ?? 0) === 0) {
+          statements.push(database.prepare("DELETE FROM people WHERE id = ?").bind(row.person_id));
+          personRemoved = true;
+        }
       }
     }
   }
+
+  await database.batch(statements);
   return { unlinked: true, attendanceRemoved, personRemoved };
 }
 

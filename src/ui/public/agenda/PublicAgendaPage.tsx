@@ -213,6 +213,9 @@ export const PUBLIC_SITE_STYLES = `
 .claim-done { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-accent-wash); padding: 4px 10px; font: 600 11.5px/1.4 var(--public-sans); color: var(--public-accent-ink); }
 .claim-done.quiet-state { background: var(--public-sunk); color: var(--public-soft); }
 .claim-actions { display: inline-flex; gap: 12px; flex: 0 0 auto; }
+/* The challenge mounts asynchronously from a third-party script. Its slot is
+   reserved at the size it will take, so arriving late moves nothing. */
+.claim-turnstile { flex: 0 0 auto; min-width: 300px; min-height: 65px; }
 .claim-done .quiet { background: none; border: 0; padding: 0; min-width: 46px; text-align: center; color: var(--public-accent); font: 650 10.5px/1 var(--public-mono); letter-spacing: .04em; }
 .claim-done .quiet:hover, .claim-done .quiet:focus-visible { text-decoration: underline; outline: none; }
 
@@ -546,12 +549,17 @@ function speakerHref(slug: string): string {
   return `/p/${encodeURIComponent(slug)}`;
 }
 
-function TrackChips({ session }: { session: PublicSession }): JSX.Element {
+function TrackChips({ session, starCount }: { session: PublicSession; starCount?: number }): JSX.Element {
   return (
     <div class="public-track-list">
       {session.tracks.length > 0 ? session.tracks.map((track) => (
         <span class="public-track-chip" style={{ "--track-color": track.color }} key={track.id}>{track.name}</span>
       )) : <span class="public-track-chip">—</span>}
+      {/* Inside the chip flow, so the count sits BESIDE the taxonomy chips as
+          ruled rather than on a grid row of its own beneath them — and so the
+          uppercase, letter-spaced rule on `.public-meta-row > span` cannot
+          claim it and eat its tabular figures. */}
+      <StarCountChip count={starCount} />
     </div>
   );
 }
@@ -571,7 +579,7 @@ function CardMeta({ session, starCount }: { session: PublicSession; starCount?: 
   return (
     <div class="public-card-meta">
       <div class="public-meta-row"><span>Format</span><FormatChip session={session} /></div>
-      <div class="public-meta-row"><span>Track</span><TrackChips session={session} /><StarCountChip count={starCount} /></div>
+      <div class="public-meta-row"><span>Track</span><TrackChips session={session} starCount={starCount} /></div>
     </div>
   );
 }
@@ -1044,7 +1052,12 @@ export function PublicSessionPage({ event, venue, session, origin, starCounts = 
             <a class="public-button" href={links.google} target="_blank" rel="noopener">Google</a>
             <a class="public-button" href={links.outlook} target="_blank" rel="noopener">Outlook</a>
             {typeof starCounts[session.id] === "number"
-              ? <span class="star-count-inline num">★ {starCounts[session.id]} schedules</span>
+              ? (
+                <span class="star-count-inline num" title={starCountLabel(starCounts[session.id]!)}>
+                  <span aria-hidden="true">★ {starCounts[session.id]} schedules</span>
+                  <span class="sr-only">{starCountLabel(starCounts[session.id]!)}</span>
+                </span>
+              )
               : null}
           </div>
           <div class="public-divider" />

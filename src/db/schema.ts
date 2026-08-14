@@ -364,6 +364,10 @@ export interface ScheduleClaimRow {
   event_id: Id;
   /** 1 when this claim is what created the person row — the unlink rule turns on it. */
   minted_person: 0 | 1;
+  /** Read-only handle carried by the owner's calendar feed, so pins stay theirs. */
+  feed_token: string | null;
+  /** Set while a claim mail is unopened; cleared the moment it is verified. */
+  pending_write_key: string | null;
   person_id: Id | null;
   requested_at: EpochMilliseconds;
   token_hash: string;

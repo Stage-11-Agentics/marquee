@@ -93,17 +93,29 @@ export function timingSafeEqual(left: string, right: string): boolean {
   return difference === 0;
 }
 
-export function scheduleUrls(code: string, eventSlug: string, origin: string, writeKey?: string): PublicScheduleUrls {
+export function scheduleUrls(
+  code: string,
+  eventSlug: string,
+  origin: string,
+  writeKey?: string,
+  /**
+   * The owner's read-only feed handle. It is what separates "my calendar" from
+   * "the feed anyone holding my share code could construct": the sessions the
+   * owner is speaking at ride the feed only for a caller presenting this.
+   */
+  feedToken?: string | null,
+): PublicScheduleUrls {
   const base = origin.replace(/\/+$/, "");
   const host = base.replace(/^https?:\/\//, "");
   const agenda = `${base}/agenda?event=${encodeURIComponent(eventSlug)}&sched=${code}`;
+  const feed = `/api/v1/public/schedules/${code}/calendar.ics${feedToken ? `?f=${encodeURIComponent(feedToken)}` : ""}`;
   return {
     share: agenda,
     // The key rides the fragment, which no browser sends to a server: the sync
     // link can be shown, scanned, and pasted without the key ever being logged.
     sync: writeKey ? `${agenda}#k=${writeKey}` : agenda,
-    webcal: `webcal://${host}/api/v1/public/schedules/${code}/calendar.ics`,
-    ics: `${base}/api/v1/public/schedules/${code}/calendar.ics`,
+    webcal: `webcal://${host}${feed}`,
+    ics: `${base}${feed}`,
     json: `${base}/api/v1/public/schedules/${code}`,
   };
 }

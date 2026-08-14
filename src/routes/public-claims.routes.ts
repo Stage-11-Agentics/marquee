@@ -55,26 +55,34 @@ function turnstileSecret(context: { env: ApiEnv["Bindings"] }): string {
 const codeParams = z.object({ code: z.string().regex(CODE_PATTERN) });
 
 /**
- * A modest ceiling of its own, per the constraint that every anonymous
- * endpoint accepting an email brings one. This one is per IP and deliberately
- * tight — unlike a star, a claim causes an outbound mail, and the cost of
- * being generous is somebody else's inbox.
+ * Keyed on the SCHEDULE, not the address the request came from.
+ *
+ * A conference is one NAT — the star beacon reasons this through at length and
+ * the same fact applies here with sharper teeth: ten claims an hour per IP is
+ * ten claims an hour for an entire venue's wifi, which is not a rate limit, it
+ * is an outage. `requireOwner` has already proved this caller holds one
+ * specific code, and a code can only ever mail whatever address is attached to
+ * it, so the code is the axis that actually bounds the damage: a resend loop
+ * spams one mailbox, and the ceiling stops it.
  */
-const CLAIM_LIMIT = 10;
+const CLAIM_LIMIT = 6;
+/** A code has one mail out at a time; a caller trying twenty tokens against it is not its owner. */
+const VERIFY_LIMIT = 20;
 const CLAIM_WINDOW_SECONDS = 3600;
 
 async function checkClaimLimit(
   store: KVNamespace | undefined,
-  ip: string,
+  code: string,
   now: number,
+  limit: number = CLAIM_LIMIT,
 ): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
   if (!store) return { allowed: true, retryAfterSeconds: 0 };
   const windowStart = Math.floor(now / (CLAIM_WINDOW_SECONDS * 1000)) * CLAIM_WINDOW_SECONDS * 1000;
-  const key = `schedule-claim:${ip}:${windowStart}`;
+  const key = `schedule-claim:${code}:${windowStart}`;
   const retryAfterSeconds = Math.max(1, Math.ceil((windowStart + CLAIM_WINDOW_SECONDS * 1000 - now) / 1000));
   const seen = await store.get(key, "json").catch(() => null);
   const count = typeof seen === "number" ? seen : 0;
-  if (count >= CLAIM_LIMIT) return { allowed: false, retryAfterSeconds };
+  if (count >= limit) return { allowed: false, retryAfterSeconds };
   await store
     .put(key, JSON.stringify(count + 1), { expirationTtl: CLAIM_WINDOW_SECONDS * 2 })
     .catch(() => { /* an uncounted request beats a refused one */ });
@@ -142,7 +150,7 @@ const requestScheduleClaim = defineApiRoute(
       );
     }
 
-    const limit = await checkClaimLimit(context.env.CACHE, clientIp(context.req.raw), Date.now());
+    const limit = await checkClaimLimit(context.env.CACHE, code, Date.now());
     if (!limit.allowed) throw ApiError.rateLimited(limit.retryAfterSeconds);
 
     // The same exemption the public form takes, for the same reason: a demo
@@ -175,6 +183,10 @@ const requestScheduleClaim = defineApiRoute(
       code,
       eventId: row.event_id,
       email,
+      // Held on the claim row, not put in the mail — see attendee-claim-mail.ts.
+      // The owner presented it in this request; it is the same key, parked
+      // where an organizer-readable table cannot reach it.
+      writeKey: presentedKey,
       now,
     });
     if (!requested.ok) {
@@ -191,9 +203,6 @@ const requestScheduleClaim = defineApiRoute(
         origin: new URL(context.req.url).origin,
         eventSlug: view.event.slug,
         code,
-        // The key was presented by the owner in this request and is used only
-        // to build the link. It is not stored — the row still keeps a hash.
-        writeKey: presentedKey,
         token: requested.token,
       }),
       sessionCount: view.sessions.length,
@@ -226,7 +235,7 @@ const verifyScheduleClaim = defineApiRoute(
     operationId: "verifyScheduleClaim",
     summary: "Complete a claim by presenting the token from its mail",
     description:
-      "The step that creates identity: the person is upserted by email into the organization's people record — matched, never duplicated — and an attendance row records that they are coming to this conference. Opening the same link twice answers with the same state.",
+      "The step that creates identity: the person is upserted by email into the organization's people record — matched, never duplicated — and an attendance row records that they are coming to this conference. Also returns the schedule's write key once, which is how the device reading the mail gains the ability to edit — the mail itself never carries it. Opening the same link twice answers with the same state.",
     tags: ["Public"],
     request: {
       params: codeParams,
@@ -240,6 +249,17 @@ const verifyScheduleClaim = defineApiRoute(
   },
   async (context) => {
     const code = context.req.valid("param").code;
+    // The only claim endpoint a caller reaches without proving they own the
+    // code, so it is the only one where guessing a token is even a shape. The
+    // token is 256 bits; this is belt and braces, and the stated contract that
+    // every anonymous endpoint brings its own limiter.
+    //
+    // Keyed on the code, like the send. Keyed on the IP it would be the venue
+    // NAT again: every attendee at a conference verifies from the same address,
+    // and a ceiling meant to slow a guesser would instead stop the tenth person
+    // that hour from ever completing their claim.
+    const limit = await checkClaimLimit(context.env.CACHE, `verify:${code}`, Date.now(), VERIFY_LIMIT);
+    if (!limit.allowed) throw ApiError.rateLimited(limit.retryAfterSeconds);
     const outcome = await verifyClaim(context.env.DB, {
       code,
       token: context.req.valid("json").token,
@@ -256,6 +276,10 @@ const verifyScheduleClaim = defineApiRoute(
     return context.json({
       claim: claimState(outcome.row),
       speakingSessionIds: view ? speakingSessionIds(view.allSessions, outcome.personId) : [],
+      // The one moment this crosses the wire, to the one caller that proved it
+      // can read the mailbox. Null when an earlier open already collected it.
+      writeKey: outcome.writeKey,
+      feedToken: outcome.feedToken,
     }, 200);
   },
 );

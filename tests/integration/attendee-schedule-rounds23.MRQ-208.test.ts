@@ -1,6 +1,7 @@
 import { beforeEach, expect, test } from "vitest";
 
 import { app, type Env } from "../../src/index";
+import { mintToken, sha256Hex } from "../../src/lib/auth/random-token";
 import { applyMigrations, env } from "./apply-migrations";
 
 /**
@@ -35,6 +36,26 @@ const json = (body: unknown): RequestInit => ({
   headers: { "content-type": "application/json" },
   body: JSON.stringify(body),
 });
+
+/** An owner-scoped bearer token, so the organizer-side calls are made as a real principal. */
+async function orgToken(): Promise<string> {
+  const raw = `mq_${mintToken()}`;
+  await env.DB
+    .prepare(
+      `INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind("tok_mrq208", ORG_ID, "MRQ-208 test token", await sha256Hex(raw), raw.slice(0, 7),
+      JSON.stringify({ permissions: ["program:read", "program:write"], event_ids: [] }), "person-priya", NOW, NOW)
+    .run();
+  // A token still has to belong to somebody who is staff of the organization:
+  // the grant says what the credential may do, the membership says whose it is.
+  await env.DB
+    .prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, NULL, ?, 'owner', ?, ?)")
+    .bind("mem_mrq208", ORG_ID, "person-priya", NOW, NOW)
+    .run();
+  return raw;
+}
 
 /** A schedule, created the way the site's own module creates one. */
 async function createSchedule(sessionIds: string[], deviceHash?: string) {
@@ -340,7 +361,7 @@ test("CONTRACT · MRQ-208 a verified speaker's own sessions pin for the owner, r
 
   // The owner, presenting the key, sees the identity and the pins.
   const owner = await request(`/api/v1/public/schedules/${schedule.code}`, { headers: { "x-schedule-write-key": schedule.writeKey } });
-  const ownerPayload = await owner.json<{ claim: { maskedEmail: string } | null; speakingSessionIds: string[] }>();
+  const ownerPayload = await owner.json<{ claim: { maskedEmail: string } | null; speakingSessionIds: string[]; feedToken: string | null }>();
   expect(ownerPayload.claim?.maskedEmail).toBe("p…a@example.com");
   expect(ownerPayload.speakingSessionIds).toEqual(["sub-keynote"]);
 
@@ -351,15 +372,25 @@ test("CONTRACT · MRQ-208 a verified speaker's own sessions pin for the owner, r
   expect(sharedPayload.claim).toBeUndefined();
   expect(sharedPayload.speakingSessionIds).toBeUndefined();
 
-  // The calendar feed carries the pin — a speaker should find their own talk in
-  // the calendar they subscribed to.
-  const feed = await (await request(`/api/v1/public/schedules/${schedule.code}/calendar.ics`)).text();
-  expect(feed).toContain("UID:sub-memory@");
-  expect(feed).toContain("UID:sub-keynote@");
+  // The owner's feed carries the pin — a speaker should find their own talk in
+  // the calendar they subscribed to. The token is what makes it theirs.
+  const feedToken = ownerPayload.feedToken;
+  expect(feedToken).toBeTruthy();
+  const ownerFeed = await (await request(`/api/v1/public/schedules/${schedule.code}/calendar.ics?f=${feedToken}`)).text();
+  expect(ownerFeed).toContain("UID:sub-memory@");
+  expect(ownerFeed).toContain("UID:sub-keynote@");
+
+  // The same feed addressed with only the share code — which is all a friend
+  // has — carries the picks and nothing about who owns them.
+  const sharedFeed = await (await request(`/api/v1/public/schedules/${schedule.code}/calendar.ics`)).text();
+  expect(sharedFeed).toContain("UID:sub-memory@");
+  expect(sharedFeed).not.toContain("UID:sub-keynote@");
+  const wrongToken = await (await request(`/api/v1/public/schedules/${schedule.code}/calendar.ics?f=not-the-token`)).text();
+  expect(wrongToken).not.toContain("UID:sub-keynote@");
 
   // Unlinking takes the identity and the pins with it.
   await request(`/api/v1/public/schedules/${schedule.code}/claim`, { method: "DELETE", headers: { "x-schedule-write-key": schedule.writeKey } });
-  const after = await (await request(`/api/v1/public/schedules/${schedule.code}/calendar.ics`)).text();
+  const after = await (await request(`/api/v1/public/schedules/${schedule.code}/calendar.ics?f=${feedToken}`)).text();
   expect(after).not.toContain("UID:sub-keynote@");
 });
 
@@ -433,4 +464,98 @@ test("CONTRACT · MRQ-208 the demand board reconciles with the rows it is built 
   // beside a count of five reads as broken rather than as nearly empty.
   expect(capacityLabel({ session_id: "x", title: "x", starts_at: null, duration_min: null, room: "Ballroom", capacity: 2500, count: 5 })).toBe("<1% of room");
   expect(capacityLabel({ session_id: "x", title: "x", starts_at: null, duration_min: null, room: "Ballroom", capacity: 2500, count: 0 })).toBe("0% of room");
+});
+
+/* ── The blockers a fresh-eyes review found, each with a test that fails loudly ── */
+
+test("CONTRACT · MRQ-208 one address claiming two codes: unlinking either keeps the other's attendance and the person", async () => {
+  const first = await createSchedule(["sub-keynote"]);
+  const second = await createSchedule(["sub-memory"]);
+  for (const schedule of [first, second]) {
+    const keyed = { "content-type": "application/json", "x-schedule-write-key": schedule.writeKey };
+    await request(`/api/v1/public/schedules/${schedule.code}/claim`, { ...json({ email: "roamer@example.com" }), headers: keyed });
+    await request(`/api/v1/public/schedules/${schedule.code}/claim/verify`, json({ token: await tokenFromMail() }));
+  }
+  const person = await env.DB.prepare("SELECT id FROM people WHERE lower(email) = ?")
+    .bind("roamer@example.com").first<{ id: string }>();
+  expect(person).toBeTruthy();
+
+  // The claim row carries a real foreign key to people, so a person delete that
+  // ignored it threw — after the linkage and the attendance had already gone.
+  const unlink = await request(`/api/v1/public/schedules/${first.code}/claim`, {
+    method: "DELETE",
+    headers: { "x-schedule-write-key": first.writeKey },
+  });
+  expect(unlink.status).toBe(200);
+  expect(await unlink.json<{ personRemoved: boolean; attendanceRemoved: boolean }>())
+    .toMatchObject({ personRemoved: false, attendanceRemoved: false });
+
+  // The second code is still claimed, so the attendance stays and re-points at it.
+  const attendance = await env.DB
+    .prepare("SELECT schedule_code FROM event_attendances WHERE person_id = ? AND source = 'claim'")
+    .bind(person?.id)
+    .first<{ schedule_code: string }>();
+  expect(attendance?.schedule_code).toBe(second.code);
+  expect(await env.DB.prepare("SELECT id FROM people WHERE id = ?").bind(person?.id).first()).toBeTruthy();
+
+  // Unlinking the last one does remove everything it minted.
+  const last = await request(`/api/v1/public/schedules/${second.code}/claim`, {
+    method: "DELETE",
+    headers: { "x-schedule-write-key": second.writeKey },
+  });
+  expect(await last.json<{ personRemoved: boolean }>()).toMatchObject({ personRemoved: true });
+  expect(await env.DB.prepare("SELECT id FROM people WHERE id = ?").bind(person?.id).first()).toBeNull();
+});
+
+test("CONTRACT · MRQ-208 the claim mail carries a verification token and never the write key", async () => {
+  const schedule = await createSchedule(["sub-keynote"]);
+  await request(
+    `/api/v1/public/schedules/${schedule.code}/claim`,
+    { ...json({ email: "maya@copperline.dev" }), headers: { "content-type": "application/json", "x-schedule-write-key": schedule.writeKey } },
+  );
+  const mail = await env.DB
+    .prepare("SELECT html, text FROM outbox WHERE template_key = 'attendee_schedule_claim' ORDER BY created_at DESC LIMIT 1")
+    .first<{ html: string; text: string }>();
+  // The body is stored, and organizers can list the outbox. A credential that
+  // opens somebody's schedule must not be in there.
+  expect(mail?.text).not.toContain(schedule.writeKey);
+  expect(mail?.html).not.toContain(schedule.writeKey);
+  expect(mail?.text).not.toContain("#k=");
+
+  // Verifying is what hands the key over — once — so the reading device can edit.
+  const verified = await request(`/api/v1/public/schedules/${schedule.code}/claim/verify`, json({ token: await tokenFromMail() }));
+  const payload = await verified.json<{ writeKey: string | null; feedToken: string | null }>();
+  expect(payload.writeKey).toBe(schedule.writeKey);
+  expect(payload.feedToken).toBeTruthy();
+  // And it is gone from the row the moment it is collected.
+  const row = await env.DB.prepare("SELECT pending_write_key FROM schedule_claims WHERE code = ?")
+    .bind(schedule.code).first<{ pending_write_key: string | null }>();
+  expect(row?.pending_write_key).toBeNull();
+});
+
+test("CONTRACT · MRQ-208 an attendee import can still be undone, and its attendance rows go with it", async () => {
+  const token = await orgToken();
+  const csv = "name,email,company\nTom Brandt,tom@meridian.cap,Meridian\nMaya Okafor,maya@copperline.dev,Copperline\n";
+  const imported = await request("/api/v1/org/imports", {
+    ...json({ csv, filename: "attendees.csv", event: EVENT_SLUG }),
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+  });
+  expect(imported.status).toBe(202);
+  const result = await imported.json<{ import_id: string; created: number; attendances: number }>();
+  expect(result).toMatchObject({ created: 2, attendances: 2 });
+
+  // Adding event_attendances to the person-reference inventory made every
+  // imported person look "referenced", which skipped them all AND spent the
+  // receipt — leaving an organizer who imported the wrong CSV no way back.
+  const undone = await request(`/api/v1/org/imports/${result.import_id}/undo`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(undone.status).toBe(200);
+  expect(await undone.json<{ undone: number; attendances_removed: number; skipped: number }>())
+    .toMatchObject({ undone: 2, attendances_removed: 2, skipped: 0 });
+  const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM event_attendances WHERE source = 'import'").first<{ n: number }>();
+  expect(Number(left?.n)).toBe(0);
+  const people = await env.DB.prepare("SELECT COUNT(*) AS n FROM people WHERE lower(email) IN ('tom@meridian.cap', 'maya@copperline.dev')").first<{ n: number }>();
+  expect(Number(people?.n)).toBe(0);
 });

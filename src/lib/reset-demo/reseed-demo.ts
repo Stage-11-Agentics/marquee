@@ -103,9 +103,35 @@ const ORG = [DEMO_ORGANIZATION_ID] as const;
  * is scoped through a JSON payload, and `api_tokens` and `memberships` already
  * delete by organization and only need their event half widened.
  */
-const DELETE_PLANS: Partial<Record<WipeTable, DeletePlan>> = {
+/**
+ * TOTAL, not partial, and deliberately so. `scopedWipeStatements` drops any
+ * table with no plan — silently — so a `Partial` map turns "somebody added a
+ * table to WIPE_ORDER and stopped there" into a wipe that deletes parents while
+ * their children still point at them, and a batch that aborts wholesale. A
+ * total map with an explicit `null` makes that omission a type error instead of
+ * a broken reset nobody notices until the demo will not reset.
+ */
+const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
+  // Global control-plane state: it must survive a demo reset (see above).
+  mirror_state: null,
   webhook_deliveries: {
     sql: `DELETE FROM webhook_deliveries WHERE endpoint_id IN (SELECT id FROM webhook_endpoints WHERE event_id IN (${ORG_EVENTS}))`,
+    bindings: ORG,
+  },
+  // MRQ-208, children first. The claim carries a real email address, so a
+  // reset that skipped it would leave PII in the one workspace a judge or a
+  // visitor actually opens — and every one of these references a schedule, a
+  // person or an event that the rest of this wipe is about to remove.
+  schedule_claims: {
+    sql: `DELETE FROM schedule_claims WHERE event_id IN (${ORG_EVENTS})`,
+    bindings: ORG,
+  },
+  session_star_beacons: {
+    sql: `DELETE FROM session_star_beacons WHERE event_id IN (${ORG_EVENTS})`,
+    bindings: ORG,
+  },
+  event_attendances: {
+    sql: `DELETE FROM event_attendances WHERE event_id IN (${ORG_EVENTS})`,
     bindings: ORG,
   },
   // Attendee schedules are anonymous rows pointing at demo sessions; a demo
@@ -335,6 +361,8 @@ export interface ReseedResult {
 
 function scopedWipeStatements(db: D1Database): D1PreparedStatement[] {
   return WIPE_ORDER.flatMap((table) => {
+    // A null plan is a decision on the record — see DELETE_PLANS. A missing
+    // one can no longer reach here: the map is total.
     const plan = DELETE_PLANS[table];
     return plan ? [db.prepare(plan.sql).bind(...plan.bindings)] : [];
   });

@@ -142,6 +142,13 @@ const requiredIndexes = [
   "idx_agenda_event_starts_room",
   "idx_agenda_room_starts",
   "idx_agenda_track_starts",
+  // MRQ-208. The beacon index is wide because the demand aggregate's GROUP BY
+  // runs on the public agenda's hot path and would otherwise plan a temp
+  // B-tree; the attendance ones are what make an attendee list a query rather
+  // than a scan. This list is the only guard that notices one being dropped.
+  "idx_session_star_beacons_event",
+  "idx_event_attendances_event_source",
+  "uq_event_attendances_person_event_source",
   "idx_attachments_draft_files",
   "idx_attachments_owner",
   "idx_attachments_submission_files",

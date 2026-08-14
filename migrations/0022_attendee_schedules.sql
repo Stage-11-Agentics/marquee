@@ -50,7 +50,10 @@ CREATE TABLE session_star_beacons (
   PRIMARY KEY (session_id, device_hash)
 );
 
-CREATE INDEX idx_session_star_beacons_event ON session_star_beacons (event_id);
+-- Wide enough to cover the demand aggregate's GROUP BY, which is the query on
+-- the public agenda's hot path: (event_id) alone plans a temp B-tree for every
+-- render (R7).
+CREATE INDEX idx_session_star_beacons_event ON session_star_beacons (event_id, session_id, device_hash);
 
 -- The email↔code linkage. It exists from the moment the mail is requested, so
 -- a pending claim is a real row an organizer never sees: `verified_at` is what
@@ -64,6 +67,25 @@ CREATE TABLE schedule_claims (
   event_id TEXT NOT NULL REFERENCES events(id),
   email TEXT NOT NULL,
   token_hash TEXT NOT NULL,
+  -- The write key, in the clear, for exactly as long as one unopened mail.
+  --
+  -- The mail has to be able to hand a new device write access — that is the
+  -- recovery gap the claim exists to close — but the composed mail body lives
+  -- in `outbox`, which organizers can list. A credential that opens somebody's
+  -- schedule must not sit in a table the conference staff can read, so the mail
+  -- carries only the verification token and this column carries the key, to be
+  -- handed to the browser that proves it can read the mailbox and NULLed in the
+  -- same write. Between those two moments it is readable by nothing that has a
+  -- surface. `public_schedules` still stores only the hash.
+  pending_write_key TEXT,
+  -- A read-only handle for the owner's own calendar feed.
+  --
+  -- The pins ride the ICS set by ruling, and the webcal URL is derivable from
+  -- the share code — so without a second handle, handing a friend a share link
+  -- would also tell them which sessions their friend is speaking at. This token
+  -- goes in the owner's feed URL and nowhere else; a caller with only the code
+  -- gets the picks, exactly as a read-only link should.
+  feed_token TEXT,
   person_id TEXT REFERENCES people(id),
   minted_person INTEGER NOT NULL DEFAULT 0 CHECK (minted_person IN (0, 1)),
   requested_at INTEGER NOT NULL,
