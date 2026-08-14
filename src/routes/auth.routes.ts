@@ -7,7 +7,11 @@ import type { ApiEnv } from "../api/runtime";
 import { clearSessionCookie, setSessionCookie } from "../lib/cookies";
 import { enqueueAuthMail, renderMagicLinkLoginMail } from "../lib/auth/auth-mail";
 import { getAuth, unauthorized } from "../lib/auth/auth-middleware";
-import { consumeMagicLink, mintMagicLink } from "../lib/auth/magic-links";
+import {
+  consumeMagicLinkWithStatus,
+  mintMagicLink,
+  readMagicLink,
+} from "../lib/auth/magic-links";
 import { createSession, revokeSession, SESSION_TTL_MS } from "../lib/auth/auth-sessions";
 import { loadMembershipsForOrg } from "../lib/auth/scope-resolution";
 import { pickOutboxEventId, rolesOf, signinRedirect } from "../lib/auth/signin-destination";
@@ -44,13 +48,35 @@ function dropRejectedSessionCookie(context: Context<ApiEnv>): void {
  * a reason it can state. API clients keep the 401 envelope byte-for-byte: they
  * are the callers for whom a redirect would be the unreadable answer.
  */
-function rejectMagicLink(context: Context<ApiEnv>, message: string): Response {
+type MagicLinkFailureReason = "expired" | "used" | "already_signed_in";
+
+function rejectMagicLink(
+  context: Context<ApiEnv>,
+  message: string,
+  options: { reason?: MagicLinkFailureReason; token?: string; code?: string } = {},
+): Response {
   dropRejectedSessionCookie(context);
   context.header("Cache-Control", "no-store");
   if ((context.req.header("accept") ?? "").includes("text/html")) {
-    return context.redirect("/signin?reason=expired", 302);
+    const query = new URLSearchParams({ reason: options.reason ?? "expired" });
+    if (options.token) query.set("token", options.token);
+    return context.redirect(`/signin?${query.toString()}`, 302);
   }
-  return context.json({ error: { code: "magic_link_invalid", message } }, 401);
+  return context.json({ error: { code: options.code ?? "magic_link_invalid", message } }, 401);
+}
+
+function rejectMagicLinkState(
+  context: Context<ApiEnv>,
+  status: "expired" | "used" | "invalid",
+): Response {
+  if (status === "expired") {
+    return rejectMagicLink(context, "This sign-in link expired. Request a new one.", { reason: "expired" });
+  }
+  if (status === "used") {
+    return rejectMagicLink(context, "This sign-in link was already used. Request a new one.", { reason: "used" });
+  }
+  // Unknown and wrong-purpose tokens remain deliberately non-enumerating.
+  return rejectMagicLink(context, "This sign-in link has expired or was already used");
 }
 
 const roleSchema = z.enum(["organizer", "reviewer", "speaker"]);
@@ -262,7 +288,7 @@ const exchangeMagicLink = defineApiRoute(
     responses: {
       302: {
         description:
-          "Redirects to the magic link's requested destination — or, for a browser navigation with a spent link, to /signin?reason=expired.",
+          "Redirects to the magic link's requested destination — or, for a browser navigation, to /signin with the truthful exchange reason.",
       },
       401: jsonResponse(authErrorSchema, "The magic link is missing, expired, or already used."),
       ...errorResponses([429, 500]),
@@ -271,15 +297,33 @@ const exchangeMagicLink = defineApiRoute(
   (async (context: Context<ApiEnv>) => {
     const token = context.req.query("token");
     if (!token) return rejectMagicLink(context, "Missing token");
+    const now = Date.now();
+    const purposes = ["login", "draft_resume", "cospeaker_profile", "task_link"] as const;
+
+    // The browser may already hold a live session for a different seat. Read
+    // the link first: refusing a credential after spending it strands the
+    // person, and the next attempt would falsely look like expiry or replay.
+    const auth = getAuth(context);
+    if (auth?.kind === "session") {
+      const state = await readMagicLink(context.env.DB, token, now, { purposes });
+      if (state.status === "live" && state.link.person_id !== null) {
+        return rejectMagicLink(
+          context,
+          "This browser is already signed in. Sign out to use this link, or continue as the person already signed in.",
+          { reason: "already_signed_in", token, code: "magic_link_session_conflict" },
+        );
+      }
+      if (state.status !== "live") return rejectMagicLinkState(context, state.status);
+      return rejectMagicLink(context, "This sign-in link is not valid");
+    }
+
     // Sign-in exchanges only person-bound links. `claim` and `org_invite` have
     // no person yet and are exchanged at `/api/v1/claim`, which is the one
     // place a session is minted from a token that predates its owner.
-    const link = await consumeMagicLink(context.env.DB, token, Date.now(), {
-      purposes: ["login", "draft_resume", "cospeaker_profile", "task_link"],
-    });
-    if (!link || link.person_id === null) {
-      return rejectMagicLink(context, "This sign-in link has expired or was already used");
-    }
+    const consumed = await consumeMagicLinkWithStatus(context.env.DB, token, now, { purposes });
+    if (consumed.status !== "consumed") return rejectMagicLinkState(context, consumed.status);
+    const link = consumed.link;
+    if (link.person_id === null) return rejectMagicLink(context, "This sign-in link is not valid");
     const roleHint = (() => {
       if (link.purpose !== "cospeaker_profile") return "login";
       try {

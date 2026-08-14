@@ -192,6 +192,95 @@ test("CONTRACT · exchange mints one session and rejects replayed or expired lin
   expect(await authSessionCount()).toBe(before + 1);
 });
 
+test("CONTRACT · MRQ-181 · an existing session preserves a fresh link and names each invalid state", async () => {
+  await seedDemoFixture();
+  const link = await mintMagicLink(env.DB, {
+    personId: DEMO_SPEAKER_PERSON_ID,
+    purpose: "login",
+    redirectTo: "/portal",
+  });
+  const existing = await createSession(env.DB, {
+    personId: DEMO_ORGANIZER_PERSON_ID,
+    userAgent: "existing-session-regression",
+  });
+  const before = await authSessionCount();
+
+  const blocked = await app.request(
+    `/api/v1/auth/exchange?token=${encodeURIComponent(link.token)}`,
+    {
+      redirect: "manual",
+      headers: {
+        accept: "text/html",
+        cookie: `mq_session=${existing.id}`,
+      },
+    },
+    env,
+  );
+  expect(blocked.status).toBe(302);
+  const blockedLocation = new URL(blocked.headers.get("location") ?? "", "https://marquee.example");
+  expect(blockedLocation.pathname).toBe("/signin");
+  expect(blockedLocation.searchParams.get("reason")).toBe("already_signed_in");
+  expect(blockedLocation.searchParams.get("token")).toBe(link.token);
+  expect(await env.DB.prepare("SELECT used_at FROM magic_links WHERE id = ?").bind(link.id).first<{ used_at: number | null }>()).toMatchObject({ used_at: null });
+  expect(await authSessionCount()).toBe(before);
+
+  const signedInPage = await app.request(`${blockedLocation.pathname}${blockedLocation.search}`, {
+    headers: { cookie: `mq_session=${existing.id}` },
+  }, env);
+  expect(await signedInPage.text()).toContain("Sign out and use this sign-in link");
+  const loggedOut = await app.request("/api/v1/auth/logout", {
+    method: "POST",
+    headers: { cookie: `mq_session=${existing.id}` },
+  }, env);
+  expect(loggedOut.status).toBe(200);
+
+  const retry = await app.request(
+    `/api/v1/auth/exchange?token=${encodeURIComponent(link.token)}`,
+    { redirect: "manual", headers: { accept: "text/html" } },
+    env,
+  );
+  expect(retry.status).toBe(302);
+  expect(retry.headers.get("location")).toBe("/portal");
+  expect(await env.DB.prepare("SELECT used_at FROM magic_links WHERE id = ?").bind(link.id).first<{ used_at: number | null }>()).not.toMatchObject({ used_at: null });
+
+  const now = Date.now();
+  const expiredLink = await mintMagicLink(env.DB, {
+    personId: DEMO_SPEAKER_PERSON_ID,
+    purpose: "login",
+    now: now - 16 * 60_000,
+  });
+  const expired = await app.request(
+    `/api/v1/auth/exchange?token=${encodeURIComponent(expiredLink.token)}`,
+    { redirect: "manual", headers: { accept: "text/html" } },
+    env,
+  );
+  expect(expired.status).toBe(302);
+  const expiredLocation = new URL(expired.headers.get("location") ?? "", "https://marquee.example");
+  expect(expiredLocation.searchParams.get("reason")).toBe("expired");
+  expect(await (await app.request(`${expiredLocation.pathname}${expiredLocation.search}`, {}, env)).text()).toContain("That sign-in link expired.");
+
+  const usedLink = await mintMagicLink(env.DB, {
+    personId: DEMO_SPEAKER_PERSON_ID,
+    purpose: "login",
+    now,
+  });
+  const firstUse = await app.request(
+    `/api/v1/auth/exchange?token=${encodeURIComponent(usedLink.token)}`,
+    { redirect: "manual" },
+    env,
+  );
+  expect(firstUse.status).toBe(302);
+  const replay = await app.request(
+    `/api/v1/auth/exchange?token=${encodeURIComponent(usedLink.token)}`,
+    { redirect: "manual", headers: { accept: "text/html" } },
+    env,
+  );
+  expect(replay.status).toBe(302);
+  const replayLocation = new URL(replay.headers.get("location") ?? "", "https://marquee.example");
+  expect(replayLocation.searchParams.get("reason")).toBe("used");
+  expect(await (await app.request(`${replayLocation.pathname}${replayLocation.search}`, {}, env)).text()).toContain("That sign-in link was already used.");
+});
+
 test("CONTRACT · demo login rejects a role with no matching demo persona", async () => {
   const now = Date.now();
   await env.DB.prepare(

@@ -29,7 +29,7 @@ import { errorFields, loggerForEnv } from "../lib/observability/log";
  * from one answer to another under a reader.
  */
 
-export type SigninReason = "expired" | "signed_out" | "session_ended";
+export type SigninReason = "expired" | "used" | "already_signed_in" | "signed_out" | "session_ended";
 
 /**
  * Each reason reads differently to someone who still has a session, because
@@ -40,8 +40,18 @@ export type SigninReason = "expired" | "signed_out" | "session_ended";
 const REASON_COPY: Record<SigninReason, { eyebrow: string; line: string; signedInLine: string }> = {
   expired: {
     eyebrow: "Link expired",
-    line: "That sign-in link had already been used or had passed its fifteen minutes. Request a new one below.",
-    signedInLine: "That sign-in link had already been used or had passed its fifteen minutes. This browser is still signed in, so carry on.",
+    line: "That sign-in link expired. Request a new one below.",
+    signedInLine: "That sign-in link expired. This browser is still signed in, so carry on.",
+  },
+  used: {
+    eyebrow: "Link already used",
+    line: "That sign-in link was already used. Request a new one below.",
+    signedInLine: "That sign-in link was already used. This browser is still signed in, so carry on.",
+  },
+  already_signed_in: {
+    eyebrow: "Already signed in",
+    line: "This browser is already signed in. Sign out before using that link.",
+    signedInLine: "Sign out to use this link, or continue as the person already signed in.",
   },
   signed_out: {
     eyebrow: "Signed out",
@@ -56,7 +66,14 @@ const REASON_COPY: Record<SigninReason, { eyebrow: string; line: string; signedI
 };
 
 function readReason(value: string | null): SigninReason | null {
-  return value === "expired" || value === "signed_out" || value === "session_ended" ? value : null;
+  return value === "expired" || value === "used" || value === "already_signed_in" || value === "signed_out" || value === "session_ended"
+    ? value
+    : null;
+}
+
+function readRetryToken(value: string | null): string | null {
+  const token = value?.trim() ?? "";
+  return /^[A-Za-z0-9_-]{20,256}$/.test(token) ? token : null;
 }
 
 export interface SigninSignedIn {
@@ -74,6 +91,8 @@ export interface SigninPageState {
   reason: SigninReason | null;
   /** Already validated as a same-origin path, or empty. */
   next: string;
+  /** A fresh link preserved for the sign-out-and-retry recovery action. */
+  retryToken: string | null;
 }
 
 function ReasonBanner({ reason, signedIn }: { reason: SigninReason; signedIn: boolean }): JSX.Element {
@@ -182,6 +201,7 @@ function DemoDoors(): JSX.Element {
 }
 
 function SignedInPanel({ state, person }: { state: SigninPageState; person: SigninSignedIn }): JSX.Element {
+  const canUseLink = state.reason === "already_signed_in" && state.retryToken !== null;
   return (
     <div class="signin-body">
       <div class="eyebrow">Already signed in</div>
@@ -193,8 +213,13 @@ function SignedInPanel({ state, person }: { state: SigninPageState; person: Sign
       <div class="signin-actions">
         <span class="signin-status" id="signin-status" role="status" aria-live="polite"></span>
         <div class="signin-actions-pair">
-          <button class="button" type="button" id="signin-signout">
-            Sign out
+          <button
+            class="button"
+            type="button"
+            id={canUseLink ? "signin-use-link" : "signin-signout"}
+            {...(canUseLink ? { "data-signin-token": state.retryToken } : {})}
+          >
+            {canUseLink ? "Sign out and use this sign-in link" : "Sign out"}
           </button>
           <a class="button primary" href={person.home}>
             Continue
@@ -360,14 +385,24 @@ const SIGNIN_SCRIPT = `
   });
 
   const signOut = document.getElementById("signin-signout");
-  if (signOut) {
-    signOut.addEventListener("click", async () => {
-      signOut.setAttribute("aria-busy", "true");
-      signOut.disabled = true;
-      setStatus(status, "Signing out…", false);
-      await fetch("/api/v1/auth/logout", { method: "POST" }).catch(() => undefined);
-      window.location.assign("/signin?reason=signed_out");
-    });
+  const useLink = document.getElementById("signin-use-link");
+  const signOutAndGo = async (destination) => {
+    const button = signOut || useLink;
+    if (!button) return;
+    button.setAttribute("aria-busy", "true");
+    button.disabled = true;
+    setStatus(status, "Signing out…", false);
+    await fetch("/api/v1/auth/logout", { method: "POST" }).catch(() => undefined);
+    window.location.assign(destination);
+  };
+  if (signOut) signOut.addEventListener("click", () => void signOutAndGo("/signin?reason=signed_out"));
+  if (useLink) {
+    const token = useLink.getAttribute("data-signin-token");
+    if (token) {
+      useLink.addEventListener("click", () => {
+        void signOutAndGo("/api/v1/auth/exchange?token=" + encodeURIComponent(token));
+      });
+    }
   }
 })();
 `;
@@ -412,6 +447,7 @@ export async function readSigninState(context: Context<{ Bindings: Env }>): Prom
   // becomes a Location header.
   const next = safeNext(url.searchParams.get("next")?.slice(0, 512)) ?? "";
   const reason = readReason(url.searchParams.get("reason"));
+  const retryToken = reason === "already_signed_in" ? readRetryToken(url.searchParams.get("token")) : null;
 
   let signedIn: SigninSignedIn | null = null;
   let demo = false;
@@ -447,6 +483,7 @@ export async function readSigninState(context: Context<{ Bindings: Env }>): Prom
     demo,
     reason,
     next,
+    retryToken,
   };
 }
 
