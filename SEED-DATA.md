@@ -54,6 +54,15 @@ whose required speaker tasks are complete. The latter is intentionally a genuine
 **Ready to place** row — it has no agenda slot, no open speaker task, and no
 pending acceptance wave.
 
+The scheduled agenda spans every format the conference runs: Stage Talks, five
+parallel Workshops in the Marriott rooms, the Expo Stage's Lightning block
+running through the mainstage break, and two Online sessions in the virtual
+room. Each item's duration defaults from its format, so a Lightning slot is ten
+minutes and a Workshop is ninety. Every scheduled record is in Wave 1 — a
+speaker on the public agenda has always been invited. Ten of the twenty-four
+are accepted Abstracts rather than Sessions, which is a supported state: the
+unscheduled pool and the agenda both take any accepted record.
+
 Confirmation responses are also deliberately mixed for the walkthrough. The
 seed includes `confirmed`, `pending`, and two `declined` participations. One
 scheduled Session carries two roles for the same person — one confirmed and one
