@@ -84,7 +84,7 @@ const publicFormSchema = z.object({
   conference: z.object({ name: z.string(), slug: z.string() }),
   form: z.object({
     id: z.string(), name: z.string(), slug: z.string(), kind: z.enum(["abstract", "session"]),
-    welcome_md: z.string(), closes_at: z.number().int().nullable(), per_submitter_limit: z.number().int(),
+    status: z.enum(["open", "closed"]), welcome_md: z.string(), closes_at: z.number().int().nullable(), per_submitter_limit: z.number().int(),
     min_speakers: z.number().int(), max_speakers: z.number().int(), max_sponsors: z.number().int(),
   }),
   state: publicStateSchema,

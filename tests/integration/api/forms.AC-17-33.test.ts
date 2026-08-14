@@ -242,6 +242,26 @@ describe.sequential("MRQ-13 form builder API", () => {
     expect((await json<{ status: string; public_url: string | null }>(reopened))).toMatchObject({ status: "open", public_url: "/f/draft-session" });
   });
 
+  test("CONTRACT · an elapsed close date is closed in the catalog, detail, and status filters", async () => {
+    await env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = ?").bind(Date.now() - 1, MAIN_FORM_ID).run();
+
+    const catalog = await request(`/api/v1/events/${EVENT_ID}/forms?page=1&per_page=20&sort=name`);
+    const catalogBody = await json<{ data: Array<{ id: string; status: string; visibility: string; public_url: string | null }> }>(catalog);
+    expect(catalogBody.data.find((form) => form.id === MAIN_FORM_ID)).toMatchObject({
+      status: "closed",
+      visibility: "public",
+      public_url: "/f/main-cfp",
+    });
+
+    const detail = await request(`/api/v1/events/${EVENT_ID}/forms/${MAIN_FORM_ID}`);
+    expect((await json<{ status: string }>(detail)).status).toBe("closed");
+
+    const openOnly = await request(`/api/v1/events/${EVENT_ID}/forms?page=1&per_page=20&status=open`);
+    expect((await json<{ data: Array<{ id: string }> }>(openOnly)).data.some((form) => form.id === MAIN_FORM_ID)).toBe(false);
+    const closedOnly = await request(`/api/v1/events/${EVENT_ID}/forms?page=1&per_page=20&status=closed`);
+    expect((await json<{ data: Array<{ id: string }> }>(closedOnly)).data.some((form) => form.id === MAIN_FORM_ID)).toBe(true);
+  });
+
   test("AC-32 · per-form limits are values, not a hard-coded constant", async () => {
     for (const limit of [1, 3, 5]) {
       const response = await request(`/api/v1/events/${EVENT_ID}/forms/${DRAFT_FORM_ID}`, { method: "PATCH", body: JSON.stringify({ per_submitter_limit: limit }) });
