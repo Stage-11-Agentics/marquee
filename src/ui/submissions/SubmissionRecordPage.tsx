@@ -531,15 +531,17 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
    * record being gone. Recoverable refusals now answer beside the control that
    * asked; everything else still takes the page, because then it is true.
    */
-  const act = async (name: string, path: string, init: RequestInit = {}, route = SUBMISSION_ROUTE) => {
+  const act = async (name: string, path: string, init: RequestInit = {}, route = SUBMISSION_ROUTE): Promise<boolean> => {
     setBusy(name);
     setActionError(null);
     try {
       await apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) }, route });
       reload();
+      return true;
     } catch (error: unknown) {
       if (isRefusal(error)) setActionError({ action: name, message: errorSummary(error) });
       else setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) });
+      return false;
     } finally { setBusy(""); }
   };
 
@@ -557,8 +559,11 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     if (!decisionRequest) return;
     const recommendation = decisionRequest;
     setDecisionRequest(null);
-    await act(recommendation, "/decision", { method: "POST", body: JSON.stringify({ recommendation, feedback_md: feedbackDraft.trim() || null }) }, DECISION_ROUTE);
-    setFeedbackDraft("");
+    // The feedback is the same words the speaker reads in the decision mail, so
+    // it is cleared only once the decision is recorded. Clearing it regardless
+    // meant a refused or unreachable decision took the message with it.
+    const decided = await act(recommendation, "/decision", { method: "POST", body: JSON.stringify({ recommendation, feedback_md: feedbackDraft.trim() || null }) }, DECISION_ROUTE);
+    if (decided) setFeedbackDraft("");
   };
 
   const sendMessage = async (event: Event) => {

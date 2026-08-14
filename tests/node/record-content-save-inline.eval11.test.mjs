@@ -107,3 +107,29 @@ test("CONTRACT · every reload path defers to the operator's unsaved text", asyn
   assert.doesNotMatch(page, /setDraftTitle\(record\.title\)/);
   assert.doesNotMatch(page, /setDraftAbstract\(record\.abstract \?\? ""\)/);
 });
+
+test("CONTRACT · one record's unsaved text cannot follow you to another record", async () => {
+  const shell = await source("src/ui/shell/AppShell.tsx");
+
+  // Keeping a draft across a reload is only safe while the component instance
+  // belongs to one submission. AppShell keys the boundary by event, so without
+  // a key here the same instance is reused for the next record and the retained
+  // draft would arrive on top of it — a leak this fix would otherwise have
+  // introduced, since the unconditional reseed used to mask it.
+  assert.match(shell, /<SubmissionRecordPage key=\{decodeURIComponent\(location\.pathname\.slice\("\/submissions\/"\.length\)\)\}/);
+});
+
+test("CONTRACT · decision feedback survives a decision that did not land", async () => {
+  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
+
+  const decide = page.slice(page.indexOf("const decide = async"), page.indexOf("\n  };", page.indexOf("const decide = async")));
+  // Cleared only on success — this text is what the speaker reads in the mail.
+  assert.match(decide, /const decided = await act\(/);
+  assert.match(decide, /if \(decided\) setFeedbackDraft\(""\)/);
+
+  // act has to report the outcome for that to be possible.
+  const act = page.slice(page.indexOf("const act = async"), page.indexOf("const changePublication"));
+  assert.match(act, /Promise<boolean>/);
+  assert.match(act, /reload\(\);\s*return true;/);
+  assert.match(act, /return false;/);
+});

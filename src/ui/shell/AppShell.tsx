@@ -236,7 +236,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             ? <SubmissionsPage eventId={eventId} search={location.search} navigate={navigate} />
             : isProgramBoard ? <ProgramBoardPage eventId={eventId} navigate={navigate} />
             : isSubmissionNew ? <CreateSubmissionPage eventId={eventId} navigate={navigate} />
-            : isSubmissionRecord ? <SubmissionRecordPage eventId={eventId} submissionId={decodeURIComponent(location.pathname.slice("/submissions/".length))} navigate={navigate} />
+            : isSubmissionRecord ? <SubmissionRecordPage key={decodeURIComponent(location.pathname.slice("/submissions/".length))} eventId={eventId} submissionId={decodeURIComponent(location.pathname.slice("/submissions/".length))} navigate={navigate} />
             : route?.id === "dashboard" ? <DashboardPage eventId={eventId} navigate={navigate} />
             : isEvaluation ? <EvaluationPage eventId={eventId} />
             : route?.id === "venues" ? <VenuesPage eventId={eventId} />
