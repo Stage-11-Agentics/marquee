@@ -18,14 +18,12 @@ import type {
   AuthSessionRow,
   Id,
   MagicLinkPurpose,
-  MagicLinkRow,
   MembershipRow,
   OrganizationRow,
   PersonRow,
 } from "../../db/schema";
 import { createSession } from "./auth-sessions";
-import { consumeMagicLink, mintMagicLink } from "./magic-links";
-import { sha256Hex } from "./random-token";
+import { consumeMagicLink, mintMagicLink, readMagicLink } from "./magic-links";
 
 /** The role a claim and an invite both land on: everyone who can run the instance. */
 export const INSTANCE_ORGANIZER_ROLE = "owner" as const;
@@ -170,12 +168,8 @@ export async function readInstanceLink(
   expectedPurpose: "claim" | "org_invite",
   now = Date.now(),
 ): Promise<InstanceLinkState> {
-  const row = await db
-    .prepare("SELECT * FROM magic_links WHERE token_hash = ?")
-    .bind(await sha256Hex(token))
-    .first<MagicLinkRow>();
-  if (!row || row.purpose !== expectedPurpose) return { status: "inert" };
-  if (row.used_at !== null || row.expires_at <= now) return { status: "inert" };
+  const state = await readMagicLink(db, token, now, { purposes: [expectedPurpose] });
+  if (state.status !== "live") return { status: "inert" };
   return { status: "live", purpose: expectedPurpose };
 }
 

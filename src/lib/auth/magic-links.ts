@@ -97,28 +97,54 @@ export function mintPortalMagicLink(db: D1Database, input: PortalMagicLinkInput)
   return mintLink(db, input);
 }
 
+export type MagicLinkState =
+  | { status: "live"; link: MagicLinkRow }
+  | { status: "expired" | "used" | "invalid"; link: MagicLinkRow | null };
+
+/**
+ * Read a token without spending it. Callers that need to show a recovery path
+ * must inspect the credential before consuming it; otherwise a refusal can
+ * burn the only usable link and leave the person with no way through the door.
+ * Purpose mismatches stay deliberately indistinguishable from unknown tokens.
+ */
+export async function readMagicLink(
+  db: D1Database,
+  token: string,
+  now = Date.now(),
+  options: { purposes?: readonly MagicLinkPurpose[] } = {},
+): Promise<MagicLinkState> {
+  const tokenHash = await sha256Hex(token);
+  const link = await db
+    .prepare("SELECT * FROM magic_links WHERE token_hash = ?")
+    .bind(tokenHash)
+    .first<MagicLinkRow>();
+  if (!link || (options.purposes && !options.purposes.includes(link.purpose))) {
+    return { status: "invalid", link: null };
+  }
+  if (link.used_at !== null) return { status: "used", link };
+  if (link.expires_at <= now) return { status: "expired", link };
+  return { status: "live", link };
+}
+
+export type MagicLinkConsumption =
+  | { status: "consumed"; link: MagicLinkRow }
+  | { status: "expired" | "used" | "invalid"; link: MagicLinkRow | null };
+
 /**
  * Single-use and expiring, enforced atomically: the UPDATE only lands when the
  * link is still unused and unexpired, so a raced second exchange gets
  * `changes = 0` and fails. Lookup is by token hash (unique index); the raw
  * token never touches the database or the logs.
  */
-export async function consumeMagicLink(
+async function consumeMagicLinkState(
   db: D1Database,
   token: string,
   now = Date.now(),
   options: { purposes?: readonly MagicLinkPurpose[] } = {},
-): Promise<MagicLinkRow | null> {
-  const tokenHash = await sha256Hex(token);
-  const link = await db
-    .prepare("SELECT * FROM magic_links WHERE token_hash = ?")
-    .bind(tokenHash)
-    .first<MagicLinkRow>();
-  if (!link) return null;
-  // A purpose mismatch leaves the token LIVE. A claim link presented to the
-  // sign-in door is the wrong door, not a spent link — burning it there would
-  // turn a mistyped URL into a locked-out instance.
-  if (options.purposes && !options.purposes.includes(link.purpose)) return null;
+): Promise<MagicLinkConsumption> {
+  const state = await readMagicLink(db, token, now, options);
+  if (state.status !== "live") return state;
+  const link = state.link;
   const consumed = await db
     .prepare(
       `UPDATE magic_links SET used_at = ?, updated_at = ?
@@ -126,6 +152,33 @@ export async function consumeMagicLink(
     )
     .bind(now, now, link.id, now)
     .run();
-  if ((consumed.meta.changes ?? 0) !== 1) return null;
-  return { ...link, used_at: now, updated_at: now };
+  if ((consumed.meta.changes ?? 0) === 1) {
+    return { status: "consumed", link: { ...link, used_at: now, updated_at: now } };
+  }
+  // A raced exchange can only have made this row used or expired. Re-read it
+  // so the losing browser receives the truthful state instead of a generic
+  // expiry message.
+  const afterRace = await readMagicLink(db, token, now, options);
+  return afterRace.status === "live"
+    ? { status: "invalid", link: null }
+    : afterRace;
+}
+
+export async function consumeMagicLinkWithStatus(
+  db: D1Database,
+  token: string,
+  now = Date.now(),
+  options: { purposes?: readonly MagicLinkPurpose[] } = {},
+): Promise<MagicLinkConsumption> {
+  return consumeMagicLinkState(db, token, now, options);
+}
+
+export async function consumeMagicLink(
+  db: D1Database,
+  token: string,
+  now = Date.now(),
+  options: { purposes?: readonly MagicLinkPurpose[] } = {},
+): Promise<MagicLinkRow | null> {
+  const result = await consumeMagicLinkState(db, token, now, options);
+  return result.status === "consumed" ? result.link : null;
 }

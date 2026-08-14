@@ -43,7 +43,13 @@ test("CONTRACT · A-5 has one enumerated session writer path and cookie-safe emb
   const sessionCalls = modules.flatMap((module) => callSites(module, "createSession"));
   const cookieCalls = modules.flatMap((module) => callSites(module, "setSessionCookie"));
   const magicMintCalls = modules.flatMap((module) => callSites(module, "mintMagicLink"));
-  const magicConsumeCalls = modules.flatMap((module) => callSites(module, "consumeMagicLink"));
+  // The status-aware consumer is the same single-use seam: it preserves the
+  // reason for a rejection so a browser can tell expiry from replay without
+  // adding another token writer or consumer path.
+  const magicConsumeCalls = modules.flatMap((module) => [
+    ...callSites(module, "consumeMagicLink"),
+    ...callSites(module, "consumeMagicLinkWithStatus"),
+  ]);
 
   // Positive controls: every intended issuer must remain present before the
   // count can pass. The cold start widened this set deliberately — a claim or
