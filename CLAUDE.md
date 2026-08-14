@@ -109,16 +109,25 @@ Already working and unsure? Verify rather than assume — a stale base is invisi
 costs you an hour, and re-running never clears it:
 
 ```sh
-git fetch github && git merge-base --is-ancestor github/main HEAD \
-  && echo "base is current" || echo "behind github/main — or the fetch failed; read its output"
+if git fetch github; then
+  if git merge-base --is-ancestor github/main HEAD; then echo "current"
+  else echo "behind github/main — rebase"; fi
+else echo "FETCH FAILED — comparison not attempted"; fi
 ```
 
-**Chain the fetch with `&&`, and mean it.** A failed fetch does not make `merge-base` fail
-— it makes it answer confidently about a stale remote-tracking ref. Every worktree here
+**Three states, three messages, and never `-q`.** A failed fetch does not make `merge-base`
+fail — it makes it answer confidently about a stale remote-tracking ref. Every worktree here
 shares one `.git`, so two agents fetching at the same moment lose the ref lock
 (`cannot lock ref 'refs/remotes/github/main'`) and the comparison that follows is about
-whatever state happened to exist. Unchained, "behind" and "my fetch died" print the same
-thing.
+whatever state happened to exist. Chaining with `&&` at least stops the comparison running,
+but it still prints one string for two different situations; "behind" and "my fetch died"
+need to be distinguishable, because only one of them is about your branch. And `-q` does not
+suppress the ref-lock error — it removes the ordinary output that makes anyone notice the
+fetch step at all, so nothing normal prints and nothing abnormal stands out.
+
+Lost the race? **Retry with `git fetch github main --force`** — a plain re-run loses the same
+way. The remote is the truth and the local ref is the thing that lost, so let it be
+overwritten.
 
 That question — *is my base current?* — is the durable one. Checking for a specific
 rescue commit instead (`--is-ancestor a04f80b1 HEAD`) answers today's incident and then
