@@ -44,6 +44,11 @@ export interface PublicFormRecord {
   submissionOutcome: PublicFormOutcome | null;
   submissionEditable: boolean;
   submissionEditReason: string | null;
+  /**
+   * The submission confirmation as the outbox has it: the address it is
+   * addressed to and whether it has left yet. Null when none was enqueued.
+   */
+  receipt: { email: string; sent: boolean } | null;
 }
 
 export interface PublicFormWriteResult {
@@ -172,6 +177,16 @@ async function findResumeSubmission(
     .first<SubmissionRow>();
 }
 
+/**
+ * One sentence about the receipt, in the tense the outbox actually supports.
+ * Shared so the banner and the confirmation panel cannot drift apart.
+ */
+export function receiptSentence(receipt: { email: string; sent: boolean }): string {
+  return receipt.sent
+    ? `We emailed a confirmation to ${receipt.email}.`
+    : `A confirmation is on its way to ${receipt.email}.`;
+}
+
 function publicOutcomeForSubmission(submission: SubmissionRow | null): PublicFormOutcome | null {
   if (!submission) return null;
   switch (submission.status) {
@@ -182,6 +197,64 @@ function publicOutcomeForSubmission(submission: SubmissionRow | null): PublicFor
     default:
       return null;
   }
+}
+
+/**
+ * The submission confirmation is conditional: `public-form.routes.ts` skips it
+ * when the organizer has stored `enabled = 0` on the thank-you template. Read
+ * the outbox rather than re-deriving that decision, so the page promises a
+ * receipt only when a row exists to send. Indexed by `idx_outbox_entity_status`
+ * on `(event_id, entity_id, …)`.
+ *
+ * Three narrowings, each answering a way the plain query lies:
+ *
+ * - **The recipient is the stored submitter, by id.** `comms.routes.ts` files
+ *   organizer sends under the submission's own `entity_id`, so another
+ *   participant's row can sit beside the receipt under the same key. Matching
+ *   `person_id` against `submitter_person_id` is the one identity a caller
+ *   cannot reach: `?email=` is request-supplied and overrides the resolved
+ *   address, so keying on the address would let a resume-link holder point the
+ *   sentence at a neighbouring row — or, with an address that matches nothing,
+ *   hide their own receipt.
+ * - **A failed or hard-bounced row is not on its way.** The delivery webhook
+ *   moves a hard bounce to `failed` when the row had already been sent, and
+ *   leaves `delivery_state` alone otherwise, so both have to be excluded. A
+ *   soft bounce is still in flight and stays eligible.
+ * - **Only a public-form confirmation is live mail.** `enqueuePublicFormConfirmation`
+ *   is the one send path on this route that writes `send_policy = 'always_live'`;
+ *   organizer communications take the `demo_safe` default. Without that clause an
+ *   organizer message to the submitter, filed under the same submission and the
+ *   same key, is a perfect match on every other column — and the page calls it
+ *   "your confirmation".
+ * - **The template key is the one this form uses now.** An organizer may change
+ *   `thankyou_template_key` while submissions exist, and an older receipt then
+ *   goes unrecognised. That direction is deliberate: the page falls silent
+ *   about mail it cannot vouch for rather than claiming mail it cannot find.
+ */
+async function findReceipt(
+  db: D1Database,
+  form: FormRow,
+  submission: SubmissionRow,
+): Promise<{ email: string; sent: boolean } | null> {
+  const row = await db
+    .prepare(
+      `SELECT to_email, status FROM outbox
+       WHERE event_id = ? AND entity_id = ? AND template_key = ?
+         AND person_id = ?
+         AND send_policy = 'always_live'
+         AND status IN ('queued', 'sent')
+         AND delivery_state <> 'bounced_hard'
+       ORDER BY created_at ASC, id ASC
+       LIMIT 1`,
+    )
+    .bind(
+      form.event_id,
+      submission.id,
+      form.thankyou_template_key ?? "submission_confirmation",
+      submission.submitter_person_id,
+    )
+    .first<{ to_email: string; status: string }>();
+  return row ? { email: row.to_email, sent: row.status === "sent" } : null;
 }
 
 /**
@@ -298,10 +371,19 @@ export async function loadPublicForm(
     submissionOutcome: publicOutcomeForSubmission(submission),
     submissionEditable: editability.enabled,
     submissionEditReason: editability.reason,
+    // Only for the freshly-submitted state: an outcome replaces this copy
+    // entirely, so under one the query would be run and then discarded.
+    receipt: state === "submitted" && submission && publicOutcomeForSubmission(submission) === null
+      ? await findReceipt(db, form, submission)
+      : null,
   };
 }
 
-function messageForState(state: PublicFormStateName, submissionEditable = false): string | null {
+function messageForState(
+  state: PublicFormStateName,
+  submissionEditable = false,
+  receipt: { email: string; sent: boolean } | null = null,
+): string | null {
   switch (state) {
     case "closed":
       return "This call for speakers is closed. Keep your link and return when the conference reopens.";
@@ -309,10 +391,16 @@ function messageForState(state: PublicFormStateName, submissionEditable = false)
       return "Your abstract limit is full. Use a saved resume link to continue an existing draft.";
     case "resumed":
       return "Your saved draft is back. Review the answers, then choose Submit when you are ready.";
-    case "submitted":
+    case "submitted": {
+      // Named only when a confirmation was actually enqueued; an organizer who
+      // disabled the template leaves the submitter no mail to wait for. The
+      // tense follows the row rather than the moment: a page reopened a week
+      // later must not still describe a delivered mail as on its way.
+      const receiptLine = receipt ? ` ${receiptSentence(receipt)}` : "";
       return submissionEditable
-        ? "Your abstract is in. You can still edit it while the call for speakers is open."
-        : "Your abstract is in. Keep this link if you need to revisit the confirmation.";
+        ? `Your abstract is in.${receiptLine} You can still edit it while the call for speakers is open.`
+        : `Your abstract is in.${receiptLine} Keep this link if you need to revisit the confirmation.`;
+    }
     default:
       return null;
   }
@@ -347,10 +435,13 @@ export function toPublicFormState(
       : record.submissionOutcome === "rejected"
         ? { title: "Your abstract was rejected", message: "The conference team rejected this abstract for the program. Keep this private link if you need to revisit the record." }
         : { title: "Your abstract is in", message: "The conference team has your response and will follow up at the address you entered." };
+  const receipt = record.receipt;
   const confirmation: PublicFormConfirmation | null = record.state === "submitted"
     ? {
         ...confirmationCopy,
         email: personEmail,
+        receipt_email: receipt?.email ?? null,
+        receipt_sent: receipt?.sent ?? false,
         resume_url: resumeUrl,
         portal_url: null,
       }
@@ -384,7 +475,9 @@ export function toPublicFormState(
     submission_edit_reason: record.submissionEditReason,
     turnstile_site_key: options.turnstileSiteKey ?? null,
     confirmation,
-    message: record.resumeMissed ? resumeMissMessage(record.state) : messageForState(record.state, record.submissionEditable),
+    message: record.resumeMissed
+      ? resumeMissMessage(record.state)
+      : messageForState(record.state, record.submissionEditable, receipt),
   };
 }
 

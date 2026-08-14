@@ -38,6 +38,14 @@ export interface PublicFormConfirmation {
   title: string;
   message: string;
   email: string;
+  /**
+   * The address a confirmation email was actually enqueued to, or null when
+   * none was. An organizer can disable the confirmation template, so the page
+   * may only promise a receipt when one exists.
+   */
+  receipt_email: string | null;
+  /** Whether that confirmation has left the outbox, which decides the tense. */
+  receipt_sent: boolean;
   resume_url: string | null;
   portal_url: string | null;
 }
