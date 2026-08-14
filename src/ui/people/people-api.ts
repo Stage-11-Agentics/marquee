@@ -103,6 +103,13 @@ export interface PeopleImportResult {
 
 export interface PeopleImportUndoResult {
   undone: number;
+  skipped: number;
+  skipped_rows: Array<{
+    target_id: string;
+    reason: "changed_after_import" | "has_references" | "missing_restore_receipt";
+    fields: string[];
+    references: string[];
+  }>;
   retained_manifest: true;
 }
 

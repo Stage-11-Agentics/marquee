@@ -26,7 +26,18 @@ import {
   type PeopleImportResult,
   type Person,
   type SavedPersonList,
+  type PeopleImportUndoResult,
 } from "./people-api";
+
+function undoSkipCopy(skip: PeopleImportUndoResult["skipped_rows"][number]): string {
+  if (skip.reason === "changed_after_import") {
+    return `${skip.fields.join(", ")} kept — changed after the import.`;
+  }
+  if (skip.reason === "has_references") {
+    return `Kept — still referenced by ${skip.references.join(", ")}.`;
+  }
+  return "Kept — the import receipt has no imported value for this row.";
+}
 
 function Modal({
   title,
@@ -66,6 +77,7 @@ export function ImportPeopleModal({
   const [file, setFile] = useState<{ name: string; text: string } | null>(null);
   const [result, setResult] = useState<PeopleImportResult | null>(null);
   const [undone, setUndone] = useState<number | null>(null);
+  const [undoOutcome, setUndoOutcome] = useState<PeopleImportUndoResult | null>(null);
   const [hot, setHot] = useState(false);
 
   const read = async (picked: File | undefined) => {
@@ -95,6 +107,7 @@ export function ImportPeopleModal({
     setError("");
     try {
       const outcome = await undoImportedPeople(result.import_id);
+      setUndoOutcome(outcome);
       setUndone(outcome.undone);
       onUndone(outcome.undone);
     } catch (caught) {
@@ -128,8 +141,11 @@ export function ImportPeopleModal({
       <div class="people-preview-body">
         {undone === null
           ? `${result.created} created · ${result.updated} updated · ${result.skipped} skipped. The receipt records overwritten values and remains available until you undo it.`
-          : `${undone} ${undone === 1 ? "person was" : "people were"} restored. The receipt remains available for audit.`}
+          : `${undone} ${undone === 1 ? "person was" : "people were"} restored${undoOutcome?.skipped ? ` · ${undoOutcome.skipped} kept` : ""}. The receipt remains available for audit.`}
       </div>
+      {undone !== null && undoOutcome?.skipped_rows.length ? <ul class="people-hint people-import-skips">
+        {undoOutcome.skipped_rows.map((skip) => <li key={`${skip.target_id}-${skip.reason}`}>{skip.target_id}: {undoSkipCopy(skip)}</li>)}
+      </ul> : null}
       <div class="people-hint">Receipt <span class="tabular">{result.import_id}</span></div>
     </div> : <>
       <AgentBriefPanel copy={peopleImportBrief(window.location.origin)} />

@@ -82,8 +82,8 @@ describe.sequential("MRQ-167 org people import receipt", () => {
     expect(result.updated).toBe(1);
 
     const receipt = await env.DB.prepare(
-      "SELECT outcome, target_id, before_json FROM import_rows WHERE import_id = ? AND row_index = 0",
-    ).bind(result.import_id).first<{ outcome: string; target_id: string; before_json: string | null }>();
+      "SELECT outcome, target_id, before_json, after_json FROM import_rows WHERE import_id = ? AND row_index = 0",
+    ).bind(result.import_id).first<{ outcome: string; target_id: string; before_json: string | null; after_json: string | null }>();
     expect(receipt?.outcome).toBe("updated");
     expect(receipt?.target_id).toBe(SPEAKER_ID);
     expect(JSON.parse(receipt?.before_json ?? "null")).toEqual({
@@ -91,6 +91,12 @@ describe.sequential("MRQ-167 org people import receipt", () => {
       title: "Principal Engineer",
       company: "Latticework Systems",
       bio: "A biography",
+    });
+    expect(JSON.parse(receipt?.after_json ?? "null")).toEqual({
+      name: "Stale Export Name",
+      title: "Stale Export Title",
+      company: "Stale Export Co",
+      bio: "Stale export bio.",
     });
 
     expect(await env.DB.prepare("SELECT name, title, company, bio FROM people WHERE id = ?").bind(SPEAKER_ID).first()).toEqual({
@@ -130,5 +136,87 @@ describe.sequential("MRQ-167 org people import receipt", () => {
       company: "Latticework Systems",
       bio: "A biography",
     });
+  });
+
+  test("REGRESSION · MRQ-167 · undo keeps a field corrected after the import", async () => {
+    const csv = [
+      "Full Name,Email,Company,Job Title,Bio",
+      "Imported Name,PRIYA@mrq167.test,Imported Co,Imported Title,Imported bio.",
+    ].join("\n");
+    const response = await post("/api/v1/org/imports", { csv, filename: "human-correction.csv" });
+    expect(response.status).toBe(202);
+    const result = await response.json() as { import_id: string; updated: number };
+    expect(result.updated).toBe(1);
+
+    await env.DB.prepare("UPDATE people SET name = ? WHERE id = ?").bind("Priya Raman (Corrected By Human)", SPEAKER_ID).run();
+
+    const undone = await post(`/api/v1/org/imports/${result.import_id}/undo`, {});
+    expect(undone.status).toBe(200);
+    expect(await undone.json()).toMatchObject({
+      undone: 1,
+      skipped: 1,
+      skipped_rows: [{
+        target_id: SPEAKER_ID,
+        reason: "changed_after_import",
+        fields: ["name"],
+        references: [],
+      }],
+      retained_manifest: true,
+    });
+    expect(await env.DB.prepare("SELECT name, title, company, bio FROM people WHERE id = ?").bind(SPEAKER_ID).first()).toEqual({
+      name: "Priya Raman (Corrected By Human)",
+      title: "Principal Engineer",
+      company: "Latticework Systems",
+      bio: "A biography",
+    });
+  });
+
+  test("REGRESSION · MRQ-167 · references skip only their created rows", async () => {
+    const csv = [
+      "Full Name,Email,Company",
+      "Annotated Speaker,annotated@mrq167.test,Notes Co",
+      "Listed Speaker,listed@mrq167.test,List Co",
+      "Unreferenced Speaker,unreferenced@mrq167.test,Free Co",
+    ].join("\n");
+    const response = await post("/api/v1/org/imports", { csv, filename: "referenced-people.csv" });
+    expect(response.status).toBe(202);
+    const result = await response.json() as { import_id: string; created: number };
+    expect(result.created).toBe(3);
+
+    const annotated = await env.DB.prepare("SELECT id FROM people WHERE email = ?").bind("annotated@mrq167.test").first<{ id: string }>();
+    const listed = await env.DB.prepare("SELECT id FROM people WHERE email = ?").bind("listed@mrq167.test").first<{ id: string }>();
+    const unreferenced = await env.DB.prepare("SELECT id FROM people WHERE email = ?").bind("unreferenced@mrq167.test").first<{ id: string }>();
+    expect(annotated?.id).toBeTruthy();
+    expect(listed?.id).toBeTruthy();
+    expect(unreferenced?.id).toBeTruthy();
+
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO person_events (id, org_id, person_id, kind, value_json, actor_person_id, created_at) VALUES (?, ?, ?, 'note', ?, ?, ?)")
+        .bind("note_mrq167_annotated", ORG_ID, annotated?.id, JSON.stringify({ body: "Keep this note" }), OWNER_ID, NOW),
+      env.DB.prepare("INSERT INTO person_lists (id, org_id, name, kind, config_json, created_by, created_at, updated_at) VALUES (?, ?, 'MRQ-167 list', 'fixed', '{}', ?, ?, ?)")
+        .bind("list_mrq167", ORG_ID, OWNER_ID, NOW, NOW),
+      env.DB.prepare("INSERT INTO person_list_members (list_id, person_id, created_at) VALUES (?, ?, ?)")
+        .bind("list_mrq167", listed?.id, NOW),
+    ]);
+
+    const undone = await post(`/api/v1/org/imports/${result.import_id}/undo`, {});
+    expect(undone.status).toBe(200);
+    const undoResult = await undone.json() as {
+      undone: number;
+      skipped: number;
+      skipped_rows: Array<{ target_id: string; reason: string; fields: string[]; references: string[] }>;
+      retained_manifest: true;
+    };
+    expect(undoResult.undone).toBe(1);
+    expect(undoResult.skipped).toBe(2);
+    expect(undoResult.skipped_rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ target_id: annotated?.id, reason: "has_references", references: expect.arrayContaining(["person_events"]) }),
+      expect.objectContaining({ target_id: listed?.id, reason: "has_references", references: expect.arrayContaining(["person_list_members"]) }),
+    ]));
+    expect(undoResult.retained_manifest).toBe(true);
+    expect(await env.DB.prepare("SELECT id FROM people WHERE id = ?").bind(annotated?.id).first()).toEqual({ id: annotated?.id });
+    expect(await env.DB.prepare("SELECT id FROM people WHERE id = ?").bind(listed?.id).first()).toEqual({ id: listed?.id });
+    expect(await env.DB.prepare("SELECT id FROM people WHERE id = ?").bind(unreferenced?.id).first()).toBeNull();
+    expect(await env.DB.prepare("SELECT status FROM imports WHERE id = ?").bind(result.import_id).first()).toEqual({ status: "undone" });
   });
 });
