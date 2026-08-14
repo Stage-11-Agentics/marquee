@@ -416,6 +416,34 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(body).not.toMatch(/>Closed\s+\d[^<]*<\/span>/);
   });
 
+  test("CONTRACT · an expired call is closed on a submitted private resume link", async () => {
+    const submitted = await request("/api/v1/public/forms/public-cfp/submissions", {
+      method: "POST",
+      body: JSON.stringify({
+        turnstileToken: nextTurnstileToken(),
+        answers: {
+          title: "Expired link proposal",
+          speaker_name: "Expired Link Speaker",
+          speaker_email: "expired-link@example.com",
+          tracks: ["Agents"],
+          vendor_content: "No",
+        },
+      }),
+    });
+    expect(submitted.status).toBe(201);
+    const submission = await json<{ confirmation: { resume_url: string } }>(submitted);
+    const resume = new URL(submission.confirmation.resume_url);
+
+    await env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = ?").bind(Date.now() - 1, FORM_ID).run();
+
+    const api = await request(`/api/v1/public/forms/public-cfp${resume.search}`);
+    expect((await json<{ state: string; form: { status: string } }>(api))).toMatchObject({ state: "submitted", form: { status: "open" } });
+    const rendered = await request(`/f/public-cfp${resume.search}`);
+    const body = await rendered.text();
+    expect(body).toContain("Call for speakers · closed");
+    expect(body).not.toContain("Call for speakers · closes");
+  });
+
   test("CONTRACT · public routes are present in the served OpenAPI document", async () => {
     const response = await request("/api/openapi.json");
     expect(response.status).toBe(200);

@@ -52,6 +52,7 @@ export interface PublicFormState {
     name: string;
     slug: string;
     kind: "abstract" | "session";
+    status: "open" | "closed";
     welcome_md: string;
     closes_at: number | null;
     per_submitter_limit: number;

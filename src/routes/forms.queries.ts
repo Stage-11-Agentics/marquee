@@ -93,15 +93,25 @@ function formVisibility(status: FormRow["status"]): "public" | "private" {
   return status === "draft" ? "private" : "public";
 }
 
+export function effectiveFormStatus(
+  row: Pick<FormRow, "status" | "closes_at">,
+  now = Date.now(),
+): FormRow["status"] {
+  return row.status === "open" && row.closes_at !== null && Number(row.closes_at) <= now
+    ? "closed"
+    : row.status;
+}
+
 function normalizeForm(row: FormRow & { response_count?: number | null }): FormListItem {
   const responseCount = Number(row.response_count ?? 0);
+  const status = effectiveFormStatus(row);
   return {
     id: row.id,
     event_id: row.event_id,
     name: row.name,
     slug: row.slug,
     kind: row.kind,
-    status: row.status,
+    status,
     opens_at: asNumber(row.opens_at),
     closes_at: asNumber(row.closes_at),
     welcome_md: row.welcome_md,
@@ -110,8 +120,8 @@ function normalizeForm(row: FormRow & { response_count?: number | null }): FormL
     max_speakers: Number(row.max_speakers),
     max_sponsors: Number(row.max_sponsors),
     response_count: responseCount,
-    visibility: formVisibility(row.status),
-    public_url: row.status === "draft" ? null : `/f/${row.slug}`,
+    visibility: formVisibility(status),
+    public_url: status === "draft" ? null : `/f/${row.slug}`,
     created_at: Number(row.created_at),
     updated_at: Number(row.updated_at),
   };
@@ -139,9 +149,15 @@ export async function listForms(db: D1Database, input: FormListInput) {
   const sort = resolveSort(FORM_SORTS, input.sort, "newest");
   const where = ["f.event_id = ?"];
   const bindings: (string | number)[] = [input.eventId];
-  if (input.status) {
+  if (input.status === "draft") {
     where.push("f.status = ?");
-    bindings.push(input.status);
+    bindings.push("draft");
+  } else if (input.status === "open") {
+    where.push("f.status = ? AND (f.closes_at IS NULL OR f.closes_at > ?)");
+    bindings.push("open", Date.now());
+  } else if (input.status === "closed") {
+    where.push("(f.status = ? OR (f.status = 'open' AND f.closes_at IS NOT NULL AND f.closes_at <= ?))");
+    bindings.push("closed", Date.now());
   }
   if (input.kind) {
     where.push("f.kind = ?");
