@@ -45,11 +45,11 @@ function CopyLinkButton({ url, label = "Copy link" }: { url: string; label?: str
   </button>;
 }
 
-function VersionRow({ version, count }: { version: FileVersion; count: number }): JSX.Element {
-  return <li class={`file-versions-row ${version.is_latest ? "is-latest" : ""}`}>
+function VersionRow({ version }: { version: FileVersion }): JSX.Element {
+  return <li class="file-versions-row">
     <span class="file-versions-mark tabular">v{version.version}</span>
     <span class="file-versions-name" title={version.filename}>{version.filename}</span>
-    <span class="file-versions-flag">{version.is_latest ? `Current · v${version.version} of ${count}` : "Previous version"}</span>
+    <span class="file-versions-flag">Previous version</span>
     <span class="file-versions-when">{formatUploaded(version.uploaded_at)}</span>
     <span class="file-versions-size tabular">{formatBytes(version.size_bytes)}</span>
     <span class="file-versions-actions">
@@ -92,12 +92,13 @@ export function FileVersions({ list, compact = false, emptyCopy, class: classNam
 
   if (compact) return <div class={`file-versions is-compact ${className}`}>{summary}</div>;
 
-  const priorCount = count - 1;
+  const previousVersions = versions.filter((version) => version.attachment_id !== latest.attachment_id);
+  const priorCount = Math.max(0, count - 1);
   return <div class={`file-versions ${className}`}>
     {summary}
-    <ul class="file-versions-list" aria-label={`Version history for ${latest.filename}`}>
-      {versions.map((version) => <VersionRow key={version.attachment_id} version={version} count={count} />)}
-    </ul>
+    {previousVersions.length > 0 ? <ul class="file-versions-list" aria-label={`Previous versions of ${latest.filename}`}>
+      {previousVersions.map((version) => <VersionRow key={version.attachment_id} version={version} />)}
+    </ul> : null}
     <p class="file-versions-note">
       {priorCount > 0
         ? `${priorCount} earlier version${priorCount === 1 ? "" : "s"} kept and still downloadable. `

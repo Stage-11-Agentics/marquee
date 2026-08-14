@@ -53,13 +53,14 @@ test("CONTRACT · MRQ-115/CNT-02 — the summary names the file, its version, wh
   expect(html).toContain('href="https://media.marquee.test/api/v1/media/uploads/evt/task_upload/att_v2.pdf"');
 });
 
-test("CONTRACT · MRQ-115/CNT-04 — both versions render, the latest is marked, and the older one keeps its own download control", () => {
+test("CONTRACT · MRQ-115/CNT-04 — the current summary and previous history each have one download control", () => {
   const html = renderToString(h(FileVersions, { list: TWO_VERSIONS }));
-  expect(html).toContain("Current · v2 of 2");
+  expect(html).toContain("v2 of 2");
   expect(html).toContain("Previous version");
   expect(html).toContain("att_v1.pdf");
   expect(html).toContain("att_v2.pdf");
-  expect(html.match(/>Download</g)).toHaveLength(3); // summary + one per version
+  expect(html.match(/>Download</g)).toHaveLength(2); // current summary + previous version
+  expect(html.match(/href="https:\/\/media\.marquee\.test\/api\/v1\/media\/uploads\/evt\/task_upload\/att_v2\.pdf"/g)).toHaveLength(1);
   expect(html).toContain("1 earlier version kept and still downloadable.");
 });
 
@@ -80,6 +81,7 @@ test("CONTRACT · MRQ-115 — a single version says so rather than implying a hi
   expect(html).toContain("v1 of 1");
   expect(html).toContain("This is the only version uploaded so far.");
   expect(html).not.toContain("earlier version");
+  expect(html).not.toContain("file-versions-list");
 });
 
 test("CONTRACT · MRQ-115 — nothing uploaded renders a true sentence, not an empty box", () => {
