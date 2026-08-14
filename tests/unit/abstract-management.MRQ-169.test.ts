@@ -81,6 +81,8 @@ test("CONTRACT · MRQ-169 · distribution answers in numbers, and refuses inside
   expect(evaluationPage).toContain("fully covered");
   expect(evaluationPage).toContain("no eligible reviewer");
   expect(evaluationPage).toContain("The per-reviewer limit stopped some abstracts short.");
+  expect(evaluationPage).toContain("Reviewer counts are total assignments in this round, including work already assigned.");
+  expect(evaluationPage).toContain("assigned total");
   // The dialog stays open on success — the report is the answer to the click.
   expect(evaluationPage).toContain("setCoverage(report)");
   // Every dialog that can refuse renders the refusal in reserved space.
