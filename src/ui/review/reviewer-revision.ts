@@ -21,6 +21,11 @@ export interface ReviewerRevisionState {
   score: number | null;
 }
 
+export interface ReviewerRevisionTarget<T extends ReviewerRevisionItem> {
+  item: T;
+  state: ReviewerRevisionState;
+}
+
 /** The home row's only route into the specific recorded review. */
 export function reviewerRevisionPath(submissionId: string): string {
   return `${ROLE_HOME.reviewer}/queue?revise=${encodeURIComponent(submissionId)}`;
@@ -50,4 +55,21 @@ export function reviewStateForRevision(item: ReviewerRevisionItem): ReviewerRevi
     recommendation: item.review?.recommendation ?? null,
     score: item.review?.score ?? null,
   };
+}
+
+/**
+ * Resolve the one revision entry path used by both the first render and a
+ * fetched refresh. A stripped URL is allowed to fall back to the item already
+ * being revised; an explicit query value always wins, including an invalid
+ * value, so a stranger's record can never be opened by fallback.
+ */
+export function reviewerRevisionFor<T extends ReviewerRevisionItem>(
+  search: string,
+  completed: readonly T[],
+  preservedId: string | null = null,
+): ReviewerRevisionTarget<T> | null {
+  const hasQueryTarget = new URLSearchParams(search).has("revise");
+  const id = hasQueryTarget ? reviewerRevisionId(search) : preservedId;
+  const item = completedItemForRevision(completed, id);
+  return item ? { item, state: reviewStateForRevision(item) } : null;
 }

@@ -8,7 +8,7 @@ import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, Chip, EmptyState } from "../shell/components";
 import { ThemeSwitch } from "../shell/ThemeSwitch";
 import { useIdentity } from "../shell/identity";
-import { completedItemForRevision, reviewStateForRevision, reviewerRevisionId, reviewerRevisionPath } from "./reviewer-revision";
+import { reviewerRevisionFor, reviewStateForRevision, reviewerRevisionId, reviewerRevisionPath } from "./reviewer-revision";
 import "./review.css";
 
 
@@ -256,12 +256,13 @@ export function ReviewerPage({ eventId, initialQueue, locationSearch: locationSe
     name: initialQueue.plan.name,
     rounds: [{ ...initialQueue.round, position: initialQueue.round.position ?? 0 }],
   } : null;
-  const initialRevision = initialQueue && !isHome
-    ? completedItemForRevision(initialQueue.completed ?? [], reviewerRevisionId(initialSearch))
+  const initialRevisionTarget = initialQueue && !isHome
+    ? reviewerRevisionFor(initialSearch, initialQueue.completed ?? [])
     : null;
+  const initialRevision = initialRevisionTarget?.item ?? null;
   const initialDrafts = Object.fromEntries([
     ...(initialQueue?.data ?? []).map((item) => [item.id, { ...EMPTY_REVIEW }] as const),
-    ...(initialRevision ? [[initialRevision.id, reviewStateForRevision(initialRevision)] as const] : []),
+    ...(initialRevisionTarget ? [[initialRevisionTarget.item.id, initialRevisionTarget.state] as const] : []),
   ]) as Record<string, ReviewState>;
   const [plan, setPlan] = useState<ReviewerPlan | null>(initialPlan);
   const [roundId, setRoundId] = useState<string | null>(initialQueue?.round.id ?? null);
@@ -297,7 +298,12 @@ export function ReviewerPage({ eventId, initialQueue, locationSearch: locationSe
    * review layout with the stored values in place, so "see exactly what you
    * recorded" and "change it" are the same screen.
   */
-  const [revising, setRevising] = useState<CompletedItem | null>(initialRevision);
+  const [revising, setRevisingState] = useState<CompletedItem | null>(initialRevision);
+  const revisingRef = useRef<CompletedItem | null>(initialRevision);
+  const setRevising = (item: CompletedItem | null): void => {
+    revisingRef.current = item;
+    setRevisingState(item);
+  };
   const cardRef = useRef<HTMLElement | null>(null);
   const detailRef = useRef<HTMLElement | null>(null);
 
@@ -342,16 +348,18 @@ export function ReviewerPage({ eventId, initialQueue, locationSearch: locationSe
           return next;
         });
       }
+      const revisionTarget = !isHome
+        ? reviewerRevisionFor(window.location.search, loadedCompleted, revisingRef.current?.id ?? null)
+        : null;
       setDrafts((previous) => {
         const next = { ...previous };
         for (const item of queueResponse.data) next[item.id] ??= { ...EMPTY_REVIEW };
-        const revision = !isHome ? completedItemForRevision(loadedCompleted, reviewerRevisionId(window.location.search)) : null;
-        if (revision) next[revision.id] = reviewStateForRevision(revision);
+        if (revisionTarget) next[revisionTarget.item.id] ??= revisionTarget.state;
         return next;
       });
-      const revision = !isHome ? completedItemForRevision(loadedCompleted, reviewerRevisionId(window.location.search)) : null;
+      const revision = revisionTarget?.item ?? null;
       setRevising(revision);
-      if (revision) {
+      if (revision && reviewerRevisionId(window.location.search)) {
         const url = new URL(window.location.href);
         url.searchParams.delete("revise");
         window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);

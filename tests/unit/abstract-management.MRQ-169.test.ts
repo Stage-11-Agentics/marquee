@@ -13,7 +13,7 @@ import { h } from "preact";
 import { renderToString } from "preact-render-to-string";
 import { expect, test } from "vitest";
 
-import { completedItemForRevision, reviewStateForRevision, reviewerRevisionId, reviewerRevisionPath } from "../../src/ui/review/reviewer-revision";
+import { completedItemForRevision, reviewStateForRevision, reviewerRevisionFor, reviewerRevisionId, reviewerRevisionPath } from "../../src/ui/review/reviewer-revision";
 import { ReviewerPage, ReviewerRevisionAction, type QueueEnvelope } from "../../src/ui/review/ReviewerPage";
 
 const source = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
@@ -159,6 +159,10 @@ test("CONTRACT · MRQ-171 · revision helpers only resolve a review in the retur
   expect(completedItemForRevision(completed, "submission-missing")).toBeNull();
   expect(completedItemForRevision(completed, "submission-unreviewed")).toBeNull();
   expect(completedItemForRevision(completed, reviewerRevisionId("?revise=someone-else"))).toBeNull();
+  const preserved = reviewerRevisionFor("", completed, "submission-target");
+  expect(preserved?.item).toBe(completed[0]);
+  expect(preserved?.state).toEqual(reviewStateForRevision(completed[0]));
+  expect(reviewerRevisionFor("?revise=someone-else", completed, "submission-target")).toBeNull();
 });
 
 test("CONTRACT · MRQ-171 · a revision deep link is present on first render and preserves the recorded scorecard", () => {
