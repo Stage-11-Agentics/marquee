@@ -8,6 +8,7 @@ import type { EventRow } from "../db/schema";
 import { forbidden, getAuth, unauthorized } from "../lib/auth/auth-middleware";
 import { authHasRole } from "../lib/auth/scope-resolution";
 import { requireOrgOwner } from "../lib/auth/org-admin";
+import { deletionActorForAuth } from "../lib/events/delete-event";
 import { SHIPPED_DEMO_EVENT_ID } from "../lib/reset-demo/demo-fixture";
 import { removeDemoData } from "../lib/reset-demo/remove-demo";
 import { createResetJob, readResetJob } from "../lib/reset-demo/reset-jobs";
@@ -145,9 +146,14 @@ const removeDemoConference = defineApiRoute(
     },
   },
   (async (context: Context<ApiEnv>) => {
-    requireOrgOwner(context);
+    const auth = requireOrgOwner(context);
     const environment = context.env as unknown as Env;
-    const result = await removeDemoData(context.env.DB, environment.MEDIA);
+    const actor = await deletionActorForAuth(
+      context.env.DB,
+      auth,
+      context.get("requestId") ?? null,
+    );
+    const result = await removeDemoData(context.env.DB, environment.MEDIA, actor);
     context.header("Cache-Control", "no-store");
     return context.json(
       {

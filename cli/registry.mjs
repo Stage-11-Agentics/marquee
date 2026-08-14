@@ -161,6 +161,15 @@ export const COMMAND_REGISTRY = [
     options: [SET_OPTION],
   },
   {
+    path: ["event", "delete"],
+    usage: "marquee event delete <event-id>",
+    summary: "Permanently delete a conference and its event-scoped records.",
+    operations: ["deleteEvent"],
+    skill: "configure",
+    event: true,
+    options: [],
+  },
+  {
     path: ["tracks", "list"],
     usage: "marquee tracks list <event-id>",
     summary: "List the conference's tracks.",

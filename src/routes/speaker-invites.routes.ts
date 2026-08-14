@@ -82,6 +82,7 @@ const inviteSpeakers = defineApiRoute(
       if (!speaker) throw ApiError.notFound("speaker not found");
       const link = await mintPortalMagicLink(context.env.DB, {
         personId: speaker.id,
+        eventId,
         purpose: "login",
         redirectTo: "/portal",
         now,
@@ -160,6 +161,7 @@ const previewSpeakerPortal = defineApiRoute(
 
     const link = await mintPortalMagicLink(context.env.DB, {
       personId: speaker.id,
+      eventId,
       purpose: "login",
       redirectTo: "/portal?viewing_as=speaker",
       now: Date.now(),

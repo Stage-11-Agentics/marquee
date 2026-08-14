@@ -1099,3 +1099,25 @@ handing the committee's judgment to a vendor's idea of a good reviewer.
   same change as this evidence, never ahead of it.
 
 **Next mint: AC-294.**
+
+## Amendment 22 — Delete conference: one irreversible, contract-first cascade *(2026-08-14, merge-captain allocation)*
+
+*Two stories minted: **US-90 – US-91**. Six criteria minted: **AC-302 – AC-307**. The binding design is the Danger zone and confirmation modal in `prototypes/pipeline-v1.1/index.html` (`settingsView` and its `bindSettings` delete handler), with T2 in `sequence/sidebar-fold-tickets.md` as the cascade contract. This is a post-deadline band; `EVALUATION.md` §2.6 owns its verification rows. AC-294 – AC-301 belong to MRQ-207 and are not reused here.*
+
+### US-90 · Delete a conference without deleting the CRM
+
+**As an** organizer, **I want** to permanently delete a conference from Conference settings, **so that** an abandoned event stops exposing stale intake, agenda, portal, site, and delivery state while the organization’s people history remains intact.
+
+- **AC-302**: The Danger zone confirmation modal keeps **Delete conference** disabled until the organizer types the exact conference name, after trimming surrounding whitespace. A wrong name, different case, empty input, or any extra/missing character keeps the button disabled; the exact name unlocks it. The operation is organizer-only (`owner` or `program_lead`) at the API boundary as well as in the UI.
+- **AC-303**: Before confirmation, the modal discloses the ruled consequences verbatim: **“Dies with the conference”** — “Abstracts and sessions · forms and their public links · agenda and conference site · speaker portal access · queued calendar invites”; **“Stays”** — “People, notes, tags, and outreach — organization-level, untouched.” The Danger zone card also says: “Deleting removes everything scoped to this conference. People, notes, tags, and outreach are organization-level and stay in the CRM.”
+- **AC-304**: A successful deletion lands on another conference in the organization when one exists; otherwise it lands on the fresh-install landing at `/dashboard` with no conference selected. The deleted conference is no longer selectable or addressable.
+- **AC-305**: The modal states **“This removes the conference and everything scoped to it. It cannot be undone.”** The delete is one transactional operation: its audit row is written with the acting organizer, and a failed transaction leaves the conference and its rows present. There is no restore or soft-delete path.
+
+### US-91 · Give agents the same destructive operation
+
+**As an** agent acting for an organizer, **I want** the CLI and demo-removal operation to use the same conference-deletion primitive, **so that** a human confirmation and an agent run cannot drift into different data-lifetime rules.
+
+- **AC-306**: `DELETE /api/v1/events/:id` and the shared cascade remove every event-scoped row, counted per table before and after: both submission kinds and their answers/tracks/participations/decisions, forms/fields/admins and their public links, agenda slots and published schedule/site material, portal magic links, all event outbox mail and calendar invites, embeds, evaluations/reviewer state, tasks/uploads, imports, venues/taxonomy, event settings, webhooks, and mirror rows. Organization-scoped `people`, `person_events` notes/tags, and non-event attachment subjects are byte-identical; the deletion audit row survives with actor identity.
+- **AC-307**: `marquee event delete <event-id>` is documented in `SKILL.md` and calls the same route. `POST /api/v1/admin/remove-demo` is the seeded-demo policy of that same cascade, with only its explicitly broader `is_demo` people cleanup; it is not a parallel deletion list. The legacy `attachments.event_id` wart is handled narrowly by detaching surviving `person_headshot` rows; no second attachment ownership model is introduced.
+
+**Next mint: AC-308.**

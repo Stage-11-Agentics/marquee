@@ -241,7 +241,8 @@ export interface WaveRow extends MutableRecord {
 
 export interface AttachmentRow extends MutableRecord {
   content_type: string;
-  event_id: Id;
+  /** Null when an organization-level person headshot outlives its conference. */
+  event_id: Id | null;
   filename: string;
   owner_id: Id;
   owner_type: AttachmentOwnerType;
@@ -326,6 +327,7 @@ export interface AuthSessionRow extends MutableRecord {
 }
 
 export interface MagicLinkRow extends MutableRecord {
+  event_id: Id | null;
   expires_at: EpochMilliseconds;
   /** Null exactly for `claim` and `org_invite`, whose person is created at exchange. */
   person_id: Id | null;

@@ -21,6 +21,7 @@ The command registry is:
 - `node cli/marquee.mjs event seed`
 - `node cli/marquee.mjs event show <event-id>`
 - `node cli/marquee.mjs event set <event-id> --set <key=value>`
+- `node cli/marquee.mjs event delete <event-id>`
 - `node cli/marquee.mjs tracks list <event-id>`
 - `node cli/marquee.mjs tracks add <event-id> --set name=<name> --set color=<hex>`
 - `node cli/marquee.mjs tracks remove <event-id> <track-id>`

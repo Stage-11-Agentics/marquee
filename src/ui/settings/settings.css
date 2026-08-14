@@ -12,6 +12,24 @@
 .settings-venue-link { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 24px 26px; border-color: color-mix(in srgb, var(--accent) 28%, var(--line)); background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 10%, var(--surface)), var(--surface)); }
 .settings-venue-link h2 { margin: 5px 0 4px; }
 .settings-venue-link p { margin: 0; }
+.settings-danger-card { align-items: center; background: color-mix(in srgb, var(--danger, #b34848) 5%, var(--surface)); border-color: color-mix(in srgb, var(--danger, #b34848) 35%, var(--line)); display: flex; gap: 24px; justify-content: space-between; padding: 22px 26px; }
+.settings-danger-card h2 { margin: 5px 0 5px; }
+.settings-danger-card p { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0; max-width: 700px; }
+.settings-danger-card .button { flex: 0 0 auto; }
+.settings-danger-backdrop { align-items: center; background: var(--backdrop); display: grid; inset: 0; padding: 18px; place-items: center; position: fixed; z-index: 600; }
+.settings-danger-modal { background: var(--panel); border: 1px solid var(--line-strong); box-shadow: 0 22px 80px rgb(24 23 21 / 24%); max-height: calc(100vh - 36px); max-width: 620px; overflow: auto; width: 100%; }
+.settings-danger-head { border-bottom: 1px solid var(--line); padding: 18px 20px 12px; }
+.settings-danger-head h2 { font-size: 16px; margin: 6px 0 0; }
+.settings-danger-body { display: grid; gap: 15px; padding: 16px 20px 20px; }
+.settings-danger-body > p { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0; }
+.settings-danger-consequences { display: grid; gap: 10px; }
+.settings-danger-consequences > div { background: var(--sunk); border: 1px solid var(--line); display: grid; gap: 5px; padding: 11px 12px; }
+.settings-danger-consequences strong { color: var(--ink-soft); font: 600 10px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.settings-danger-consequences span { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.settings-danger-error { color: var(--danger, #b34848); font-size: 11.5px; min-height: 17px; }
+.settings-danger-actions { background: var(--sunk); border-top: 1px solid var(--line-strong); display: flex; gap: 8px; justify-content: flex-end; padding: 12px 20px; }
+.settings-danger-confirm { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }
+.settings-danger-confirm:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }
 .settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .field { display: grid; gap: 7px; min-width: 0; color: var(--muted); font-size: 12px; letter-spacing: .02em; }
 .field > input:where(:not([type="radio"]):not([type="checkbox"])), .field > select, .field > textarea, .field .unit-input, .field .color-field { width: 100%; box-sizing: border-box; }
@@ -53,7 +71,7 @@
 .skeleton-line { display: block; width: 65%; height: 12px; border-radius: 4px; background: var(--line); }
 .skeleton-line.wide { width: 90%; height: 18px; }
 @media (max-width: 900px) { .settings-grid { grid-template-columns: 1fr; } .settings-details-card, .settings-venue-link, .settings-organizers { grid-column: auto; } .settings-row-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .settings-row-fields .field:first-child { grid-column: span 2; } }
-@media (max-width: 600px) { .settings-fields, .settings-row-fields, .track-fields { grid-template-columns: 1fr; } .span-2, .settings-row-fields .field:first-child { grid-column: auto; } .settings-venue-link, .settings-savebar { align-items: stretch; flex-direction: column; } .settings-venue-link .button, .settings-savebar .button { width: 100%; } }
+@media (max-width: 600px) { .settings-fields, .settings-row-fields, .track-fields { grid-template-columns: 1fr; } .span-2, .settings-row-fields .field:first-child { grid-column: auto; } .settings-venue-link, .settings-danger-card, .settings-savebar { align-items: stretch; flex-direction: column; } .settings-venue-link .button, .settings-danger-card .button, .settings-savebar .button { width: 100%; } .settings-danger-actions { align-items: stretch; flex-direction: column-reverse; } .settings-danger-actions .button { width: 100%; } }
 
 .task-template-row { gap: 10px; }
 .task-template-row .settings-row-heading { padding-bottom: 2px; }

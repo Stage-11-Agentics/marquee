@@ -11,6 +11,7 @@ import { SocialMark } from "../social/SocialBadges";
 import { SOCIAL_PLATFORMS, type SocialPlatformId } from "../../lib/social-links";
 import { loadVenueModel } from "../venues/venue-writer";
 import type { VenueModel } from "../../lib/venues";
+import { conferenceNameMatches } from "./delete-conference";
 import "./settings.css";
 
 interface EventDetails {
@@ -69,6 +70,13 @@ interface Props {
 interface VenueCounts {
   buildings: number;
   rooms: number;
+}
+
+interface DeleteConferenceResponse {
+  ok: true;
+  event_id: string;
+  next_event_id: string | null;
+  removed_objects: number;
 }
 
 function temporaryId(prefix: string): string {
@@ -176,7 +184,7 @@ function TrackRow({
 }
 
 export function EventSettings({ eventId, navigate }: Props): JSX.Element {
-  const { refresh } = useEventContext();
+  const { refresh, switchEvent } = useEventContext();
   const [state, setState] = useState<LoadState>({ kind: "loading", model: null });
   const [venueCounts, setVenueCounts] = useState<VenueCounts | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -185,6 +193,10 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
   const [removedFormats, setRemovedFormats] = useState<string[]>([]);
   const [removedTracks, setRemovedTracks] = useState<string[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteName, setDeleteName] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -252,6 +264,27 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
       setNotice("Conference settings saved");
     } catch (error: unknown) {
       setSaveError(errorSummary(error));
+    }
+  };
+
+  const deleteConference = async (): Promise<void> => {
+    if (!model || !conferenceNameMatches(deleteName, model.event.name)) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      const response = await requestJson<DeleteConferenceResponse>(
+        `/api/v1/events/${encodeURIComponent(eventId)}`,
+        "/api/v1/events/{eventId}",
+        { method: "DELETE" },
+      );
+      await refresh();
+      if (response.next_event_id) switchEvent(response.next_event_id);
+      setDeleteOpen(false);
+      setDeleteName("");
+      navigate("/dashboard");
+    } catch (error: unknown) {
+      setDeleteError(errorSummary(error));
+      setDeleteBusy(false);
     }
   };
 
@@ -336,8 +369,32 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
           <div><span class="eyebrow">Speaker tasks</span><h2>What every speaker owes</h2><p class="subtle">Author slide uploads, bios, and release forms, then assign them to speakers.</p></div>
           <button class="button primary" type="button" onClick={() => navigate("/tasks")}>Open Tasks →</button>
         </section>
+
+        <section class="card settings-danger-card span-2">
+          <div>
+            <span class="eyebrow">Danger zone</span>
+            <h2>Delete conference</h2>
+            <p>Deleting removes everything scoped to this conference. People, notes, tags, and outreach are organization-level and stay in the CRM.</p>
+          </div>
+          <button class="button danger" type="button" onClick={() => { setDeleteName(""); setDeleteError(null); setDeleteOpen(true); }}>Delete conference…</button>
+        </section>
       </div>
       <footer class="settings-savebar"><span class="subtle">Changes apply to the conference record after saving.</span><button class="button primary" type="submit" disabled={!dirty}>{dirty ? "Save event settings" : "Event settings saved"}</button></footer>
     </form>
+    {deleteOpen && <div class="settings-danger-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target && !deleteBusy) setDeleteOpen(false); }}>
+      <section class="settings-danger-modal" role="dialog" aria-modal="true" aria-labelledby="delete-conference-title">
+        <header class="settings-danger-head"><div><span class="eyebrow">Danger zone</span><h2 id="delete-conference-title">Delete {model.event.name}?</h2></div></header>
+        <div class="settings-danger-body">
+          <p>This removes the conference and everything scoped to it. It cannot be undone.</p>
+          <div class="settings-danger-consequences">
+            <div><strong>Dies with the conference</strong><span>Abstracts and sessions · forms and their public links · agenda and conference site · speaker portal access · queued calendar invites</span></div>
+            <div><strong>Stays</strong><span>People, notes, tags, and outreach — organization-level, untouched.</span></div>
+          </div>
+          <label class="field"><span>Type the conference name to confirm</span><input value={deleteName} placeholder={model.event.name} autoComplete="off" onInput={(event) => setDeleteName(event.currentTarget.value)} /></label>
+          <div class="settings-danger-error" role={deleteError ? "alert" : undefined}>{deleteError ?? ""}</div>
+        </div>
+        <footer class="settings-danger-actions"><button class="button" type="button" onClick={() => setDeleteOpen(false)} disabled={deleteBusy}>Keep conference</button><button class="button danger settings-danger-confirm" type="button" onClick={() => void deleteConference()} disabled={deleteBusy || !conferenceNameMatches(deleteName, model.event.name)}>{deleteBusy ? "Deleting…" : "Delete conference"}</button></footer>
+      </section>
+    </div>}
   </div>;
 }

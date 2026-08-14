@@ -238,10 +238,12 @@ const requestMagicLink = defineApiRoute(
       // and no link appears on screen to compensate for the mail that is not
       // coming.
       if (event) {
+        const redirectTo = signinRedirect(body.redirect_to, rolesOf(memberships));
         const link = await mintMagicLink(context.env.DB, {
           personId: person.id,
+          eventId: /^(\/portal|\/reviewer|\/co-speaker|\/task)(?:[/?]|$)/.test(redirectTo) ? event.id : null,
           purpose: "login",
-          redirectTo: signinRedirect(body.redirect_to, rolesOf(memberships)),
+          redirectTo,
           now,
         });
         const url = new URL(context.req.url);

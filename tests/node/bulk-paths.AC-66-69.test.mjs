@@ -252,6 +252,13 @@ const EXPECTED_PLACEHOLDER_SITES = [
     classification: "one placeholder per COLUMN of a single-row INSERT; the column list comes from the source row, so it is bounded by the widest table in the copy manifest (forms, ~20) and cannot approach D1's binding cap",
   },
   {
+    file: "src/lib/events/delete-event.ts",
+    owner: "placeholders",
+    binding: null,
+    expression: 'values.map(() => "?")',
+    classification: "NAMED_FINDING: the organizer DELETE supplies one event ID; remove-demo accepts an unbounded event set but deleteEventCascade chunks it to 32 IDs, so the widest three-way statement binds 96 values, below D1's 100-binding cap",
+  },
+  {
     file: "src/lib/files/versions.ts",
     owner: "readAttachments",
     binding: "result",
