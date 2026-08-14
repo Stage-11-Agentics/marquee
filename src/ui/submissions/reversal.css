@@ -9,6 +9,21 @@
 .reversal-row strong, .reversal-row small { display: block; }
 .reversal-row small { color: var(--muted, #6d6b67); margin-top: .2rem; }
 .reversal-row-state { color: var(--muted, #6d6b67); font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; }
+/* The toggle keeps the row's exact geometry — same flex, same padding, same
+   borders — so opening the detail never resizes or re-aligns the counts. */
+.reversal-row-group { border-top: 1px solid var(--line, #e6e1d8); }
+.reversal-row-group:first-child { border-top: 0; }
+.reversal-row-group .reversal-row { border-top: 0; padding-top: .7rem; }
+.reversal-row-group:first-child .reversal-row { padding-top: 0; }
+.reversal-row-toggle { background: transparent; border: 0; color: inherit; cursor: pointer; font: inherit; padding-left: 0; padding-right: 0; text-align: left; width: 100%; }
+.reversal-row-toggle:hover strong { text-decoration: underline; }
+.reversal-row-toggle [data-row-state] { align-items: baseline; display: inline-flex; gap: .4rem; }
+.reversal-row-caret { color: var(--muted, #6d6b67); display: inline-block; font-size: .7rem; width: .7rem; }
+.reversal-row-detail ul { display: grid; gap: .4rem; list-style: none; margin: .55rem 0 .7rem; padding: 0; }
+.reversal-row-detail li { display: flex; gap: .75rem; justify-content: space-between; align-items: baseline; }
+.reversal-row-detail li span { font-size: .8rem; overflow-wrap: anywhere; }
+.reversal-row-detail li small, .reversal-row-empty { color: var(--muted, #6d6b67); font-size: .75rem; white-space: nowrap; }
+.reversal-row-empty { margin: .55rem 0 .7rem; }
 .reversal-result { display: flex; gap: .6rem; align-items: baseline; border-left: 3px solid var(--accent, #db4c3f); padding: .75rem 1rem; background: color-mix(in srgb, var(--accent, #db4c3f) 8%, transparent); }
 .reversal-loading { padding: 3rem 0; color: var(--muted, #6d6b67); }
 .reversal-modal-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 1.5rem; background: rgb(24 23 21 / 45%); }

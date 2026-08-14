@@ -59,6 +59,33 @@ export function reversalNote(after: Row): string {
   ].join(", ");
 }
 
+export interface DecisionRecipient {
+  person_id: string;
+  name: string;
+  email: string;
+}
+
+/**
+ * Who a decision mail for this record would be addressed to right now — the
+ * same choice `loadSubmission` makes in SQL (`src/jobs/cascade/decisions.ts`):
+ * the lowest-positioned `speaker`, else the `submitter`. The record surface
+ * needs it in order to say whether the address a past send used is still the
+ * address on file, and getting it by a different rule than the sender uses
+ * would be worse than not saying it at all.
+ */
+export function decisionRecipient(participants: Row[]): DecisionRecipient | null {
+  const eligible = participants.filter((row) => row.role === "speaker" || row.role === "submitter");
+  const chosen = eligible.sort((left, right) =>
+    (left.role === right.role ? 0 : left.role === "speaker" ? -1 : 1)
+    || count(left.position) - count(right.position))[0];
+  if (!chosen) return null;
+  return {
+    person_id: String(chosen.person_id ?? ""),
+    name: String(chosen.name ?? ""),
+    email: String(chosen.email ?? ""),
+  };
+}
+
 /**
  * Merge the reversals into the decisions, newest first. Both are already sorted
  * that way individually, so this is a merge rather than a re-sort — and ties

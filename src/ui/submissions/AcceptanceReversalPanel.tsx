@@ -30,6 +30,36 @@ function stateLabel(status: string, cancelled = false): string {
   return "retained";
 }
 
+type RowId = "portal-tasks" | "scheduled-emails" | "calendar-invites";
+
+/**
+ * One inventory line and, on demand, the rows behind it. The header is a
+ * button rather than a link because nothing navigates: the evidence belongs
+ * beside the decision, not one page away from it.
+ */
+export function ReversalRow({ id, title, count, state, rows, empty, open, onToggle }: {
+  id: RowId;
+  title: string;
+  count: string;
+  state: string;
+  rows: Array<{ id: string; label: string; detail: string }>;
+  empty: string;
+  open: boolean;
+  onToggle: () => void;
+}): JSX.Element {
+  return <div class="reversal-row-group">
+    <button type="button" class="reversal-row reversal-row-toggle" aria-expanded={open} aria-controls={`reversal-detail-${id}`} onClick={onToggle}>
+      <span><strong>{title}</strong><small>{count}</small></span>
+      <span data-row-state={id}>{state}<span class="reversal-row-caret" aria-hidden="true">{open ? "▾" : "▸"}</span></span>
+    </button>
+    <div class="reversal-row-detail" id={`reversal-detail-${id}`} hidden={!open}>
+      {rows.length === 0
+        ? <p class="reversal-row-empty">{empty}</p>
+        : <ul>{rows.map((row) => <li key={row.id}><span>{row.label}</span><small>{row.detail}</small></li>)}</ul>}
+    </div>
+  </div>;
+}
+
 export function AcceptanceReversalPanel({ eventId, submissionId, onReversed }: Props): JSX.Element {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [open, setOpen] = useState(false);
@@ -37,6 +67,7 @@ export function AcceptanceReversalPanel({ eventId, submissionId, onReversed }: P
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
+  const [expanded, setExpanded] = useState<RowId | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -80,10 +111,50 @@ export function AcceptanceReversalPanel({ eventId, submissionId, onReversed }: P
       <CardBody>
         {result && <div class="reversal-result" role="status">{result.resulting_status} · {result.tasks_cancelled} task row(s), {result.emails_cancelled} email row(s), {result.calendar_cancelled} invite(s) cancelled.</div>}
         {error && <div class="reversal-error" role="alert">{error}</div>}
+        {/* Each count opens onto the rows it counts. A number alone asks the
+            organizer to reverse an acceptance on faith: "2 active" is only a
+            decision they can make if they can see WHICH two tasks, which
+            queued mail, and whose calendar invite. The row header keeps its
+            own size when it opens, so the counts never move. */}
         <div class="reversal-rows">
-          <div class="reversal-row"><span><strong>Portal tasks</strong><small>{preview.tasks.length} row(s)</small></span><span data-row-state="portal-tasks">{preview.tasks.filter((task) => task.status === "open" && task.cancelled_at === null).length} active</span></div>
-          <div class="reversal-row"><span><strong>Scheduled emails</strong><small>{preview.scheduled_emails.length} row(s)</small></span><span data-row-state="scheduled-emails">{preview.scheduled_emails.filter((email) => email.status === "queued").length} queued</span></div>
-          <div class="reversal-row"><span><strong>Calendar invites</strong><small>{preview.calendar_invites.length} recipient row(s)</small></span><span data-row-state="calendar-invites">{preview.calendar_invites.filter((invite) => invite.status !== "cancelled").length} active</span></div>
+          <ReversalRow
+            id="portal-tasks"
+            title="Portal tasks"
+            count={`${preview.tasks.length} row(s)`}
+            state={`${preview.tasks.filter((task) => task.status === "open" && task.cancelled_at === null).length} active`}
+            open={expanded === "portal-tasks"}
+            onToggle={() => setExpanded(expanded === "portal-tasks" ? null : "portal-tasks")}
+            empty="No portal tasks were created for this talk."
+            rows={preview.tasks.map((task) => ({
+              id: task.id,
+              label: task.title,
+              detail: task.cancelled_at !== null ? "cancelled" : task.status === "done" ? "done" : "open",
+            }))}
+          />
+          <ReversalRow
+            id="scheduled-emails"
+            title="Scheduled emails"
+            count={`${preview.scheduled_emails.length} row(s)`}
+            state={`${preview.scheduled_emails.filter((email) => email.status === "queued").length} queued`}
+            open={expanded === "scheduled-emails"}
+            onToggle={() => setExpanded(expanded === "scheduled-emails" ? null : "scheduled-emails")}
+            empty="No mail is scheduled against this talk."
+            rows={preview.scheduled_emails.map((email) => ({ id: email.id, label: email.subject, detail: email.status }))}
+          />
+          <ReversalRow
+            id="calendar-invites"
+            title="Calendar invites"
+            count={`${preview.calendar_invites.length} recipient row(s)`}
+            state={`${preview.calendar_invites.filter((invite) => invite.status !== "cancelled").length} active`}
+            open={expanded === "calendar-invites"}
+            onToggle={() => setExpanded(expanded === "calendar-invites" ? null : "calendar-invites")}
+            empty="No calendar invite has been sent for this talk."
+            rows={preview.calendar_invites.map((invite) => ({
+              id: invite.id,
+              label: invite.email,
+              detail: `${invite.status} · ${invite.last_method === "CANCEL" ? "cancellation sent" : "invite sent"}`,
+            }))}
+          />
         </div>
       </CardBody>
     </Card>

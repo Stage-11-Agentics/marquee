@@ -43,6 +43,21 @@
 .record-inline-message { color: transparent; flex: 1 1 260px; font-size: 10.5px; line-height: 1.4; min-height: 16px; }
 .record-inline-message.error { color: var(--danger); }
 .record-inline-message.notice { color: var(--ok); }
+/* Delivery evidence sits between the instruction and the buttons: read what
+   the last attempt did, then act. The line holds two rows' worth of height at
+   every width so opening the history never shifts the buttons under a cursor
+   already on its way to them. */
+.record-delivery-last { color: var(--ink-soft); font-size: 11px; line-height: 1.45; margin: 8px 0 0; min-height: 32px; }
+.record-delivery-history { margin: 6px 0 14px; }
+.record-delivery-history summary { color: var(--muted); cursor: pointer; font-size: 10.5px; }
+.record-delivery-sends { display: grid; gap: 6px; list-style: none; margin: 8px 0 0; padding: 0; }
+.record-delivery-sends li { align-items: baseline; border-bottom: 1px solid var(--line); display: grid; gap: 4px 8px; grid-template-columns: minmax(0, 1fr) auto; padding-bottom: 6px; }
+.record-delivery-sends li:last-child { border-bottom: 0; padding-bottom: 0; }
+.record-delivery-sends .chip { grid-column: 2; grid-row: 1 / span 2; justify-self: end; }
+.record-delivery-address { font: 400 10.5px var(--mono); overflow-wrap: anywhere; }
+.record-delivery-sends .subtle { font-size: 10px; grid-column: 1; }
+.record-delivery-reason { color: var(--muted); font-size: 10px; grid-column: 1; line-height: 1.4; }
+.record-delivery-reason.alarm { color: var(--danger); }
 .record-decision-list { display: grid; gap: 10px; }
 .record-decision { border-bottom: 1px solid var(--line); display: grid; gap: 7px; padding-bottom: 10px; }
 .record-decision:last-child { border-bottom: 0; padding-bottom: 0; }

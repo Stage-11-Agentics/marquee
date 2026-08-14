@@ -11,6 +11,66 @@ export function moment(value: number | null): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
 }
 
+/**
+ * A send is answered by the minute it left, not the day: two attempts to the
+ * same address on one afternoon are the ordinary case on this card, and a
+ * date-only stamp would render them identically.
+ */
+export function sendMoment(value: number | null): string {
+  if (value === null) return "—";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  }).format(new Date(value));
+}
+
+export interface DecisionSend {
+  to_email: string;
+  status: "queued" | "sent" | "suppressed" | "failed";
+  delivery_state: "unknown" | "delivered" | "bounced_hard" | "bounced_soft" | "complained";
+  reason: string | null;
+  created_at: number;
+  sent_at: number | null;
+  delivered_at: number | null;
+}
+
+/**
+ * What became of one decision mail, in the organizer's terms. The provider's
+ * verdict outranks the transport's: a row can be `sent` and still have bounced,
+ * and telling an organizer "Sent" about a message that hard-bounced is exactly
+ * the reassurance that keeps a speaker uninformed.
+ */
+export function sendOutcome(send: DecisionSend): { label: string; tone: "" | "success" | "warning" | "alarm" } {
+  if (send.delivery_state === "bounced_hard") return { label: "Bounced", tone: "alarm" };
+  if (send.delivery_state === "bounced_soft") return { label: "Bounced, may retry", tone: "warning" };
+  if (send.delivery_state === "complained") return { label: "Marked as spam", tone: "warning" };
+  if (send.delivery_state === "delivered") return { label: "Delivered", tone: "success" };
+  if (send.status === "failed") return { label: "Failed to send", tone: "alarm" };
+  if (send.status === "suppressed") return { label: "Held, not sent", tone: "warning" };
+  if (send.status === "sent") return { label: "Sent", tone: "success" };
+  return { label: "Queued", tone: "" };
+}
+
+/** The moment the outcome refers to — delivery, then dispatch, then the queue. */
+export function sendMomentFor(send: DecisionSend): number {
+  return send.delivered_at ?? send.sent_at ?? send.created_at;
+}
+
+/**
+ * The one line above the resend button. Naming the address the last attempt
+ * used is the whole point of the card: "send it again" is a trap if the
+ * organizer cannot see that the last one went to a typo.
+ */
+export function lastSendLine(sends: readonly DecisionSend[], currentEmail: string | null): string {
+  const last = sends[0];
+  if (!last) return "No decision mail has been queued for this record yet.";
+  const outcome = sendOutcome(last);
+  const line = `Last sent to ${last.to_email} · ${sendMoment(sendMomentFor(last))} · ${outcome.label}.`;
+  if (currentEmail && currentEmail.trim().toLowerCase() !== last.to_email.trim().toLowerCase()) {
+    return `${line} The speaker record now reads ${currentEmail.trim()}.`;
+  }
+  return line;
+}
+
 export function statusLabel(value: string): string {
   if (value === "in_review") return "In review";
   if (value === "waitlisted") return "Maybe";

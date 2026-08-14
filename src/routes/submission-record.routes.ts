@@ -10,7 +10,9 @@ import type { DecisionActor } from "../jobs/cascade/decisions";
 import { writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { membershipAllowsGrant, roleForEvent, tokenHasGrant } from "../lib/auth/scope-resolution";
-import { decisionHistory } from "../lib/decision-history";
+import { decisionHistory, decisionRecipient } from "../lib/decision-history";
+import { heldBackReason } from "../lib/delivery-health";
+import { classifySendFailure } from "../lib/mail-failure";
 import {
   attachmentPreviewPath,
   isPreviewableImage,
@@ -316,6 +318,14 @@ async function nextParticipantPosition(db: D1Database, submissionId: string): Pr
  */
 const EDITABLE_CONTENT_STATUSES = ["draft", "submitted", "in_review", "accepted", "waitlisted"] as const;
 
+/**
+ * How many decision mails the record carries. A record that has been resent ten
+ * times has a delivery problem the outbox surface should answer, not a history
+ * the organizer reads on the record; the newest handful is what "which address
+ * did this go to" needs.
+ */
+const DECISION_SEND_LIMIT = 6;
+
 interface ContentState {
   title: string;
   abstract: string | null;
@@ -547,7 +557,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
   `).bind(eventId, submissionId).first<BaseRecordRow>();
   if (!row) throw ApiError.notFound("submission not found");
 
-  const [participants, answers, tracks, decisions, reversals, evaluations, comparisons, history, rounds, criteria, reviewerOptions] = await Promise.all([
+  const [participants, answers, tracks, decisions, reversals, evaluations, comparisons, history, rounds, criteria, reviewerOptions, decisionSends] = await Promise.all([
     db.prepare(`
       SELECT participation.id, participation.person_id, person.name, person.email, person.company,
         person.title, participation.role, participation.position, participation.confirmation_status,
@@ -675,6 +685,26 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       WHERE membership.event_id = ? AND membership.role = 'reviewer'
       ORDER BY person.name COLLATE NOCASE, person.id
     `).bind(eventId).all<Record<string, unknown>>(),
+    // Every decision mail this record has produced, newest first. "Correct the
+    // address, then send again" is only actionable if the organizer can see
+    // which address the last attempt actually used — otherwise they resend to
+    // the same wrong mailbox and learn nothing. The original send carries the
+    // submission id as its entity; a bulk notify or a deliberate retry carries
+    // the decision id, so both keys are asked for. Served by
+    // `idx_outbox_entity_status(event_id, entity_id, status)`.
+    db.prepare(`
+      SELECT mail.id, mail.to_email, mail.template_key, mail.status, mail.delivery_state,
+        mail.suppressed_reason, mail.error, mail.created_at, mail.sent_at, mail.delivered_at
+      FROM outbox mail
+      WHERE mail.event_id = ?
+        AND mail.template_key IN ('acceptance', 'rejection')
+        AND (
+          mail.entity_id = ?
+          OR mail.entity_id IN (SELECT id FROM submission_decisions WHERE submission_id = ?)
+        )
+      ORDER BY mail.created_at DESC, mail.id DESC
+      LIMIT ${DECISION_SEND_LIMIT}
+    `).bind(eventId, submissionId, submissionId).all<Record<string, unknown>>(),
   ]);
 
   const roundMap = new Map<string, Record<string, unknown>>();
@@ -779,6 +809,25 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
     participants: participants.results,
     answers: normalizedAnswers,
     decisions: decisionHistory(decisions.results, reversals.results),
+    decision_recipient: decisionRecipient(participants.results),
+    decision_sends: decisionSends.results.map((send) => ({
+      id: send.id,
+      to_email: send.to_email,
+      kind: send.template_key === "acceptance" ? "accepted" : "rejected",
+      status: send.status,
+      delivery_state: send.delivery_state ?? "unknown",
+      // One line the organizer can read, whichever way the attempt ended. The
+      // stored values are machine slugs and provider prose; neither belongs on
+      // a record, and both already have organizer-facing translations.
+      reason: send.suppressed_reason
+        ? heldBackReason(String(send.suppressed_reason))
+        : send.error
+          ? classifySendFailure(String(send.error)).reason
+          : null,
+      created_at: send.created_at,
+      sent_at: send.sent_at,
+      delivered_at: send.delivered_at,
+    })),
     evaluations: evaluationEvidence,
     comparisons: comparisonEvidence,
     routing: row.applied_rule_id === null ? null : {

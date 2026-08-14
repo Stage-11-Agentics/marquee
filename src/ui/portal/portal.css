@@ -194,6 +194,9 @@
 .portal-loading, .portal-error { align-items: center; display: grid; min-height: 320px; place-items: center; text-align: center; }
 .portal-error { color: var(--alarm); font-size: 12px; }
 .portal-error p { color: var(--muted); margin: 8px 0 16px; }
+/* A true answer, not a failure: an account with no seat here is told so in the
+   page's own voice. Alarm red would report a fault that did not happen. */
+.portal-error.portal-answer { color: var(--ink); }
 .portal-signin { color: var(--accent-dark); text-decoration: underline; }
 
 @media (max-width: 820px) {
