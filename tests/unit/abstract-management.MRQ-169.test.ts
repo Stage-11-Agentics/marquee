@@ -63,8 +63,12 @@ test("CONTRACT · MRQ-169 · a recorded review reopens into the review layout an
   expect(reviewerPage).toContain("saving updates your review");
   expect(reviewerPage).toContain("Update review");
   expect(reviewerPage).toContain("Back to queue");
-  expect(reviewerPage).toContain("onClick={() => openRevision(item)}");
-  expect(reviewerPage).toContain("read and revise exactly what was recorded");
+  // MRQ-171 moves the completed list to home, where its row opens the full
+  // submission modal first. The modal still offers the same revision action
+  // and re-enters the queue's review layout with the recorded values.
+  expect(reviewerPage).toContain("onClick={() => void openDetailFor(item.id)}");
+  expect(reviewerPage).toContain("if (item) { if (isHome) window.location.assign(\"/reviewer/queue\"); else openRevision(item); }");
+  expect(reviewerPage).toContain("Read / Reopen →");
   // The reader who opened the full submission to see their record gets it
   // first, above the abstract and the four sections that used to bury it.
   expect(reviewerPage.indexOf("Your saved review")).toBeLessThan(reviewerPage.indexOf("<h3>Full abstract</h3>"));
