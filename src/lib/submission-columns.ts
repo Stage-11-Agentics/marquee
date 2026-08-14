@@ -54,5 +54,8 @@ export function submissionStatusLabel(status: string): string {
   if (status === "waitlisted") return "Maybe";
   if (status === "in_review") return "In review";
   if (status === "unreviewed") return "Unreviewed";
-  return status.length === 0 ? "" : status[0]!.toUpperCase() + status.slice(1);
+  // MRQ-97: `accepted` falls through to the generic title-case on purpose.
+  // It is a stored decision fact, and labelling it "Ready to place" here would
+  // put a pipeline stage where a decision belongs.
+  return status[0]!.toUpperCase() + status.slice(1);
 }
