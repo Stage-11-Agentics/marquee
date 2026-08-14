@@ -36,20 +36,34 @@ Never work in the primary checkout — it is the board's home and it stays on `m
 work in `Marquee-worktrees/mrq-auto-eval`, which is the loop's own machinery.
 
 - `npm test` (45s budget), `npm run pr-gate` (120s) before the PR.
-- **A red gate is real; slowness is not a failure.** Same branch, same night: load 14 →
-  78s, load 164 → 276s against a 120s budget — and that 276s run **passed**.
-  `run-test.mjs` and `pr-gate.mjs` report an over-budget run as `pass-over-budget`, a loud
-  warn, and set the exit code from the test outcome; only `HARD_LIMIT_MS` (600s, a hang
-  detector) turns slow into failed. So read the `status` field rather than guessing at load:
-  `fail` is load-invariant — **believe it**; `pass-over-budget` is a warn; `timeout` is
-  unknown, so re-run under the shared lock at
-  `Marquee-worktrees/.gate-lock/gate-lock.sh`. The exceptions are `check:seed` and
-  `check:speed`, which derive status from wall clock and *can* red on contention alone.
-  **Never dismiss failing tests as a known baseline without naming the commit that made
-  them pass.**
 - Every fix ships with a regression test that fails against `github/main` and passes on your
   branch. If you cannot write that test, you have not found the defect yet.
 - `gh pr create --repo Stage-11-Agentics/marquee --base main`.
+
+## A red gate is real. Slowness is not a failure.
+
+**If a gate is RED, believe it.** Then read the `status` field, because what a red means depends on
+how that script computes it:
+
+- `fail` — from any findings-derived check (`trace:ac`, `check-clocks`, `check-routes`,
+  `check-schema`, `check-shell-truth`, or the suite itself). Load-invariant and real. It is yours.
+- `pass-over-budget` — it passed, slowly. A warn, not a failure. The 45s and 120s numbers are
+  objectives that print loudly and pass; `process.exitCode` comes from the test outcome, and only
+  `HARD_LIMIT_MS` — a 600s hang detector — turns slow into red.
+- `timeout` — unknown results, and the one status contention can manufacture. Re-run the same sha
+  once and compare the parent commit's `elapsedMs` before you investigate.
+- `check:seed` and `check:speed` are the only two scripts that can red on wall clock alone.
+
+**Never dismiss failing tests as a known baseline without naming the commit that made them pass.**
+An implementer on this project did exactly that and shipped a red branch: the 22 auth failures it
+called pre-existing were its own calendar-pinned test fixture, and clean `main` passed all 215.
+Four agents rediscovered them independently before anyone checked. If you cannot name the commit,
+they are yours.
+
+**Route every gate and every full `npm test` through the shared lock**, one-off runs included:
+`/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh npm run pr-gate`.
+It keeps the warns honest. It was never what stood between you and a false red, because there are
+no false reds.
 
 ## Push when the work is done, before the verification run
 
