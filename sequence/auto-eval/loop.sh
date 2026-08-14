@@ -285,10 +285,12 @@ one mutable site interleave their data and both become unreadable."
     "$round" "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$FREEZE_FILE"
   say "deploy freeze declared at $FREEZE_FILE"
 
-  # The `die` in this trap body is load-bearing. Under -E the ERR trap fires
-  # twice — once inside atlas(), once here — and `die` exits on the first
-  # firing. Soften it to a bare `rm` and the second firing falls through to the
-  # success path, so a refused kickoff would report a round that never started.
+  # The `die` here is what makes a refusal legible, not what stops it running
+  # on. It emits the operator-facing diagnostic that
+  # tests/node/auto-eval-guards.test.mjs asserts on, and it exits a
+  # deterministic 1 where errexit alone would surface ssh's raw 255 with no
+  # message at all. The trap fires once, and errexit halts the script either
+  # way.
   trap 'rm -f "$FREEZE_FILE"; die "kickoff refused — freeze lifted, no round started"' ERR
   atlas "chmod +x ~/$KIT_ATLAS/kickoff-round.sh && ~/$KIT_ATLAS/kickoff-round.sh $round $sha"
   trap - ERR
