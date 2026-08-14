@@ -2,7 +2,8 @@ import { expect, test } from "vitest";
 
 import { extensionOf, parseUploadOwnerConfig, policyFor, sanitizeFilename, validateDeclared } from "../../../src/lib/r2/policy";
 import { classify, readPngDimensions } from "../../../src/lib/r2/sniff";
-import { compareOnboardingRows, deriveTaskState, orderOnboardingTaskTemplates, rowMatchesOnboardingFilters, taskGlyph, type OnboardingRow, type OnboardingTaskTemplate } from "../../../src/routes/onboarding.queries";
+import { compareOnboardingRows, deriveTaskState, rowMatchesOnboardingFilters, taskGlyph, type OnboardingRow, type OnboardingTaskTemplate } from "../../../src/routes/onboarding.queries";
+import { orderNewestFirst } from "../../../src/ui/shell/wide-grid";
 import { acceptedExtensions, formatBytes, validateClientUpload } from "../../../src/ui/upload/upload-policy";
 
 test("AC-232 · extension and MIME are rejected independently at sign time", () => {
@@ -140,7 +141,7 @@ test("CONTRACT · CNT-07 · the newest authored task column is visible first", (
     { id: "task-newest", name: "Final headshot", kind: "file", description: "", position: 8 },
   ];
 
-  expect(orderOnboardingTaskTemplates(templates).map((template) => template.id)).toEqual([
+  expect(orderNewestFirst(templates, (template) => template.position).map((template) => template.id)).toEqual([
     "task-newest",
     "task-middle",
     "task-seeded",
