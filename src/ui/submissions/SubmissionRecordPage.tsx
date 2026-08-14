@@ -64,7 +64,7 @@ export interface EvaluationEvidence {
 interface RubricCriterion { id: string; name: string; kind: "numeric" | "select" | "text"; weight_pct: number; position: number }
 export type EvaluationPanelEvaluation = Pick<EvaluationEvidence,
   "abstained" | "id" | "reviewer_name" | "reviewer_kind" | "recommendation" | "score" | "comment"
-  | "override_score" | "override_comment" | "override_person_name"
+  | "criteria_scores" | "override_score" | "override_comment" | "override_person_name"
 >;
 interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; criteria: RubricCriterion[]; reviewers: Assignment[]; evaluations: EvaluationPanelEvaluation[]; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
 interface RecordData {
@@ -213,8 +213,16 @@ function ScorecardAnswers({ criteria, scores }: { criteria: RubricCriterion[]; s
  * The comment body and its action each have reserved space. Expanding a long
  * comment makes that body scrollable inside the slot instead of moving the
  * assignment controls or the rest of the record underneath the operator.
+ *
+ * A reviewer answers two separate things: the scorecard the round defines, and
+ * the optional committee note beside it. Only the note used to reach this
+ * panel, so a chair read the note under "Reviewer comment" and never saw the
+ * reasoning typed against the rubric's own text criterion — and when the two
+ * disagree, the panel showed the half the reviewer did not write. The scorecard
+ * follows the note here rather than replacing it: which of the two recommendations
+ * governs is a product question, and presenting both is the honest answer to it.
  */
-export function EvaluationPanelResult({ evaluation }: { evaluation: EvaluationPanelEvaluation }): JSX.Element {
+export function EvaluationPanelResult({ evaluation, criteria = [] }: { evaluation: EvaluationPanelEvaluation; criteria?: RubricCriterion[] }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const reviewerComment = evaluation.comment.trim();
   const isLongComment = !evaluation.abstained && reviewerComment.length > 120;
@@ -245,6 +253,7 @@ export function EvaluationPanelResult({ evaluation }: { evaluation: EvaluationPa
         ? <button type="button" aria-controls={commentId} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Show less" : "Read full comment"}</button>
         : <span class="evaluation-panel-comment-action-placeholder" aria-hidden="true" />}
     </div>
+    {!evaluation.abstained && <ScorecardAnswers criteria={criteria} scores={evaluation.criteria_scores} />}
     {hasOverride && <div class="evaluation-panel-override" data-evaluation-panel-override="true">
       <small>Organizer override</small>
       <strong class="tabular">{scoreText(evaluation.override_score)}</strong>
@@ -703,7 +712,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           {round.evaluations.filter((evaluation) => !evaluation.abstained).length > 0 && <div class="record-round-evidence"><small>{round.evaluations.filter((evaluation) => !evaluation.abstained).length} scorecard result{round.evaluations.filter((evaluation) => !evaluation.abstained).length === 1 ? "" : "s"}</small></div>}
           {round.evaluations.some((evaluation) => evaluation.abstained) && <div class="record-round-evidence"><small>{round.evaluations.filter((evaluation) => evaluation.abstained).length} conflict{round.evaluations.filter((evaluation) => evaluation.abstained).length === 1 ? "" : "s"} declared</small></div>}
           {round.evaluations.length > 0 && <div class="record-round-results">
-            {round.evaluations.map((evaluation, index) => <EvaluationPanelResult key={`${evaluation.id}-${index}`} evaluation={evaluation} />)}
+            {round.evaluations.map((evaluation, index) => <EvaluationPanelResult key={`${evaluation.id}-${index}`} evaluation={evaluation} criteria={criteriaByRound.get(round.id) ?? []} />)}
           </div>}
           {round.comparisons.length > 0 && <div class="record-round-evidence"><small>{round.comparisons.length} comparison result{round.comparisons.length === 1 ? "" : "s"}</small></div>}
           {round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong><ReviewerName name={assignment.reviewer_name} kind={assignment.reviewer_kind} /></strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}
