@@ -18,6 +18,9 @@ import quickSearchSource from "../../src/ui/shell/QuickSearch.tsx?raw";
 import evaluationSource from "../../src/ui/evaluation/EvaluationPage.tsx?raw";
 import sourcingSource from "../../src/ui/people/SourcingPipelinePage.tsx?raw";
 import filesSource from "../../src/ui/files/FilesPage.tsx?raw";
+import bulkExportSource from "../../src/ui/files/BulkExportDialog.tsx?raw";
+import organizersSource from "../../src/ui/setup/OrganizersCard.tsx?raw";
+import formsSource from "../../src/ui/forms/FormsPage.tsx?raw";
 
 /**
  * sbek round 11, speaker-management: a CSV import created two "Marcus Okafor"
@@ -143,12 +146,34 @@ describe("duplicate person names", () => {
     expect(html).toContain("Session for Marcus Okafor (2)");
   });
 
+  test("CONTRACT · the picker finds a person by the name it is showing", () => {
+    // Typing what you can see — "Marcus Okafor (2)" — has to find the row that
+    // shows it. A picker whose search and render disagree is a picker that
+    // cannot be searched.
+    expect(taskTemplatesSource).toContain("`${displayNames.get(person.id) ?? person.name} ${person.name}");
+    const html = renderToString(h(AssigneePicker, {
+      assignees: [MARCUS_A, MARCUS_B, PRIYA],
+      displayNames: disambiguatedNames([MARCUS_A, MARCUS_B, PRIYA]),
+      selected: [],
+      onChange: () => undefined,
+      idPrefix: "task-assign-test",
+    }));
+    expect(html).toContain("Search speakers by name, company, or email");
+  });
+
+  test("CONTRACT · a cancelled task's holder is not on the page and does not mark the one who is", () => {
+    // Cancelled tasks are filtered out of the assignment table, so their holders
+    // are invisible. Counting them would put "(2)" on the only visible Marcus —
+    // a marker about somebody the organizer cannot see.
+    expect(taskTemplatesSource).toContain("!task.cancelled && !assignees.some((person) => person.id === task.person.id)");
+  });
+
   test("CONTRACT · someone who holds a task but is no longer assignable keeps their label", () => {
     // Removing a co-speaker deletes the participation and keeps the task, so a
     // person can hold work while dropping out of the assignable list. Deriving
     // from the assignable list alone dropped exactly those people back to a raw
     // name in the table where their task still sits.
-    expect(taskTemplatesSource).toContain("assignments.filter((task) => !assignees.some((person) => person.id === task.person.id))");
+    expect(taskTemplatesSource).toContain("!assignees.some((person) => person.id === task.person.id)");
     const stillHeld = disambiguatedNames([MARCUS_A, { id: MARCUS_B.id, name: MARCUS_B.name }]);
     expect(stillHeld.get(MARCUS_B.id)).toBe("Marcus Okafor (2)");
   });
@@ -169,7 +194,9 @@ describe("duplicate person names", () => {
    * have to be derived board-wide and the card is not a control that acts on a
    * person.
    */
-  const WIRED_SITES: ReadonlyArray<readonly [string, string, readonly string[]]> = [
+  // The fourth field marks a surface that receives the map as a prop rather
+  // than importing the helper itself.
+  const WIRED_SITES: ReadonlyArray<readonly [string, string, readonly string[], boolean?]> = [
     ["the roster", peoplePageSource, ["displayNames.get(row.id) ?? row.name"]],
     ["the speaker roster", speakersSource, ["displayNames.get(row.id) ?? row.name"]],
     ["the onboarding grid, compose drawer, and invite results", onboardingSource, [
@@ -181,7 +208,8 @@ describe("duplicate person names", () => {
       "displayNames.get(person.id) ?? person.name",
       "assigneeNames.get(row.person.id) ?? row.person.name",
     ]],
-    ["the reviewer picker, participants card, and message recipient", submissionRecordSource, [
+    ["the reviewer picker, participants card, message recipient, and person search", submissionRecordSource, [
+      "participantResultNames.get(person.id) ?? person.title",
       "reviewerNames.get(reviewer.id) ?? reviewer.name",
       "reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name",
       "participantNames.get(group.person_id) ?? group.name",
@@ -194,12 +222,17 @@ describe("duplicate person names", () => {
       "poolNames.get(member.id) ?? member.name",
     ]],
     ["the sourcing pipeline cards and stage control", sourcingSource, ["cardNames.get(card.person_id) ?? card.name"]],
-    ["the files board", filesSource, ["personNames.get(row.person.id) ?? row.person.name"]],
+    ["the files board", filesSource, ["personNames.get(row.person.id) ?? row.person.name", "personNames={personNames}"]],
+    // The dialog takes the board's map as a prop rather than deriving its own,
+    // so it names people exactly as the list it was opened from did.
+    ["the bulk export dialog", bulkExportSource, ["personNames.get(row.person.id) ?? row.person.name"], true],
+    ["the organizer rows, each beside a Remove", organizersSource, ["memberNames.get(member.person_id) ?? member.name"]],
+    ["the form administrator rows, each beside a Remove", formsSource, ["?? admin.name"]],
   ];
 
   test("CONTRACT · every surface where a person is chosen or acted on by name reads the shared derivation", () => {
-    for (const [what, source, expressions] of WIRED_SITES) {
-      expect(source, `${what} imports the shared derivation`).toContain("lib/duplicate-names");
+    for (const [what, source, expressions, viaProp] of WIRED_SITES) {
+      if (!viaProp) expect(source, `${what} imports the shared derivation`).toContain("lib/duplicate-names");
       for (const expression of expressions) {
         expect(source, `${what} renders through it: ${expression}`).toContain(expression);
       }

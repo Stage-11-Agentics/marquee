@@ -626,6 +626,9 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   // who a message goes to. One derivation across the record's own people, so
   // the card and the picker agree.
   const participantNames = disambiguatedNames(record.participants.map((participant) => ({ id: participant.person_id, name: participant.name })));
+  // The "Choose existing person" search is its own list, and picking the wrong
+  // row here adds the wrong human to the submission.
+  const participantResultNames = disambiguatedNames(participantResults.map((person) => ({ id: person.id, name: person.title })));
   const speakerParticipant = record.participants.find((participant) => participant.role === "speaker")
     ?? record.participants.find((participant) => participant.role === "co_speaker")
     ?? record.participants.find((participant) => participant.role !== "submitter");
@@ -715,7 +718,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
                     {participantSearchState === "error" && <span class="record-picker-placeholder error">People search unavailable. Try again.</span>}
                     {participantSearchState === "idle" && participantQuery.trim().length < 2 && <span class="record-picker-placeholder">Type at least 2 characters to search.</span>}
                     {participantSearchState === "idle" && participantQuery.trim().length >= 2 && participantResults.length === 0 && <span class="record-picker-placeholder">No matching people. Add a new person if this is a new contact.</span>}
-                    {participantResults.map((person) => <button type="button" role="option" class="record-person-suggestion" key={person.id} onClick={() => { setSelectedParticipant(person); setParticipantQuery(person.title); setParticipantResults([]); setParticipantError(""); }}><strong>{person.title}</strong><small>{person.subtitle}</small></button>)}
+                    {participantResults.map((person) => <button type="button" role="option" class="record-person-suggestion" key={person.id} onClick={() => { setSelectedParticipant(person); setParticipantQuery(person.title); setParticipantResults([]); setParticipantError(""); }}><strong>{participantResultNames.get(person.id) ?? person.title}</strong><small>{person.subtitle}</small></button>)}
                   </div>
                 </>}
               </div>}

@@ -2,6 +2,7 @@ import type { JSX } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
+import { disambiguatedNames } from "../../lib/duplicate-names";
 import { Button, Card, CardBody, CardHeader, Chip } from "../shell/components";
 import "./setup.css";
 
@@ -49,6 +50,8 @@ function expiryLabel(expiresAt: number): string {
 
 export function OrganizersCard(): JSX.Element {
   const [members, setMembers] = useState<Member[]>([]);
+  // Two organizers can share a name, and each row carries a Remove beside it.
+  const memberNames = disambiguatedNames(members.map((member) => ({ id: member.person_id, name: member.name })));
   const [invites, setInvites] = useState<Invite[]>([]);
   const [minted, setMinted] = useState<MintedInvite | null>(null);
   const [status, setStatus] = useState("");
@@ -136,7 +139,7 @@ export function OrganizersCard(): JSX.Element {
           <span class="organizer-action">—</span>
         </div>}
         {members.map((member) => <div key={member.person_id} class="organizer-row">
-          <span class="organizer-name">{member.name}{member.is_you && <small>You</small>}</span>
+          <span class="organizer-name">{memberNames.get(member.person_id) ?? member.name}{member.is_you && <small>You</small>}</span>
           <span class="organizer-email">{member.email}</span>
           <Chip tone="success">{member.role}</Chip>
           <span class="organizer-action">

@@ -229,6 +229,6 @@ export function FilesPage({ eventId, navigate }: { eventId: string; navigate?: (
           </div>}
       </section>
     </> : <div class="files-board-state card">{state.kind === "error" ? <><strong>The files library is unavailable</strong><span>{state.message}</span></> : "Reading every deliverable the conference has asked for…"}</div>}
-    <BulkExportDialog eventId={eventId} rows={selectedRows} open={exportOpen} onClose={() => setExportOpen(false)} />
+    <BulkExportDialog eventId={eventId} rows={selectedRows} personNames={personNames} open={exportOpen} onClose={() => setExportOpen(false)} />
   </div>;
 }

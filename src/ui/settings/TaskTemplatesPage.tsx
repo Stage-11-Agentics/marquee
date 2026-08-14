@@ -215,7 +215,9 @@ export function AssigneePicker({
   const needle = query.trim().toLowerCase();
   const visible = needle === ""
     ? assignees
-    : assignees.filter((person) => `${person.name} ${person.email} ${person.company ?? ""}`.toLowerCase().includes(needle));
+    // Searched against the name as RENDERED, not only as stored: typing what
+    // you can see — "Marcus Okafor (2)" — has to find the row showing it.
+    : assignees.filter((person) => `${displayNames.get(person.id) ?? person.name} ${person.name} ${person.email} ${person.company ?? ""}`.toLowerCase().includes(needle));
 
   return <div class="task-assignee-picker">
     <div class="task-assignee-head">
@@ -426,7 +428,12 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
   const assigneeNames = useMemo(
     () => disambiguatedNames([
       ...assignees,
-      ...assignments.filter((task) => !assignees.some((person) => person.id === task.person.id)).map((task) => task.person),
+      ...assignments
+        // Cancelled tasks are filtered out of the table below, so their holders
+        // are not on this page at all and must not inflate the derivation: a
+        // hidden namesake would put "(2)" on the only visible one.
+        .filter((task) => !task.cancelled && !assignees.some((person) => person.id === task.person.id))
+        .map((task) => task.person),
     ]),
     [assignees, assignments],
   );
