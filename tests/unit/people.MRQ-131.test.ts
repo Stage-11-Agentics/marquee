@@ -16,7 +16,8 @@ import {
 } from "../../src/lib/person-annotations";
 import { mapPersonHeaders, planPersonImport } from "../../src/lib/people-import";
 import { buildPeopleQuery, parseTags } from "../../src/routes/people.queries";
-import { activeCriteria, saveControl } from "../../src/ui/people/people-api";
+import { activeCriteria, EMPTY_FILTERS, hasFilters, saveControl } from "../../src/ui/people/people-api";
+import { activeNavId, matchRoute, routesFor } from "../../src/ui/shell/route-table";
 import { PIPELINE_STAGES as CLIENT_STAGES } from "../../src/ui/people/pipeline-stages";
 import { peopleImportBrief } from "../../src/ui/people/people-brief";
 
@@ -182,6 +183,63 @@ test("CONTRACT · MRQ-131 · active criteria render as removable chips", () => {
   const criteria = activeCriteria({ q: "priya", company: "Latticework", title: "", tag: "AI", listId: "" });
   expectDeep(criteria.map((entry) => entry.key), ["company", "tag"]);
   expectDeep(criteria.map((entry) => entry.label), ["company", "tag"]);
+});
+
+test("CONTRACT · MRQ-131 · a list is never rendered as its id, and still counts as a filter", () => {
+  // The chip can only render what a filter carries, and a list carries an id.
+  // Showing `list: lst_01K…` in the row that says what you are looking at is
+  // the whole defect: the organizer named the thing, and the screen answered
+  // in database.
+  const criteria = activeCriteria({ q: "", company: "", title: "", tag: "", listId: "lst_01KZZZ" });
+  expectDeep(criteria, []);
+  // But it is still a narrowing, so "Clear all" appears and the empty state
+  // reads "nobody matches" rather than "nobody here yet".
+  expectEqual(hasFilters({ q: "", company: "", title: "", tag: "", listId: "lst_01KZZZ" }), true);
+  expectEqual(hasFilters({ ...EMPTY_FILTERS }), false);
+
+  // People names it instead, in a band that distinguishes all four states —
+  // and in particular does not report a failed request as a deleted list.
+  const page = readFileSync(new URL("../../src/ui/people/PeoplePage.tsx", import.meta.url), "utf8");
+  expect(page).toMatch(/people-listband/);
+  for (const state of ["resolving", "named", "missing", "error"]) {
+    expect(page, `the band must handle the "${state}" state`).toContain(`"${state}"`);
+  }
+  // Reserved height: the name and its meta line arrive from a second request
+  // and the table below must not move when they land.
+  const css = readFileSync(new URL("../../src/ui/people/people.css", import.meta.url), "utf8");
+  expectOk(/\.people-listband \{[^}]*min-height:/s.test(css));
+});
+
+test("CONTRACT · MRQ-131 · Lists is reached from People, not from a sidebar row of its own", () => {
+  // A list is a lens on People. A permanent second destination for it makes
+  // the nav longer and the relationship less obvious — but the route stays,
+  // because saving a list lands on it and the URL is shareable.
+  // Asserted through the resolver rather than the source text, so reordering a
+  // property in the table cannot fail a test about navigation.
+  expectDeep(routesFor("organization").map((route) => route.id), ["people", "sourcing"]);
+  // The route itself survives — /lists still resolves, it just has no row.
+  const lists = matchRoute("/lists");
+  expectEqual(lists?.id, "lists");
+  expectEqual(lists?.sidebar, undefined);
+  // And on /lists the nav names where you are rather than highlighting nothing.
+  expectEqual(activeNavId("lists"), "people");
+  expectEqual(activeNavId("people"), "people");
+  expectEqual(activeNavId("sourcing"), "sourcing");
+  expectEqual(activeNavId(undefined), undefined);
+});
+
+test("CONTRACT · MRQ-131 · a radio in a field is never sized like a text entry", () => {
+  // `.people-field input` caught the two radios in "Keep it up to date?" and
+  // gave each `width: 100%`. Inside a flex label that stretches the control
+  // across the dialog: the glyph pins to the far left and its words land on
+  // the other side of the modal, one word per line.
+  const css = readFileSync(new URL("../../src/ui/people/people.css", import.meta.url), "utf8");
+  const selectors = css.split("\n").filter((line) => line.trimStart().startsWith(".people-field input"));
+  expectOk(selectors.length > 0);
+  for (const selector of selectors) {
+    expectOk(selector.includes('not([type="radio"])') && selector.includes('not([type="checkbox"])'));
+  }
+  expect(css).toMatch(/\.people-radio-row input \{[^}]*width: auto/s);
 });
 
 test("CONTRACT · MRQ-131 · tags arrive as a JSON array and a broken one degrades to none", () => {

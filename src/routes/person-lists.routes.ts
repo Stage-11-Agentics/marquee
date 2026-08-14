@@ -19,21 +19,17 @@ import { ApiError } from "../api/errors";
 import { newUlid } from "../api/ids";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { requireOrgAccess } from "../lib/auth/org-access";
-import { PIPELINE_STAGE_IDS } from "../lib/person-annotations";
-import { buildPeopleQuery, parseTags, type PersonListRow } from "./people.queries";
+import {
+  buildPeopleQuery,
+  configFilters,
+  listConfigSchema,
+  parseListConfig,
+  parseTags,
+  type PersonListConfig,
+  type PersonListRow,
+} from "./people.queries";
 
 const listParams = z.object({ listId: z.string().min(1) });
-
-/** The saved filter behind a Live list — the same vocabulary the list query takes. */
-export const listConfigSchema = z.object({
-  q: z.string().trim().max(200).default(""),
-  company: z.string().trim().max(200).optional(),
-  title: z.string().trim().max(200).optional(),
-  tag: z.string().trim().max(80).optional(),
-  stage: z.enum(PIPELINE_STAGE_IDS as unknown as [string, ...string[]]).optional(),
-});
-
-export type PersonListConfig = z.infer<typeof listConfigSchema>;
 
 const listSummary = z.object({
   id: z.string(),
@@ -67,14 +63,6 @@ interface PersonListRecord {
   member_count: number;
 }
 
-export function parseListConfig(value: string): PersonListConfig {
-  try {
-    return listConfigSchema.parse(JSON.parse(value) as unknown);
-  } catch {
-    return listConfigSchema.parse({});
-  }
-}
-
 function recordResponse(row: PersonListRecord) {
   return {
     id: row.id,
@@ -103,16 +91,6 @@ async function liveCount(db: D1Database, orgId: string, config: PersonListConfig
   const built = buildPeopleQuery({ orgId, ...configFilters(config) });
   const row = await db.prepare(built.countSql).bind(...built.countBindings).first<{ total: number }>();
   return Number(row?.total ?? 0);
-}
-
-function configFilters(config: PersonListConfig) {
-  return {
-    ...(config.q ? { q: config.q } : {}),
-    ...(config.company ? { company: config.company } : {}),
-    ...(config.title ? { title: config.title } : {}),
-    ...(config.tag ? { tag: config.tag } : {}),
-    ...(config.stage ? { stage: config.stage } : {}),
-  };
 }
 
 const listLists = defineApiRoute(

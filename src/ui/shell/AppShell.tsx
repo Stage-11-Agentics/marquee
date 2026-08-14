@@ -6,7 +6,7 @@ import { Button, EmptyState, PageHeader } from "./components";
 import { ErrorBoundary } from "./ErrorSurface";
 import { OverlayHost, TOAST_EVENT, ToastHost, type OverlayState } from "./OverlayHosts";
 import { SessionWall } from "./SessionWall";
-import { matchRoute } from "./route-table";
+import { activeNavId, matchRoute } from "./route-table";
 import { useBrowserRouter } from "./router";
 import { SeatBlockedPage, useSeat } from "./seat";
 import { Sidebar } from "./Sidebar";
@@ -195,7 +195,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   </>;
   return <>
     <div class="app-shell">
-      <Sidebar activeId={route?.id} eventName={eventName} navigate={navigate} resetting={resetting} onReset={() => void resetDemo()} />
+      <Sidebar activeId={activeNavId(route?.id)} eventName={eventName} navigate={navigate} resetting={resetting} onReset={() => void resetDemo()} />
       <main class="main">
         <Topbar
           eventName={eventName}

@@ -3,7 +3,9 @@
  * sidebar. That placement is the scope boundary made visible: everything below
  * the caption belongs to one conference, everything above it outlives all of
  * them. People, Lists, and the sourcing pipeline are org-level, so a nav that
- * nests them inside a conference's menu would be describing them wrongly.
+ * nests them inside a conference's menu would be describing them wrongly. Only
+ * People and the sourcing pipeline take a row there; Lists is org-level too but
+ * is reached from People, whose lens it is.
  */
 export type RouteGroup = "organization" | "home" | "pipeline" | "modules" | "utility";
 
@@ -22,7 +24,12 @@ export const routeTable: readonly RouteDefinition[] = [
   // which is software's word for it; not "Directory" or "Contacts", which are
   // address-book register for a record that carries a decade of history.
   { id: "people", path: "/people", label: "People", icon: "◉", group: "organization", sidebar: true },
-  { id: "lists", path: "/lists", label: "Lists", icon: "◈", group: "organization", sidebar: true },
+  // Lists is a way of looking at People, so it is reached from People — the
+  // toolbar button there, and the band on a list's own view. It keeps a real
+  // route (saving a list lands on it, and the URL is shareable) but no sidebar
+  // row: a second permanent destination for a lens on the first one only makes
+  // the nav longer and the relationship less obvious.
+  { id: "lists", path: "/lists", label: "Lists", icon: "◈", group: "organization" },
   { id: "sourcing", path: "/pipeline", label: "Sourcing pipeline", icon: "▤", group: "organization", sidebar: true },
   // Agents guess URLs, and every 404 costs turns. These three resolve to People
   // rather than to the SPA's not-found state; they are not shown in the sidebar
@@ -111,4 +118,16 @@ export function matchRoute(pathname: string, search = ""): RouteDefinition | und
 
 export function routesFor(group: RouteGroup): readonly RouteDefinition[] {
   return routeTable.filter((route) => route.group === group && route.sidebar);
+}
+
+/**
+ * Which sidebar row a route lights up. Usually its own — but a route with no
+ * row of its own has to name the row it belongs under, or the organizer stands
+ * somewhere the nav refuses to acknowledge. `/lists` is a lens on People.
+ */
+const SIDEBAR_HOME: Readonly<Record<string, string>> = { lists: "people" };
+
+export function activeNavId(routeId: string | undefined): string | undefined {
+  if (!routeId) return undefined;
+  return SIDEBAR_HOME[routeId] ?? routeId;
 }

@@ -19,18 +19,34 @@ import { AddPersonModal, ComposeModal, ImportPeopleModal, SaveListModal } from "
 import {
   activeCriteria,
   EMPTY_FILTERS,
+  fetchLists,
   fetchPeople,
   fetchSummary,
   formatDay,
+  formatMoment,
   hasFilters,
   saveControl,
   type OrgSummary,
   type PeopleFilters,
   type PeoplePage as PeoplePayload,
+  type SavedPersonList,
 } from "./people-api";
 import "./people.css";
 
 const PER_PAGE = 25;
+
+/**
+ * The People URL. Only two things live in it — which list you are inside and
+ * which person is open — and every navigation within the screen has to carry
+ * the first, so it is built in one place rather than spelled out per call site.
+ */
+function peopleUrl(listId: string, personId?: string): string {
+  const params = new URLSearchParams();
+  if (listId) params.set("list", listId);
+  if (personId) params.set("person", personId);
+  const query = params.toString();
+  return query ? `/people?${query}` : "/people";
+}
 
 type LoadState =
   | { kind: "loading" }
@@ -89,9 +105,40 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
   const [modal, setModal] = useState<"" | "import" | "compose" | "savelist" | "addperson">("");
   const [toast, setToast] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
+  // Four states, and telling them apart is the point. "Deleted" and "the
+  // request failed" look identical to a `.catch`, and reporting a network blip
+  // as "this list no longer exists" tells an organizer their work is gone.
+  const [listState, setListState] = useState<
+    { kind: "resolving" } | { kind: "named"; list: SavedPersonList } | { kind: "missing" } | { kind: "error"; message: string }
+  >({ kind: "resolving" });
   const filterIdentity = JSON.stringify(filters);
 
   useEffect(() => { setFilters((current) => ({ ...current, listId: listFromUrl })); }, [listFromUrl]);
+
+  // Resolved from the index rather than from `GET /lists/{id}`, which serialises
+  // every member to hand back a name — an unpaginated scan of the whole list to
+  // render one line (R7). The index carries the name and a correct count for
+  // both kinds and carries no members at all. Absent from it IS "missing", so
+  // the distinction never rests on classifying an error.
+  useEffect(() => {
+    setListState({ kind: "resolving" });
+    if (!listFromUrl) return;
+    const controller = new AbortController();
+    fetchLists(controller.signal)
+      .then((payload) => {
+        const found = payload.data.find((entry) => entry.id === listFromUrl);
+        setListState(found ? { kind: "named", list: found } : { kind: "missing" });
+      })
+      .catch((caught: unknown) => {
+        if (controller.signal.aborted) return;
+        // A conference switch calls `abortInFlightRequests()`, which aborts the
+        // shell's generation controller and not this one — so the signal above
+        // reads false and only the error's own name gives it away.
+        if (caught instanceof Error && caught.name === "AbortError") return;
+        setListState({ kind: "error", message: errorSummary(caught) });
+      });
+    return () => controller.abort();
+  }, [listFromUrl]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -125,14 +172,29 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
     setPage(1);
     setFilters((current) => ({ ...current, [key]: current[key] === value ? "" : value }));
   };
-  const clearAll = () => { setPage(1); setFilters({ ...EMPTY_FILTERS }); navigate?.("/people"); };
+  const clearAll = () => { setPage(1); setFilters({ ...EMPTY_FILTERS }); navigate?.(peopleUrl("")); };
+  // Leaves the list and NOTHING else — it is not "show everyone", because a
+  // company or tag chip set alongside the list stays set, and a button whose
+  // label overpromises is worse than one that says what it does. It clears the
+  // state as well as the URL so it still works if `navigate` is ever absent;
+  // clearing only the filter would leave `?list=` in the address bar for the
+  // next reload to put back.
+  const leaveList = () => {
+    setPage(1);
+    setFilters((current) => ({ ...current, listId: "" }));
+    navigate?.(peopleUrl(""));
+  };
   const toggleRow = (id: string) => setSelected((current) => {
     const next = new Set(current);
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const openPerson = (personId: string) => navigate?.(`/people?person=${encodeURIComponent(personId)}`);
-  const closePerson = () => navigate?.("/people");
+  // The drawer is a layer over the list you are in, so both of these carry the
+  // list through. Dropping it would close the drawer onto the whole
+  // organization — the band gone, the rows silently different, and no way back
+  // but the browser's own button.
+  const openPerson = (personId: string) => navigate?.(peopleUrl(filters.listId, personId));
+  const closePerson = () => navigate?.(peopleUrl(filters.listId));
   // An import receipt — "14 created · 2 updated · 1 skipped" — is a number the
   // organizer has to actually read, so the line stays up long enough to read it.
   const announce = (message: string) => {
@@ -143,9 +205,11 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
   return <div class="people-page">
     <PageHeader
       title="People"
-      copy={payload
-        ? `Everyone this organization has worked with, across every conference — ${payload.total.toLocaleString()} speakers, submitters, chairs and contacts, carrying their history, notes and tags. A returning speaker is already here; nobody re-keys anything.`
-        : "Reading everyone this organization has worked with…"}
+      copy={filters.listId
+        ? "A list is a way of looking at People, not a separate place people live — everything below is this organization's people, narrowed to the list named beneath the search."
+        : payload
+          ? `Everyone this organization has worked with, across every conference — ${payload.total.toLocaleString()} speakers, submitters, chairs and contacts, carrying their history, notes and tags. A returning speaker is already here; nobody re-keys anything.`
+          : "Reading everyone this organization has worked with…"}
       actions={<>
         <Button onClick={() => setModal("import")}>Import people</Button>
         <Button variant="primary" onClick={() => setModal("addperson")}>Add person</Button>
@@ -176,6 +240,35 @@ export function PeoplePage({ search = "", navigate }: { search?: string; navigat
       <Button small onClick={() => navigate?.("/lists")}>Lists</Button>
       <Button small onClick={() => navigate?.("/pipeline")}>Sourcing pipeline</Button>
     </div>
+
+    {/* The list you are inside, said in the name you gave it. Rendered from the
+        URL rather than from the resolved record, so the band is on screen from
+        the first paint and the name fills into it — the table never shifts. */}
+    {filters.listId ? <div class="people-listband">
+      <span class="people-listband-mark" aria-hidden="true">◈</span>
+      {/* The live region is the name and its line, not the whole band: the two
+          buttons never change, and dragging them into every announcement is
+          noise a screen reader cannot skip past. */}
+      <span class="people-listband-said" aria-live="polite">
+        <span class="people-listband-name">{
+        listState.kind === "named" ? listState.list.name
+          : listState.kind === "missing" ? "This list no longer exists"
+            : listState.kind === "error" ? "This list could not be read"
+              : "Reading this list…"
+        }</span>
+        <span class="people-listband-meta">{
+        listState.kind === "named"
+          ? `${listState.list.kind === "live" ? "Live" : "Fixed"} list · ${listState.list.member_count.toLocaleString()} ${listState.list.member_count === 1 ? "person" : "people"} · saved ${formatMoment(listState.list.created_at)}${listState.list.created_by_name ? ` by ${listState.list.created_by_name}` : ""}`
+          : listState.kind === "missing" ? "It was deleted, or the link is from another organization."
+            : listState.kind === "error" ? listState.message
+              : " "
+        }</span>
+      </span>
+      <span class="people-listband-actions">
+        <Button small onClick={() => navigate?.("/lists")}>All lists</Button>
+        <Button small onClick={leaveList}>Leave this list</Button>
+      </span>
+    </div> : null}
 
     {filterOpen ? <div class="people-filter-panel">
       <div class="people-filter-group">

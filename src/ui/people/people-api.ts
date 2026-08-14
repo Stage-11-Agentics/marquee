@@ -158,17 +158,23 @@ export interface PeopleFilters {
 
 export const EMPTY_FILTERS: PeopleFilters = { q: "", company: "", title: "", tag: "", listId: "" };
 
+/**
+ * The attribute chips. A list is deliberately NOT one of them: its identity is
+ * a name the organizer gave it, and the only thing a chip has to render is the
+ * id — so the row that is supposed to say what you are looking at said
+ * `list: lst_01K…` instead. The list gets its own named banner; `hasFilters`
+ * still counts it so "Clear all" appears and the empty state stays honest.
+ */
 export function activeCriteria(filters: PeopleFilters): Array<{ key: keyof PeopleFilters; label: string; value: string }> {
   const criteria: Array<{ key: keyof PeopleFilters; label: string; value: string }> = [];
   if (filters.company) criteria.push({ key: "company", label: "company", value: filters.company });
   if (filters.title) criteria.push({ key: "title", label: "job title", value: filters.title });
   if (filters.tag) criteria.push({ key: "tag", label: "tag", value: filters.tag });
-  if (filters.listId) criteria.push({ key: "listId", label: "list", value: filters.listId });
   return criteria;
 }
 
 export function hasFilters(filters: PeopleFilters): boolean {
-  return filters.q.trim().length > 0 || activeCriteria(filters).length > 0;
+  return filters.q.trim().length > 0 || filters.listId.length > 0 || activeCriteria(filters).length > 0;
 }
 
 /**
