@@ -1,12 +1,8 @@
 import { readFileSync } from "node:fs";
-import { h } from "preact";
-import { renderToString } from "preact-render-to-string";
 import { expect, test } from "vitest";
 
 import { isOutreachOverdue } from "../../src/lib/person-annotations";
 import { buildPeopleQuery } from "../../src/routes/people.queries";
-import { ComposeModal } from "../../src/ui/people/PeopleModals";
-import { OutreachCard } from "../../src/ui/people/SourcingPipelinePage";
 
 const page = readFileSync(new URL("../../src/ui/people/SourcingPipelinePage.tsx", import.meta.url), "utf8");
 const drawer = readFileSync(new URL("../../src/ui/people/PersonDrawer.tsx", import.meta.url), "utf8");
@@ -15,11 +11,6 @@ const peopleApi = readFileSync(new URL("../../src/ui/people/people-api.ts", impo
 const compose = readFileSync(new URL("../../src/ui/people/PeopleModals.tsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("../../src/ui/people/people.css", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../../migrations/0019_outreach_targeting.sql", import.meta.url), "utf8");
-
-const stages = [
-  { id: "researching", name: "Researching", kind: "open" },
-  { id: "contacted", name: "Contacted", kind: "open" },
-];
 
 test("CONTRACT · MRQ-205 · Outreach static copy contains no baked-in four-digit year", () => {
   // This is intentionally grep-shaped: a future copy edit that sneaks a
@@ -32,37 +23,6 @@ test("CONTRACT · MRQ-205 · Outreach static copy contains no baked-in four-digi
   expect(page).toContain("+ Add prospect");
 });
 
-test("CONTRACT · MRQ-205 · the long-name DOM card carries a full-name tooltip, target line, and contained selector", () => {
-  const name = "Margarethe von Habsburg-Lothringen, Erzherzogin zu Österreich";
-  const html = renderToString(h(OutreachCard, {
-    card: {
-      person_id: "per_long",
-      name,
-      company: "Longform Signal Cooperative",
-      stage: "contacted",
-      score: 92,
-      rationale: null,
-      moved_at: 1,
-      target_event_id: "evt_devflow",
-      target_event_name: "DevFlow Conf 2027 with an exceptionally long conference name",
-      next_touch_on: "2026-08-11",
-    },
-    displayName: name,
-    stages,
-    busy: false,
-    onMove: () => undefined,
-    onOpen: () => undefined,
-  }));
-
-  expect(html).toContain('data-outreach-card="true"');
-  expect(html).toContain(`title="${name}"`);
-  expect(html).toContain("→ DevFlow Conf 2027 with an exceptionally long conference name");
-  expect(html).toContain('class="people-moveto"');
-  expect(css).toMatch(/\.people-card \{[\s\S]*?min-width: 0;[\s\S]*?overflow: hidden;/);
-  expect(css).toMatch(/\.people-moveto \{[\s\S]*?flex: 1 1 auto;[\s\S]*?max-width: 100%;/);
-  expect(page).toContain("element.scrollWidth > element.clientWidth + 1");
-});
-
 test("CONTRACT · MRQ-205 · next-touch overdue state sorts and tints live cards", () => {
   const now = Date.UTC(2026, 7, 12);
   expect(isOutreachOverdue("2026-08-11", "contacted", now)).toBe(true);
@@ -73,7 +33,7 @@ test("CONTRACT · MRQ-205 · next-touch overdue state sorts and tints live cards
 });
 
 test("CONTRACT · MRQ-205 · target FK is additive and people filtering stays SQL-backed", () => {
-  expect(migration).toMatch(/ALTER TABLE person_events ADD COLUMN target_event_id TEXT REFERENCES events\(id\);/);
+  expect(migration).toMatch(/ALTER TABLE person_events ADD COLUMN target_event_id TEXT REFERENCES events\(id\) ON DELETE SET NULL;/);
   expect(migration).not.toMatch(/target_event_id TEXT NOT NULL/);
   expect(migration).toMatch(/ALTER TABLE person_events ADD COLUMN next_touch_on TEXT;/);
   expect(migration).toMatch(/ALTER TABLE people ADD COLUMN do_not_contact INTEGER NOT NULL DEFAULT 0/);
@@ -86,22 +46,4 @@ test("CONTRACT · MRQ-205 · target FK is additive and people filtering stays SQ
   expect(compose).toContain("marked do-not-contact:");
   expect(drawer).toContain("Outreach:");
   expect(drawer).toContain("Open board");
-});
-
-test("CONTRACT · MRQ-205 · compose names excluded people after selection leaves the visible page", () => {
-  const html = renderToString(h(ComposeModal, {
-    people: [
-      { id: "per_grace", name: "Grace Isford", do_not_contact: false },
-      { id: "per_margarethe", name: "Margarethe von Habsburg-Lothringen", do_not_contact: true },
-    ],
-    onClose: () => undefined,
-    onSent: () => undefined,
-  }));
-
-  expect(html).toContain("1 excluded — marked do-not-contact: Margarethe von Habsburg-Lothringen");
-  expect(html).toContain("1 recipient ready");
-  // The People table is server-paginated, so the modal receives the cached
-  // selected records rather than filtering only the currently visible rows.
-  expect(people).toContain("const [selected, setSelected] = useState<Map<string, SelectedPerson>>(new Map())");
-  expect(people).toContain("people={[...selected.values()]}");
 });

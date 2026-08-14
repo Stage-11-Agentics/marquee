@@ -12,6 +12,7 @@ const ACTOR_ID = "per_delete_204_actor";
 const SPEAKER_ID = "per_delete_204_speaker";
 const REVIEWER_ID = "per_delete_204_reviewer";
 const OTHER_PERSON_ID = "per_delete_204_other";
+const OUTREACH_CARD_ID = "person_event_delete_204_outreach";
 const MULTI_EVENT_TOKEN_ID = "token_delete_204_multi";
 const SESSION_ID = "session_delete_204";
 const MAGIC_LINK_ID = "magic_delete_204_portal";
@@ -412,4 +413,29 @@ test("AC-304 · deletion returns the sibling first and then the fresh-install de
   expect(JSON.parse(secondText)).toMatchObject({ ok: true, event_id: SIBLING_EVENT_ID, next_event_id: null });
   expect(await countRows("SELECT COUNT(*) AS total FROM events WHERE org_id = ?", ORG_ID)).toBe(0);
   expect(await countRows("SELECT COUNT(*) AS total FROM organizations WHERE id = ?", ORG_ID)).toBe(1);
+});
+
+test("CONTRACT · MRQ-205 · deleting a targeted conference keeps the outreach card with a null target", async () => {
+  await env.DB.prepare(
+    `INSERT INTO person_events (id, org_id, person_id, kind, value_json, actor_person_id, target_event_id, created_at)
+     VALUES (?, ?, ?, 'stage', ?, ?, ?, ?)`,
+  ).bind(
+    OUTREACH_CARD_ID,
+    ORG_ID,
+    SPEAKER_ID,
+    JSON.stringify({ stage: "contacted", score: 88 }),
+    ACTOR_ID,
+    EVENT_ID,
+    NOW + 2,
+  ).run();
+
+  const response = await request(`/api/v1/events/${EVENT_ID}`, { method: "DELETE" });
+  const responseText = await response.text();
+  expect(response.status, responseText).toBe(200);
+  expect(await countRows("SELECT COUNT(*) AS total FROM events WHERE id = ?", EVENT_ID)).toBe(0);
+
+  const card = await env.DB.prepare("SELECT target_event_id FROM person_events WHERE id = ?")
+    .bind(OUTREACH_CARD_ID)
+    .first<{ target_event_id: string | null }>();
+  expect(card).toEqual({ target_event_id: null });
 });
