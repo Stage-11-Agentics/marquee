@@ -40,3 +40,12 @@ test("CONTRACT · AIA-07 + CFP-15 publication preview and agenda drop targets ex
   assert.match(trackBoard, /role="group"\n    aria-label=\{ariaLabel\}\n    data-agenda-drop-target="true"/);
   assert.match(trackBoard, /Place Session in/);
 });
+
+test("CONTRACT · agenda builder puts the placement workspace before the publication checklist", () => {
+  const toolbar = page.indexOf('<div class="agenda-toolbar card">');
+  const layout = page.indexOf('<div class="agenda-layout">');
+  const publication = page.indexOf("<PublicationPanel");
+  assert.ok(toolbar >= 0 && layout >= 0 && publication >= 0, "agenda builder landmarks are present");
+  assert.ok(toolbar < layout, "toolbar must precede the placement workspace");
+  assert.ok(layout < publication, "publication checklist must follow the placement workspace");
+});
