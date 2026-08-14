@@ -56,6 +56,13 @@
 #       is invisible to it, which is why its success line says "static".
 #     - SPECIFICITY. A surviving rule that a new, more specific selector now
 #       overrides is present and inert.
+#     - MEDIA CONTEXT. Selector tokens are collected without the @media
+#       condition they sit under, because the extraction skips the `@` line and
+#       reads the indented rules beneath it. A rule MOVED into or out of a media
+#       query is textually present on both sides and behaviourally different —
+#       a desktop rule relocated under `(max-width: 580px)` reads as surviving
+#       and no longer applies to the case it was written for. Found by #210's
+#       reviewer, briefed to hunt a limit this header had not declared.
 #
 #   Those are found by executing the page, not by reading it. Which is the
 #   outer question after any control passes: is a SEARCH even the right
