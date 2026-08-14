@@ -36,7 +36,55 @@ export function safeNext(next: string | null | undefined): string | null {
   if (typeof next !== "string" || next.length === 0) return null;
   if (!isSafeRedirectTarget(next)) return null;
   if (next.startsWith("/\\")) return null;
-  return next;
+  return stripReservedParams(next);
+}
+
+/**
+ * Parameters a caller may never set, because the server reads them back as an
+ * assertion about who authorised the link.
+ *
+ * `viewing_as` + `eventId` together are the organizer-preview marker (SPK-07).
+ * The exchange reads them off the STORED `redirect_to` and, on the strength of
+ * them, lets a signed-in organizer past the already-signed-in guard. The read
+ * side is careful — it never consults the URL — but `POST /api/v1/auth/magic-link`
+ * is public and writes a caller-supplied redirect verbatim onto the same field.
+ * So the marker was forgeable by anyone with an address in the system: request
+ * your own login link carrying the marker, forward the mail to an organizer of
+ * that conference, and their click unseats them into your session.
+ *
+ * Proving the read path is safe says nothing about who can WRITE the field.
+ * This is the write half.
+ */
+const RESERVED_REDIRECT_PARAMS: readonly string[] = ["viewing_as"];
+
+/**
+ * Drop the reserved parameters from a caller-supplied path, keeping everything
+ * else. Lossless for every legitimate caller: a login link has no business
+ * carrying a preview marker, and no product surface asks one to.
+ *
+ * `eventId` is deliberately NOT reserved. The portal reads it to scope itself
+ * and the product's own server-minted links carry it (`public-form.routes.ts`
+ * mints `/portal?eventId=…`), so reserving it would break real links. Only the
+ * PAIR is the marker, and removing either half unmakes it.
+ */
+function stripReservedParams(next: string): string {
+  // A relative path by construction; the base only satisfies the parser.
+  let parsed: URL;
+  try {
+    parsed = new URL(next, "https://marquee.invalid");
+  } catch {
+    return next;
+  }
+  let removed = false;
+  for (const name of RESERVED_REDIRECT_PARAMS) {
+    if (parsed.searchParams.has(name)) {
+      parsed.searchParams.delete(name);
+      removed = true;
+    }
+  }
+  if (!removed) return next;
+  const query = parsed.searchParams.toString();
+  return `${parsed.pathname}${query ? `?${query}` : ""}${parsed.hash}`;
 }
 
 /** Where a magic link should land: the caller's safe `?next=`, else the seat's home. */

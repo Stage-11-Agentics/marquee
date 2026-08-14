@@ -14,7 +14,7 @@ import {
   readMagicLink,
 } from "../lib/auth/magic-links";
 import { createSession, resolveSession, revokeSession, SESSION_TTL_MS } from "../lib/auth/auth-sessions";
-import { portalPreviewEventId, portalPreviewHint, portalPreviewReturnSessionId } from "../lib/auth/portal-preview";
+import { isEventSpeaker, portalPreviewEventId, portalPreviewHint, portalPreviewReturnSessionId } from "../lib/auth/portal-preview";
 import { authHasRole, loadMembershipsForOrg } from "../lib/auth/scope-resolution";
 import { pickOutboxEventId, rolesOf, signinRedirect } from "../lib/auth/signin-destination";
 import type { DemoRole } from "../lib/auth/demo-seat";
@@ -331,7 +331,16 @@ const exchangeMagicLink = defineApiRoute(
         // the link. Everything else still gets the refusal — that guard is what
         // stops a stray link silently swapping who a browser is signed in as.
         const previewEventId = portalPreviewEventId(state.link.redirect_to);
-        if (previewEventId === null || !authHasRole(auth, "ops", previewEventId)) {
+        // Two independent conditions, and the second does not depend on the
+        // marker's provenance: the person this link opens must genuinely be a
+        // speaker at the conference the browser holds `ops` over. A marker that
+        // ever reaches the row by some path other than the preview mint still
+        // cannot open a portal that was never previewable.
+        if (
+          previewEventId === null
+          || !authHasRole(auth, "ops", previewEventId)
+          || !(await isEventSpeaker(context.env.DB, previewEventId, state.link.person_id))
+        ) {
           return rejectMagicLink(
             context,
             "This browser is already signed in. Sign out to use this link, or continue as the person already signed in.",
