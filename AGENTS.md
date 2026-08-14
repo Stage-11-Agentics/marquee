@@ -35,7 +35,7 @@ Open-source speaker/session-management platform for conference organizers, built
 - Remote is **`github`**; branch is **`main`**. There is no `origin`.
 - **The Forgejo repo is retired.** Do not push to it, fetch from it, or re-add it as a remote — it was removed so stale commands fail loudly.
 - PRs via `gh pr create --repo Stage-11-Agentics/marquee --base main`; `gh` is already authenticated.
-- **Private stays private.** The public competition artifact is the orphan branch `mrq-42-assembly` (tip `f4240644`): the app tree without `sequence/`, `OPERATOR-PRECONDITIONS.md`, or the `.lattice` board. **Never push `main` to a public repo, and never merge the orphan into `main`** — the merge would delete everything the orphan omits, including the board.
+- **This repository goes public as it stands, history and all** (Atin, 2026-08-12): the operator flips this repo itself at submission time — only the operator does that. The earlier orphan-branch plan (`mrq-42-assembly`) is superseded; **never merge that orphan into `main`** — the merge would delete everything it omits, including the board. Write every commit as if it were already public, because it will be: no secrets, ever (they live in Wrangler secrets and `.dev.vars`).
 
 ## The primary checkout is the Lattice board's home, never a workspace
 
