@@ -38,6 +38,65 @@ function namedScope(module, name) {
   return match ? match.getText(sourceFile) : null;
 }
 
+function namedDeclaration(module, name) {
+  const sourceFile = ts.createSourceFile(
+    module.absolute,
+    module.source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  let match = null;
+  walk(sourceFile, (node) => {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === name) match = node;
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name) match = node;
+  });
+  return match ? { node: match, sourceFile } : null;
+}
+
+function variableInitializer(scope, name) {
+  let initializer = null;
+  walk(scope, (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name) {
+      initializer = node.initializer;
+    }
+  });
+  return initializer;
+}
+
+function callNamed(scope, name) {
+  let match = null;
+  walk(scope, (node) => {
+    if (!ts.isCallExpression(node)) return;
+    if (ts.isIdentifier(node.expression) && node.expression.text === name) match = node;
+  });
+  return match;
+}
+
+function objectProperty(object, name) {
+  if (!ts.isObjectLiteralExpression(object)) return null;
+  return object.properties.find((property) => {
+    if (!ts.isPropertyAssignment(property)) return false;
+    const propertyName = property.name;
+    return ts.isIdentifier(propertyName) && propertyName.text === name;
+  }) ?? null;
+}
+
+function isBodySelector(node) {
+  return ts.isPropertyAccessExpression(node)
+    && node.name.text === "selector"
+    && ts.isIdentifier(node.expression)
+    && node.expression.text === "body";
+}
+
+function isRecipientsMap(node) {
+  return ts.isCallExpression(node)
+    && ts.isPropertyAccessExpression(node.expression)
+    && node.expression.name.text === "map"
+    && ts.isIdentifier(node.expression.expression)
+    && node.expression.expression.text === "recipients";
+}
+
 function callsNamed(module, name) {
   const sourceFile = ts.createSourceFile(
     module.absolute,
@@ -358,7 +417,26 @@ test("CONTRACT · every named bulk family has one classified write seam", async 
   assert.match(scopes.writeBulkSubmissionDecisions, /insertDecisions/);
   assert.match(scopes.writeBulkSubmissionDecisions, /bulk_submission_decision/);
   assert.match(scopes.writeBulkSubmissionDecisions, /operationId/);
-  assert.match(scopes.sendCommunication, /recipientsFor/);
+  const sendComms = namedDeclaration(commsModule, "sendComms");
+  assert.ok(sendComms, "sendComms must remain discoverable as the communication write seam");
+  const selectionInitializer = variableInitializer(sendComms.node, "selection");
+  assert.ok(selectionInitializer, "sendComms must retain a selection result before enqueueing");
+  assert.ok(ts.isAwaitExpression(selectionInitializer), "sendComms must await its canonical selection path");
+  assert.ok(ts.isCallExpression(selectionInitializer.expression), "sendComms must call the selection path");
+  assert.ok(selectionInitializer.expression.arguments.some(isBodySelector), "sendComms must resolve the request selector");
+  const recipientsInitializer = variableInitializer(sendComms.node, "recipients");
+  assert.ok(
+    ts.isPropertyAccessExpression(recipientsInitializer)
+      && recipientsInitializer.name.text === "recipients"
+      && ts.isIdentifier(recipientsInitializer.expression)
+      && recipientsInitializer.expression.text === "selection",
+    "the resolved selection's recipients must feed the bulk send",
+  );
+  const enqueueCall = callNamed(sendComms.node, "enqueueBulkReminder");
+  assert.ok(enqueueCall, "sendComms must enqueue through the bulk reminder seam");
+  const enqueueOptions = enqueueCall.arguments.find((argument) => ts.isObjectLiteralExpression(argument));
+  const recipientsProperty = objectProperty(enqueueOptions, "recipients");
+  assert.ok(recipientsProperty && isRecipientsMap(recipientsProperty.initializer), "bulk enqueue must receive the resolved recipients");
   assert.match(scopes.sendCommunication, /enqueueBulkReminder/);
   assert.match(scopes.recipientsFor, /json_each\(\?\)/);
   assert.match(scopes.recipientsFor, /return \[\]/);
