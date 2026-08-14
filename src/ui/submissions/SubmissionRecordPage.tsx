@@ -398,6 +398,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [busy, setBusy] = useState("");
   const [draftTitle, setDraftTitle] = useState("");
   const [draftAbstract, setDraftAbstract] = useState("");
+  const [contentError, setContentError] = useState("");
   const [contentConfirming, setContentConfirming] = useState(false);
   const [selectedReviewers, setSelectedReviewers] = useState<Record<string, string>>({});
   const [schedule, setSchedule] = useState({ starts_at: "", duration_min: "30", room_id: "", track_id: "" });
@@ -627,16 +628,42 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
    */
   const isDraftRecord = state.kind === "ready" && state.record.status === "draft";
 
+  /**
+   * This editor holds prose the organizer typed, so it does not go through
+   * `act`. `act` answers a refused write beside the control and gives the page
+   * to everything else — correct for assign or publish, where a lost page
+   * costs a click. Here the page IS the work: a dropped connection replaced the
+   * record with "Record unavailable · Your work is not lost", and Retry
+   * reloaded the record, which reseeds `draftTitle` and `draftAbstract` from
+   * the server and overwrites the edits with the values they replaced. The
+   * reassurance was false at the moment it was shown, and a long abstract went
+   * with it.
+   *
+   * The same reasoning already took the score override off `act`. A failed save
+   * now reports beside the button, the record stays on screen, and the typed
+   * title and abstract stay in the fields — so pressing Save again resubmits
+   * the same work rather than a reload having eaten it. `act`'s own policy is
+   * deliberately unchanged: a record that really is gone should still take the
+   * page.
+   */
   const saveContent = async (event: Event, confirmPublished: boolean) => {
     event.preventDefault();
     setContentConfirming(false);
+    setContentError("");
     const payload: Record<string, unknown> = { title: draftTitle, abstract: draftAbstract || null };
-    if (isDraftRecord) {
-      await act("content", "", { method: "PATCH", body: JSON.stringify(payload) }, SUBMISSION_ROUTE);
-      return;
-    }
-    if (confirmPublished) payload.confirm_published = true;
-    await act("content", "/content", { method: "PATCH", body: JSON.stringify(payload) }, CONTENT_ROUTE);
+    if (!isDraftRecord && confirmPublished) payload.confirm_published = true;
+    const path = isDraftRecord ? "" : "/content";
+    const route = isDraftRecord ? SUBMISSION_ROUTE : CONTENT_ROUTE;
+    setBusy("content");
+    try {
+      await apiFetch<unknown>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`,
+        { method: "PATCH", body: JSON.stringify(payload), headers: { "content-type": "application/json" }, route },
+      );
+      reload();
+    } catch (error: unknown) {
+      setContentError(errorSummary(error));
+    } finally { setBusy(""); }
   };
 
   /**
@@ -722,7 +749,10 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
             button saw nothing happen and reloaded their typing away. The guard
             itself is a feature and is untouched; only its warning moved
             earlier. */}
-          <span class="subtle record-content-cue">{isLivePublicly && contentConfirming ? "This replaces what attendees see on the public agenda." : isDraftRecord ? "No submit action is available from this editor." : isLivePublicly ? "This Session is live on the public agenda; saving will ask you to confirm." : "Saved changes are recorded in the history below."}</span></div></form></CardBody></Card>}
+          <span class="subtle record-content-cue">{isLivePublicly && contentConfirming ? "This replaces what attendees see on the public agenda." : isDraftRecord ? "No submit action is available from this editor." : isLivePublicly ? "This Session is live on the public agenda; saving will ask you to confirm." : "Saved changes are recorded in the history below."}</span>
+          {/* Reserved height, so a failed save answers here without moving the
+              button the operator is about to press again. */}
+          <span class={`record-inline-message ${contentError ? "error" : ""}`} role={contentError ? "alert" : undefined}>{contentError || " "}</span></div></form></CardBody></Card>}
         {record.actions.can_decide && <Card><CardHeader title="Record action"><span class={record.decisions.length > 0 ? "record-decision-cue" : "subtle"}>{decidedNote(record.decisions[0])}</span></CardHeader><CardBody><div class="record-action-row">{record.status !== "accepted" && <Button variant="primary" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("approve"); setFeedbackDraft(""); }}>Accept</Button>}{record.status !== "waitlisted" && <Button disabled={Boolean(busy)} onClick={() => { setDecisionRequest("maybe"); setFeedbackDraft(""); }}>Maybe</Button>}{record.status !== "rejected" && <Button variant="danger" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("deny"); setFeedbackDraft(""); }}>Reject</Button>}<span class="subtle">Feedback (optional) is saved with the decision; accepted and rejected decisions also include it in the speaker email.</span></div></CardBody></Card>}
         {decisionRequest && <div class="record-decision-dialog" role="group" aria-labelledby="record-decision-heading"><div class="record-decision-dialog-head"><div><span class="eyebrow">Confirm record action</span><h2 id="record-decision-heading">{decisionRequest === "approve" ? "Accept this submission?" : decisionRequest === "maybe" ? "Waitlist this submission?" : "Reject this submission?"}</h2></div><button type="button" aria-label="Close decision dialog" onClick={() => setDecisionRequest(null)}>×</button></div><p>{decisionRequest === "maybe" ? "A waitlist does not send a message. Any feedback you add is saved with the decision." : "Feedback is optional. If you add it, the speaker will see the same words in the decision email."}</p><label class="field"><span>Feedback for the speaker (optional)</span><textarea rows={6} value={feedbackDraft} onInput={(event) => setFeedbackDraft(event.currentTarget.value)} placeholder="Share context the speaker can act on." /></label><div class="record-action-row"><Button type="button" onClick={() => setDecisionRequest(null)}>Cancel</Button><Button type="button" variant={decisionRequest === "deny" ? "danger" : "primary"} disabled={Boolean(busy)} onClick={() => void decide()}>{busy ? "Saving…" : decisionRequest === "approve" ? "Accept and notify" : decisionRequest === "maybe" ? "Waitlist" : "Reject and notify"}</Button></div></div>}
         {record.decisions.length > 0 && <Card><CardHeader title="Decision history"><span class="tabular">{record.decisions.length}</span></CardHeader><CardBody><div class="record-decision-list">{record.decisions.map((decision) => <article class="record-decision" key={decision.id}><div class="record-decision-head"><strong>{decision.kind === "reversal" ? `Acceptance reversed · ${statusLabel(decision.resulting_status)}` : statusLabel(decision.resulting_status)}</strong><span>{decision.decided_by_name || "Conference team"} · {moment(decision.decided_at)}</span></div><p>{decision.note || decision.feedback_md || "No feedback recorded."}</p></article>)}</div></CardBody></Card>}
