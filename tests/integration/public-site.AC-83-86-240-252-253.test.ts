@@ -149,7 +149,7 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   await env.DB.prepare("DELETE FROM buildings WHERE id = 'building-public-annex'").run();
 });
 
-test("MRQ-185 · a published submitter-only session names its missing on-stage speaker on the agenda and embed", async () => {
+test("CONTRACT · MRQ-185 · a published submitter-only session names its missing on-stage speaker on the agenda and embed", async () => {
   await env.DB.batch([
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, social_links, is_demo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 1, ?, ?)")
       .bind("person-no-stage", "org_public_site", "submitter-only@example.com", "Submitter Only", "Program Lead", "Conference Co", "Submitter biography", NOW, NOW),
