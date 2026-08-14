@@ -1,8 +1,8 @@
 # Implementer — one ticket, one PR
 
-Ticket: `$AE_TICKET`. Read it with `lattice show $AE_TICKET`. Report to the coordinator;
-it owns your completion. Raise a c11 flag only if a **migration** is required — that is
-the one thing you may not do yourself.
+Ticket: `$AE_TICKET`. Read it with `lattice show $AE_TICKET`. Report to Triage; it owns
+your completion. Raise a c11 flag only if a **migration** is required — that is the one
+thing you may not do yourself.
 
 Read `CLAUDE.md`, `DESIGN.md`, and `PHILOSOPHY.md` before you touch anything.
 
@@ -33,7 +33,8 @@ that inherits a cwd and starts committing puts its work on someone else's branch
 someone else's PR. That has already happened here once.
 
 Never work in the primary checkout — it is the board's home and it stays on `main`. Never
-work in `Marquee-worktrees/mrq-auto-eval`, which is the loop's own machinery.
+work in `Marquee-worktrees/mrq-auto-eval` or `Marquee-worktrees/auto-eval` — both are the
+loop's own machinery.
 
 - `npm test` (45s budget), `npm run pr-gate` (120s) before the PR.
 - Every fix ships with a regression test that fails against `github/main` and passes on your
@@ -108,5 +109,5 @@ scoring fix — the judge cannot score a button that is not on the page.
 ## When you are done
 
 Comment on the ticket with: the root cause in one sentence, how you verified it (the
-actual command or the A/B), and the PR number. Set status and stop. Do not merge — the
-merge warden owns `main`.
+actual command or the A/B), and the PR number. Set status and stop. Do not merge — Triage
+owns the merge, and it merges on a reviewer's verdict, never on the author's confidence.

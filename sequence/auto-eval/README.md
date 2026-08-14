@@ -37,8 +37,8 @@ caused by improving itself.
 ## Structure
 
 The spine is a **verb toolbox**, not a daemon. Shell owns mechanism and guards;
-agents own judgement. A coordinator that dies mid-run is replaceable because
-every verb reads and writes files rather than the coordinator's context.
+agents own judgement. A surface that dies mid-run is replaceable because every
+verb reads and writes files rather than that surface's context.
 
 ```
 loop.sh status            one screen: round, sha under test, judgements landed, lanes
@@ -50,13 +50,88 @@ loop.sh barrier           THE mutation window: reset → verify → deploy → v
 loop.sh fire <sha>        kick the next round on Atlas against a known sha
 ```
 
-| role | count | life | owns |
-|---|---|---|---|
-| coordinator | 1 | whole run | round clock, ticket minting (single-writer), calls the verbs |
-| merge warden | 1 | whole run | the gate, serialized; the only thing that touches `main` |
-| area analyst | 6/round | ~10 min | item-level diff + (a)/(b)/(c) classification for one area |
-| implementer | K | ~40 min | one ticket, own worktree, PR |
-| craft critic | 1 | whole run | the axis sbek cannot see — `DESIGN.md`, `PHILOSOPHY.md` |
+Two surfaces stand for the whole run; everything else is created per unit of work
+and closed when that unit lands.
+
+| role | count | life | owns | prompt |
+|---|---|---|---|---|
+| **Eval Runner** | 1 | whole run | the only surface that talks to Atlas: round clock, the verbs, the freeze, the barrier, the score floor. Writes no code, mints no tickets, dispatches nobody. | `prompts/runner.md` |
+| **Eval Triage** | 1 | whole run | findings in, merged PRs out: item-level diff, (a)/(b)/(c) classification, ticket minting (single-writer), dispatch, and the merge | `prompts/triage.md` |
+| reviewer | 1/PR | ~15 min | reads a diff its author did not write, and reproduces the symptom rather than the cause | `prompts/reviewer.md` |
+| implementer | K | ~40 min | one ticket, own worktree, one PR | `prompts/implementer.md` |
+
+**There is no message bus between the two standing surfaces.** The Runner does
+not hand judgements to Triage; Triage watches the disk. `watch` already syncs
+each area into `$KIT_LOCAL/runs/$stamp/judgements/`, so every judgement exists as
+a file the moment it exists at all. The one exception is the run stamp itself:
+`fire` sets `runStamp=null` and only the first `cmd_sync` fills it in, so for the
+opening stretch of a round the stamp is unknowable and Triage globs every run
+directory rather than resolving one. Routing judgements through an agent's context as well was the one place
+this design contradicted its own principle — *every verb reads and writes files
+rather than that surface's context* — and it bought nothing, because the file is
+what Triage opens either way. It was also strictly worse under failure: the sync
+inside `watch` is guarded, so a dropped link prints the line and retries the file
+next tick, which means the announcement could arrive pointing at a directory that
+did not yet hold the judgement.
+
+Three consequences, and the first is the one the design rests on.
+
+**Triage blocks in one shell command; it never polls in its own loop.** A poll is
+a turn per check — two hours at 45s is roughly 160 turns of *still nothing*, far
+more context than the six messages it replaces. Last night's Triage reached 89%
+context, which is precisely when it began accepting controls that could not fail.
+A blocking wait costs one tool call and no context, so Triage arrives at each
+judgement with a nearly empty window. That is not a saving; it is the mechanism
+by which the classification is any good.
+
+**Silence must stay distinguishable from death.** Under a push design, no message
+means nothing happened. Under a watch design, no file means nothing happened *or*
+the round died, and from Triage's seat those are identical. This is observed, not
+theoretical: `watch` exited 255 mid-round in round 9 and a judgement landed
+unnoticed — *a dead watch looks exactly like a quiet one*. Only the Runner can
+tell `running` from `unreachable` from `stopped`. So Triage's wait carries a
+deadline and returns on either a new file or that deadline, and **an empty run
+directory at T+window is a finding, not patience.** This is the same instinct as
+*deadline barrier, not completion barrier*, applied to the other surface.
+
+**Exactly three things still cross between the two standing surfaces, and this is
+the closed list — not examples:**
+
+1. **Runner → Triage: this run is VOID.** A void run is byte-indistinguishable
+   from a good one on disk, and diffing against one invents regressions that no
+   code caused. `state.voidRuns` is the record, but the judgement is the Runner's
+   and it has to arrive before Triage mines.
+2. **Triage → Runner: a coverage capability is still unbuilt — hold the fire.**
+   The coverage trap below. It must land *before* a `fire`, which is exactly why
+   it cannot be a file Triage writes mid-round.
+3. **Either → the operator: a c11 flag.** A migration, the score floor, a stuck
+   barrier.
+
+That list governs the Runner↔Triage boundary only. A dispatched worker still
+reports to whoever dispatched it — in particular **a reviewer's verdict is a
+deliberate fourth channel**, from the reviewer to Triage, because Triage's merge
+is conditional on receiving it and an undelivered verdict is the failure that
+channel exists to prevent.
+
+Everything else is the sidebar description. Which promotes descriptions from a
+courtesy to the only channel the two standing surfaces have: **a stale
+description is now a lie the operator cannot detect**, because there is no second
+stream that would contradict it.
+
+**Merging belongs to Triage, and Triage may not merge unreviewed.** `CLAUDE.md`
+is the binding rule — *reviewed* means someone other than the author read the
+diff, and neither a green gate nor Triage's own confidence is a review. Since
+Triage dispatched the implementer and wrote the ticket, it is not a disinterested
+reader of the result either. So Triage dispatches a reviewer per PR and merges on
+that verdict.
+
+A reviewer is a **separate surface, not a subagent of Triage** (operator ruling,
+2026-08-14). A subagent shares Triage's context and inherits its framing of the
+defect, which is exactly what the review has to be independent of: on #221 the
+author tested the cause it had fixed and the reviewer reproduced the symptom, and
+only the second test would have caught a stall standing behind a 404. It also
+protects the scarcest resource in the loop, which is Triage's own context window.
+Doc-only PRs may use a subagent.
 
 ## Rules that are not negotiable
 
@@ -93,7 +168,7 @@ loop.sh fire <sha>        kick the next round on Atlas against a known sha
   with no matching code change, whose evidence shows the control was never
   exercised, is a watch item. It becomes a ticket if the next round repeats it.
 
-## Triage taxonomy (the analyst's contract)
+## Triage taxonomy (Triage's contract)
 
 Every backward move is exactly one of these, and only the first is an emergency:
 
