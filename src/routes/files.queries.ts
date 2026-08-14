@@ -23,6 +23,11 @@ export type FileStateFilter = (typeof FILE_STATES)[number];
 /** What the row's deliverable slot is doing right now. */
 export type FileRowState = "uploaded" | "missing" | "overdue" | "cancelled";
 
+export interface FilesSession {
+  id: string;
+  title: string;
+}
+
 export interface FilesRow {
   /** The deliverable slot — the speaker task id. Comments and exports anchor here, not on an attachment. */
   id: string;
@@ -37,7 +42,9 @@ export interface FilesRow {
     cancelled_at: number | null;
   };
   person: { id: string; name: string; email: string };
-  session: { id: string; title: string } | null;
+  session: FilesSession | null;
+  /** Accepted sessions to choose from when no unambiguous fallback exists. */
+  session_candidates: FilesSession[];
   latest: FileVersion | null;
   version_count: number;
   versions: FileVersion[];
@@ -75,6 +82,12 @@ interface TaskRow {
   submission_title: string | null;
 }
 
+interface AcceptedSessionRow {
+  person_id: string;
+  submission_id: string;
+  title: string;
+}
+
 function stateFor(row: TaskRow, versionCount: number, now: number): FileRowState {
   if (row.cancelled_at !== null) return "cancelled";
   if (versionCount > 0) return "uploaded";
@@ -88,11 +101,45 @@ function matchesSearch(row: FilesRow, needle: string): boolean {
     row.session?.title ?? "",
     row.task.title,
     row.task.template_name,
+    ...row.session_candidates.map((session) => session.title),
     ...row.versions.map((version) => version.filename),
   ]
     .join(" ")
     .toLowerCase();
   return haystack.includes(needle);
+}
+
+/**
+ * Existing deliverable tasks can predate the per-person session assignment
+ * write path. Read the accepted sessions here so that a legacy NULL link does
+ * not erase a relationship the organizer already holds elsewhere. Rejected
+ * and withdrawn talks are deliberately excluded: they are not valid places
+ * for a current deliverable to land.
+ */
+async function acceptedSessionsFor(
+  db: D1Database,
+  eventId: string,
+  personIds: readonly string[],
+): Promise<Map<string, FilesSession[]>> {
+  if (personIds.length === 0) return new Map();
+  const rows = await db.prepare(
+    `SELECT DISTINCT part.person_id, submission.id AS submission_id, submission.title
+       FROM participations part
+       JOIN submissions submission ON submission.id = part.submission_id
+      WHERE submission.event_id = ?
+        AND submission.status = 'accepted'
+        AND part.role IN ('speaker', 'co_speaker', 'submitter')
+        AND part.person_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+      ORDER BY part.person_id ASC, submission.title COLLATE NOCASE ASC, submission.id ASC`,
+  ).bind(eventId, JSON.stringify([...new Set(personIds)])).all<AcceptedSessionRow>();
+
+  const sessions = new Map<string, FilesSession[]>();
+  for (const row of rows.results) {
+    const list = sessions.get(row.person_id) ?? [];
+    list.push({ id: row.submission_id, title: row.title });
+    sessions.set(row.person_id, list);
+  }
+  return sessions;
 }
 
 /**
@@ -138,18 +185,27 @@ export async function listFiles(
     .bind(eventId)
     .all<TaskRow>();
 
-  const versionsByTask = await listVersionsForOwners(
-    db,
-    "task_upload",
-    tasks.results.map((task) => task.id),
-    mediaPublicOrigin,
-    mediaSigningSecret,
-    now,
-  );
+  const personIds = [...new Set(tasks.results.map((task) => task.person_id))];
+  const [versionsByTask, acceptedSessionsByPerson] = await Promise.all([
+    listVersionsForOwners(
+      db,
+      "task_upload",
+      tasks.results.map((task) => task.id),
+      mediaPublicOrigin,
+      mediaSigningSecret,
+      now,
+    ),
+    acceptedSessionsFor(db, eventId, personIds),
+  ]);
 
   const all: FilesRow[] = tasks.results.map((task) => {
     const list = versionsByTask.get(task.id);
     const versions = list?.versions ?? [];
+    const explicitSession = task.submission_id === null
+      ? null
+      : { id: task.submission_id, title: task.submission_title ?? "Untitled session" };
+    const acceptedSessions = acceptedSessionsByPerson.get(task.person_id) ?? [];
+    const session = explicitSession ?? (acceptedSessions.length === 1 ? acceptedSessions[0] : null);
     return {
       id: task.id,
       state: stateFor(task, versions.length, now),
@@ -163,7 +219,8 @@ export async function listFiles(
         cancelled_at: task.cancelled_at,
       },
       person: { id: task.person_id, name: task.person_name, email: task.person_email },
-      session: task.submission_id ? { id: task.submission_id, title: task.submission_title ?? "Untitled session" } : null,
+      session,
+      session_candidates: session === null ? acceptedSessions : [],
       latest: list?.latest ?? null,
       version_count: list?.version_count ?? 0,
       versions,

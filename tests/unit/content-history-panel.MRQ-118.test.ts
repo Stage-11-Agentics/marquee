@@ -6,6 +6,7 @@ import { renderToString } from "preact-render-to-string";
 import { expect, test } from "vitest";
 
 import { ContentHistory, type HistoryEntryView } from "../../src/ui/history/ContentHistory";
+import { historyMoment } from "../../src/ui/submissions/record-copy";
 
 /**
  * The organizer's History panel (MRQ-118) — CNT-11's scoring surface.
@@ -74,6 +75,23 @@ test("CONTRACT · without an onRestore handler the history panel is read-only", 
 test("CONTRACT · an empty history says so instead of rendering a bare panel", () => {
   const html = renderToString(h(ContentHistory, { entries: [], label, moment }));
   expect(html).toContain("No history recorded.");
+});
+
+test("CONTRACT · MRQ-182 · history shows time of day and keeps the timestamp column stable", () => {
+  const later = Date.UTC(2026, 7, 13, 15, 9);
+  const earlier = Date.UTC(2026, 7, 13, 15, 4);
+  const laterStamp = historyMoment(later);
+  const earlierStamp = historyMoment(earlier);
+  const html = renderToString(h(ContentHistory, {
+    entries: [entry({ id: "later", created_at: later }), entry({ id: "earlier", created_at: earlier })],
+    label,
+    moment: historyMoment,
+  }));
+
+  expect(laterStamp).toMatch(/Aug 13, 2026.*:\d{2}/);
+  expect(laterStamp).not.toBe(earlierStamp);
+  expect(html.indexOf(laterStamp)).toBeLessThan(html.indexOf(earlierStamp));
+  expect(historyStyles).toMatch(/\.history-fact time \{[^}]*min-width: \d+px;/);
 });
 
 test("CONTRACT · history rows cannot jump when a restore control swaps for its confirm", () => {
