@@ -174,7 +174,9 @@ describe.sequential("MRQ-170 submitter editing", () => {
     expect(acceptedBody.outcome).toBe("accepted");
     expect(acceptedBody.confirmation?.title).toBe("Your abstract was accepted");
     const acceptedPage = await request(`/f/mrq-170-cfp?resume=${encodeURIComponent(token)}`);
-    expect(await acceptedPage.text()).toContain("<h2>Your abstract was accepted</h2>");
+    const acceptedHtml = await acceptedPage.text();
+    expect(acceptedHtml).toContain("<h2>Your abstract was accepted</h2>");
+    expect(acceptedHtml).toContain("Editing is closed because the conference has already made a decision.");
     const decidedPortal = await request("/api/v1/me/portal", {}, cookie);
     const decidedBody = await decidedPortal.json<{ submissions: Array<{ id: string; edit: { enabled: boolean; reason: string | null } }> }>();
     expect(decidedBody.submissions[0]).toMatchObject({ id: submissionId, edit: { enabled: false } });
