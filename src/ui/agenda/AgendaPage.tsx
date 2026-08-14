@@ -745,7 +745,7 @@ function RoomPanel({ room, showBuildingComparison, onClose }: { room: AgendaRoom
   </aside>;
 }
 
-export function ConflictCounter({ count, open, onOpen }: { count: number; open: boolean; onOpen: () => void }): JSX.Element {
+export function ConflictCounter({ count, open, onOpen, children }: { count: number; open: boolean; onOpen: () => void; children?: ComponentChildren }): JSX.Element {
   return <Button
     type="button"
     variant="danger"
@@ -755,7 +755,7 @@ export function ConflictCounter({ count, open, onOpen }: { count: number; open: 
     aria-label={`Open live agenda conflict details · ${count} active`}
     title="Open live agenda conflict details"
     onClick={onOpen}
-  >⚠ <span class="tabular">{count}</span> conflicts</Button>;
+  >{children ?? <>⚠ <span class="tabular">{count}</span> conflicts</>}</Button>;
 }
 
 export function ConflictPanel({ conflicts, sessions, showBuildingComparison = true, onClose, onJump }: { conflicts: AgendaConflict[]; sessions: AgendaSession[]; showBuildingComparison?: boolean; onClose: () => void; onJump: (sessionId: string) => void }): JSX.Element {
@@ -1239,7 +1239,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
   };
 
   return <div class="agenda-page">
-    <PageHeader title="Agenda builder" copy={`${headerBuilding ? `${headerBuilding}. ` : ""}Place accepted Sessions by drag or selection. Format defaults set duration; live conflicts warn without blocking.`} actions={<><AgentBriefLauncher surface="agenda" eventId={eventId} /><ConflictCounter count={visibleConflictData.length} open={conflictsOpen} onOpen={() => setConflictsOpen(true)} /></>} />
+    <PageHeader title="Agenda builder" copy={`${headerBuilding ? `${headerBuilding}. ` : ""}Place accepted Sessions by drag or selection. Format defaults set duration; live conflicts warn without blocking.`} actions={<><AgentBriefLauncher surface="agenda" eventId={eventId} /><ConflictCounter count={visibleConflictData.length} open={conflictsOpen} onOpen={() => setConflictsOpen(true)}>⚠ <span class="tabular">{visibleConflictData.length}</span> conflicts</ConflictCounter></>} />
     {snapshot.schedule_window.outside_window_session_count > 0 && <div class="agenda-notice agenda-schedule-window-warning" role="status"><span><strong class="tabular">{snapshot.schedule_window.outside_window_session_count}</strong> scheduled Session{snapshot.schedule_window.outside_window_session_count === 1 ? "" : "s"} fall outside the conference dates.</span><a href="/settings">Open Conference settings ↗</a></div>}
     {publicationNotice && <div class="agenda-notice agenda-publication-success" role="status"><span>Published <strong class="tabular">{publicationNotice.count}</strong> Session{publicationNotice.count === 1 ? "" : "s"} to the public agenda.</span><span class="agenda-notice-actions"><a href={publicationNotice.publicAgendaUrl}>View public agenda ↗</a><button type="button" onClick={() => setPublicationNotice(null)} aria-label="Dismiss publication confirmation">×</button></span></div>}
     <PublicationPanel
