@@ -4,10 +4,10 @@
  * The rows were built inline inside the download handler, next to a blob, an
  * anchor and a revoke — so the only way to see what the file actually contains
  * was to download one. That is how the export came to escape its cells
- * differently from the two server-side exports for three months without anyone
- * noticing.
+ * differently from the two server-side exports without anyone noticing.
  */
 
+import type { SubmissionListItem } from "../../api/submissions";
 import { csvRow } from "../../lib/csv";
 import { submissionKindLabel, submissionStatusLabel } from "../../lib/submission-columns";
 
@@ -16,18 +16,23 @@ export const SUBMISSION_EXPORT_HEADER = [
   "Type", "ID", "Title", "Speakers", "Status", "Tracks", "Score", "Submitted", "Last updated", "Origin",
 ] as const;
 
-/** Only what the export reads, so a test does not have to build a whole row. */
+/**
+ * Only what the export reads, so a test does not have to build a whole row —
+ * but every field keeps the list's own type. Widening `status` and `origin` to
+ * `string` for convenience lets a fixture assert on a value the product cannot
+ * emit, and a fixture that cannot happen proves nothing about a file that can.
+ */
 export interface ExportableSubmission {
-  kind: "abstract" | "session";
+  kind: SubmissionListItem["kind"];
   id: string;
   title: string;
   speakers: ReadonlyArray<{ name: string }>;
-  status: string;
+  status: SubmissionListItem["status"];
   tracks: ReadonlyArray<{ name: string }>;
   score: number | null;
   submitted_at: number | null;
   updated_at: number | null;
-  origin: string;
+  origin: SubmissionListItem["origin"];
 }
 
 /** The whole file, trailing newline included — exactly what gets downloaded. */

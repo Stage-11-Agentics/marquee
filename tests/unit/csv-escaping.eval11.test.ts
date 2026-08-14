@@ -33,7 +33,7 @@ function submission(overrides: Partial<ExportableSubmission> = {}): ExportableSu
     score: 4.25,
     submitted_at: 1_760_000_000_000,
     updated_at: 1_760_000_100_000,
-    origin: "form",
+    origin: "public",
     ...overrides,
   };
 }
@@ -41,6 +41,32 @@ function submission(overrides: Partial<ExportableSubmission> = {}): ExportableSu
 /** Physical lines, the way every line-oriented tool counts them. */
 function physicalLines(file: string): string[] {
   return file.replace(/\n$/, "").split("\n");
+}
+
+/**
+ * Split one record into cells, tracking quote state — because a comma or a
+ * `","` sequence inside a correctly escaped field is data, not a boundary. A
+ * naive `line.split('","')` reports 11 cells for a title of `Talk","Fake`,
+ * which is a test that fails on data the escaper handled correctly.
+ */
+function cells(line: string): string[] {
+  const found: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index]!;
+    if (quoted) {
+      if (character !== '"') { current += character; continue; }
+      if (line[index + 1] === '"') { current += '"'; index += 1; continue; }
+      quoted = false;
+      continue;
+    }
+    if (character === '"') { quoted = true; continue; }
+    if (character === ",") { found.push(current); current = ""; continue; }
+    current += character;
+  }
+  found.push(current);
+  return found;
 }
 
 describe("csv escaping", () => {
@@ -75,18 +101,35 @@ describe("csv escaping", () => {
     // organizer reading the file finds the origin under Origin, not under
     // Title, which is what a shifted row actually looks like in a spreadsheet.
     for (const line of physicalLines(file).slice(1)) {
-      expect(line.split('","'), "cells per record").toHaveLength(SUBMISSION_EXPORT_HEADER.length);
-      expect(line.endsWith('"form"')).toBe(true);
+      const row = cells(line);
+      expect(row, "cells per record").toHaveLength(SUBMISSION_EXPORT_HEADER.length);
+      expect(row.at(-1), "the last cell is still Origin").toBe("public");
+      expect(row[0]).toBe("Session");
     }
 
     // Flattening is lossy on purpose, and the words survive it.
-    expect(file).toContain("Agents in production: what broke, and why");
-    expect(file).toContain("Ada Lovelace");
+    expect(cells(physicalLines(file)[1]!)[2]).toBe("Agents in production: what broke, and why");
+    expect(cells(physicalLines(file)[2]!)[3]).toBe("Ada Lovelace");
+  });
+
+  test("CONTRACT · a quote sequence in a title is data, not a column boundary", () => {
+    // The one hostile title that would fool a naive reader: it contains the
+    // exact `","` a lazy split treats as a separator.
+    const file = submissionsCsv([submission({ title: 'Talk","Fake' })]);
+    const row = cells(physicalLines(file)[1]!);
+    expect(row).toHaveLength(SUBMISSION_EXPORT_HEADER.length);
+    expect(row[2]).toBe('Talk","Fake');
   });
 
   test("CONTRACT · the header is the columns the list promises, in order", () => {
     const [header] = physicalLines(submissionsCsv([]));
-    expect(header).toBe(SUBMISSION_EXPORT_HEADER.map((name) => `"${name}"`).join(","));
+    // Written out rather than derived from the constant: comparing the constant
+    // to itself passes after a rename, a reorder, or a dropped column, which is
+    // every change this assertion exists to catch.
+    expect(cells(header!)).toEqual([
+      "Type", "ID", "Title", "Speakers", "Status", "Tracks", "Score", "Submitted", "Last updated", "Origin",
+    ]);
+    expect(cells(header!)).toEqual([...SUBMISSION_EXPORT_HEADER]);
     // An empty export is a header and nothing else, not an empty file — the
     // organizer needs to see which columns they asked for.
     expect(physicalLines(submissionsCsv([]))).toHaveLength(1);
