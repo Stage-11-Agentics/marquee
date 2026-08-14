@@ -28,7 +28,7 @@ import {
   pipelineStageName,
   type PersonEventRow,
 } from "../lib/person-annotations";
-import { personFeedPage, type PersonFeedEntry } from "../lib/org-activity";
+import { personFeedPage } from "../lib/org-activity";
 import type { ActivityLine } from "../lib/activity-copy";
 import { normalizeEmail } from "../lib/sessionize-import";
 import {

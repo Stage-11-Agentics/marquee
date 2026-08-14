@@ -285,9 +285,13 @@
 .org-activity-fact { display: grid; gap: 3px; min-width: 0; }
 .org-activity-fact strong { color: var(--ink); font-size: 11.5px; font-weight: 600; }
 .org-activity-fact .subtle { font-size: 10.5px; }
-.org-activity-meta { align-items: baseline; color: var(--muted); display: flex; font-size: 10.5px; gap: 10px; justify-content: flex-end; }
+/* Three fixed columns, not a flex row: with flex, "All conferences" and a long
+   conference name pushed the actor column to a different place on every row,
+   and a log is read down a column. */
+.org-activity-meta { align-items: baseline; color: var(--muted); display: grid; font-size: 10.5px; gap: 12px; grid-template-columns: minmax(0, 1fr) 190px 170px; }
+.org-activity-meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .org-activity-meta time { font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* The count and the control keep their row whether or not there is more to
    load: "Complete" holds the space "Load more" leaves. */
 .org-activity-foot { align-items: center; border-top: 1px solid var(--line); display: flex; justify-content: space-between; margin-top: 12px; min-height: 34px; padding-top: 12px; }
-@media (max-width: 720px) { .org-activity-row { grid-template-columns: 1fr; row-gap: 4px; } .org-activity-meta { justify-content: flex-start; } }
+@media (max-width: 720px) { .org-activity-row { grid-template-columns: 1fr; row-gap: 4px; } .org-activity-meta { grid-template-columns: 1fr; row-gap: 2px; } }
