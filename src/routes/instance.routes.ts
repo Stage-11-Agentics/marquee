@@ -22,6 +22,8 @@ const statusRow = z.object({
   configured: z.boolean(),
   note: z.string(),
   fix: z.array(z.string()),
+  sender: z.string().nullable().optional(),
+  account: z.string().nullable().optional(),
 });
 
 const instanceStatusResponse = z.object({

@@ -4,6 +4,9 @@
 .settings-list-empty { align-items: start; color: var(--muted); display: grid; gap: 6px; min-height: 112px; padding: 18px 0; }
 .settings-list-empty strong { color: var(--ink-soft); font-size: 12px; }
 .settings-list-empty span { font-size: 11px; line-height: 1.5; }
+.server-page { display: grid; gap: 18px; }
+.server-page .page-head { margin-bottom: 0; }
+
 .settings-page .page-head { margin-bottom: 0; }
 .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
 .settings-grid > .card { min-width: 0; }

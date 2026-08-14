@@ -39,6 +39,7 @@ import { CreateConferencePage } from "../setup/CreateConferencePage";
 import { HandoffPage } from "../setup/HandoffPage";
 import { PeoplePage } from "../people/PeoplePage";
 import { SourcingPipelinePage } from "../people/SourcingPipelinePage";
+import { ServerPage } from "../settings/ServerPage";
 
 type ResetResponse = {
   job_id?: unknown;
@@ -156,6 +157,10 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const isApiTokens = location.pathname === "/settings/api";
   // Four paths, one page: agents guess URLs and each 404 costs turns.
   const isPeople = ["/people", "/crm", "/directory", "/contacts"].includes(location.pathname);
+  const isServer = route?.id === "org-server" || route?.id === "org-instance";
+  useEffect(() => {
+    if (location.pathname === "/org/instance") navigate("/org/server", { replace: true });
+  }, [location.pathname, navigate]);
   // The handoff is the second half of the claim, not an admin screen: it is
   // reached seconds after a session first exists, before there is a conference
   // to draw navigation around.
@@ -231,6 +236,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             /* Lists is the People screen's second tab, not a screen of its own. */
             : route?.id === "lists" ? <PeoplePage search={location.search} navigate={navigate} tab="lists" />
             : route?.id === "sourcing" ? <SourcingPipelinePage search={location.search} navigate={navigate} />
+            : isServer ? <ServerPage />
             : eventId === null ? <NoConference navigate={navigate} />
             : isSubmissionsList
             ? <SubmissionsPage eventId={eventId} search={location.search} navigate={navigate} />

@@ -23,6 +23,10 @@ UPLOAD_RATE_LIMIT_SECRET=local-fake-upload-rate-limit-secret
 # its whsec_ signing secret here for local verification. Keep this commented
 # until you have a real secret; never commit the value.
 # RESEND_WEBHOOK_SECRET=whsec_<base64-signing-secret>
+# Optional display label copied from the connected Resend account. There is no
+# safe account-name inference from an API key, so leave this unset rather than
+# inventing an identity in the Server panel.
+# RESEND_ACCOUNT_NAME=your-resend-account-name
 
 # Observability. Both are optional and both have safe defaults; they are listed
 # here so the levers docs/OBSERVABILITY.md describes have a visible home.

@@ -26,6 +26,7 @@
 .instance-row:last-child { border-bottom: 0; }
 .instance-name { font-size: 12px; }
 .instance-note { color: var(--ink-soft); font-size: 11px; line-height: 1.5; }
+.instance-provider { display: block; color: var(--muted); font-size: 10px; line-height: 1.2; margin-bottom: 2px; }
 /* The fix column keeps its width whether it holds a button or a dash, so a row
    flipping to configured never re-flows the rows beside it. */
 .instance-fix { display: flex; justify-content: flex-end; min-width: 130px; }

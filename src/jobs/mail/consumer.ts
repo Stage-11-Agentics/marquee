@@ -1,13 +1,12 @@
 import type { D1Database, MessageBatch, Queue } from "@cloudflare/workers-types";
 
 import type { OutboxRow } from "../../db/schema";
+import { RESEND_MAIL_FROM } from "../../lib/mail/config";
 import { enqueueOverdueTaskReminderRows, enqueuePreCloseReminderRows } from "./triggers";
 
 export const MAIL_MESSAGE_TYPE = "mail_outbox";
 const PROCESSING_SENTINEL = "__mail_processing__";
 const PROCESSING_LEASE_MS = 5 * 60_000;
-const MAIL_FROM = "Marquee <marquee@stage11.systems>";
-
 export interface MailQueueMessage {
   type: typeof MAIL_MESSAGE_TYPE;
   outbox_id: string;
@@ -43,7 +42,7 @@ function encodeBase64(value: string): string {
 function emailPayload(row: OutboxRow): ResendEmail {
   const method = row.ics_body?.match(/^METHOD:(REQUEST|CANCEL)(?:\r?\n|$)/m)?.[1] ?? "REQUEST";
   return {
-    from: MAIL_FROM,
+    from: RESEND_MAIL_FROM,
     to: [row.to_email],
     subject: row.subject,
     html: row.html,

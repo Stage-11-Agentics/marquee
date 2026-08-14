@@ -448,11 +448,19 @@ test("AC-284 · instance status is derived from bindings and secrets, with fixed
   const { cookie } = await seedClaimedInstance();
   const response = await request("/api/v1/instance/status", { headers: { cookie } });
   expect(response.status).toBe(200);
-  const body = await response.json() as { data: { host: string; rows: { key: string; configured: boolean; fix: string[] }[] } };
+  const body = await response.json() as {
+    data: {
+      host: string;
+      rows: { key: string; configured: boolean; fix: string[]; sender?: string | null; account?: string | null }[];
+    };
+  };
   expect(body.data.rows.map((row) => row.key)).toEqual(["mail", "uploads", "spam", "domain"]);
 
   // No RESEND_API_KEY is bound in the test environment, so mail reads honestly.
-  expect(body.data.rows.find((row) => row.key === "mail")?.configured).toBe(false);
+  const mail = body.data.rows.find((row) => row.key === "mail");
+  expect(mail?.configured).toBe(false);
+  expect(mail?.sender).toBeNull();
+  expect(mail?.account).toBeNull();
   // The published always-pass Turnstile pair protects nothing, and says so.
   expect(body.data.rows.find((row) => row.key === "spam")?.configured).toBe(false);
   expect(body.data.rows.find((row) => row.key === "mail")?.fix).toEqual([

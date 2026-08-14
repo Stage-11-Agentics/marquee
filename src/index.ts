@@ -37,6 +37,8 @@ export interface Env {
   CLIENT_TELEMETRY?: string;
   MAIL_QUEUE: Queue<unknown>;
   RESEND_API_KEY?: string;
+  /** Optional display label for the connected Resend account. */
+  RESEND_ACCOUNT_NAME?: string;
   RESEND_WEBHOOK_SECRET?: string;
   MEDIA: R2Bucket;
   MIRROR_QUEUE: Queue<unknown>;
