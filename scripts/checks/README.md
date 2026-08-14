@@ -10,6 +10,40 @@ npm run pr-gate -- --ticket MRQ-N
 
 Private Forgejo has no CI runner. This command is the merge evidence: Worker/client/test type checks, the production build, design-contract verification, `npm test`, and merged-scope AC tracing. The public GitHub workflow mirrors those fast checks but is not evidence for a private Forgejo PR.
 
+## After a rebase: the merge guard
+
+```sh
+npm run guard:merge                  # defaults: github/main, PortalPage.tsx, portal.css
+npm run guard:merge -- --base <ref> --tsx <file> --css <file>
+npm run guard:merge -- -q            # findings and verdict only
+```
+
+**Opt-in, and deliberately not part of `pr-gate`.** It is a post-rebase tool
+rather than a gate: run it after resolving conflicts and before you believe the
+resolution. Wiring it into every run is how it would become noise.
+
+Every other check here runs on what a compiler can see. `tsc` catches a dropped
+export. **Nothing catches a dropped CSS rule.** When a rule like
+`.portal-error.portal-answer { color: var(--ink) }` vanishes in a merge, the
+build compiles, every test passes, and the answer it paints silently reverts to
+alarm red — reverting the defect that rule was added to fix, invisible to
+everything else we run.
+
+It checks five things and prints each one, so a reader sees the coverage rather
+than trusting a verdict: CSS selector tokens on the base surviving in yours;
+grouped exports surviving; every class the markup renders having a rule that
+styles it; branch **order** (a 404 branch that exists but sits after the generic
+catch-all is dead code that reads as fixed); and named external consumers, so a
+human can inspect a semantic seam that has no textual marker.
+
+Two limits, repeated in its own header. It compares against **one** base, so
+inheriting from two merges means one run per ref — and because `github/main` is
+both the default and, on a moving branch, frequently *not* your merge-base, it
+warns when the two differ rather than reporting the base's own additions as your
+losses. And a CLEAN result answers a **negative** — nothing was dropped — which
+is the direction a dead or stale local server can fake for free. Drive the
+surface afterwards, and prefer a positive assertion where one is available.
+
 ## Public assembly
 
 Build the publishable tree from an explicit ref. The assembler copies only the
