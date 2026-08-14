@@ -26,7 +26,6 @@ import { errorFields } from "../lib/observability/log";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 import { auditStatement, auditStatementFromSelect, writeAudit } from "../lib/audit";
 import { contentOf, isContentAction, isRestorable, recordHistoryFor } from "../lib/history";
-import { isVisibleToAudience } from "../lib/participants";
 import { purgePublicEmbedCache } from "../lib/public-site";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -1032,17 +1031,15 @@ const createSubmission = defineApiRoute(
     }
     // A Session born on the organizer's builder has a person attached to it as
     // its speaker of record, unless that attachment is explicitly a private
-    // sponsor contact and a distinct on-stage participant is supplied. Keep
-    // the submitter role as authorship metadata, but never make a builder-
-    // created Session public-speaker empty by leaving its only attached person
-    // submitter-only.
+    // sponsor contact. A sponsor contact with no named speaker is an honest
+    // public "Speaker to be announced" state, not permission to publish the
+    // contact's name. Keep the submitter role as authorship metadata, but never
+    // make a builder-created Session public-speaker empty by leaving its only
+    // ordinary attached person submitter-only.
     const submitterIsSponsorContact = participants.some((participant) =>
       participant.personId === submitterId && participant.role === "sponsor_contact",
     );
-    const hasDistinctSpeakingParticipant = participants.some((participant) =>
-      participant.personId !== submitterId && isVisibleToAudience(participant.role, "public"),
-    );
-    if (body.kind === "session" && (!submitterIsSponsorContact || !hasDistinctSpeakingParticipant)) {
+    if (body.kind === "session" && !submitterIsSponsorContact) {
       addParticipant(submitterId, "speaker", participants.length);
     }
     addParticipant(submitterId, "submitter", participants.length);
