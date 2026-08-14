@@ -30,6 +30,7 @@ type ImportRow = {
   entity: string;
   outcome: "created" | "updated" | "skipped" | "failed";
   reason: string | null;
+  target_id?: string | null;
 };
 
 type RunResult = {
@@ -125,19 +126,45 @@ describe.sequential("CONTRACT · MRQ-166 · Sessionize speaker email", () => {
     expect(await env.DB.prepare("SELECT id FROM people WHERE org_id = ? AND email LIKE 'speaker+%@example.invalid'").bind(ORG_ID).first()).toBeNull();
   });
 
-  test("CONTRACT · MRQ-166 · a unique name match keeps its stored email and profile values", async () => {
+  test("CONTRACT · MRQ-166 · a same-name row with another email creates a separate person", async () => {
     const imported = await upload([
       "Name,Email,Title,Company,Bio",
       "Unique Name Match,new-address@mrq166.test,Imported title,Imported company,Imported bio",
     ].join("\n"));
     const result = await mapAndRun(imported);
 
-    const person = await env.DB.prepare("SELECT email, title, company, bio FROM people WHERE id = ?").bind(NAME_MATCH_ID).first<{ email: string; title: string; company: string; bio: string }>();
-    expect(person).toMatchObject({ email: "stored@mrq166.test", title: "Stored title", company: "Stored company", bio: "Stored bio" });
+    const existing = await env.DB.prepare("SELECT email, title, company, bio FROM people WHERE id = ?").bind(NAME_MATCH_ID).first<{ email: string; title: string; company: string; bio: string }>();
+    expect(existing).toMatchObject({ email: "stored@mrq166.test", title: "Stored title", company: "Stored company", bio: "Stored bio" });
+    const separate = await env.DB.prepare("SELECT email, name, title, company, bio FROM people WHERE org_id = ? AND email = ?").bind(ORG_ID, "new-address@mrq166.test").first<{ email: string; name: string; title: string; company: string; bio: string }>();
+    expect(separate).toMatchObject({ email: "new-address@mrq166.test", name: "Unique Name Match", title: "Imported title", company: "Imported company", bio: "Imported bio" });
     const row = result.rows.find((candidate) => candidate.entity === "speaker");
-    expect(row?.reason).toContain("matched by name");
-    expect(row?.reason).toContain("kept email");
-    expect(row?.reason).toContain("kept title, company, bio (existing value)");
+    expect(row).toMatchObject({ outcome: "created" });
+    expect(row?.reason).toContain("same name exists with a different email; created separate person");
+  });
+
+  test("CONTRACT · MRQ-166 · a later import with the same external ref keeps the person when email changes", async () => {
+    const first = await upload([
+      "Speaker Id,Name,Email,Title,Company,Bio",
+      "sessionize-speaker-1,External Ref Speaker,old-address@mrq166.test,Original title,Original company,Original bio",
+    ].join("\n"));
+    const firstResult = await mapAndRun(first);
+    expect(firstResult.counts).toMatchObject({ created: 1, failed: 0 });
+    const firstPerson = await env.DB.prepare("SELECT id FROM people WHERE org_id = ? AND email = ?")
+      .bind(ORG_ID, "old-address@mrq166.test").first<{ id: string }>();
+    expect(firstPerson?.id).toBeTruthy();
+
+    const second = await upload([
+      "Speaker Id,Name,Email,Title,Company,Bio",
+      "sessionize-speaker-1,External Ref Speaker,external-ref-new-address@mrq166.test,Original title,Original company,Original bio",
+    ].join("\n"));
+    const secondResult = await mapAndRun(second);
+    const row = secondResult.rows.find((candidate) => candidate.entity === "speaker");
+    expect(row).toMatchObject({ outcome: "skipped", target_id: firstPerson?.id });
+    expect(row?.reason).toContain("matched by source external_ref");
+    expect(row?.reason).toContain("kept email (existing profile)");
+    expect(await env.DB.prepare("SELECT id, email FROM people WHERE id = ?").bind(firstPerson?.id ?? "").first())
+      .toMatchObject({ id: firstPerson?.id, email: "old-address@mrq166.test" });
+    expect(await env.DB.prepare("SELECT id FROM people WHERE org_id = ? AND email = ?").bind(ORG_ID, "external-ref-new-address@mrq166.test").first()).toBeNull();
   });
 
   test("CONTRACT · MRQ-166 · duplicate names match neither existing person", async () => {
