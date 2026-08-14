@@ -97,11 +97,14 @@ test("CONTRACT · every reload path defers to the operator's unsaved text", asyn
   // The load handler is the single place both fields are reseeded, and it must
   // go through the rule rather than assigning the server value outright — every
   // reload() call site on this page funnels through here.
-  assert.match(page, /setDraftTitle\(\(current\) => adoptServerValue\(current, serverContent\.current\.title, record\.title\)\)/);
-  assert.match(page, /setDraftAbstract\(\(current\) => adoptServerValue\(current, serverContent\.current\.abstract, record\.abstract \?\? ""\)\)/);
-  // And the baseline must advance, or the second reload would compare against
-  // a stale value and start overwriting again.
-  assert.match(page, /serverContent\.current = \{ title: record\.title, abstract: record\.abstract \?\? "" \}/);
+  assert.match(page, /setDraftTitle\(\(current\) => adoptServerValue\(contentEdited\.current, current, record\.title\)\)/);
+  assert.match(page, /setDraftAbstract\(\(current\) => adoptServerValue\(contentEdited\.current, current, record\.abstract \?\? ""\)\)/);
+  // The flag has to be SET where typing happens, or every field reads untouched.
+  assert.match(page, /onInput=\{\(event\) => \{ contentEdited\.current = true; setDraftTitle/);
+  assert.match(page, /onInput=\{\(event\) => \{ contentEdited\.current = true; setDraftAbstract/);
+  // And cleared only where a save of THESE fields lands, so the values just
+  // written are adopted rather than defended against.
+  assert.match(page, /contentEdited\.current = false;/);
 
   // No path may still seed the fields unconditionally.
   assert.doesNotMatch(page, /setDraftTitle\(record\.title\)/);
@@ -158,4 +161,25 @@ test("CONTRACT · a refresh does not unmount the record it is refreshing", async
   // live in the row component, not on the page.
   assert.match(page, /setState\(\(current\) => \(current\.kind === "ready" \? current : \{ kind: "loading" \}\)\)/);
   assert.doesNotMatch(page, /setState\(\{ kind: "loading" \}\)/);
+});
+
+test("CONTRACT · a refresh leaves nothing stale actionable", async () => {
+  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
+  const act = page.slice(page.indexOf("const act = async"), page.indexOf("const changePublication"));
+
+  // Keeping the record rendered through a refresh is what protects child state,
+  // and it also leaves stale chips, status and actions on screen. They must not
+  // be usable until the fresh record lands, so busy spans the refetch: the
+  // success path does not clear it and there is no finally that would.
+  assert.doesNotMatch(act, /finally \{ setBusy\(""\); \}/);
+  const success = act.slice(0, act.indexOf("catch (error: unknown)"));
+  assert.doesNotMatch(success, /setBusy\(""\)/);
+  // The failure path clears it itself, since no refresh is coming.
+  assert.match(act.slice(act.indexOf("catch (error: unknown)")), /setBusy\(""\)/);
+
+  // The load effect owns it on BOTH outcomes, or a failed refresh leaves the
+  // page disabled forever.
+  const effect = page.slice(page.indexOf("const controller = new AbortController();"), page.indexOf("}, [eventId, submissionId, reloadKey]);"));
+  assert.match(effect, /setState\(\{ kind: "ready", record \}\); setBusy\(""\);/);
+  assert.match(effect, /notFound: isNotFound\(error\) \}\); setBusy\(""\);/);
 });

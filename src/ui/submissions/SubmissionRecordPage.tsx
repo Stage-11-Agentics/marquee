@@ -136,14 +136,16 @@ type LoadState = { kind: "loading" } | { kind: "error"; message: string; notFoun
  * no failure and no message: the eval only caught the failed-save route, but
  * there were eight.
  *
- * The test is whether the field still holds what the server last gave us. If it
- * does, nobody has typed and the fresher server value is the right one. If it
- * does not, the difference is the operator's work and it stays — including work
- * typed while a save was in flight, which arrives back as "edited" and is kept
- * rather than being replaced by the value that was saved a moment earlier.
+ * The signal is whether the operator has TOUCHED the field, not whether its
+ * text currently differs from the server's. Comparing text loses the one case
+ * that matters most: type something, save, then think better of it and put the
+ * original back while the save is still in flight — the field matches the old
+ * baseline again, so an equality test calls it untouched and replaces a
+ * deliberate undo with the value being saved. An edit is an edit even when it
+ * lands back where it started.
  */
-export function adoptServerValue(current: string, lastServer: string, incoming: string): string {
-  return current === lastServer ? incoming : current;
+export function adoptServerValue(edited: boolean, current: string, incoming: string): string {
+  return edited ? current : incoming;
 }
 
 /** A real 404 and a dropped connection call for different headlines — the
@@ -419,8 +421,8 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [draftTitle, setDraftTitle] = useState("");
   const [draftAbstract, setDraftAbstract] = useState("");
   const [contentError, setContentError] = useState("");
-  /** What the server last handed these two fields, so an edit can be told from an untouched field. */
-  const serverContent = useRef({ title: "", abstract: "" });
+  /** Set the moment either content field is typed into; cleared when a save of them lands. */
+  const contentEdited = useRef(false);
   const [contentConfirming, setContentConfirming] = useState(false);
   const [selectedReviewers, setSelectedReviewers] = useState<Record<string, string>>({});
   const [schedule, setSchedule] = useState({ starts_at: "", duration_min: "30", room_id: "", track_id: "" });
@@ -460,8 +462,8 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     // refetches; only the first load has nothing to show.
     setState((current) => (current.kind === "ready" ? current : { kind: "loading" }));
     apiFetch<RecordData>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}`, { signal: controller.signal, route: SUBMISSION_ROUTE })
-      .then((record) => { setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setDraftTitle((current) => adoptServerValue(current, serverContent.current.title, record.title)); setDraftAbstract((current) => adoptServerValue(current, serverContent.current.abstract, record.abstract ?? "")); serverContent.current = { title: record.title, abstract: record.abstract ?? "" }; setMessageRecipientId((current) => current || record.participants.find((participant) => participant.role !== "submitter")?.id || record.participants[0]?.id || ""); setMessageSubject((current) => current || `A note about ${record.title}`); setMessageBody((current) => current || "Hi {{speaker.first_name}},\n\n"); setState({ kind: "ready", record }); })
-      .catch((error: unknown) => { if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) }); });
+      .then((record) => { setSchedule((current) => ({ ...current, room_id: current.room_id || "", track_id: current.track_id || record.tracks.find((track) => track.is_primary)?.id || "" })); setDraftTitle((current) => adoptServerValue(contentEdited.current, current, record.title)); setDraftAbstract((current) => adoptServerValue(contentEdited.current, current, record.abstract ?? "")); setMessageRecipientId((current) => current || record.participants.find((participant) => participant.role !== "submitter")?.id || record.participants[0]?.id || ""); setMessageSubject((current) => current || `A note about ${record.title}`); setMessageBody((current) => current || "Hi {{speaker.first_name}},\n\n"); setState({ kind: "ready", record }); setBusy(""); })
+      .catch((error: unknown) => { if (!controller.signal.aborted) { setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) }); setBusy(""); } });
     return () => controller.abort();
   }, [eventId, submissionId, reloadKey]);
 
@@ -541,13 +543,21 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     setActionError(null);
     try {
       await apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) }, route });
+      // Deliberately does NOT clear busy: the write has landed but the record
+      // on screen is still the one from before it. Keeping the record rendered
+      // through a refresh — which is what protects the override form's state —
+      // also leaves its chips, status and actions visible, and they must not be
+      // actionable while they are stale. The load effect clears busy when the
+      // fresh record arrives, so every existing `disabled={Boolean(busy)}`
+      // covers the refresh window without being told about it.
       reload();
       return true;
     } catch (error: unknown) {
       if (isRefusal(error)) setActionError({ action: name, message: errorSummary(error) });
       else setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) });
+      setBusy("");
       return false;
-    } finally { setBusy(""); }
+    }
   };
 
   const changePublication = async (published: boolean) => {
@@ -695,10 +705,13 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`,
         { method: "PATCH", body: JSON.stringify(payload), headers: { "content-type": "application/json" }, route },
       );
+      contentEdited.current = false;
+      // Same reason as act(): the refresh clears it when the record lands.
       reload();
     } catch (error: unknown) {
       setContentError(errorSummary(error));
-    } finally { setBusy(""); }
+      setBusy("");
+    }
   };
 
   /**
@@ -776,7 +789,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     <div class="record-layout">
       <div class="record-main stack">
         <Card><CardBody><div class="record-summary"><div><span class="eyebrow">Program record</span><h2>{record.title}</h2><p>{record.abstract || "—"}</p></div><div class="record-summary-meta"><Chip>{statusLabel(record.status)}</Chip><span class="tabular">{record.time_in_stage}</span><span>{record.bypass_evaluation ? "Evaluation bypassed" : "Evaluation required"}</span></div></div><div class="record-meta-grid"><span><small>Origin</small><strong>{statusLabel(record.origin)}</strong></span><span><small>Submitted</small><strong>{moment(record.submitted_at)}</strong></span><span><small>Format</small><strong>{record.format?.name ?? "—"}</strong></span><span><small>Wave</small><strong>{record.wave?.name ?? "—"}</strong></span><span><small>Routing rule</small><strong>{record.routing?.name ?? "—"}</strong></span><span class="record-publication-status"><small>Public status</small><strong>{record.is_published ? "Live on the public site" : "Not yet public"}</strong><span>{record.is_published ? "Visible to attendees." : record.slot ? "Scheduled; publication is still off." : "Needs a room and time before it can go public."}</span></span></div>{record.slot && <div class="record-slot"><div class="record-slot-summary"><strong>{record.slot.day} · {record.slot.time} · {record.slot.room}</strong><span>{record.slot.building} · {record.slot.duration_min} min</span></div><div class="record-slot-publication"><Chip class="record-publication-chip" tone={record.slot.is_published ? "success" : "warning"}>{record.slot.is_published ? "Live on the public site" : "Not yet public"}</Chip><div class="record-publication-action" aria-live="polite">{publicationRequest ? <div class="record-publication-confirm" role="group" aria-labelledby="record-publication-confirm-title"><strong id="record-publication-confirm-title">{publicationRequest === "publish" ? "Publish this session?" : "Remove this session from the public site?"}</strong><span>{publicationRequest === "publish" ? "This Session's title, time, room, speakers, and description become public immediately." : "This Session disappears from the public agenda and embeds immediately."}</span><div class="record-publication-confirm-actions"><Button type="button" small variant={publicationRequest === "publish" ? "primary" : "danger"} disabled={Boolean(busy)} onClick={() => void changePublication(publicationRequest === "publish")}>{busy === publicationRequest ? (publicationRequest === "publish" ? "Publishing…" : "Removing…") : publicationRequest === "publish" ? "Publish this session" : "Remove from public site"}</Button><Button type="button" small variant="ghost" disabled={Boolean(busy)} onClick={() => setPublicationRequest(null)}>Cancel</Button></div></div> : publicationAction ? <Button type="button" small class="record-publication-trigger" variant={publicationAction === "publish" ? "primary" : "danger"} disabled={Boolean(busy)} onClick={() => setPublicationRequest(publicationAction)}>{publicationAction === "publish" ? "Publish this session" : "Remove from public site"}</Button> : <span class="record-publication-action-placeholder" aria-hidden="true" />}</div></div></div>}</CardBody></Card>
-        {canEditContent && <Card><CardHeader title="Session content"><span class="subtle">{contentNote(record)}</span></CardHeader><CardBody><form class="record-draft-form" onSubmit={(event) => { event.preventDefault(); if (isLivePublicly && !contentConfirming) { setContentConfirming(true); return; } void saveContent(event, isLivePublicly); }}><label class="field"><span>Title</span><input required value={draftTitle} onInput={(event) => setDraftTitle(event.currentTarget.value)} /></label><label class="field"><span>Abstract</span><textarea rows={6} value={draftAbstract} onInput={(event) => setDraftAbstract(event.currentTarget.value)} /></label><div class="record-action-row"><Button variant="primary" type="submit" class="record-content-save" disabled={Boolean(busy)}>{busy === "content" ? "Saving…" : isLivePublicly && contentConfirming ? "Confirm public update" : "Save changes"}</Button>{/* The live-record cue is said BEFORE the first click, not after it. A
+        {canEditContent && <Card><CardHeader title="Session content"><span class="subtle">{contentNote(record)}</span></CardHeader><CardBody><form class="record-draft-form" onSubmit={(event) => { event.preventDefault(); if (isLivePublicly && !contentConfirming) { setContentConfirming(true); return; } void saveContent(event, isLivePublicly); }}><label class="field"><span>Title</span><input required value={draftTitle} onInput={(event) => { contentEdited.current = true; setDraftTitle(event.currentTarget.value); }} /></label><label class="field"><span>Abstract</span><textarea rows={6} value={draftAbstract} onInput={(event) => { contentEdited.current = true; setDraftAbstract(event.currentTarget.value); }} /></label><div class="record-action-row"><Button variant="primary" type="submit" class="record-content-save" disabled={Boolean(busy)}>{busy === "content" ? "Saving…" : isLivePublicly && contentConfirming ? "Confirm public update" : "Save changes"}</Button>{/* The live-record cue is said BEFORE the first click, not after it. A
             published Session takes two deliberate clicks to save, and until the
             editor announced that up front the first click looked exactly like a
             silent write failure: enabled button, accepted click, no toast, and
