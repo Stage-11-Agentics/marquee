@@ -61,6 +61,7 @@ everything else is drawn inside the organizer shell.
 | `/submissions/:id` | Submission record | organizer | — | client push |
 | `/settings/tasks` | Task templates | organizer | — | client push |
 | `/settings/api` | API tokens | organizer | — | client push |
+| `/org/activity` | Activity | organizer | — | client push |
 | `/settings/webhooks` | Webhooks | organizer | — | client push |
 | `/api/docs` | API & CLI | api | — | client push |
 | `/import` | Import speakers | organizer | — | client push |
@@ -100,7 +101,7 @@ routes — the text to hand any agent or reader that needs to know what exists.
 ```text
 ROUTES (real paths, not hash routes):
   Public, no auth: / /:eventSlug/:kind/embed /agenda /agenda/agents /claim/:token /embed/:slug /embed/config /f/:slug /join/:token /login /p/:slug /s/:slug /sign-in /signin /site /speakers
-  Organizer (admin shell): /people /lists /pipeline /org/server /org/instance /crm /directory /contacts /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /agenda-builder /roster /tasks /communications /files /delivery-health /forms /evaluation /settings /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /settings/webhooks /import
+  Organizer (admin shell): /people /lists /pipeline /org/server /org/instance /crm /directory /contacts /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /agenda-builder /roster /tasks /communications /files /delivery-health /forms /evaluation /settings /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /org/activity /settings/webhooks /import
   Reviewer: /reviewer
   Review queue: /reviewer/queue
   Speaker portal: /portal
