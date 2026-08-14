@@ -43,7 +43,7 @@ interface Assignment { assignment_id: string; reviewer_person_id: string; review
  * The reviewer's own score and reasoning are always present: an override
  * supersedes a judgment on the record, it does not erase it.
  */
-interface EvaluationEvidence {
+export interface EvaluationEvidence {
   abstained: boolean;
   id: string;
   round_id: string;
@@ -62,7 +62,11 @@ interface EvaluationEvidence {
   scale_max: number | null;
 }
 interface RubricCriterion { id: string; name: string; kind: "numeric" | "select" | "text"; weight_pct: number; position: number }
-interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; criteria: RubricCriterion[]; reviewers: Assignment[]; evaluations: Array<{ abstained: boolean; score: number | null; recommendation: string | null; comment: string; reviewer_kind: "human" | "agent" }>; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
+export type EvaluationPanelEvaluation = Pick<EvaluationEvidence,
+  "abstained" | "id" | "reviewer_name" | "reviewer_kind" | "recommendation" | "score" | "comment"
+  | "override_score" | "override_comment" | "override_person_name"
+>;
+interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; criteria: RubricCriterion[]; reviewers: Assignment[]; evaluations: EvaluationPanelEvaluation[]; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
 interface RecordData {
   id: string; event_id: string; event_name: string; kind: "abstract" | "session"; title: string; abstract: string | null;
   status: string; stage: string; stage_label: string; bypass_evaluation: boolean; origin: string; vendor_affiliation: string;
@@ -182,6 +186,54 @@ function ScorecardAnswers({ criteria, scores }: { criteria: RubricCriterion[]; s
       </span>)}
     </div>}
   </div>;
+}
+
+/**
+ * The panel is the organizer's decision surface, so a scorecard result cannot
+ * stop at a count. Keep the reviewer's rating and words in one stable result
+ * row, with the chair's override in its own explicitly labelled block.
+ *
+ * The comment body and its action each have reserved space. Expanding a long
+ * comment makes that body scrollable inside the slot instead of moving the
+ * assignment controls or the rest of the record underneath the operator.
+ */
+export function EvaluationPanelResult({ evaluation }: { evaluation: EvaluationPanelEvaluation }): JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  const reviewerComment = evaluation.comment.trim();
+  const isLongComment = !evaluation.abstained && reviewerComment.length > 120;
+  const hasOverride = evaluation.override_score !== null || Boolean(evaluation.override_comment?.trim());
+  const commentId = `evaluation-panel-comment-${evaluation.id}`;
+
+  return <article class="record-round-result" data-evaluation-panel-result={evaluation.id}>
+    <div class="record-round-result-head">
+      <strong><ReviewerName name={evaluation.reviewer_name} kind={evaluation.reviewer_kind} /></strong>
+      <span class="evaluation-panel-override-slot">{hasOverride
+        ? <Chip tone="warning" class="override-chip">Override</Chip>
+        : <span class="evaluation-panel-override-slot-placeholder" aria-hidden="true" />}</span>
+    </div>
+    <div class="evaluation-panel-rating">
+      <small>{evaluation.abstained ? "Reviewer outcome" : "Reviewer rating"}</small>
+      <strong class="tabular">{evaluation.abstained
+        ? "Conflict declared"
+        : `${scoreText(evaluation.score)} · ${evaluation.recommendation || "No recommendation"}`}</strong>
+    </div>
+    <div class="evaluation-panel-comment-slot">
+      <small>Reviewer comment</small>
+      <span id={commentId} class={`evaluation-panel-comment-body${expanded ? " expanded" : ""}`}>
+        {evaluation.abstained ? "Reviewer recused; no recommendation recorded." : reviewerComment || "—"}
+      </span>
+    </div>
+    <div class="evaluation-panel-comment-action">
+      {isLongComment
+        ? <button type="button" aria-controls={commentId} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Show less" : "Read full comment"}</button>
+        : <span class="evaluation-panel-comment-action-placeholder" aria-hidden="true" />}
+    </div>
+    {hasOverride && <div class="evaluation-panel-override" data-evaluation-panel-override="true">
+      <small>Organizer override</small>
+      <strong class="tabular">{scoreText(evaluation.override_score)}</strong>
+      <span>{evaluation.override_comment?.trim() || "No override reason recorded."}</span>
+    </div>}
+  </article>;
 }
 
 function EvaluationEvidenceRow({ evaluation, criteria, canOverride, busy, error, onOverride, onClear }: {
@@ -613,6 +665,9 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           <div class="record-round-head"><strong>{round.name}</strong><span class="tabular">{round.mode === "comparison" ? "Comparison" : "Scorecard"} · target {round.target_reviews_per_submission}</span></div>
           {round.evaluations.filter((evaluation) => !evaluation.abstained).length > 0 && <div class="record-round-evidence"><small>{round.evaluations.filter((evaluation) => !evaluation.abstained).length} scorecard result{round.evaluations.filter((evaluation) => !evaluation.abstained).length === 1 ? "" : "s"}</small></div>}
           {round.evaluations.some((evaluation) => evaluation.abstained) && <div class="record-round-evidence"><small>{round.evaluations.filter((evaluation) => evaluation.abstained).length} conflict{round.evaluations.filter((evaluation) => evaluation.abstained).length === 1 ? "" : "s"} declared</small></div>}
+          {round.evaluations.length > 0 && <div class="record-round-results">
+            {round.evaluations.map((evaluation, index) => <EvaluationPanelResult key={`${evaluation.id}-${index}`} evaluation={evaluation} />)}
+          </div>}
           {round.comparisons.length > 0 && <div class="record-round-evidence"><small>{round.comparisons.length} comparison result{round.comparisons.length === 1 ? "" : "s"}</small></div>}
           {round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong><ReviewerName name={assignment.reviewer_name} kind={assignment.reviewer_kind} /></strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}
           <div class="record-assignment-add"><div class="record-assignment-picker"><select aria-label={`Assign reviewer for ${round.name}`} value={selectedReviewers[round.id] ?? ""} onChange={(event) => setSelectedReviewers({ ...selectedReviewers, [round.id]: event.currentTarget.value })}><option value="">Assign reviewer…</option>{record.evaluation.reviewer_options.map((reviewer) => <option value={reviewer.id}>{reviewer.name}{reviewer.kind === "agent" ? " · Agent" : ""}</option>)}</select>{record.evaluation.reviewer_options.find((reviewer) => reviewer.id === selectedReviewers[round.id])?.kind === "agent" && <Chip class="assignment-agent-chip">Agent</Chip>}</div><Button small disabled={!selectedReviewers[round.id] || Boolean(busy)} onClick={() => void assign(round.id)}>Assign</Button></div>{/* The refusal answers beside the control that asked, and the record stays on screen. */}<span class={`record-inline-message ${actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "error" : ""}`} role={actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "alert" : undefined}>{actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? actionError.message : " "}</span>
