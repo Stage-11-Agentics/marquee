@@ -306,8 +306,6 @@ try {
       "FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f " +
       "WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%'",
   ).all();
-  // Amendment 22 removes audit_log -> events so deletion history survives the
-  // event row it describes, while magic_links gains its event scope.
   assert.equal(foreignKeyRows.length, 105, "Expected the exact foreign-key graph");
   const foreignKeyCheck = sqlite.prepare("PRAGMA foreign_key_check").all();
   assert.deepEqual(foreignKeyCheck, [], "Fresh migration has unresolved foreign keys");
