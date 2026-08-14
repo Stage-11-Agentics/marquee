@@ -71,8 +71,24 @@ test("CONTRACT · A-5 has one enumerated session writer path and cookie-safe emb
     "src/routes/auth.routes.ts",
     "src/routes/auth.routes.ts",
   ]);
+  // The fourth `auth.routes.ts` cookie write is `exit-preview` (SPK-07). It is
+  // the ONLY writer here that mints nothing: it hands back a session that
+  // already exists, the one an organizer was unseated from when they opened a
+  // speaker's portal. A browser holds one `mq_session`, so becoming the speaker
+  // necessarily displaces them from every tab; without a way back the preview
+  // is a one-way door out of the organizer's own seat.
+  //
+  // It is enumerated rather than excused because a route that sets a cookie to
+  // a session id is exactly the shape A-5 watches. What keeps it from being a
+  // session-swap primitive is that it reads the target from the CALLING
+  // session's own `portal_preview:` hint — a marker only the exchange writes,
+  // only for a link the mint already proved was an organizer's — refuses any
+  // session without one, and revokes the preview seat on the way out. Note the
+  // session-writer count above is unchanged: the preview is a condition on the
+  // existing issuer, not a new one.
   assert.deepEqual(cookieCalls.map(({ file }) => file).sort(), [
     "src/index.ts",
+    "src/routes/auth.routes.ts",
     "src/routes/auth.routes.ts",
     "src/routes/auth.routes.ts",
     "src/routes/auth.routes.ts",

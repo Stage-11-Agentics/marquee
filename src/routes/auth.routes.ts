@@ -306,6 +306,18 @@ const exchangeMagicLink = defineApiRoute(
     // the link first: refusing a credential after spending it strands the
     // person, and the next attempt would falsely look like expiry or replay.
     const auth = getAuth(context);
+    /**
+     * Set only when a signed-in organizer is deliberately opening one of their
+     * own conference's speaker portals — the session they are about to be
+     * unseated from, so the portal can hand it back.
+     *
+     * This is a CONDITION on the single session writer below, not a second
+     * one. A-5 permits an alias of an existing issuer and forbids a second way
+     * to become somebody: the same person-bound link is spent through the same
+     * consumer seam, and the same `createSession` mints the same kind of
+     * session. What differs is only that a live session no longer refuses it.
+     */
+    let unseatedSessionId: string | null = null;
     if (auth?.kind === "session") {
       const state = await readMagicLink(context.env.DB, token, now, { purposes });
       if (state.status === "live" && state.link.person_id !== null) {
@@ -314,33 +326,22 @@ const exchangeMagicLink = defineApiRoute(
         // on the link's server-minted redirect, so an ordinary invitation can
         // never be escalated into one from the address bar, and the authority
         // is re-checked here against the live session rather than trusted from
-        // the link. Everything else still gets the refusal below — that guard
-        // is what stops a stray link silently swapping who a browser is.
+        // the link. Everything else still gets the refusal — that guard is what
+        // stops a stray link silently swapping who a browser is signed in as.
         const previewEventId = portalPreviewEventId(state.link.redirect_to);
-        if (previewEventId !== null && authHasRole(auth, "ops", previewEventId)) {
-          const consumedPreview = await consumeMagicLinkWithStatus(context.env.DB, token, now, { purposes });
-          if (consumedPreview.status !== "consumed") return rejectMagicLinkState(context, consumedPreview.status);
-          const previewPersonId = consumedPreview.link.person_id;
-          if (previewPersonId === null) return rejectMagicLink(context, "This sign-in link is not valid");
-          // The organizer's own session is unseated, not revoked: a browser
-          // holds one cookie, so arriving as the speaker necessarily displaces
-          // them everywhere. The hint records which session to hand back.
-          const previewSession = await createSession(context.env.DB, {
-            personId: previewPersonId,
-            roleHint: portalPreviewHint(auth.sessionId),
-            userAgent: context.req.header("user-agent") ?? "",
-          });
-          setSessionCookie(context, previewSession.id, SESSION_TTL_MS / 1000);
-          return context.redirect(consumedPreview.link.redirect_to, 302);
+        if (previewEventId === null || !authHasRole(auth, "ops", previewEventId)) {
+          return rejectMagicLink(
+            context,
+            "This browser is already signed in. Sign out to use this link, or continue as the person already signed in.",
+            { reason: "already_signed_in", token, code: "magic_link_session_conflict" },
+          );
         }
-        return rejectMagicLink(
-          context,
-          "This browser is already signed in. Sign out to use this link, or continue as the person already signed in.",
-          { reason: "already_signed_in", token, code: "magic_link_session_conflict" },
-        );
+        unseatedSessionId = auth.sessionId;
+      } else if (state.status !== "live") {
+        return rejectMagicLinkState(context, state.status);
+      } else {
+        return rejectMagicLink(context, "This sign-in link is not valid");
       }
-      if (state.status !== "live") return rejectMagicLinkState(context, state.status);
-      return rejectMagicLink(context, "This sign-in link is not valid");
     }
 
     // Sign-in exchanges only person-bound links. `claim` and `org_invite` have
@@ -351,6 +352,10 @@ const exchangeMagicLink = defineApiRoute(
     const link = consumed.link;
     if (link.person_id === null) return rejectMagicLink(context, "This sign-in link is not valid");
     const roleHint = (() => {
+      // The organizer's own session is unseated, not revoked: a browser holds
+      // one cookie, so arriving as the speaker necessarily displaces them from
+      // every tab. This records which session to hand back on the way out.
+      if (unseatedSessionId !== null) return portalPreviewHint(unseatedSessionId);
       if (link.purpose !== "cospeaker_profile") return "login";
       try {
         const participationId = new URL(link.redirect_to, context.req.url).searchParams.get("participation");
