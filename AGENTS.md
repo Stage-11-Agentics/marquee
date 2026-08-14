@@ -60,8 +60,13 @@ independently before anyone checked the base. Verify rather than assume — re-r
 never clears a stale base:
 
 ```sh
-git merge-base --is-ancestor a04f80b1 HEAD && echo OK || echo "stale base — rebase onto github/main"
+git fetch github
+git merge-base --is-ancestor github/main HEAD && echo "base is current" || echo "behind github/main — rebase"
 ```
+
+Check *is my base current?*, not *do I have `a04f80b1`?* — the second answers today's
+incident and then expires, printing OK forever once that commit is deep in history. A
+check that can no longer fail still looks like reassurance.
 
 - **Launch agents with the board pinned:** `c11 launch-agent … --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee`,
   so board resolution never depends on cwd or branch.

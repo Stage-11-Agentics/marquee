@@ -101,8 +101,15 @@ Already working and unsure? Verify rather than assume — a stale base is invisi
 costs you an hour, and re-running never clears it:
 
 ```sh
-git merge-base --is-ancestor a04f80b1 HEAD && echo OK || echo "stale base — rebase onto github/main"
+git fetch github
+git merge-base --is-ancestor github/main HEAD && echo "base is current" || echo "behind github/main — rebase"
 ```
+
+That question — *is my base current?* — is the durable one. Checking for a specific
+rescue commit instead (`--is-ancestor a04f80b1 HEAD`) answers today's incident and then
+quietly expires: once that commit is deep in history every branch contains it, the check
+prints OK forever, and a check that can no longer fail is worse than none, because it
+still looks like reassurance.
 
 - **Launch agents with the board pinned:** `c11 launch-agent … --env LATTICE_ROOT=/Users/atin/Projects/Stage11/deployments/Marquee`.
   Board resolution then never depends on cwd or on what branch anything is on.
