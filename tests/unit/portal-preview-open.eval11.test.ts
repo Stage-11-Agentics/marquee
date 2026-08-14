@@ -109,6 +109,32 @@ describe("open portal as this speaker", () => {
     expect(browser.opened[0]?.tab?.location.href).toBe("about:blank");
   });
 
+  test("CONTRACT · a window.open that throws still reaches the panel as a sentence", async () => {
+    // The screen's handler has a `finally` and no `catch`, so anything escaping
+    // this function is an unhandled rejection: no message, and possibly a blank
+    // tab left open — the silent failure this module exists to end, by another
+    // door.
+    const outcome = await openPortalPreview({
+      open: () => { throw new Error("refused"); },
+      previewUrl: async () => URL_MINTED,
+      describeError: (caught) => `said: ${(caught as Error).message}`,
+    });
+    expect(outcome).toEqual({ ok: false, message: "said: refused" });
+
+    // Same for the opener severance, which writes to a live window object.
+    const sealed: PreviewTab = {
+      location: { href: "about:blank" },
+      close() { /* not reached */ },
+      set opener(_value: unknown) { throw new Error("sealed"); },
+      get opener() { return null; },
+    };
+    expect(await openPortalPreview({
+      open: () => sealed,
+      previewUrl: async () => URL_MINTED,
+      describeError: (caught) => `said: ${(caught as Error).message}`,
+    })).toEqual({ ok: false, message: "said: sealed" });
+  });
+
   test("CONTRACT · the tab is opened before anything is awaited", async () => {
     // The user gesture that authorises a pop-up does not survive an await, so
     // the ordering is the fix and not an implementation detail.
@@ -134,8 +160,20 @@ describe("open portal as this speaker", () => {
     // a second one — the after-await fallback that could never fire — cannot
     // come back without failing here.
     const source = readFileSync(new URL("../../src/ui/speakers/SpeakerRecord.tsx", import.meta.url), "utf8");
-    expect([...source.matchAll(/window\.open\(/g)]).toHaveLength(1);
-    expect(source).not.toContain("noopener");
+    const calls = [...source.matchAll(/window\.open\(([^)]*)\)/g)].map((match) => match[1]!);
+
+    // One call, and it is the delegate. A second one is the after-await
+    // fallback coming back; if some future feature genuinely needs its own tab,
+    // move this guard onto the delegate rather than raising the number.
+    expect(calls, "window.open calls in the speaker record").toHaveLength(1);
     expect(source).toContain("runPortalPreview");
+
+    // Scoped to the call's arguments, not the file: `rel="noopener"` on an
+    // anchor is the house style elsewhere in this codebase and is correct there.
+    // Only a features string passed to `window.open` returns a null handle.
+    for (const args of calls) {
+      expect(args, "window.open arguments").not.toContain("noopener");
+      expect(args, "window.open must pass its features through, not name one").not.toContain('"');
+    }
   });
 });

@@ -18,15 +18,22 @@
  * So the tab is opened plainly and its `opener` set to null immediately, which
  * the HTML specification defines as severing the opener browsing context — the
  * property `noopener` was there for — while leaving a navigable handle behind.
- * The preview URL is same-origin, so this was defensive rather than
- * load-bearing in the first place.
+ * The severance is recorded on the browsing context rather than the document,
+ * so it survives the navigation. The preview URL is same-origin anyway (the
+ * route mints it from `new URL(context.req.url).origin`, and the client asks
+ * over a relative path), so this was defensive rather than load-bearing.
  *
- * There is deliberately no second `window.open` after the await. One was there,
- * as a fallback for the null handle, and it could not work by construction: a
- * pop-up opened after an await carries no user gesture and every browser
- * suppresses it. Its presence is what made the failure silent — the button
- * reported success, and the organizer was left staring at a blank tab. A blocked
- * pop-up now says so.
+ * There is deliberately no second `window.open` after the await. It was a
+ * fallback for the null handle, and it is unreachable: the only way to arrive
+ * there is `open` having returned null, which now means the pop-up blocker
+ * refused a request made under a real gesture and will refuse the identical
+ * second one. (Not, as it is tempting to say, because an await always costs the
+ * gesture — transient activation is time-based, a few seconds, so after a fast
+ * POST the second open would often have succeeded. That is why the symptom read
+ * as an eternally blank tab in some browsers and a stray extra tab in others.)
+ * Either way its presence is what made the failure silent — the button reported
+ * success and the organizer was left staring at a blank tab. A blocked pop-up
+ * now says so.
  */
 
 /** The part of a pop-up handle this module touches. */
@@ -65,10 +72,18 @@ export async function openPortalPreview(options: {
   previewUrl: () => Promise<string>;
   describeError: (caught: unknown) => string;
 }): Promise<PreviewOutcome> {
-  const tab = options.open("about:blank", "_blank");
-  // Severing the opener is what `noopener` was asked for; done this way it
-  // costs nothing, because the handle is already in hand.
-  if (tab) tab.opener = null;
+  let tab: PreviewTab | null;
+  try {
+    tab = options.open("about:blank", "_blank");
+    // Severing the opener is what `noopener` was asked for; done this way it
+    // costs nothing, because the handle is already in hand.
+    if (tab) tab.opener = null;
+  } catch (caught) {
+    // Neither call is expected to throw. If one ever does, it must arrive as a
+    // sentence in the panel: an escaping rejection here is the silent failure
+    // this module exists to end, entering by a different door.
+    return { ok: false, message: options.describeError(caught) };
+  }
   // No handle means no tab this code can ever navigate, so say so now rather
   // than minting a preview token that nothing will consume.
   if (!tab) return { ok: false, message: PREVIEW_BLOCKED_MESSAGE };
