@@ -53,6 +53,8 @@ export interface InviteSeat {
   role: MembershipRole;
   /** Null is the whole organization; an id scopes the seat to one conference. */
   eventId: Id | null;
+  /** Whose organization the seat is on — the inviter's, resolved at mint. */
+  orgId: Id;
 }
 
 /**
@@ -207,10 +209,11 @@ export type InstanceLinkState =
  * is what it must keep meaning. Reading `null` as anything narrower would
  * silently demote invites already in people's inboxes.
  */
-function seatOf(link: MagicLinkRow): InviteSeat {
+function seatOf(link: MagicLinkRow, fallbackOrgId: Id): InviteSeat {
   return {
     role: link.invite_role ?? INSTANCE_ORGANIZER_ROLE,
     eventId: link.invite_event_id ?? null,
+    orgId: link.invite_org_id ?? fallbackOrgId,
   };
 }
 
@@ -232,7 +235,10 @@ export async function readInstanceLink(
     purpose: expectedPurpose,
     // A claim token lands ownership by definition (ruling D2); only an invite
     // carries a seat someone chose.
-    seat: expectedPurpose === "claim" ? { role: INSTANCE_ORGANIZER_ROLE, eventId: null } : seatOf(state.link),
+    seat:
+      expectedPurpose === "claim"
+        ? { role: INSTANCE_ORGANIZER_ROLE, eventId: null, orgId: "" }
+        : seatOf(state.link, ""),
   };
 }
 
@@ -277,7 +283,16 @@ export async function exchangeInstanceLink(
   const link = await consumeMagicLink(db, input.token, now);
   if (!link || link.purpose !== input.purpose) return null;
 
-  const organization = await resolveOrganization(db, now);
+  // Whose organization this seat is on. An invite names its own — the
+  // organization that minted it — and only a claim, which may be creating the
+  // first organization there has ever been, falls back to resolving one.
+  const invitedOrgId = input.purpose === "org_invite" ? link.invite_org_id : null;
+  const organization =
+    invitedOrgId === null
+      ? await resolveOrganization(db, now)
+      : await db.prepare("SELECT * FROM organizations WHERE id = ?").bind(invitedOrgId).first<OrganizationRow>();
+  // The organization was deleted between mint and exchange. Nothing to join.
+  if (!organization) return null;
   const existingPerson = await db
     .prepare("SELECT * FROM people WHERE org_id = ? AND email = ?")
     .bind(organization.id, email)
@@ -287,7 +302,10 @@ export async function exchangeInstanceLink(
   // The seat comes off the consumed row, never off the request: the recipient
   // types their name and email into this exchange, and if they could also name
   // their own role the invite would be an invitation to choose one.
-  const seat = input.purpose === "claim" ? { role: INSTANCE_ORGANIZER_ROLE, eventId: null } : seatOf(link);
+  const seat: InviteSeat =
+    input.purpose === "claim"
+      ? { role: INSTANCE_ORGANIZER_ROLE, eventId: null, orgId: organization.id }
+      : seatOf(link, organization.id);
   // A conference-scoped invite is only meaningful against a conference that
   // still exists. If it was deleted between mint and exchange, the seat widens
   // to nothing rather than silently to the whole organization.

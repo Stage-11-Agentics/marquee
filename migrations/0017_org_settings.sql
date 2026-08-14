@@ -40,6 +40,12 @@ ALTER TABLE magic_links ADD COLUMN invite_role TEXT
     OR invite_role IN ('owner', 'program_lead', 'ops', 'reviewer', 'speaker')
   );
 ALTER TABLE magic_links ADD COLUMN invite_event_id TEXT REFERENCES events(id);
+-- The organization the invite was minted BY, so the exchange lands the seat
+-- there rather than wherever "the first organization row" happens to be. An
+-- instance normally holds one, and the cold start's resolve-the-only-one
+-- behaviour was fine while every invite meant the same thing; an invite that
+-- now carries a role and a scope must also carry whose they are.
+ALTER TABLE magic_links ADD COLUMN invite_org_id TEXT REFERENCES organizations(id);
 ALTER TABLE magic_links ADD COLUMN short_code_hash TEXT;
 
 -- Partial, so the millions of rows that never carry a short code do not collide

@@ -160,7 +160,17 @@ const createOrganizerInvite = defineApiRoute(
     // not a 400.
     const parsed = inviteCreateRequest.safeParse(await readOptionalJson(context));
     if (!parsed.success) throw ApiError.badRequest("invalid invite", parsed.error.issues[0]?.path.join("."));
-    const seat = { role: parsed.data.role, eventId: parsed.data.event_id };
+    const seat = { role: parsed.data.role, eventId: parsed.data.event_id, orgId: auth.orgId };
+    // A reviewer's scope is per conference by construction (AC-214) — the
+    // schema refuses an org-wide reviewer membership outright. Catching it here
+    // turns what would be a 500 at exchange, days later and in someone else's
+    // browser, into a refusal the inviter can act on while the modal is open.
+    if (seat.role === "reviewer" && seat.eventId === null) {
+      throw ApiError.unprocessable(
+        "a reviewer seat belongs to one conference — choose which one",
+        "event_id",
+      );
+    }
     if (seat.eventId !== null) {
       // A scope is a promise about a conference this organization runs. Without
       // this check an id from another tenant would mint a membership pointing

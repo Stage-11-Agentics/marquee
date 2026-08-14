@@ -352,6 +352,8 @@ export interface MagicLinkRow extends MutableRecord {
   expires_at: EpochMilliseconds;
   /** The conference an `org_invite` is scoped to; null on an org-wide invite and on every other purpose. */
   invite_event_id: Id | null;
+  /** The organization an `org_invite` was minted by, so the exchange cannot land the seat elsewhere. */
+  invite_org_id: Id | null;
   /** The membership role an `org_invite` mints. Decided at mint by the inviter, never by the recipient. */
   invite_role: MembershipRole | null;
   /** Null exactly for `claim` and `org_invite`, whose person is created at exchange. */
