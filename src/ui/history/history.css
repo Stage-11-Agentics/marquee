@@ -15,6 +15,7 @@
 .history-fact { align-items: center; display: grid; gap: 7px; grid-template-columns: 1fr auto auto; }
 .history-fact strong, .history-fact span, .history-fact time { font-size: 10.5px; }
 .history-fact span, .history-fact time { color: var(--muted); }
+.history-fact time { min-width: 170px; white-space: nowrap; }
 
 /* Fixed height and right alignment so "Restore this version" swapping for
    "Confirm / Cancel" changes nothing about the row's geometry. */

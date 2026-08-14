@@ -63,6 +63,8 @@ async function readLibrary(
 function FileRow({ eventId, row, selected, onToggle }: { eventId: string; row: FilesRow; selected: boolean; onToggle: () => void }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const hasFile = row.latest !== null;
+  const hasAmbiguousSession = row.session === null && row.session_candidates.length > 0;
+  const sessionChoices = row.session_candidates.map((session) => session.title).join(" · ");
   return <>
     <tr>
       <td class="files-select-column">
@@ -80,8 +82,8 @@ function FileRow({ eventId, row, selected, onToggle }: { eventId: string; row: F
         <small>{row.person.email}</small>
       </td>
       <td class="files-session-cell">
-        <strong>{row.session?.title ?? <span class="files-empty-dash">—</span>}</strong>
-        <small>{row.session ? "session" : "no session attached"}</small>
+        <strong title={row.session?.title ?? (sessionChoices || undefined)}>{row.session?.title ?? (hasAmbiguousSession ? "Multiple accepted sessions" : <span class="files-empty-dash">—</span>)}</strong>
+        <small title={hasAmbiguousSession ? sessionChoices : undefined}>{row.session ? "session" : hasAmbiguousSession ? `choose one: ${sessionChoices}` : "no session attached"}</small>
       </td>
       <td><span class={`files-state state-${row.state}`}>{ROW_STATE_LABELS[row.state]}</span></td>
       <td class="files-when">{hasFile ? formatDate(row.latest?.uploaded_at ?? null) : `due ${formatDate(row.task.due_at)}`}</td>

@@ -112,6 +112,10 @@ beforeEach(async () => {
       VALUES (?, ?, ?, 'session', 'Taming 40-Minute CI: Incremental Builds at Monorepo Scale', 'An abstract', 'accepted', 'public', ?, 'Taming 40-Minute CI', ?, ?)`).bind(PRIYA_SUBMISSION, EVENT_ID, FORM_ID, PRIYA, NOW, NOW),
     env.DB.prepare(`INSERT INTO submissions (id, event_id, form_id, kind, title, abstract, status, origin, submitter_person_id, search_blob, created_at, updated_at)
       VALUES (?, ?, ?, 'session', 'Lightning: Agents in Production Q&A', 'An abstract', 'accepted', 'public', ?, 'Lightning Agents', ?, ?)`).bind(MARCUS_SUBMISSION, EVENT_ID, FORM_ID, MARCUS, NOW, NOW),
+    env.DB.prepare(`INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+      VALUES ('part_mrq115_priya', ?, ?, 'speaker', 0, ?, ?)`).bind(PRIYA_SUBMISSION, PRIYA, NOW, NOW),
+    env.DB.prepare(`INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+      VALUES ('part_mrq115_marcus', ?, ?, 'speaker', 0, ?, ?)`).bind(MARCUS_SUBMISSION, MARCUS, NOW, NOW),
     env.DB.prepare(`INSERT INTO task_templates (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
       VALUES (?, ?, 'Upload Session Presentation', 'file', 'Final slide deck as a PDF, 16:9 aspect ratio.', ?, NULL, NULL, NULL, 0, 1, ?, ?)`).bind(SLIDES_TEMPLATE, EVENT_ID, REAL_NOW + 30 * DAY, NOW, NOW),
     env.DB.prepare(`INSERT INTO task_templates (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
@@ -141,6 +145,39 @@ test("CONTRACT · MRQ-115/CNT-13 — the library lists the upload with its sessi
   expect(row.session?.title).toBe("Taming 40-Minute CI: Incremental Builds at Monorepo Scale");
   expect(row.latest?.uploaded_at).toBe(NOW - DAY);
   expect(row.latest?.size_bytes).toBe(4_300_000);
+});
+
+test("CONTRACT · MRQ-182 · a legacy unlinked upload derives its speaker's only accepted session and search finds it", async () => {
+  // MRQ-140 fixed new assignments. This is the old row already in a real
+  // conference: the upload exists, the task has no link, and Priya has one
+  // accepted Session that the library can recover without a migration.
+  await env.DB.prepare("UPDATE speaker_tasks SET submission_id = NULL WHERE id = ?").bind(PRIYA_SLIDES_TASK).run();
+
+  const row = rowFor(await library(), PRIYA_SLIDES_TASK);
+  expect(row.latest?.filename).toBe("slides.pdf");
+  expect(row.version_count).toBe(2);
+  expect(row.session).toEqual({ id: PRIYA_SUBMISSION, title: "Taming 40-Minute CI: Incremental Builds at Monorepo Scale" });
+  expect(row.session_candidates).toEqual([]);
+  expect((await library("?q=40-Minute")).rows.map((candidate) => candidate.id)).toContain(PRIYA_SLIDES_TASK);
+});
+
+test("CONTRACT · MRQ-182 · ambiguous accepted sessions stay honest and name the choices", async () => {
+  const secondSubmission = "sub_mrq115_priya_second";
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO submissions (id, event_id, form_id, kind, title, abstract, status, origin, submitter_person_id, search_blob, created_at, updated_at)
+      VALUES (?, ?, ?, 'session', 'Second Priya Session', 'Another abstract', 'accepted', 'public', ?, 'second priya session', ?, ?)`).bind(secondSubmission, EVENT_ID, FORM_ID, PRIYA, NOW, NOW),
+    env.DB.prepare(`INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+      VALUES ('part_mrq115_priya_second', ?, ?, 'speaker', 0, ?, ?)`).bind(secondSubmission, PRIYA, NOW, NOW),
+    env.DB.prepare("UPDATE speaker_tasks SET submission_id = NULL WHERE id = ?").bind(PRIYA_SLIDES_TASK),
+  ]);
+
+  const row = rowFor(await library(), PRIYA_SLIDES_TASK);
+  expect(row.session).toBeNull();
+  expect(row.session_candidates.map((session) => session.title)).toEqual([
+    "Second Priya Session",
+    "Taming 40-Minute CI: Incremental Builds at Monorepo Scale",
+  ]);
+  expect((await library("?q=Second Priya Session")).rows.map((candidate) => candidate.id)).toContain(PRIYA_SLIDES_TASK);
 });
 
 test("CONTRACT · MRQ-115/CNT-04 — both versions are listed newest-first, the latest is flagged, and the older one keeps its own URL", async () => {

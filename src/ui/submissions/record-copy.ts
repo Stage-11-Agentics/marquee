@@ -12,6 +12,18 @@ export function moment(value: number | null): string {
 }
 
 /**
+ * History is the organizer's dispute-resolution surface: a date alone cannot
+ * distinguish two edits made minutes apart. Keep the date-only `moment` for
+ * compact metadata elsewhere and give the history card the actual time.
+ */
+export function historyMoment(value: number | null): string {
+  if (value === null) return "—";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+  }).format(new Date(value));
+}
+
+/**
  * A send is answered by the minute it left, not the day: two attempts to the
  * same address on one afternoon are the ordinary case on this card, and a
  * date-only stamp would render them identically.
