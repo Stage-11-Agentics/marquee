@@ -10,7 +10,13 @@
 -- log living somewhere else, which is exactly what this ticket exists to avoid.
 --
 -- SQLite cannot relax a NOT NULL, so the table is rebuilt — the pattern 0007,
--- 0008, 0009, 0011 and 0018 already use.
+-- 0008, 0009, 0011 and 0018 already use. The transient table carries this
+-- migration's number because 0018 rebuilt this same table and a second
+-- `audit_log_new` would be a duplicate `CREATE TABLE` across the migration
+-- history — which `tests/node/reset-wipe-order.test.mjs` refuses, since a
+-- table name it cannot resolve to one definition is one the demo reset cannot
+-- be proven to wipe. 0018 named its own transient `magic_links_0018_new` for
+-- exactly this reason.
 --
 -- **0018's decision is preserved deliberately: `event_id` still carries no
 -- foreign key.** MRQ-204 removed it so a deleted conference keeps its audit
