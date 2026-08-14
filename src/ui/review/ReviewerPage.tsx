@@ -161,14 +161,26 @@ const EMPTY_REVIEW: ReviewState = { abstained: false, comment: "", criteria: {},
 const DEFAULT_SCALE_MIN = 1;
 const DEFAULT_SCALE_MAX = 5;
 
-/** A rating renders as the buttons the organizer's scale actually asks for. */
-function scaleSteps(criterion: Criterion): number[] {
-  const min = Math.round(criterion.scale_min ?? DEFAULT_SCALE_MIN);
-  const max = Math.round(criterion.scale_max ?? DEFAULT_SCALE_MAX);
+/** A rating renders the scale plus any recorded value the reviewer must be able to see. */
+function ratingSteps(minValue: number | null, maxValue: number | null, recordedValue: number | string | undefined = undefined): number[] {
+  const min = Math.round(minValue ?? DEFAULT_SCALE_MIN);
+  const max = Math.round(maxValue ?? DEFAULT_SCALE_MAX);
   if (max <= min) return [min];
   const steps: number[] = [];
   for (let value = min; value <= max && steps.length < 20; value += 1) steps.push(value);
+  if (typeof recordedValue === "number" && Number.isFinite(recordedValue) && recordedValue >= min && recordedValue <= max && !steps.includes(recordedValue)) {
+    steps.push(recordedValue);
+    steps.sort((left, right) => left - right);
+  }
   return steps;
+}
+
+function scaleSteps(criterion: Criterion, recordedValue: number | string | undefined = undefined): number[] {
+  return ratingSteps(criterion.scale_min, criterion.scale_max, recordedValue);
+}
+
+function overallScoreSteps(recordedValue: number | null): number[] {
+  return ratingSteps(DEFAULT_SCALE_MIN, DEFAULT_SCALE_MAX, recordedValue ?? undefined);
 }
 
 /**
@@ -688,13 +700,13 @@ export function ReviewerPage({ eventId, initialQueue, locationSearch: locationSe
             <div class="review-choice"><strong>{recommendationLabel(currentReview.recommendation)}</strong><span>{currentReview.recommendation ? `${recommendationLabel(currentReview.recommendation)} saves a proposal; only a program lead changes lifecycle status.` : "Approve, Maybe, and Deny do not require a scorecard."}</span></div>
             <div class="divider" />
             <div class="score-heading"><span class="subtle">Overall score (optional) · keys 1–5</span><button type="button" class="clear-score" onClick={() => updateReview({ score: null })} disabled={currentReview.score === null}>Clear</button></div>
-            <div class="score-buttons" data-reviewer-controls="score" role="group" aria-label="Numeric score (optional)">{[1, 2, 3, 4, 5].map((score) => <button type="button" class={currentReview.score === score ? "active" : ""} aria-pressed={currentReview.score === score} onClick={() => updateReview({ score })}>{score}</button>)}</div>
+            <div class="score-buttons" data-reviewer-controls="score" role="group" aria-label="Numeric score (optional)">{overallScoreSteps(currentReview.score).map((score) => <button type="button" class={currentReview.score === score ? "active" : ""} aria-pressed={currentReview.score === score} onClick={() => updateReview({ score })}>{score}</button>)}</div>
             {criteria.length > 0 && <div class="review-criteria" data-reviewer-controls="criteria">
               <div class="divider" />
               <span class="subtle">{roundName} scorecard</span>
               {criteria.map((criterion) => <div class="review-criterion" key={criterion.id}>
                 <span class="review-criterion-name">{criterion.name}{criterion.kind === "numeric" && criterion.weight_pct > 0 ? <span class="subtle tabular"> · {criterion.weight_pct}%</span> : null}</span>
-                {criterion.kind === "numeric" && <div class="score-buttons" role="group" aria-label={criterion.name}>{scaleSteps(criterion).map((step) => <button type="button" key={step} class={currentReview.criteria[criterion.id] === step ? "active" : ""} aria-pressed={currentReview.criteria[criterion.id] === step} onClick={() => setCriterion(criterion.id, step)}>{step}</button>)}</div>}
+                {criterion.kind === "numeric" && <div class="score-buttons" role="group" aria-label={criterion.name}>{scaleSteps(criterion, currentReview.criteria[criterion.id]).map((step) => <button type="button" key={step} class={currentReview.criteria[criterion.id] === step ? "active" : ""} aria-pressed={currentReview.criteria[criterion.id] === step} onClick={() => setCriterion(criterion.id, step)}>{step}</button>)}</div>}
                 {criterion.kind === "select" && <select aria-label={criterion.name} value={String(currentReview.criteria[criterion.id] ?? "")} onChange={(event) => setCriterion(criterion.id, (event.currentTarget as HTMLSelectElement).value)}><option value="">Not answered</option>{(criterion.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}</select>}
                 {criterion.kind === "text" && <textarea aria-label={criterion.name} rows={3} value={String(currentReview.criteria[criterion.id] ?? "")} onInput={(event) => setCriterion(criterion.id, (event.currentTarget as HTMLTextAreaElement).value)} />}
               </div>)}

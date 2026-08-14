@@ -194,6 +194,18 @@ test("CONTRACT · MRQ-171 · a revision deep link is present on first render and
   expect(normal).toContain('data-queue-id="submission-unreviewed"');
   expect(normal).toContain("Save recommendation &amp; next");
   expect(normal).not.toContain("Update review");
+
+  const fractionalRevision = renderToString(h(ReviewerPage, {
+    eventId: "event-review",
+    initialQueue: {
+      ...revisionQueue,
+      completed: revisionQueue.completed?.map((item) => item.id === "submission-target" && item.review
+        ? { ...item, review: { ...item.review, criteria_scores: { fit: 4.5, audience: "operators" }, score: 4.5 } }
+        : item),
+    },
+    locationSearch: "?revise=submission-target",
+  }));
+  expect(fractionalRevision).toContain('aria-pressed="true">4.5</button>');
 });
 
 test("CONTRACT · MRQ-169 · co-presenters are named on the results table and in the speaker portal", () => {
