@@ -5,7 +5,7 @@
 -- written in the same batch as the event delete, so retaining the id here is
 -- what makes the deletion auditable after the parent is gone.
 -- D1 runs a migration as one transaction. The attachment rebuild temporarily
--- removes and restores rows that people, tasks, and file comments reference;
+-- removes and restores rows that people, tasks, and file comments reference
 -- defer those checks until the replacement table is in place so an existing
 -- populated conference migrates with the same referential integrity as a
 -- fresh install.
