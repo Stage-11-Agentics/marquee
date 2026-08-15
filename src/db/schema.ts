@@ -753,6 +753,18 @@ export interface MirrorStateRow extends MutableRecord {
   webhook_id: string | null;
 }
 
+export interface MirrorCredentialRow extends MutableRecord {
+  base_id: string;
+  last_error: string | null;
+  last_verified_at: EpochMilliseconds | null;
+  org_id: Id;
+  set_at: EpochMilliseconds;
+  set_by_person_id: Id;
+  token_ciphertext: string;
+  token_fingerprint: string;
+  webhook_secret_ciphertext: string | null;
+}
+
 export interface WebhookEndpointRow extends ImmutableRecord {
   enabled: 0 | 1;
   event_id: Id;
@@ -930,6 +942,7 @@ export const CORE_TABLE_NAMES = [
   "task_templates",
   "speaker_tasks",
   "calendar_invites",
+  "mirror_credentials",
   "mirror_outbox",
   "mirror_state",
   "imports",
@@ -954,7 +967,7 @@ export const CORE_TABLE_NAMES = [
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 60 as const;
+export const CORE_TABLE_COUNT = 61 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -972,7 +985,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 60>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 61>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -1002,6 +1015,7 @@ export const CORE_TABLES = {
   imports: "imports",
   magic_links: "magic_links",
   memberships: "memberships",
+  mirror_credentials: "mirror_credentials",
   mirror_outbox: "mirror_outbox",
   mirror_state: "mirror_state",
   organizations: "organizations",
@@ -1065,6 +1079,7 @@ export interface CoreTableRows {
   imports: ImportRow;
   magic_links: MagicLinkRow;
   memberships: MembershipRow;
+  mirror_credentials: MirrorCredentialRow;
   mirror_outbox: MirrorOutboxRow;
   mirror_state: MirrorStateRow;
   organizations: OrganizationRow;
@@ -1138,6 +1153,7 @@ interface CoreDefaultColumns {
   imports: never;
   magic_links: never;
   memberships: "confirmation_status";
+  mirror_credentials: never;
   mirror_outbox: "attempts";
   mirror_state: "local_row_count" | "remote_row_count";
   organizations: never;
@@ -1238,6 +1254,7 @@ export type SpeakerTaskInsert = CoreInsert<"speaker_tasks">;
 export type CalendarInviteInsert = CoreInsert<"calendar_invites">;
 export type MirrorOutboxInsert = CoreInsert<"mirror_outbox">;
 export type MirrorStateInsert = CoreInsert<"mirror_state">;
+export type MirrorCredentialInsert = CoreInsert<"mirror_credentials">;
 export type ImportInsert = CoreInsert<"imports">;
 export type ImportRowInsert = CoreInsert<"import_rows">;
 export type EmbedInsert = CoreInsert<"embeds">;

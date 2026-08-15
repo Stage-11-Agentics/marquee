@@ -44,7 +44,10 @@ export async function findMirrorImportViolations(root = REPOSITORY_ROOT) {
   return violations;
 }
 
-const violations = await findMirrorImportViolations();
+// Tests may point this checker at an isolated synthetic tree. The gate leaves
+// the default rooted at the real repository, so production evidence still
+// covers every source module without letting a node test mutate src/.
+const violations = await findMirrorImportViolations(process.env.MIRROR_IMPORT_ROOT ?? REPOSITORY_ROOT);
 if (violations.length > 0) {
   emit({ command: "check:mirror-imports", status: "fail", violations });
   process.exitCode = 1;

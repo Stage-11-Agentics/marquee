@@ -294,11 +294,21 @@ in the environment; do not commit it.
    npx wrangler secret put R2_SECRET_ACCESS_KEY
    npx wrangler secret put UPLOAD_TOKEN_SECRET
    npx wrangler secret put UPLOAD_RATE_LIMIT_SECRET
+   # Marquee-minted random 32-byte key for encrypting Airtable credentials/webhook secrets
+   openssl rand -base64 32
+   npx wrangler secret put MIRROR_CREDENTIAL_SECRET
    ```
 
    Enter values from your secret manager when Wrangler prompts. Do not use
    `.dev.vars`, the published Turnstile test pair, or the fake R2 values for a
    hosted deployment.
+
+   `MIRROR_CREDENTIAL_SECRET` is an operator-generated random 32-byte value,
+   not a value supplied by Airtable. The `openssl` command prints the value;
+   paste that output into the Wrangler prompt. It encrypts the Airtable
+   personal access token and webhook signing secret at rest. The Airtable
+   mirror is optional and is connected later from Settings → Airtable or the
+   API-backed `marquee mirror` commands.
 
    To let Marquee know whether an accepted message reached a recipient, create
    a Resend webhook at `https://your-domain.example/api/v1/webhooks/resend`.
@@ -389,12 +399,14 @@ the existing seam and its tests before introducing a second implementation.
 | Venue movement | [`src/lib/venue-geometry.ts`](src/lib/venue-geometry.ts) | Reuse the pure haversine/walking/transit helper and keep unpinned buildings honest. |
 | Calendar delivery | [`src/jobs/calendar/ics.ts`](src/jobs/calendar/ics.ts) | Extend the ICS path for calendar clients. Calendar OAuth write is a documented extension point, not a built feature. |
 | Observability | [`src/lib/observability/log.ts`](src/lib/observability/log.ts) | Add an event and its declared fields to the allowlist. A hosted error tracker is a one-function seam in the sink and in `browserSend`; gate it on a DSN so a deployment without one still talks to nobody. See [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md). |
-| Data integrations | D1-backed API and import boundaries | A registration-platform sync and an Airtable mirror are extension points. D1 remains the source of truth; Airtable is a deliberate asynchronous mirror, not a source-of-truth system. Neither integration should be placed on a page read path. |
+| Data integrations | D1-backed API and import boundaries | A registration-platform sync remains an extension point; the Airtable mirror is a shipped, connectable asynchronous integration. D1 remains the source of truth; Airtable is never read on a page path. |
 
 The three named integrations are intentionally honest: registration-platform
-sync, Airtable mirror, and calendar OAuth are extension points, not silently
-claimed features. The API, route manifest, pure condition/geometry helpers,
-decision writer, and demo-safe outbox are the seams that exist now.
+sync and calendar OAuth remain extension points; the Airtable mirror is now a
+shipped, connectable asynchronous mirror rather than a silently claimed
+feature. D1 remains the source of truth, and the API, route manifest, pure
+condition/geometry helpers, decision writer, and demo-safe outbox are the seams
+that exist now.
 
 ## Contributing
 

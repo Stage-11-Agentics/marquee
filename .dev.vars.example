@@ -28,6 +28,9 @@ UPLOAD_RATE_LIMIT_SECRET=local-fake-upload-rate-limit-secret
 # inventing an identity in the Server panel.
 # RESEND_ACCOUNT_NAME=your-resend-account-name
 
+# Airtable credential encryption: paste the output of `openssl rand -base64 32`.
+# MIRROR_CREDENTIAL_SECRET=replace-with-a-random-32-byte-value
+
 # Observability. Both are optional and both have safe defaults; they are listed
 # here so the levers docs/OBSERVABILITY.md describes have a visible home.
 # LOG_LEVEL: debug | info | warn | error | silent. Default info.

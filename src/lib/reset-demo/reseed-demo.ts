@@ -68,6 +68,7 @@ export const WIPE_ORDER = [
   "person_list_members",
   "person_lists",
   "person_events",
+  "mirror_credentials",
   "people",
   "companies",
   "attachments",
@@ -118,6 +119,7 @@ const ORG = [DEMO_ORGANIZATION_ID] as const;
  */
 const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   // Global control-plane state: it must survive a demo reset (see above).
+  mirror_credentials: null,
   mirror_state: null,
   webhook_deliveries: {
     sql: `DELETE FROM webhook_deliveries WHERE endpoint_id IN (SELECT id FROM webhook_endpoints WHERE event_id IN (${ORG_EVENTS}))`,

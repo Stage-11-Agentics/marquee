@@ -61,12 +61,18 @@ export type SubmissionNotificationState =
   | "not_delivered"
   | "no_valid_address";
 
+export interface SubmissionNotificationAction {
+  label: string;
+  route: string;
+}
+
 export interface SubmissionNotification {
   state: SubmissionNotificationState;
   label: string;
   detail: string;
   sent_at: number | null;
   outbox_status: "queued" | "sent" | "suppressed" | "failed" | null;
+  action: SubmissionNotificationAction | null;
 }
 
 export interface SubmissionAgentReview {

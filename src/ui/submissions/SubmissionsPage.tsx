@@ -1,7 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
-import type { SubmissionListItem, SubmissionTrackListItem } from "../../api/submissions";
+import type { SubmissionListItem, SubmissionNotificationAction, SubmissionTrackListItem } from "../../api/submissions";
 import {
   DEFAULT_SUBMISSION_COLUMNS,
   SUBMISSION_COLUMN_REGISTRY,
@@ -222,7 +222,34 @@ export function SubmissionsKindSegment({ search, navigate }: Pick<Props, "search
   return <KindSegment kind={kind} onChange={(value) => navigate(`/submissions${submissionsQuerySuffix(search, { kind: value, page: 1 })}`)} />;
 }
 
-function Cell({ item, column, navigate }: { item: SubmissionListItem; column: SubmissionColumnId; navigate: (target: string) => void }): JSX.Element {
+function CascadeAction({ action, onComplete }: { action: SubmissionNotificationAction; onComplete: () => void }): JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const run = async (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await apiFetch(action.route, {
+        method: "POST",
+        route: "/api/v1/events/{eventId}/submissions/{submissionId}/onboarding-cascade",
+      });
+      onComplete();
+    } catch (caught: unknown) {
+      setError(errorSummary(caught));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <span class="notification-action">
+    <button type="button" class="button tiny" disabled={busy} onClick={(event) => void run(event)}>{busy ? "Running…" : action.label}</button>
+    {error && <small class="cascade-error">{error}</small>}
+  </span>;
+}
+
+function Cell({ item, column, navigate, onCascadeComplete }: { item: SubmissionListItem; column: SubmissionColumnId; navigate: (target: string) => void; onCascadeComplete: () => void }): JSX.Element {
   if (column === "type") return <span class={`chip entity-chip ${item.kind}`}>{submissionKindLabel(item.kind)}</span>;
   if (column === "id") return <strong class="tabular">{item.id}</strong>;
   if (column === "title") {
@@ -244,7 +271,7 @@ function Cell({ item, column, navigate }: { item: SubmissionListItem; column: Su
   }
   if (column === "status") return <span class={`chip status-chip ${item.status}`}>{submissionStatusLabel(item.status)}</span>;
   if (column === "notified") return item.notified
-    ? <span class={`notification-state ${item.notified.state}`} title={item.notified.detail}><strong>{item.notified.label}</strong><small>{item.notified.detail}</small></span>
+    ? <span class={`notification-state ${item.notified.state}`} title={item.notified.detail}><strong>{item.notified.label}</strong><small>{item.notified.detail}</small>{item.notified.action && <CascadeAction action={item.notified.action} onComplete={onCascadeComplete} />}</span>
     : <span class="subtle">—</span>;
   if (column === "tracks") return <span class="track-chips">{item.tracks.length ? item.tracks.map((track) => <span key={track.id} class="chip track-chip" style={{ borderLeftColor: track.color }} title={track.is_primary ? "Primary track" : "Additional track"}>{track.name}{track.is_primary ? " · Primary" : ""}</span>) : "—"}</span>;
   if (column === "score") return <>
@@ -921,7 +948,7 @@ export function SubmissionsPage({
             {envelope && rows.length === 0 && !acceptedStageDeadEnd && <tr class="state-row"><td colSpan={columns.length + 1}><strong>{notifiedQueue ? "Every decision has reached its speaker" : draftQueue ? "No drafts need attention" : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "No submissions yet" : "No matching records"}</strong><span>{notifiedQueue ? "The notification gap is clear." : draftQueue ? "Every draft is complete for the fields its submitter can see." : envelope.total === 0 && !q && !status && !kind && !track && !format && !wave && !task && !placement ? "This conference is ready for its first Abstract or Session." : "Clear a filter to bring records back into view."}</span>{notifiedQueue || draftQueue ? <Button small onClick={() => navigate("/submissions")}>View all submissions</Button> : q || status || kind || track || format || wave || task || placement ? <Button small onClick={() => navigate("/submissions")}>Clear filters</Button> : <Button small onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</td></tr>}
             {rows.map((item) => <tr class="submission-row" key={item.id} onClick={(event) => { const target = event.target as HTMLElement; if (!target.closest("a,input,button,select")) navigate(`/submissions/${item.id}`); }}>
               <td class="check-col"><input type="checkbox" aria-label={`Select ${item.id}`} checked={allMatching || selectedIds.has(item.id)} onChange={(event) => toggleRow(item.id, event.currentTarget.checked)} /></td>
-              {columns.map((column) => <td class={`${column}-col`}><Cell item={item} column={column} navigate={navigate} /></td>)}
+              {columns.map((column) => <td class={`${column}-col`}><Cell item={item} column={column} navigate={navigate} onCascadeComplete={() => setReloadKey((value) => value + 1)} /></td>)}
             </tr>)}
           </tbody>
         </table>

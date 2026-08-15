@@ -10,8 +10,11 @@ import { MIRROR_RECONCILE_MESSAGE_TYPE, runResetJob } from "./lib/reset-demo/res
 import { RESET_DEMO_MESSAGE_TYPE } from "./routes/admin-ops.routes";
 import { processMailQueue, MAIL_MESSAGE_TYPE, runMailSchedule } from "./jobs/mail/consumer";
 import { dispatchPendingMirrorMessages } from "./jobs/mirror/outbox";
+import { keepaliveMirror } from "./jobs/mirror/actions";
+import { handleMirrorWebhook } from "./jobs/mirror/inbound";
 import { processMirrorQueue } from "./jobs/mirror/consumer";
 import { MIRROR_OUTBOX_MESSAGE_TYPE } from "./jobs/mirror/messages";
+import { MIRROR_INBOUND_MESSAGE_TYPE } from "./jobs/mirror/messages";
 import { MAIL_SCHEDULE_CRON } from "./jobs/mail/schedule";
 import type { Principal } from "./api/runtime";
 import type { ApiGrant } from "./api/grants";
@@ -50,9 +53,8 @@ export interface Env {
   RESEND_WEBHOOK_SECRET?: string;
   MEDIA: R2Bucket;
   MIRROR_QUEUE: Queue<unknown>;
-  AIRTABLE_API_KEY?: string;
-  AIRTABLE_BASE_ID?: string;
-  AIRTABLE_BASE?: string;
+  MIRROR_CREDENTIAL_SECRET?: string;
+  MIRROR_WEBHOOK_URL?: string;
   OPERATIONS_QUEUE: Queue<unknown>;
   TURNSTILE_SECRET_KEY: string;
   TURNSTILE_SITE_KEY: string;
@@ -78,6 +80,7 @@ type QueueMessageBody = {
 
 /** Nightly orphaned-upload sweep; the schedule is declared in `wrangler.jsonc`. */
 const UPLOAD_SWEEP_CRON = "30 4 * * *";
+const MIRROR_KEEPALIVE_CRON = "15 4 * * *";
 
 const TURNSTILE_ALWAYS_PASS_SITE_KEY = "1x00000000000000000000AA";
 const TURNSTILE_ALWAYS_PASS_SECRET_KEY =
@@ -177,6 +180,19 @@ app.get("/__validation/session-cookie", (context) => {
   return context.json({ cookie: "mq_session", status: "set" });
 });
 
+// Airtable sends a signed ping here. The body is deliberately not treated as
+// a mutation command: a valid ping authorizes a cursor pull through the
+// provider seam, and the D1 allowlist remains the only inbound writer.
+app.post("/mirror/webhook", async (context) => {
+  const result = await handleMirrorWebhook(
+    context.env,
+    context.req.raw,
+  );
+  if (result.status === 401) return context.json(result.body, 401);
+  if (result.status === 202) return context.json(result.body, 202);
+  return context.json(result.body, 200);
+});
+
 app.route("/", landingRoutes);
 app.route("/", claimRoutes);
 app.route("/", signinRoutes);
@@ -251,7 +267,9 @@ const worker: ExportedHandler<Env> = {
     }
     const mirrorMessages = batch.messages.filter((message) => {
       const body = message.body as { type?: string };
-      return body?.type === MIRROR_OUTBOX_MESSAGE_TYPE || body?.type === MIRROR_RECONCILE_MESSAGE_TYPE;
+      return body?.type === MIRROR_OUTBOX_MESSAGE_TYPE
+        || body?.type === MIRROR_RECONCILE_MESSAGE_TYPE
+        || body?.type === MIRROR_INBOUND_MESSAGE_TYPE;
     });
     if (mirrorMessages.length > 0) {
       const startedAt = Date.now();
@@ -279,6 +297,7 @@ const worker: ExportedHandler<Env> = {
         body?.type === MAIL_MESSAGE_TYPE
         || body?.type === MIRROR_OUTBOX_MESSAGE_TYPE
         || body?.type === MIRROR_RECONCILE_MESSAGE_TYPE
+        || body?.type === MIRROR_INBOUND_MESSAGE_TYPE
       ) continue;
       // The producer stamps the originating request id into the message body,
       // so the acceptance a human clicked and the mail the queue sent four
@@ -334,6 +353,9 @@ const worker: ExportedHandler<Env> = {
         // mail cron is the idle-deployment backstop for committed outbox work.
         await dispatchPendingMirrorMessages(env, runId, Date.now());
         outcome = "mail_and_mirror";
+      } else if (controller.cron === MIRROR_KEEPALIVE_CRON) {
+        const result = await keepaliveMirror(env);
+        outcome = result.refreshed ? "mirror_keepalive" : "mirror_keepalive_idle";
       } else if (controller.cron === UPLOAD_SWEEP_CRON) {
         await runUploadOrphanSweep(env.DB, env.MEDIA, Date.now());
       } else {

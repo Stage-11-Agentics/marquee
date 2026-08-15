@@ -99,6 +99,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   companies: 2,
   attachments: 40,
   event_settings: 0,
+  mirror_credentials: 0,
   mirror_outbox: 0,
   mirror_state: 0,
   events: 2,

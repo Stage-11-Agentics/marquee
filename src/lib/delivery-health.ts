@@ -742,9 +742,10 @@ function uploadsCapability(facts: DeliveryHealthFacts, infrastructure: Infrastru
 }
 
 function mirrorCapability(facts: DeliveryHealthFacts): CapabilityStatus {
-  // No link: the mirror is configured where the conference is hosted, not from
-  // a screen inside Marquee. A row that promised one would land nowhere.
-  const base = { id: "mirror", label: "Airtable sync", href: null as string | null };
+  // The connection is organization-owned, but this is the delivery-health
+  // doorway from a conference. It lands on the one settings surface that can
+  // actually repair the connection rather than displaying an unowned row.
+  const base = { id: "mirror", label: "Airtable sync", href: "/settings/airtable" as string | null };
   if (!facts.mirror.configured) {
     return { ...base, level: "ok", headline: "Airtable is not connected.", detail: "Nothing to sync. This conference is not mirroring to Airtable." };
   }

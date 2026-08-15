@@ -62,3 +62,46 @@ Every criterion above is provable against MRQ-217's fake transport. `npm test` m
 ## Done means
 
 `npm run pr-gate` honest and green **including `trace:ac`** — test titles take `AC-nnn · ` or `CONTRACT · ` and nothing else (`scripts/checks/trace-ac-core.mjs:45`); `MRQ-223 · ` will fail the gate. PR open via `gh pr create --repo Stage-11-Agentics/marquee --base main`, ticket through `review`/`in_validation` with evidence, then report. Commit and push your plan before any code, and push after every meaningful commit.
+
+## Execution plan — delegator
+
+The phases below are deliberately serial. Each phase gets focused tests and a pushed
+commit before the next phase starts; the final gate is run only after all four phases
+have their concrete evidence.
+
+1. **Phase 1 — reachable on switch (AC-308–AC-310, AC-313).** Add the credential
+   migration and Worker-secret encryption boundary; make `mirrorConfig` load only the
+   org-scoped D1 credential; extend the existing transport/job seam with schema/table
+   discovery and the connect, mapping, status, and disconnect actions. Keep connect
+   verification-before-persistence, return no secret, make mapping write the three
+   `mirror_state` rows, and make disconnect the sole `clearMirrorOutbox` caller.
+   Prove rejected credentials are byte-stable, stored bytes do not contain plaintext,
+   scopes are enforced, and an unconfigured connect flow alone enables a fake outbound
+   write without a `mirror_state` fixture.
+2. **Phase 2 — inbound and keepalive (AC-226–AC-227, AC-229).** Add signed ping
+   handling and cursor-based payload pull through the existing mirror job boundary;
+   pass one base-wide limiter through outbound and inbound work; apply only the exact
+   allowlist, stamp Airtable-origin writes, suppress echoes, and leave status changes
+   outside the acceptance cascade. Make the changed-in-Airtable recovery action true,
+   and add the scheduled webhook re-registration plus row-count refresh. Prove a mixed
+   allowlisted/non-allowlisted edit and sustained two-way bounces from fake call logs.
+3. **Phase 3 — settings and discovery (AC-228, AC-311).** Add the API-backed
+   `/settings/airtable` route/page with unconfigured and connected states, honest
+   queued/stuck delivery counts, sync metadata, expiry warning, live log, sync-now,
+   and disconnect. Register the route, add Airtable to Server and System health
+   discovery, and retain the traffic-assisted delivery explanation. Prove route
+   ownership and the status payload without putting provider reads on request paths.
+4. **Phase 4 — agent surface (AC-312–AC-313).** Extend the command registry and
+   CLI client to call the API for Airtable connect/status/disconnect; update the
+   generator inputs so `SKILL.md` is regenerated, and add the optional organizer
+   flow to `docs/GETTING-STARTED.md`. Prove the no-screen connect → verify → map →
+   confirm path against the fake transport and retain API-token scope parity.
+5. **Closeout.** Run targeted tests after each phase, then serialize and run
+   `npm run pr-gate`; inspect every check's status (including `trace:ac`), commit and
+   push each meaningful unit, attach fake-call and runtime evidence to MRQ-223, move
+   it through review/in-validation, and open the PR. Do not merge.
+
+Invariants for every phase: D1 remains the source of truth; Airtable imports stay under
+`src/jobs/mirror/*`; the mirrored set remains `submissions`, `speaker_tasks`, and
+`people`; missing configuration is an inert off state; no implicit outbox cleanup;
+no request-path provider reads; and no inbound acceptance cascade.

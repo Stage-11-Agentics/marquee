@@ -279,7 +279,7 @@ describe("MRQ-74 · capability verdicts", () => {
     expect(mirror?.headline).toBe("Airtable is not connected.");
   });
 
-  test("CONTRACT · the mirror row never offers a destination, because there is no mirror screen to reach", () => {
+  test("AC-311 · the mirror row links to the Airtable settings door and stays quiet when unconfigured", () => {
     const unconnected = deriveDeliveryHealth(facts(), UNREPORTED);
     const draining = deriveDeliveryHealth(
       facts({ mirror: { configured: true, pending: 30, stuck: 30, last_sync_at: NOW - 6 * HOUR, has_error: true } }),
@@ -287,7 +287,7 @@ describe("MRQ-74 · capability verdicts", () => {
     );
     for (const snapshot of [unconnected, draining]) {
       const mirror = snapshot.capabilities.find((row) => row.id === "mirror");
-      expect(mirror?.href).toBeNull();
+      expect(mirror?.href).toBe("/settings/airtable");
     }
     // The old copy sent the organizer to a settings screen that was never built.
     expect(unconnected.capabilities.find((row) => row.id === "mirror")?.detail).not.toContain("settings");

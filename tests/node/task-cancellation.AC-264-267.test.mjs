@@ -45,7 +45,7 @@ test("AC-265 · every overdue and active-task reader excludes cancellation tombs
 
 test("AC-266 · one reconcile function restores without changing due dates and relies on idempotent writes", () => {
   assert.equal((decisions.match(/export async function reconcileTaskSet\s*\(/g) ?? []).length, 1);
-  assert.equal((decisions.match(/reconcileTaskSet\(/g) ?? []).length, 3);
+  assert.equal((decisions.match(/reconcileTaskSet\(/g) ?? []).length, 4);
   const restoration = decisions.match(/UPDATE speaker_tasks[\s\S]{0,320}cancelled_at = NULL[\s\S]{0,180}/)?.[0] ?? "";
   assert.match(restoration, /WHERE id = \?/);
   assert.match(restoration, /status = 'open'/);

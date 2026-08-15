@@ -42,6 +42,7 @@ const submissionNotificationSchema = z.object({
   detail: z.string(),
   sent_at: z.number().int().nullable(),
   outbox_status: z.enum(["queued", "sent", "suppressed", "failed"]).nullable(),
+  action: z.object({ label: z.string(), route: z.string() }).nullable(),
 });
 const submissionAgentReviewSchema = z.object({
   id: z.string(),

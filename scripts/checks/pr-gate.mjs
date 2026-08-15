@@ -36,6 +36,7 @@ const checks = [
   ["shell truth", "npm", ["run", "check:shell-truth"]],
   ["design contract", "npm", ["run", "check:design"]],
   ["API contract", "npm", ["run", "check:api"]],
+  ["mirror hermetic proof", "npm", ["run", "check:mirror"]],
   ["route map", "npm", ["run", "check:routes"]],
   ["fixture clocks", "npm", ["run", "check:clocks"]],
   ["schema shape", "npm", ["run", "check:schema"]],

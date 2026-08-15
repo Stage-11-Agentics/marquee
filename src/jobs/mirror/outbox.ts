@@ -35,7 +35,7 @@ export async function dispatchPendingMirrorMessages(
   requestId?: string,
   now = Date.now(),
 ): Promise<number> {
-  if (!mirrorConfig(env)) {
+  if (!(await mirrorConfig(env))) {
     // Missing configuration is an inert, successful off state. An operator
     // may be provisioning or rotating secrets, so pending work must remain
     // available for the next configured dispatch. Cleanup belongs only to an

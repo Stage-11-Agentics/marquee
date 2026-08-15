@@ -471,7 +471,7 @@ test("AC-284 · instance status is derived from bindings and secrets, with fixed
       rows: { key: string; configured: boolean; fix: string[]; sender?: string | null; account?: string | null }[];
     };
   };
-  expect(body.data.rows.map((row) => row.key)).toEqual(["mail", "uploads", "spam", "domain"]);
+  expect(body.data.rows.map((row) => row.key)).toEqual(["mail", "uploads", "spam", "domain", "airtable"]);
 
   // No RESEND_API_KEY is bound in the test environment, so mail reads honestly.
   const mail = body.data.rows.find((row) => row.key === "mail");

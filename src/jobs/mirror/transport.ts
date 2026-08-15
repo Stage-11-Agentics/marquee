@@ -2,7 +2,38 @@ export interface AirtableRecord {
   fields: Record<string, unknown>;
 }
 
+export interface AirtableListRecord extends AirtableRecord {
+  id: string;
+}
+
+export interface AirtableTableField {
+  id: string;
+  name: string;
+  type?: string;
+}
+
+export interface AirtableTable {
+  id: string;
+  name: string;
+  fields?: readonly AirtableTableField[];
+}
+
+export interface AirtableWebhookPayload {
+  changedTablesById?: Record<string, {
+    changedRecordsById?: Record<string, {
+      current?: Record<string, unknown>;
+      previous?: Record<string, unknown>;
+    }>;
+  }>;
+  [key: string]: unknown;
+}
+
 export interface AirtableTransport {
+  readBaseSchema(): Promise<{ tables: readonly AirtableTable[] }>;
+  listRecords(input: { tableId: string; offset?: string }): Promise<{
+    records: readonly AirtableListRecord[];
+    offset: string | null;
+  }>;
   patchRecords(input: {
     tableId: string;
     records: readonly AirtableRecord[];
@@ -11,6 +42,17 @@ export interface AirtableTransport {
     tableId: string;
     marqueeIds: readonly string[];
   }): Promise<void>;
+  listPayloads(input: { webhookId: string; cursor?: string | null }): Promise<{
+    cursor: string | null;
+    mightHaveMore: boolean;
+    payloads: readonly AirtableWebhookPayload[];
+  }>;
+  createWebhook(input: { notificationUrl: string }): Promise<{
+    id: string;
+    expirationTime: number;
+    macSecretBase64: string | null;
+  }>;
+  deleteWebhook(input: { webhookId: string }): Promise<void>;
 }
 
 export interface AirtableTransportOptions {
@@ -32,6 +74,43 @@ export class AirtableTransportError extends Error {
   }
 }
 
+/** Apply one base-wide budget to every provider operation, including inbound. */
+export function rateLimitedAirtableTransport(
+  transport: AirtableTransport,
+  limiter: { take(): Promise<void> },
+): AirtableTransport {
+  return {
+    async readBaseSchema() {
+      await limiter.take();
+      return transport.readBaseSchema();
+    },
+    async listRecords(input) {
+      await limiter.take();
+      return transport.listRecords(input);
+    },
+    async patchRecords(input) {
+      await limiter.take();
+      return transport.patchRecords(input);
+    },
+    async deleteRecords(input) {
+      await limiter.take();
+      return transport.deleteRecords(input);
+    },
+    async listPayloads(input) {
+      await limiter.take();
+      return transport.listPayloads(input);
+    },
+    async createWebhook(input) {
+      await limiter.take();
+      return transport.createWebhook(input);
+    },
+    async deleteWebhook(input) {
+      await limiter.take();
+      return transport.deleteWebhook(input);
+    },
+  };
+}
+
 function encodePathPart(value: string): string {
   return encodeURIComponent(value);
 }
@@ -44,6 +123,22 @@ interface ListResponse {
   records?: Array<{ id?: string; fields?: Record<string, unknown> }>;
   offset?: string;
   error?: { message?: string };
+}
+
+interface SchemaResponse {
+  tables?: AirtableTable[];
+}
+
+interface PayloadResponse {
+  cursor?: string | number;
+  mightHaveMore?: boolean;
+  payloads?: AirtableWebhookPayload[];
+}
+
+interface WebhookResponse {
+  id?: string;
+  expirationTime?: string | number;
+  macSecretBase64?: string;
 }
 
 async function readError(response: Response): Promise<string> {
@@ -60,6 +155,7 @@ export function createFetchAirtableTransport(options: AirtableTransportOptions):
   const origin = (options.apiOrigin ?? "https://api.airtable.com").replace(/\/+$/, "");
   const tableUrl = (tableId: string) =>
     `${origin}/v0/${encodePathPart(options.baseId)}/${encodePathPart(tableId)}`;
+  const baseUrl = (path: string) => `${origin}${path}`;
   const request = async (url: string, init: RequestInit): Promise<Response> => {
     await options.beforeRequest?.();
     const response = await fetcher(url, {
@@ -75,6 +171,28 @@ export function createFetchAirtableTransport(options: AirtableTransportOptions):
   };
 
   return {
+    async readBaseSchema() {
+      const response = await request(
+        baseUrl(`/v0/meta/bases/${encodePathPart(options.baseId)}/tables`),
+        { method: "GET" },
+      );
+      const payload = await response.json() as SchemaResponse;
+      return { tables: payload.tables ?? [] };
+    },
+
+    async listRecords({ tableId, offset }) {
+      const params = new URLSearchParams({ pageSize: "100" });
+      if (offset) params.set("offset", offset);
+      const response = await request(`${tableUrl(tableId)}?${params.toString()}`, { method: "GET" });
+      const payload = await response.json() as ListResponse;
+      return {
+        records: (payload.records ?? []).flatMap((record) => record.id
+          ? [{ id: record.id, fields: record.fields ?? {} }]
+          : []),
+        offset: payload.offset ?? null,
+      };
+    },
+
     async patchRecords({ tableId, records }) {
       await request(tableUrl(tableId), {
         method: "PATCH",
@@ -102,6 +220,51 @@ export function createFetchAirtableTransport(options: AirtableTransportOptions):
         }
         offset = listed.offset;
       } while (offset);
+    },
+
+    async listPayloads({ webhookId, cursor }) {
+      const params = new URLSearchParams();
+      if (cursor) params.set("cursor", cursor);
+      const query = params.toString();
+      const response = await request(
+        `${baseUrl(`/v0/bases/${encodePathPart(options.baseId)}/webhooks/${encodePathPart(webhookId)}/payloads`)}${query ? `?${query}` : ""}`,
+        { method: "GET" },
+      );
+      const payload = await response.json() as PayloadResponse;
+      return {
+        cursor: payload.cursor === undefined ? null : String(payload.cursor),
+        mightHaveMore: payload.mightHaveMore === true,
+        payloads: payload.payloads ?? [],
+      };
+    },
+
+    async createWebhook({ notificationUrl }) {
+      const response = await request(
+        baseUrl(`/v0/bases/${encodePathPart(options.baseId)}/webhooks`),
+        { method: "POST", body: JSON.stringify({ notificationUrl }) },
+      );
+      const payload = await response.json() as WebhookResponse;
+      if (!payload.id || !payload.expirationTime) {
+        throw new AirtableTransportError(502, "Airtable returned an incomplete webhook registration");
+      }
+      const expirationTime = typeof payload.expirationTime === "number"
+        ? payload.expirationTime
+        : Date.parse(payload.expirationTime);
+      if (!Number.isFinite(expirationTime)) {
+        throw new AirtableTransportError(502, "Airtable returned an invalid webhook expiration");
+      }
+      return {
+        id: payload.id,
+        expirationTime,
+        macSecretBase64: payload.macSecretBase64 ?? null,
+      };
+    },
+
+    async deleteWebhook({ webhookId }) {
+      await request(
+        baseUrl(`/v0/bases/${encodePathPart(options.baseId)}/webhooks/${encodePathPart(webhookId)}`),
+        { method: "DELETE" },
+      );
     },
   };
 }
