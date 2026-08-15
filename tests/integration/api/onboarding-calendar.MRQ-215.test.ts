@@ -52,6 +52,19 @@ async function seedFixture(): Promise<void> {
        VALUES (?, ?, 'Calendar arithmetic', 'calendar-mrq215', '2027-03-01', '2027-04-30', 'America/Los_Angeles', 'live', 1, ?, ?)`,
     ).bind(EVENT_ID, ORG_ID, NOW, NOW),
     ...CASES.flatMap((person) => [personRow(person, NOW), templateRow(person, NOW), taskRow(person, NOW)]),
+    env.DB.prepare(
+      "INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)",
+    ).bind("track-calendar-ai", EVENT_ID, "Calendar AI", "#0a6c73", NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO submissions (id, event_id, form_id, kind, title, abstract, status, origin, submitter_person_id, created_at, updated_at)
+       VALUES (?, ?, NULL, 'session', ?, '', 'accepted', 'admin', ?, ?, ?)`,
+    ).bind("submission-calendar-edge", EVENT_ID, "Track-bound session", "person-calendar-edge", NOW, NOW),
+    env.DB.prepare(
+      "INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)",
+    ).bind("participation-calendar-edge", "submission-calendar-edge", "person-calendar-edge", NOW, NOW),
+    env.DB.prepare(
+      "INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
+    ).bind("submission-track-calendar-edge", "submission-calendar-edge", "track-calendar-ai", NOW, NOW),
   ]);
 }
 
@@ -66,6 +79,7 @@ test("CONTRACT · MRQ-215 · SQL overdue/risk rollup follows a non-UTC calendar 
 
   expect(snapshot.counts).toEqual({ all: 4, overdue: 1, incomplete: 4, risk: 2 });
   expect(snapshot.metrics).toMatchObject({ overdue_tasks: 1, at_risk: 2 });
+  expect(snapshot.facets.tracks).toEqual([{ id: "track-calendar-ai", name: "Calendar AI", color: "#0a6c73", count: 1 }]);
 
   for (const expected of CASES) {
     const row = rows.get(expected.id);
@@ -87,4 +101,16 @@ test("CONTRACT · MRQ-215 · SQL overdue/risk rollup follows a non-UTC calendar 
   const risk = await listOnboarding(env.DB, EVENT_ID, { filter: "risk" }, NOW);
   expect(risk.total).toBe(2);
   expect(new Set(risk.data.map((row) => row.id))).toEqual(new Set(["person-calendar-today", "person-calendar-edge"]));
+
+  const byTaskType = await listOnboarding(env.DB, EVENT_ID, { taskType: "template-person-calendar-today" }, NOW);
+  expect(byTaskType.total).toBe(1);
+  expect(byTaskType.data.map((row) => row.id)).toEqual(["person-calendar-today"]);
+
+  const byTrack = await listOnboarding(env.DB, EVENT_ID, { track: "track-calendar-ai" }, NOW);
+  expect(byTrack.total).toBe(1);
+  expect(byTrack.data.map((row) => row.id)).toEqual(["person-calendar-edge"]);
+
+  const bySearch = await listOnboarding(env.DB, EVENT_ID, { search: "Track-bound session" }, NOW);
+  expect(bySearch.total).toBe(1);
+  expect(bySearch.data.map((row) => row.id)).toEqual(["person-calendar-edge"]);
 });
