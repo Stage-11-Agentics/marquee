@@ -31,6 +31,7 @@ const checks = [
   ["client types", tsc, ["-p", "tsconfig.client.json", "--noEmit"]],
   ["test types", tsc, ["-p", "tsconfig.test.json", "--noEmit"]],
   ["source-text test guard", "npm", ["run", "check:no-op-tests"]],
+  ["mirror import boundary", "npm", ["run", "check:mirror-imports"]],
   ["production build", vite, ["build"]],
   ["shell truth", "npm", ["run", "check:shell-truth"]],
   ["design contract", "npm", ["run", "check:design"]],

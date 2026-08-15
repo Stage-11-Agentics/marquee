@@ -15,7 +15,8 @@ import {
   SHIPPED_DEMO_SPEAKER_PERSON_ID as DEMO_SPEAKER_PERSON_ID,
 } from "../../src/lib/reset-demo/demo-fixture";
 import { reseedDemo, WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
-import { readResetJob } from "../../src/lib/reset-demo/reset-jobs";
+import { createResetJob, readResetJob } from "../../src/lib/reset-demo/reset-jobs";
+import { runResetJob } from "../../src/lib/reset-demo/reset-consumer";
 import { applyMigrations, env } from "./apply-migrations";
 
 const NOW = Date.UTC(2026, 7, 20, 16);
@@ -352,6 +353,52 @@ test("AC-230 · reset-demo restores the full seeded baseline from dirty state, s
   await assertResetState();
   expect(secondMirrorSend).toHaveBeenCalledTimes(1);
   await assertBothDemoLogins();
+});
+
+test("CONTRACT · reset-demo suppresses row feed and emits one reconcile with a configured mirror", async () => {
+  await reseedDemo(env.DB, NOW, env.MEDIA);
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO mirror_state
+        (id, table_name, airtable_table_id, local_row_count, remote_row_count, created_at, updated_at)
+       VALUES ('state-reset-people', 'people', 'tbl_people_reset', 0, 0, ?, ?)`,
+    ).bind(NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO mirror_state
+        (id, table_name, airtable_table_id, local_row_count, remote_row_count, created_at, updated_at)
+       VALUES ('state-reset-submissions', 'submissions', 'tbl_submissions_reset', 0, 0, ?, ?)`,
+    ).bind(NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO mirror_state
+        (id, table_name, airtable_table_id, local_row_count, remote_row_count, created_at, updated_at)
+       VALUES ('state-reset-tasks', 'speaker_tasks', 'tbl_tasks_reset', 0, 0, ?, ?)`,
+    ).bind(NOW, NOW),
+  ]);
+
+  const job = await createResetJob(env.CACHE, NOW);
+  const mirrorMessages: unknown[] = [];
+  try {
+    await runResetJob(
+      {
+        ...env,
+        MIRROR_QUEUE: {
+          send: async (message: unknown) => mirrorMessages.push(message),
+        } as unknown as typeof env.MIRROR_QUEUE,
+      },
+      job.id,
+    );
+
+    const outbox = await env.DB.prepare("SELECT COUNT(*) AS count FROM mirror_outbox").first<{ count: number }>();
+    expect(Number(outbox?.count)).toBe(0);
+    expect(mirrorMessages).toEqual([
+      expect.objectContaining({ type: "mirror_reconcile", reason: "reset_demo" }),
+    ]);
+  } finally {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM mirror_outbox"),
+      env.DB.prepare("DELETE FROM mirror_state WHERE id IN ('state-reset-people', 'state-reset-submissions', 'state-reset-tasks')"),
+    ]);
+  }
 });
 
 test("AC-230 · POST /api/v1/admin/reset-demo 403s with no demo_mode=1 event", async () => {

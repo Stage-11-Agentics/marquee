@@ -1,7 +1,8 @@
 import { reseedDemo, type ReseedResult } from "./reseed-demo";
 import { updateResetJob } from "./reset-jobs";
+import { MIRROR_RECONCILE_MESSAGE_TYPE } from "../../jobs/mirror/messages";
 
-export const MIRROR_RECONCILE_MESSAGE_TYPE = "mirror_reconcile";
+export { MIRROR_RECONCILE_MESSAGE_TYPE };
 
 export interface ResetJobBindings {
   CACHE: KVNamespace;
@@ -14,7 +15,6 @@ export interface ResetJobBindings {
  * The queue consumer path for `reset_demo` messages (SPEC §4.1/§3.9): run the
  * reseed, then enqueue exactly ONE mirror reconcile job — the reseed writes
  * with suppress_mirror, so the whole base must not be re-queued row by row.
- * The reconcile message consumer lands with M-25/M-26.
  */
 export async function runResetJob(
   env: ResetJobBindings,

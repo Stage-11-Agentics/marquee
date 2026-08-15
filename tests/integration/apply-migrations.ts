@@ -31,6 +31,7 @@ import portalInvitesMigrationSql from "../../migrations/0020_portal_invites.sql?
 import auditOrgScopeMigrationSql from "../../migrations/0021_audit_log_org_scope.sql?raw";
 import attendeeSchedulesMigrationSql from "../../migrations/0022_attendee_schedules.sql?raw";
 import sponsorsMigrationSql from "../../migrations/0023_sponsors.sql?raw";
+import airtableOutboundMigrationSql from "../../migrations/0024_airtable_outbound.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -118,6 +119,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(auditOrgScopeMigrationSql),
     ...splitStatements(attendeeSchedulesMigrationSql),
     ...splitStatements(sponsorsMigrationSql),
+    ...splitStatements(airtableOutboundMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

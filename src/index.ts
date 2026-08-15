@@ -9,6 +9,9 @@ import { createCredentialResolver } from "./lib/auth/credential-resolver";
 import { MIRROR_RECONCILE_MESSAGE_TYPE, runResetJob } from "./lib/reset-demo/reset-consumer";
 import { RESET_DEMO_MESSAGE_TYPE } from "./routes/admin-ops.routes";
 import { processMailQueue, MAIL_MESSAGE_TYPE, runMailSchedule } from "./jobs/mail/consumer";
+import { dispatchPendingMirrorMessages } from "./jobs/mirror/outbox";
+import { processMirrorQueue } from "./jobs/mirror/consumer";
+import { MIRROR_OUTBOX_MESSAGE_TYPE } from "./jobs/mirror/messages";
 import { MAIL_SCHEDULE_CRON } from "./jobs/mail/schedule";
 import type { Principal } from "./api/runtime";
 import type { ApiGrant } from "./api/grants";
@@ -47,6 +50,9 @@ export interface Env {
   RESEND_WEBHOOK_SECRET?: string;
   MEDIA: R2Bucket;
   MIRROR_QUEUE: Queue<unknown>;
+  AIRTABLE_API_KEY?: string;
+  AIRTABLE_BASE_ID?: string;
+  AIRTABLE_BASE?: string;
   OPERATIONS_QUEUE: Queue<unknown>;
   TURNSTILE_SECRET_KEY: string;
   TURNSTILE_SITE_KEY: string;
@@ -105,6 +111,34 @@ app.use("*", async (context, next) => {
   }
 
   await next();
+  // The D1 trigger is the after-write hook. Queue dispatch is deliberately
+  // post-response and non-fatal: a committed local write remains committed if
+  // Queue is temporarily unavailable, and the outbox is still the recovery
+  // record. With no key/base this path is a successful no-op: pending feed
+  // work stays inert and no provider, D1 cleanup, or Queue call occurs. This
+  // request-path dispatch makes AC-225 traffic-assisted; on an idle deployment
+  // the hourly scheduled branch below is the backstop, so delivery is bounded
+  // by that cron rather than waiting forever. Explicit disconnect cleanup is
+  // separate from this middleware.
+  const dispatch = dispatchPendingMirrorMessages(
+    context.env,
+    resolveRequestId(context.req.raw),
+  ).catch((error) => {
+    loggerForEnv(context.env, { requestId: resolveRequestId(context.req.raw) }).emit("queue_error", "error", {
+      queue: "marquee-mirror",
+      message_type: MIRROR_OUTBOX_MESSAGE_TYPE,
+      ...errorFields(error),
+    });
+    return 0;
+  });
+  try {
+    context.executionCtx.waitUntil(dispatch);
+  } catch {
+    // Hono's direct `app.request` test helper has no ExecutionContext. Awaiting
+    // here keeps fake-queue assertions deterministic without changing Worker
+    // behavior, where the dispatch remains outside the response path.
+    await dispatch;
+  }
   // Wrangler presents the custom-domain hostname locally, so the published
   // Turnstile test pair is the additional signal that this is development.
   if (!isLoopback(url.hostname) && !usesTurnstileTestPair(context.env)) {
@@ -215,9 +249,37 @@ const worker: ExportedHandler<Env> = {
         throw error;
       }
     }
+    const mirrorMessages = batch.messages.filter((message) => {
+      const body = message.body as { type?: string };
+      return body?.type === MIRROR_OUTBOX_MESSAGE_TYPE || body?.type === MIRROR_RECONCILE_MESSAGE_TYPE;
+    });
+    if (mirrorMessages.length > 0) {
+      const startedAt = Date.now();
+      try {
+        await processMirrorQueue(batch, env);
+        logger.emit("queue_message", "info", {
+          queue: batch.queue,
+          message_type: "mirror",
+          outcome: "processed",
+          batch_size: mirrorMessages.length,
+          duration_ms: Date.now() - startedAt,
+        });
+      } catch (error) {
+        logger.emit("queue_error", "error", {
+          queue: batch.queue,
+          message_type: "mirror",
+          ...errorFields(error),
+        });
+        throw error;
+      }
+    }
     for (const message of batch.messages) {
       const body = message.body as QueueMessageBody;
-      if (body?.type === MAIL_MESSAGE_TYPE) continue;
+      if (
+        body?.type === MAIL_MESSAGE_TYPE
+        || body?.type === MIRROR_OUTBOX_MESSAGE_TYPE
+        || body?.type === MIRROR_RECONCILE_MESSAGE_TYPE
+      ) continue;
       // The producer stamps the originating request id into the message body,
       // so the acceptance a human clicked and the mail the queue sent four
       // invocations later share one correlation id.
@@ -245,17 +307,6 @@ const worker: ExportedHandler<Env> = {
         }
         continue;
       }
-      // Real reconcile consumer lands with M-25/M-26; stub-ack for now so the
-      // reset-demo path (which enqueues exactly one of these) doesn't stall.
-      if (body?.type === MIRROR_RECONCILE_MESSAGE_TYPE) {
-        message.ack();
-        messageLogger.emit("queue_message", "info", {
-          queue: batch.queue,
-          message_type: body.type,
-          outcome: "acked_stub",
-        });
-        continue;
-      }
       messageLogger.emit("queue_message", "warn", {
         queue: batch.queue,
         message_type: body?.type ?? "unknown",
@@ -279,6 +330,10 @@ const worker: ExportedHandler<Env> = {
       let outcome = "ran";
       if (controller.cron === MAIL_SCHEDULE_CRON) {
         await runMailSchedule(env.DB, correlateQueue(env.MAIL_QUEUE, runId), Date.now());
+        // Request traffic normally dispatches the mirror promptly. The hourly
+        // mail cron is the idle-deployment backstop for committed outbox work.
+        await dispatchPendingMirrorMessages(env, runId, Date.now());
+        outcome = "mail_and_mirror";
       } else if (controller.cron === UPLOAD_SWEEP_CRON) {
         await runUploadOrphanSweep(env.DB, env.MEDIA, Date.now());
       } else {
