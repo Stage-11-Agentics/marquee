@@ -1,5 +1,5 @@
 -- MRQ-214 — the sponsors module's data layer, at the width the sponsor portal
--- needs and no wider. 0001 through 0021 are immutable; this migration is
+-- needs and no wider. 0001 through 0022 are immutable; this migration is
 -- additive.
 --
 -- The scoping split is `sequence/sponsors-design.md` ruling 1: a COMPANY is an
