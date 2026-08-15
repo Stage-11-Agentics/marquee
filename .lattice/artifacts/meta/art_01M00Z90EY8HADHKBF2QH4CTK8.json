@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-14T20:26:36Z",
+  "created_by": "agent:lattice-auto-review",
+  "custom_fields": {},
+  "id": "art_01M00Z90EY8HADHKBF2QH4CTK8",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01M00Z90EY8HADHKBF2QH4CTK8.md",
+    "size_bytes": 7348
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "plan-review (plan-review)",
+  "token_usage": null,
+  "type": "file"
+}

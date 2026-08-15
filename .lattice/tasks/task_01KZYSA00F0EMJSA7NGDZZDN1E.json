@@ -1,0 +1,48 @@
+{
+  "assigned_to": "agent:codex-cli",
+  "branch_links": [],
+  "comment_count": 2,
+  "complexity": "medium",
+  "created_at": "2026-08-14T00:03:48Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Round-9 **major** defect, recorded in `content-management` but not owned by any rubric item \u2014 it is a defect in the front door and it costs the loop coverage every time it fires.\n\n## The judge's own words\n\n> **`/api/v1/auth/exchange` \u2192 `/signin?reason=expired`.** A fresh, never-used speaker magic sign-in link is consumed with no effect and the failure is misreported. Opening the just-issued `/api/v1/auth/exchange` link in a browser that already held another session redirected to `/signin?reason=expired` with \"Link expired. That sign-in link had already been used or had passed its fifteen minutes.\" The link was neither used nor expired \u2014 the real cause was the pre-existing session.\n\n## Why this is worth a ticket of its own\n\nTwo separate failures stacked, and the second is worse than the first:\n\n1. **The link is burned.** A single-use credential was consumed by a request that did not sign anyone in. The person now has to request another one, and the product gave them no reason to expect that.\n2. **The product blames the user for something it did.** \"That sign-in link had already been used or had passed its fifteen minutes\" is false in both clauses. The organizer or speaker reading it will re-request, hit the same pre-existing session, and get the same lie again \u2014 a loop with no exit that the copy actively steers them away from escaping, because nothing mentions the session they are already holding.\n\nPHILOSOPHY.md's honesty rule lands squarely on this: the system knows exactly why it refused and it says something else.\n\nIt also matters operationally. Every eval scenario that signs in as a second identity in a browser that already holds a session walks into this, spends turns on it, and those turns are the same budget that has already cost us four unjudged items this round.\n\n## What to build\n\n1. **Do not consume the token on a path that cannot complete the sign-in.** If a pre-existing session blocks the exchange, the link must survive so the next attempt can use it.\n2. **Say the true reason.** The message names the actual state \u2014 someone is already signed in \u2014 and distinguishes it from expiry and from re-use. Three different causes, three different sentences.\n3. **Offer the way out.** The screen that reports it carries the action that resolves it: sign out of the current session and continue with this link, or continue as the person already signed in. A dead end here strands a real speaker at the door of their own portal.\n4. Check the same reasoning for every consumer of a single-use token \u2014 a magic link, a resume token, an invite \u2014 so this is fixed once rather than three times.\n\n## Acceptance\n\n- Opening a fresh exchange link while another session exists does **not** invalidate the link; a retry after signing out succeeds with that same link.\n- The failure states the real cause and is distinguishable from a genuinely expired and a genuinely re-used link.\n- Regression test covers all three causes and asserts the fresh-link-survives property.\n\n## Constraints\n\n- Your **own linked worktree**, created as your first act, then `pwd` and `git branch --show-current` to prove it. Never the primary checkout (it is the Lattice board's home); never `mrq-auto-eval*`.\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across every worktree.\n- **No migration without the operator.** If you conclude one is needed, stop and say so on the ticket.\n- **Do not deploy.** An eval round is running and a `.deploy-freeze` marker sits at the primary checkout. Merging is wanted; deploying is not, and is not yours.\n- **Elements never jump** \u2014 reserve space for anything that swaps.\n- Ship a regression test that fails on `main` and passes on your branch.\n- **Gate serialization is a fleet rule, not an option.** Route EVERY `npm run pr-gate` and EVERY full\n  `npm test` through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`,\n  including one-off \"just checking\" runs \u2014 a lock only serializes its participants, so a single\n  unlocked run lands on top of a lock-holder and inflates it. Cheap scoped things (tsc, one test\n  file) stay unlocked.\n- **A timeout and a red are indistinguishable in an unserialized run.** Check `uptime` before you\n  believe a red; load has ranged 14 to 164 tonight and the same branch measured 78s and 276s\n  against a 120s budget. If your only evidence for a defect is \"it timed out\", you have no\n  evidence. CI fast-gate runs on a quiet box and is tonight's oracle.\n- PR: `gh pr create --repo Stage-11-Agentics/marquee --base main`.",
+  "done_at": "2026-08-14T03:23:04Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYW3ZR9D0B88NNSVNTY2P4M",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZZ0FG6NSMYW4JEHTZ47VRA3",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZZ4PW050Y0YJXJB8DA8G5PC",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYSA00F0EMJSA7NGDZZDN1E",
+  "last_event_id": "ev_01KZZ4PW4GDN4E8YX80Y3SZMRB",
+  "last_status_changed_at": "2026-08-14T03:23:04Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-181",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "content-management",
+    "round9",
+    "craft"
+  ],
+  "title": "A fresh magic link is burned by an existing session, and blamed on expiry",
+  "type": "bug",
+  "updated_at": "2026-08-14T03:23:04Z",
+  "urgency": "high"
+}

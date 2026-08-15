@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-13T21:41:42Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZYH5TAT2QK895G9GMQB9N0P",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZYH5TAT2QK895G9GMQB9N0P.md",
+    "size_bytes": 1166
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Implemented and merged in PR #186 (squash cb2794d78fbf0330ee6c68b1d64f2e92e7acf892). Added the mapping-time speakers.email guard, per-row blank-email failure, removed only the speaker placeholder, mad",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

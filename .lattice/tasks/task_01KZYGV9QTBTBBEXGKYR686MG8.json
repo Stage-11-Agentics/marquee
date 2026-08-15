@@ -1,0 +1,53 @@
+{
+  "assigned_to": "agent:auto-eval-coordinator",
+  "branch_links": [],
+  "comment_count": 4,
+  "complexity": "medium",
+  "created_at": "2026-08-13T21:35:58Z",
+  "created_by": "agent:auto-eval-coordinator",
+  "custom_fields": {},
+  "description": "## What happens\n\n`POST /api/v1/org/imports/people` (`src/routes/org-imports.routes.ts:79-106`) matches on\nemail and, for every match, runs:\n\n```sql\nUPDATE people SET name = ?, title = COALESCE(?, title), company = COALESCE(?, company),\n       bio = COALESCE(?, bio), updated_at = ? WHERE id = ?\n```\n\nA blank cell is already handled correctly \u2014 `COALESCE` means \"this export does not carry\nthe field\", not \"delete what the speaker wrote\". The defect is the case the CSV *does*\ncarry a value: a populated column silently replaces whatever the organizer hand-entered,\nwith\n\n- **no preview.** The organizer uploads and the write has already happened. The response\n  reports `created` / `updated` counts only; nothing says *which fields on which people\n  changed, from what, to what*.\n- **no undo.** `import_rows` records `outcome: \"updated\"` and `target_id`. It does not\n  record the prior values, so there is no restore path even manually.\n- **`name` overwritten unconditionally.** It is the one field with no `COALESCE`. A row\n  always has a name (`planPersonImport` skips rows without one), so a stale export\n  reverts a corrected spelling with no trace.\n\nThis is real data loss on the organizer's most expensive asset \u2014 the bio, title and\ncompany they cleaned up by hand \u2014 triggered by the most ordinary act in the product:\nre-importing a fresher export.\n\n## Why it is worth building anyway\n\nNo rubric item punishes this; it surfaced in round 5 browsing. It is on the list because\nPHILOSOPHY.md's \"respect the operator\" makes an unpreviewed, unrecoverable overwrite a\ndefect on its own merits, not because a judge counts it.\n\n## Shape of a fix\n\nThe import already computes a plan before it writes (`planPersonImport`). Diff that plan\nagainst the existing rows and make the change visible and reversible:\n\n1. **Dry-run first.** Return the per-person, per-field diff (old \u2192 new) and apply only on\n   confirm \u2014 or apply-and-show, if that keeps the flow to one step, provided step 2 exists.\n2. **Record the prior value** in `import_rows` (or a sibling) so an import is revertible\n   as a unit. An import receipt that cannot restore what it replaced is not a receipt.\n3. Treat `name` like the others.\n\nDo not add a column-mapping wizard \u2014 `people-import.ts` argues against one deliberately\nand that reasoning stands. This is about what the write does, not about the mapping.\n\n## Acceptance\n\n- Re-importing an export with a stale bio/title/company/name over hand-entered values\n  either requires a confirmation that shows the field-level diff, or is reversible from\n  the import receipt afterwards. One or the other, proven by a test.\n- The receipt carries the prior values.\n- A blank cell still means \"not carried\" and still leaves the stored value alone.",
+  "done_at": "2026-08-14T03:47:59Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYH5G81Q54AAEGP2KST0FBR",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYJ15GMHTN2JRMGXK63X1VD",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYJ38SAH4BP5HNVVZVRB0W7",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZZ64G1ESNXA2Z6Y78MH9DBK",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYGV9QTBTBBEXGKYR686MG8",
+  "last_event_id": "ev_01KZZ64G4856AH1JTMQGSDRB36",
+  "last_status_changed_at": "2026-08-14T03:47:59Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-167",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "round5",
+    "data-loss",
+    "import"
+  ],
+  "title": "CSV import overwrites hand-entered speaker data with no preview and no undo",
+  "type": "bug",
+  "updated_at": "2026-08-14T03:47:59Z",
+  "urgency": "normal"
+}

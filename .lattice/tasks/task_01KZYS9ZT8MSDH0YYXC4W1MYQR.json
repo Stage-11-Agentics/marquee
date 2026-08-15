@@ -1,0 +1,53 @@
+{
+  "assigned_to": "agent:codex-cli",
+  "branch_links": [],
+  "comment_count": 4,
+  "complexity": "medium",
+  "created_at": "2026-08-14T00:03:48Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Rubric item **CNT-12** \u2014 `content-management`, weight **3**, `cannot_judge` in round 4 (unreached) \u2192 `partial` in round 9 \u2014 **1.5 recoverable, joint-largest in my queue.** Scenario: **CNT-S3**.\n\nThis item was a free exclusion in round 4 because the run never got to it. Round 9 reached it, so it now costs real points. That is the coverage trap firing exactly as predicted.\n\n## Acceptance criterion \u2014 the rubric's `pass_criteria`, verbatim\n\n> A status control exists and persists (exact state names may vary - draft/in-review/approved is the inferred norm); the public agenda page shows the approved session (with its updated title) and omits the unapproved one. If no public agenda exists yet at area-04 time (it is built and published in a later area), the gate may be verified on any public sessions/preview surface, or judged from the agent's recorded observation together with the area-06 public-widget evidence\n\nAnd the criterion itself, verbatim:\n\n> Sessions carry a content approval/review status the organizer can set, and unapproved content is excluded from the public agenda output. (This item grades the approval GATE, not the public widget rendering itself \u2014 that is graded by public-widgets EMB-06.)\n\n## Why it fell short \u2014 the judge's own reasoning\n\n> A gate exists and it holds, but it is not a per-session content approval status. **There is no draft/in-review/approved field on the session record; public visibility is governed by the /agenda-builder \"Publish the program\" panel** [...] with per-session checkboxes and a \"Review publication\" action \u2014 **and only already-SCHEDULED sessions are even listed there, so content cannot be approved independently of being placed on the schedule.** The exclusion half is verified on the real public surface: the anonymous /agenda lists ~24 published talks, and searching it for \"Taming\" returns \"No published sessions match\"; both of this area's accepted-but-unpublished sessions are absent [...] The inclusion half was not demonstrated for these sessions \u2014 the agent deliberately did not schedule/publish either one (to avoid pre-empting the scheduling area).\n\n## Scope this narrowly \u2014 do not build an approval subsystem\n\nHalf of what held this to partial is coverage the agent deliberately deferred, and the exclusion half already passes on the real public surface. **The one product fact standing in the way is the coupling: approval is only reachable through scheduling.**\n\nThat is, again, the standing rule \u2014 *a control that vanishes when inapplicable is a defect*. An accepted, unscheduled session simply does not appear in the panel that governs its publication, so the organizer has no way to express \"this content is reviewed\" until a room and a time exist. Those are two different decisions made by two different people at two different times.\n\n## What to build\n\n1. **The \"Publish the program\" panel lists every accepted session**, not only scheduled ones. An unscheduled session appears with its publication control **rendered disabled and carrying the reason** (\"needs a room and time before it can go public\") rather than being omitted \u2014 so the organizer can see the whole population and what each one is waiting on.\n2. **The session record carries its publication/content status visibly** \u2014 an accepted session should not have to be looked up in the agenda builder for the organizer to learn whether the public can see it.\n3. **Keep the gate exactly as strict as it is.** Nothing unapproved may reach the public agenda; the exclusion behaviour already passes and must not regress. This ticket widens what is *visible and settable*, never what is *published*.\n4. If you conclude a genuine per-session status field is the right model rather than deriving it, say so on the ticket **before** building it \u2014 that is a schema question and schema questions stop at the operator.\n\n## Acceptance\n\n- An accepted, unscheduled session is present in the publication panel, disabled, with its reason stated.\n- The public agenda still omits it.\n- A regression test covers both halves \u2014 visible-but-disabled in the panel, absent from the public output.\n\n## Constraints\n\n- Your **own linked worktree**, created as your first act, then `pwd` and `git branch --show-current` to prove it. Never the primary checkout (it is the Lattice board's home); never `mrq-auto-eval*`.\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across every worktree and two agents stashing at once swap each other's work.\n- **No migration without the operator.** If you conclude one is needed, stop and say so on the ticket.\n- **Do not deploy.** An eval round is running and a `.deploy-freeze` marker sits at the primary checkout. Merging is wanted; deploying is not, and is not yours.\n- **Elements never jump** \u2014 reserve space for anything that swaps.\n- Ship a regression test that fails on `main` and passes on your branch.\n- **Gate serialization is a fleet rule, not an option.** Route EVERY `npm run pr-gate` and EVERY full\n  `npm test` through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`,\n  including one-off \"just checking\" runs \u2014 a lock only serializes its participants, so a single\n  unlocked run lands on top of a lock-holder and inflates it. Cheap scoped things (tsc, one test\n  file) stay unlocked.\n- **A timeout and a red are indistinguishable in an unserialized run.** Check `uptime` before you\n  believe a red; load has ranged 14 to 164 tonight and the same branch measured 78s and 276s\n  against a 120s budget. If your only evidence for a defect is \"it timed out\", you have no\n  evidence. CI fast-gate runs on a quiet box and is tonight's oracle.\n- PR: `gh pr create --repo Stage-11-Agentics/marquee --base main`.",
+  "done_at": "2026-08-14T01:33:25Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYSF56P5F1FFKPF5PB05R0K",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYVXYZN85Z69PJ7C2D3P7C4",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYW97X20G3F0HJ7N5C4FYT5",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYYE2MZ2CBQ3SYTWTA4R6F3",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYS9ZT8MSDH0YYXC4W1MYQR",
+  "last_event_id": "ev_01KZYYE2R3WKF4K29994ENMKZ8",
+  "last_status_changed_at": "2026-08-14T01:33:25Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-179",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "content-management",
+    "CNT-12",
+    "round9"
+  ],
+  "title": "CNT-12: a session's content cannot be approved until it has been scheduled",
+  "type": "bug",
+  "updated_at": "2026-08-14T01:33:25Z",
+  "urgency": "high"
+}

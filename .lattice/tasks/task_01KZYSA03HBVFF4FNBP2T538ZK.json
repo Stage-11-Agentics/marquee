@@ -1,0 +1,48 @@
+{
+  "assigned_to": "agent:codex-mrq-182",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": "low",
+  "created_at": "2026-08-14T00:03:48Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Two round-9 findings on the organizer's record of what it holds. Grouped because both are the same failure \u2014 **the system has the information and the surface does not carry it** \u2014 and both are small.\n\n---\n\n## Part 1 \u2014 CNT-13: a deliverable is not linked to the talk it belongs to\n\nRubric item **CNT-13**, weight **1**, `partial` in round 4 and round 9 (0.5 recoverable). Scenario **CNT-S3**. Also a **major** defect this round.\n\n### Acceptance criterion \u2014 the rubric's `pass_criteria`, verbatim\n\n> A files view lists the slides.pdf upload with its session and speaker association, upload date, and a version count of 2, consistent with actual uploads; a per-session Files tab, if present, shows the same file (its absence alone does not fail the item if the aggregate library exists)\n\n### The judge's own reasoning (confidence high)\n\n> A central files library exists at /files [...] The slides.pdf row carries FILE \"slides.pdf \u00b7 Upload Session Presentation\", SPEAKER \"Priya Raman \u00b7 benevolent.futures+sbek-speaker@gmail.com\", STATUS UPLOADED, UPLOADED \"Aug 13, 2026\", VERSIONS \"2 versions\" and SIZE 608 B [...] **The gap is the session association the criterion explicitly asks for: the SESSION column reads \"\u2014 no session attached\"**, even though the task-creation form offered a per-assignee \"Session for Priya Raman\" selector, so the deliverable is not linked to \"Taming 40-Minute CI\" anywhere in the library.\n\nAnd the defect: *\"Organizers cannot see which talk a deck belongs to, and the library's session search cannot find it.\"*\n\n### What to build\n\nThe association exists in the data \u2014 Priya has exactly one accepted session and the deck was requested of her for it. **Derive it when it was not set explicitly**, rather than leaving the column empty because an optional selector was skipped at assignment time. Prefer the explicitly chosen session where one exists; fall back to the speaker's accepted session for this conference when it is unambiguous; say \"no session attached\" only when it is genuinely ambiguous or absent, and when it is ambiguous, say which choices exist rather than nothing.\n\nThe library's session search must find the file by its talk title once the association renders.\n\nNote MRQ-140 already fixed a related bug (file-request tasks assigned via the speaker picker losing their session) and is in this build, so start by checking whether the link is missing at write time or only at read time.\n\n---\n\n## Part 2 \u2014 the change history cannot be ordered (minor)\n\n> **`/submissions/:id` \u2014 HISTORY panel.** Change-history entries carry date-only timestamps. The HISTORY panel shows \"Aug 13, 2026\" with no time of day for every entry, so several edits made minutes apart on the same day are indistinguishable and cannot be ordered by their displayed metadata.\n\nThe panel's own caption promises \"Every change, who made it, and when.\" A date is not a when for a record that changes several times an hour, and this is the panel an organizer opens precisely when two edits disagree. The underlying rows carry millisecond timestamps already.\n\nRender the time alongside the date, and keep it stable-width (tabular numerals) so the column does not jitter as entries land.\n\n### Acceptance\n\n- The files library shows the session for a deliverable whose speaker has an unambiguous accepted session, and the session search finds it.\n- History entries render a time of day and sort unambiguously.\n- Regression tests for both.\n\n## Constraints\n\n- Your **own linked worktree**, created as your first act, then `pwd` and `git branch --show-current` to prove it. Never the primary checkout (it is the Lattice board's home); never `mrq-auto-eval*`.\n- **Cut your branch from `github/main`, never local `main`.** The primary checkout's local\n  `main` is parked and stale; a local branch pointer in a shared checkout only moves when\n  somebody pulls, and nobody does. `git fetch github` then\n  `git worktree add ../Marquee-worktrees/<branch> -b <branch> github/main`.\n- **Verify freshness with a check that can still fail:**\n  `git fetch github && git merge-base --is-ancestor github/main HEAD && echo current || echo 'behind github/main \u2014 rebase'`.\n  It asks \"am I current with main\", not \"do I have some particular fix\" \u2014 a check pinned to\n  one commit goes vacuous the moment that commit is deep in history and then reassures you\n  forever. Behind is normal on a busy night and does not by itself mean broken; but if you\n  also see ~22 auth 401 failures, that is expired test-fixture sessions and **rebasing is the\n  only cure \u2014 re-running never clears it.**\n- **Confirm the instrument before you believe a negative browser result.** A dead or stale local\n  Worker produces exactly the symptoms of a broken change \u2014 blank surface, stuck loader, missing\n  styling \u2014 and a stale one answers confidently with the wrong program. Before trusting any\n  negative reading: `lsof -i :<port>` to confirm something is listening, and\n  `curl -s localhost:<port>/health` to confirm the `build_sha` is the commit you think you are\n  testing. Ports taken tonight: 8853, 8841, 8871, 8791, 8823. When you report verification\n  evidence, name the port, the build_sha, and what you saw.\n- **New test titles must start with `CONTRACT` or an `AC-<n>` reference, then a middle dot.**\n  `scripts/checks/trace-ac-core.mjs:44` enforces\n  `/^((?:AC-\\d+(?:\\s*[,+]\\s*AC-\\d+)*)|CONTRACT)\\s+\u00b7\\s+/`, so a bare ticket prefix is rejected:\n  `'MRQ-000 \u00b7 does the thing'` fails, `'CONTRACT \u00b7 MRQ-000 \u00b7 does the thing'` passes. Keep the\n  ticket reference, just put `CONTRACT` in front of it. This has cost three CI cycles tonight and\n  it is invisible until the gate says no.\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across every worktree.\n- **No migration without the operator.** If you conclude one is needed, stop and say so on the ticket.\n- **Do not deploy.** An eval round is running and a `.deploy-freeze` marker sits at the primary checkout. Merging is wanted; deploying is not, and is not yours.\n- **Elements never jump** \u2014 reserve space for anything that swaps.\n- Ship a regression test that fails on `main` and passes on your branch.\n- **Gate serialization is a fleet rule, not an option.** Route EVERY `npm run pr-gate` and EVERY full\n  `npm test` through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`,\n  including one-off \"just checking\" runs \u2014 a lock only serializes its participants, so a single\n  unlocked run lands on top of a lock-holder and inflates it. Cheap scoped things (tsc, one test\n  file) stay unlocked.\n- **A timeout and a red are indistinguishable in an unserialized run.** Check `uptime` before you\n  believe a red; load has ranged 14 to 164 tonight and the same branch measured 78s and 276s\n  against a 120s budget. If your only evidence for a defect is \"it timed out\", you have no\n  evidence. CI fast-gate runs on a quiet box and is tonight's oracle.\n- PR: `gh pr create --repo Stage-11-Agentics/marquee --base main`.",
+  "done_at": "2026-08-14T03:28:45Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYX6HF58MPESZG24PPKAQYG",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZZ04HCN87HQM82CJ3ZC04Z5",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZZ51962YG94G07914PNQFCJ",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYSA03HBVFF4FNBP2T538ZK",
+  "last_event_id": "ev_01KZZ5198ZYVQ0WTQVF544FNSD",
+  "last_status_changed_at": "2026-08-14T03:28:45Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-182",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "content-management",
+    "CNT-13",
+    "round9"
+  ],
+  "title": "CNT-13: a deliverable names no talk, and history entries carry no time",
+  "type": "bug",
+  "updated_at": "2026-08-14T03:28:45Z",
+  "urgency": "normal"
+}

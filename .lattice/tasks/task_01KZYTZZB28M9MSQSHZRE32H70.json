@@ -1,0 +1,53 @@
+{
+  "assigned_to": "agent:codex-implementer",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": "medium",
+  "created_at": "2026-08-14T00:33:17Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Rubric item **EMB-15** \u2014 `public-widgets`, weight **2**, `partial` in round 4 and round 9\n(**1.0 recoverable**). Scenario: **EMB-S3**. It is now the **only** unconverted item in\npublic-widgets \u2014 the area is 15/16 \u2014 and the last item in my lane that is neither merged nor\nowned by someone else.\n\n## Acceptance criterion \u2014 the rubric's `pass_criteria`, verbatim\n\n> The agent finds an embeds/share/publish area, sees widget-type choices covering most of the\n> five, configures and saves an embed, and captures a generated snippet or URL; **full credit\n> needs multiple output formats (styled HTML, basic HTML, JSON/XML, iCal) and filter/field/branding\n> options per SessionBoard** \u2014 the snippet actually rendering inside a third-party page is the\n> manual half\n\n## Why it fell short \u2014 the judge's own reasoning (confidence high)\n\nThe judge is emphatic that the builder is real and good, then names exactly three gaps:\n\n> A real embed builder exists at /embed/config [...] FORMAT offers four surfaces (Agenda,\n> Sessions, Speakers, Call for speakers), OUTPUT offers three (Styled HTML, JSON feed, iCal\n> feed) [...] Every change rewrites the snippet and re-renders a live preview iframe of the\n> actual public embed [...] Saving works and persists server-side [...] surviving a full reload\n> with a snippet addressed by its own durable slug. **Short of full credit for three named\n> gaps: there is no per-field selection (the field set of each surface is fixed \u2014 no checkboxes\n> anywhere in the builder), the output set omits a basic-HTML and an XML variant, and there is\n> no itinerary/personal-schedule embed type.** Two builder defects also apply (stale preview on\n> iCal, Get code not restoring the form).\n\n**This is the rare item where the remaining work is enumerated for us.** Nothing here needs\ndiagnosis; the judge wrote the checklist.\n\n## What to build \u2014 the three named gaps\n\n1. **Per-field selection.** Checkboxes over each surface's field set, so an organizer embedding\n   a speakers grid can drop, say, company or bio. The criterion asks for \"field... options\" and\n   the builder currently has none. Default everything on, so an existing saved embed's output is\n   unchanged.\n2. **Basic HTML output**, alongside Styled HTML \u2014 unstyled markup a host page can theme itself.\n   This is the point of the format existing: Styled HTML carries our accent and type, and a host\n   with its own design system wants the other one.\n3. **XML output**, alongside the JSON feed. The criterion names \"JSON/XML\" as one slot; JSON\n   alone half-fills it.\n\nThe judge also names a fourth, an itinerary/personal-schedule embed type. **Do that one last and\nonly if the first three are done and green** \u2014 the personal schedule is per-visitor state and\nembedding it is a larger design question than the other three combined. If you run out of room,\nstop and say so on the ticket rather than half-shipping it.\n\n## The two builder defects, which are the honesty half\n\n4. **The live preview goes stale on iCal.** Switching OUTPUT to \"iCal feed\" leaves the preview\n   pane rendering the JSON body from the previous selection while the snippet box correctly\n   shows the iCal anchor. The preview and the snippet contradict each other, and the preview is\n   the thing the organizer trusts.\n5. **\"Get code\" on a saved embed restores only the snippet, not the configuration.** After\n   clicking it the FORMAT tab still reads Agenda, TRACK still \"All tracks\", ACCENT still default\n   teal and the preview still shows the unfiltered agenda \u2014 while the code box reads\n   `track=trk_infra&accent=%23b3261e`. The builder is now showing one embed and describing\n   another. Restore the full configuration into the form, so what is on screen is what the\n   snippet encodes.\n\n## Acceptance\n\n- OUTPUT offers styled HTML, basic HTML, JSON, XML and iCal; each produces a snippet or URL that\n  resolves, and the preview matches the selected output every time.\n- Field selection exists per surface and changes the rendered embed.\n- \"Get code\" on a saved embed leaves the builder showing exactly that embed's configuration.\n- Existing saved embeds keep rendering exactly as they do today.\n- Regression tests fail on `main` and pass on the branch.\n\n## Constraints\n\n- Your **own linked worktree**, created as your first act, then `pwd` and `git branch --show-current` to prove it. Never the primary checkout (it is the Lattice board's home); never `mrq-auto-eval*`.\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across every worktree.\n- **No migration without the operator.** If saved-embed configuration needs a new column, stop and say so on this ticket.\n- **Do not deploy.** A `.deploy-freeze` marker sits at the primary checkout; the eval coordinator owns the barrier. Merging is wanted; deploying is not, and is not yours.\n- **Elements never jump** \u2014 reserve space for anything that swaps as OUTPUT or FORMAT changes.\n- **Gate serialization is a fleet rule, not an option.** Route EVERY `npm run pr-gate` and EVERY full `npm test` through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`, one-off runs included. Cheap scoped things (tsc, one test file) stay unlocked.\n- **Read the `status` field before you believe a red.** `fail` is load-invariant \u2014 believe it, it is a real defect. `pass-over-budget` is a warn, not a failure. `timeout` is the only status contention can manufacture: re-run the SAME sha once under the lock before investigating, and compare the parent commit's `elapsedMs` \u2014 CI's suite is running ~305s against a 600s ceiling tonight, so a CI timeout may be headroom rather than your diff. Never dismiss failing tests as a \"known baseline\" without naming the commit that made them pass.\n- PR: `gh pr create --repo Stage-11-Agentics/marquee --base main`.",
+  "done_at": "2026-08-14T03:14:17Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYV6SK70N4J7WGM0NVZ2J5S",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYXK9S8GQFSMEJJF7MKHM7Q",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZYZMRRWGTK8NMJT359HEB31",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZZ46RNW3RXX0P6CV9RKET9W",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYTZZB28M9MSQSHZRE32H70",
+  "last_event_id": "ev_01KZZ46S6H9TJVN7ZPRNRQNFWN",
+  "last_status_changed_at": "2026-08-14T03:14:17Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-184",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "public-widgets",
+    "EMB-15",
+    "round9"
+  ],
+  "title": "EMB-15: the embed builder is missing the formats and field control the criterion names",
+  "type": "bug",
+  "updated_at": "2026-08-14T03:14:17Z",
+  "urgency": "high"
+}

@@ -1,0 +1,43 @@
+{
+  "assigned_to": "agent:mrq208-opus",
+  "branch_links": [],
+  "comment_count": 7,
+  "complexity": null,
+  "created_at": "2026-08-14T20:15:16Z",
+  "created_by": "agent:schedule-review",
+  "custom_fields": {},
+  "description": "THE build ticket for the attendee-schedule rounds 2+3 design, signed off by Atin 2026-08-14. One solid ticket, one Opus delegator, whole loop (operator ruling \u2014 round-1 precedent MRQ-132).\n\nCONTRACT (read in this order; all committed on main)\n1. sequence/attendee-schedule-design.md \u2014 \u00a77 in full: R2-1\u2026R2-5, the design section, Constraints, the round-2 review rulings, Round 3, and the Round-4 build rulings (design signed off; claim = request \u2192 verify; retention = persist indefinitely; demand board = Agenda-module panel; speaker pins derived never stored; mail launch-gated).\n2. prototypes/attendee-schedule/index.html at v0.3 \u2014 the BINDING visual contract; the build reproduces its round-2/3 surfaces one-to-one in the Flight Deck skin (DESIGN.md; tokens in src/styles/tokens.css \u2014 every color a token, no literals; check:design must pass).\n3. DESIGN.md + PHILOSOPHY.md \u2014 craft rules bind (elements never jump; tabular numerals; honest empty/loading states; speed is a feature R7).\n4. Round-1 shipped code (MRQ-132, PR #102) \u2014 the star module, schedules short-code API, My Schedule view, ICS/webcal are LIVE; this ticket extends them, never forks them.\n\nDELIVERABLES\n1. D1 migration: event_attendances join (person_id, event_id, source import|claim, schedule_code nullable, verified_at, timestamps \u2014 no memberships/roles change, per \u00a77); star-beacon table (event_id, session_id, device_hash) with idempotent upsert/delete; org-level public-counts setting (on/off default OFF + threshold n, configurable, floor 1, default 3); public_schedules gains nullable device_hash for agent-demand de-dup.\n2. Star beacon: anonymous endpoints with their own KV limiter (schedules 30/hr/IP pattern \u2014 the shared buckets are a no-op). Demand aggregate per session = distinct device_hash + distinct schedule codes with NULL device_hash containing the session; web clients pass their device hash on POST/PUT /schedules so synced codes de-dup.\n3. Public agenda counts: quiet \u2605-chip beside the format/track chips (NEVER under the star button) at count \u2265 n when the setting is on; detail-page inline count; copy \"N schedules include this session\" with sr text; slot reserved at threshold/off. Setting ships OFF.\n4. Claim flow (request \u2192 verify, round-4 ruling): \"Get it by email\" row per prototype; Send = Turnstile + own limiter + one transactional mail carrying the sync URL; NO CRM write at send. First open of the emailed link = verification: person upsert by email, attendance row (source claim, schedule_code, verified_at), identity-line flip. Pending state after send: \"Check your email \u2014 link sent to \u2026\" (acknowledged divergence from the prototype's post-verify state). Resend. Unlink per the unclaim ruling: deletes the email\u2194code linkage always, the claim-sourced attendance row, and the person row only if the claim minted it and nothing else references it; confirmation copy exactly: \"Unlinked \u2014 your email and picks are removed from the organizers' records.\"\n5. Identity legibility (round 3): agenda intro \"No sign-in\u2026\" line; My Schedule identity line in both states (anonymous / linked with masked email + Manage), per prototype.\n6. Speaker cross-over (round 3 + round-4 semantics): on VERIFIED claim whose email matches a speaker at the event (same people table \u2014 the CRM rail), their speaking sessions pin into My Schedule with \"You're speaking\" chips \u2014 list, glance panel (ink-filled blocks), agent briefing, ICS/webcal set, overlap detection (starring against your own talk warns). Pins are DERIVED at render, never stored in sessionIds; absent from the shared read-only link; unlink removes them.\n7. Organizer demand panel, homed in the Agenda module of the admin shell: exact counts including sub-threshold, ranked; bar = % of room capacity with a hairline tick at 100%, past-tick fill in status tokens; \"bigger room?\" over-capacity chip; stats row (imported / synced / via agents / claimed / advance picks \u2014 gauges must reconcile); public-counts setting + threshold control beside it. Room capacity: source from the venue/room model \u2014 if rooms carry no capacity field yet, add one (nullable; rows without capacity show the count and an em-dash, no fake ratio).\n8. Attendee import + agent affordance: extend the people import rails (org-imports.routes.ts + documented API) to write attendance rows (source import) idempotently by email when an event is passed \u2014 the endpoint writes them itself, no second call; re-running never dupes a person. People-surface \"task for your agent\" block with the pre-filled prompt (prototype's IMPORT_PROMPT as the model, corrected to the real endpoints/paths). Skill-file chapter: export \u2192 map \u2192 bulk upsert \u2192 verify counts.\n9. For-agents doc: add the demand-signal disclosure (\"Building a schedule counts toward the session demand signal, anonymously\") and keep the endpoint enumeration current.\n\nCONSTRAINTS (binding)\n- Resend free tier 100/day: claim mail is LAUNCH-GATED \u2014 build the send behind a flag, everything else live. Build \u2260 enable.\n- Privacy posture: anonymous stars stay anonymous forever; identity only at verified claim; NO silent linkage of star data to imported ticket-holders; aggregates carry no identity.\n- CRM doctrine: attendees are people rows + event_attendances \u2014 no parallel table, no workflow status on people, notes/tags/lists attach to person_id.\n- Retention: no TTL machinery \u2014 codes and feeds persist.\n- Every new anonymous endpoint: own limiter; Turnstile wherever an email is accepted.\n- Suite budget 45s / gate budget 120s; read the status field per repo CLAUDE.md.\n\nVALIDATION (in_validation gate \u2014 \"I saw it work\")\nAgainst the running system (browser automation + curl): star \u2192 chip appears at threshold when setting on and never under the star; agent loop via curl (POST schedule without device hash raises the demand aggregate by one; with device hash de-dups); claim send \u2192 pending state \u2192 open the verification link (dev: capture the mail/log) \u2192 identity flips, CRM rows exist; unlink \u2192 rows removed per ruling, copy exact; speaker cross-over with a seeded speaker email \u2192 pins render everywhere ruled, absent from the shared link; demand panel gauges reconcile and the over-capacity row reads loudest. Attach evidence before pr_open.\n\nPROCESS\nLinked worktree cut from github/main (never local main; primary checkout is the board home \u2014 no branch work there). PR to Stage-11-Agentics/marquee main via gh. A non-author review before merge; merge on green + review (repo rule). Merging does not deploy \u2014 DEPLOY.md governs shipping, out of this ticket's scope unless the operator asks.",
+  "done_at": null,
+  "evidence_refs": [
+    {
+      "id": "art_01M00ZBY8EM1B3GZ8KDP2B9HR1",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01M014JFDZ3A8XQYWE2ZXS64TT",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01M0152DW2D33GNAX068BHJN7X",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01M00YM8RJ8GYW19ES555WWM7S",
+  "last_event_id": "ev_01M01DD0JQ8QA1B4H0W7KXKGGZ",
+  "last_status_changed_at": "2026-08-14T22:00:10Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-208",
+  "status": "pr_open",
+  "tags": null,
+  "title": "Build attendee schedule rounds 2+3 \u2014 demand signal, email claim, attendees in CRM, speaker cross-over",
+  "type": "task",
+  "updated_at": "2026-08-15T00:33:27Z",
+  "urgency": null
+}

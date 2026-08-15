@@ -1,7 +1,7 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:mrq-203-sidebar",
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 5,
   "complexity": "high",
   "created_at": "2026-08-14T20:05:50Z",
   "created_by": {
@@ -15,24 +15,35 @@
   },
   "custom_fields": {},
   "description": "Fold the signed sidebar-reorg prototype (v1.15, Atin love pass 2026-08-14) into the build. Full scope, acceptance sketches, and dependencies: sequence/sidebar-fold-tickets.md \u00a7T1. Summary: route-table.ts regroups to Organization (Home \u00b7 People CRM \u00b7 Outreach \u00b7 Settings) / conference core (Program pipeline \u00b7 Program board \u00b7 Abstracts & sessions \u00b7 Agenda \u00b7 Speakers) / Speaker ops / Call for proposals / Public links / Settings + footer; the seven-row Pipeline ladder is removed; renames (Program pipeline, People CRM \u2014 rewrite the route-table comment arguing against CRM; Outreach); icon curation (leading external arrows, reserved 16px column); Conference group label over the picker, eyebrow removed, 6px gap; + affordance on the Abstracts & sessions row; register.ts navLabels rework and zeroPadNavIcons retirement/repoint; NEW stage-flyout component on the Program pipeline row (Overview row first, stages 1-7 with live counts from the dashboard snapshot, 150/220ms hover intent, focus-opens, retires under 1000px); /lists becomes a tab inside People CRM with the People row active (builds on PR #224); one centered content column shared by every admin page (max-width ~1500px, margin auto \u2014 the prototype found crm pages pinned left while pipeline pages centered). Design contract: prototypes/pipeline-v1.1 + prototypes/crm + prototypes/sidebar-reorg (R1-R5); rulings in sequence/run-state.md 2026-08-14.",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-14T21:23:29Z",
+  "evidence_refs": [
+    {
+      "id": "art_01M00YSPKYPQZ18QAACWTWSRBK",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01M012H4JEEDKRQH2Y88MMXDKE",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
   "id": "task_01M00Y2ZC6EKQX3BEA1SVN8K9H",
-  "last_event_id": "ev_01M00Y2ZC7MZWP196B6E4N85Y0",
-  "last_status_changed_at": "2026-08-14T20:05:50Z",
+  "last_event_id": "ev_01M012KJDMPHKRRR0HR817QYKD",
+  "last_status_changed_at": "2026-08-14T21:23:29Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-203",
-  "status": "backlog",
+  "status": "done",
   "tags": [
     "sidebar-reorg",
     "design-fold"
   ],
   "title": "Sidebar reorg fold: nav structure, stage flyout, Lists into People, centered page column",
   "type": "task",
-  "updated_at": "2026-08-14T20:05:50Z",
+  "updated_at": "2026-08-14T21:24:48Z",
   "urgency": null
 }

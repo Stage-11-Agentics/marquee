@@ -1,0 +1,57 @@
+{
+  "assigned_to": "agent:codex",
+  "branch_links": [],
+  "comment_count": 12,
+  "complexity": "medium",
+  "created_at": "2026-08-13T22:46:06Z",
+  "created_by": "agent:claude",
+  "custom_fields": {},
+  "description": "## The defect\n\n`/reviewer` **is** the queue. \"Enter as reviewer\" from the landing page drops a\nhuman straight onto submission #1 with the scorecard already open \u2014 no page that\nsays who they are, what they are responsible for, how much is left, when it\ncloses, or where their own record lives. \"Exit queue\" is `window.history.back()`,\nwhich from a freshly opened seat means nowhere.\n\nEvery other seat has a home. The organizer has `/dashboard`; the speaker has\n`/portal` with tasks, profile and talks. The reviewer has a work surface and no\nseat. That is the gap.\n\nOperator ruling, 2026-08-13: split the seat in two.\n\n- **`/reviewer`** \u2014 the reviewer's home. Who you are, what you're responsible\n  for, what you've done, and one way in.\n- **`/reviewer/queue`** \u2014 the working surface. One submission, one\n  recommendation, next.\n\n## What the home page is\n\nFour blocks, in this order. Every number on it already has data behind it \u2014\nnothing here needs a new source of truth.\n\n**1 \u00b7 Your assignment.** Plan and round name, mode (Scorecard / Comparison),\nanonymity (\"Anonymous review\" / \"Identity visible\"), `N waiting \u00b7 M reviewed of\nT`, and the round's `closes_at` as a plain date when one is set (schema:\n`evaluation_rounds.closes_at`, nullable \u2014 say nothing rather than invent a\ndeadline). Primary action **Start reviewing \u2192** goes to `/reviewer/queue` and\nresumes at the next unreviewed item. When the queue is clear the card says so and\nthe primary action becomes a quiet secondary \u2014 an empty queue is a finished job,\nnot an error.\n\n**2 \u00b7 Your responsibility.** The track scopes already returned as `scopes`, the\ncommittee(s) this reviewer sits on, and the existing one-sentence rule (\"A\nsubmission appears when it is assigned to you \u2014 directly or through your\ncommittee \u2014 and carries a track in your scope.\"). Committee membership is *not*\nin the queue payload today; add it there rather than minting a second endpoint.\nNo scope assigned is a real state and must read as one \u2014 a reviewer with an empty\nqueue deserves to know whether nobody assigned them work or nobody gave them a\ntrack.\n\n**3 \u00b7 Your reviews.** The `completed` list that lives under the queue today,\nmoved here whole: title, the recommendation recorded (or \"Conflict\"), and Reopen\n\u2192 the same detail modal. Keep `completed_truncated`'s honest caption.\n\n**4 \u00b7 Your profile.** Name, email, title, company, bio, headshot, editable\ninline. **No new API** \u2014 `PATCH /api/v1/me/profile`\n(`src/routes/portal.routes.ts:1454`) is `auth: { kind: \"authenticated\" }`, not\nspeaker-gated, and `ProfileForm` in `src/ui/portal/PortalPage.tsx` already does\nthis work. Reuse it or lift it into a shared component; do not fork a second\nprofile editor. If the operationId or copy says \"speaker\" in a way a reviewer\nwould find odd on screen, fix the copy, not the route.\n\n## What the queue becomes\n\nKeeps: the submission card, the scorecard (recommendation, optional score,\ncriteria, committee note), Declare conflict, the A/M/D \u00b7 1\u20135 \u00b7 Enter shortcuts,\nthe full-submission modal, comparison mode.\n\nSheds: the responsibility panel and the Completed list \u2014 both now live on home,\nand leaving copies here makes \"Completed\" mean two different things depending on\nwhich page you are standing on.\n\nGains: an honest progress line (`17 of 40`) in the topline, and **Exit queue\nbecomes a real link to `/reviewer`**, not `history.back()`.\n\n## Acceptance criteria\n\n1. `/reviewer` renders the home with all four blocks. It does not render a\n   scorecard.\n2. `/reviewer/queue` renders the working surface, unchanged in its scoring\n   behaviour, and every existing reviewer AC still passes against it.\n3. **Start reviewing** lands on the first unreviewed assigned submission.\n4. **Exit queue** returns to `/reviewer` from a cold-opened tab (no history).\n5. Saving a recommendation on the queue and then returning home shows that\n   submission under Your reviews with the recommendation that was saved.\n6. Editing bio/title/company/headshot on home persists and survives a reload,\n   through the existing `/me/profile` route, with no new endpoint added.\n7. A reviewer with zero track scopes sees a home that says so; a reviewer with an\n   empty queue sees a finished-work state, not an error.\n8. Anonymity is unchanged. Blind mode still redacts identity everywhere it does\n   today, and the home page must not leak a submitter's name through the\n   completed list.\n9. Mobile: home is usable at 375px (the queue already carries\n   `data-mobile-review`).\n\n## Known touchpoints \u2014 check every one\n\n- `src/ui/review/ReviewerPage.tsx`, `src/ui/review/review.css`\n- `src/ui/shell/route-table.ts:55` \u2014 the `reviewer` route entry\n- `src/ui/shell/AppShell.tsx:127,173` \u2014 `/reviewer` is special-cased twice as a\n  non-admin shell; `/reviewer/queue` needs the same treatment\n- `src/lib/auth/signin-destination.ts:18` \u2014 reviewer sign-in destination\n- `src/routes/signin.route.tsx:159` \u2014 the demo reviewer button's `data-signin-to`\n- `src/routes/landing.route.tsx:191` \u2014 \"Enter as reviewer\"\n- `src/ui/shell/seat.tsx:58` \u2014 \"Open your review queue\"\n- `src/routes/evaluation.routes.ts:954` \u2014 the committee-invite magic link mints\n  `redirectTo: \"/reviewer\"`. An invited reviewer should land on their home, which\n  is now the right answer rather than an accident.\n- `public/submission/index.html` \u2014 three hardcoded\n  `marquee.stage11.dev/reviewer?demo=reviewer` links\n- `scripts/checks/speed.ts:140` \u2014 loads `/reviewer` and waits for\n  `[data-reviewer-surface]`. Decide deliberately whether the speed check measures\n  home or queue, and make it measure the one that matters (the queue is the\n  latency that hurts a reviewer). Do not let this silently start timing a\n  lighter page and report a false win.\n- `docs/ROUTES.md:43,101` and `SITEMAP.md` \u2014 both list `/reviewer` as \"Review\n  queue\"\n- `cli/marquee.mjs` and `SKILL.md` \u2014 CLI reviewer verbs hit the API, not the\n  route, so they should need no change; confirm rather than assume.\n- Tests keying on the reviewer surface, at least:\n  `tests/node/reviewer-boundary.AC-214-246.test.mjs`,\n  `tests/node/reviewer-anonymity.AC-64.test.mjs`,\n  `tests/node/eval-dead-ends.test.mjs`,\n  `tests/unit/signin-destination.MRQ-133.test.ts`,\n  `tests/integration/signin.MRQ-133.test.ts`,\n  `tests/integration/landing.test.ts`, and `scripts/checks/check-routes.mjs`.\n\n## Do not\n\n- Do not add a second profile endpoint, a second queue endpoint, or a second\n  reviewer identity concept.\n- Do not put organizer chrome (the admin sidebar) on either reviewer page. The\n  reviewer seat has its own topline for a reason.\n- Do not show a reviewer the round's aggregate score distribution or the\n  committee's Approve/Maybe/Deny split. It was considered and left out\n  deliberately: showing a reviewer how everyone else is voting nudges their next\n  vote.\n- Do not leave a duplicated Completed list on the queue.\n\n## Validation\n\nGreen tests are not the gate. Drive the real thing: sign in through the demo\nreviewer door, land on home, read the numbers, start reviewing, save a\nrecommendation, exit back to home, confirm the review appears with the\nrecommendation you gave, edit the profile, reload, confirm it stuck. Use the c11\nembedded browser (WKWebView \u2014 run local dev with\n`--var INSECURE_LOCAL_COOKIES:1` or the session cookie is dropped on `http://`).\nScreenshots of home and queue in the PR.",
+  "done_at": "2026-08-14T01:54:23Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYNA8RPX1J75WFFBQBXP3H5",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYS67G15B92C3WMJ765RB7H",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZYSFSKKT5YS380PDAVWW8VW",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYSQ31MNAQ1GPQMPREGEJZM",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZZ09C5MWV083AHJ60F0SV93",
+      "role": "validation",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYMVQJAFRCPSMVD47PP12E9",
+  "last_event_id": "ev_01KZZ09C5MWV083AHJ60F0SV93",
+  "last_status_changed_at": "2026-08-14T01:54:23Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-171",
+  "status": "done",
+  "tags": [
+    "reviewer",
+    "ux",
+    "seat"
+  ],
+  "title": "The reviewer seat has no home \u2014 /reviewer drops you onto a scorecard",
+  "type": "task",
+  "updated_at": "2026-08-14T02:05:48Z",
+  "urgency": null
+}

@@ -1,0 +1,13 @@
+{
+  "agent_type": "intake",
+  "base_name": "Sidebar-Round",
+  "framework": "claude-code",
+  "last_active": "2026-08-14T20:06:20Z",
+  "model": "claude-fable-5",
+  "name": "Sidebar-Round-1",
+  "parent": "human:atin",
+  "serial": 1,
+  "session": "sess_01M00Y2GZCP9X5VQ7CNDC6HENP",
+  "started_at": "2026-08-14T20:05:35Z",
+  "status": "active"
+}

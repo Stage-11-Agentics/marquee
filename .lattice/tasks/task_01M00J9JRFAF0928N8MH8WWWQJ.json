@@ -1,0 +1,58 @@
+{
+  "assigned_to": "agent:codex-mrq-200",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": null,
+  "created_at": "2026-08-14T16:39:43Z",
+  "created_by": "agent:claude-cli",
+  "custom_fields": {},
+  "description": "Three follow-ups left deliberately unfixed by PR #224 (merged as e60dacd8), which fixed the save-as-list radios, named the list on the People page, and moved Lists out of the sidebar. Each was found by review, each is real, none blocked that PR. Grouped because the first two touch the same endpoint and the third is the root cause of the bug that started the whole thing.\n\n## 1. A members-free projection on GET /api/v1/org/lists/{listId}\n\nRetires TWO deferrals at once, which is why it leads.\n\nToday the endpoint (src/routes/person-lists.routes.ts, `openList`) serialises EVERY member to answer a request. `buildPeopleQuery` with no `page` emits no LIMIT, so it is an unpaginated scan. Rendering one line of text costs the whole roster.\n\nBecause of that, the People page's list band does NOT resolve by id \u2014 it fetches the whole lists index (`fetchLists`) and finds its entry, which costs `1 + N` queries where N is the org's live-list count, since the index recomputes every live count through `liveCount`. Measured on a 1,100-person seed: 2ms at 1 live list, 6ms at 10, 22ms at 40. Linear and modest today, and Miniflare understates real D1 latency, but it is on the critical path of the page whose stated premise is speed (R7).\n\nThe index approach also carries an unstated precondition: \"absent from the index\" is only \"does not exist\" while the index is complete. There is a tripwire test for that (tests/integration/api/people.MRQ-131.test.ts \u2014 creates 12 lists, demands all 12 back), so capping or paginating GET /org/lists fails CI rather than rendering every list past page one as deleted. That test is a guard, not a solution.\n\nDeliverable: a way to resolve one list to {id, name, kind, member_count, created_by_name, created_at} without its members. Then point the band back at resolve-by-id, delete the index round trip, and let 404 mean \"no such list\" definitively.\n\nAcceptance:\n- Resolving one list for display costs one query and returns no member rows.\n- The People band resolves by id; its four states (resolving / named / missing / error) still hold, and \"missing\" comes from a real 404 rather than from absence in a list.\n- The index-completeness tripwire test can be removed, or restated against whatever the band now depends on.\n\n## 2. `?list_id=<unknown>` answers 200 with zero rows, not 404\n\nGET /api/v1/org/people?list_id=lst_typo returns `{total: 0}`. An agent driving the API reads \"the list is empty\" where it should read \"no such list\" \u2014 PHILOSOPHY \u00a73, nothing is UI-only. `resolveListScope` used to return a `found` flag for exactly this and it was removed as dead rather than wired up, because adding a 404 to the people-list endpoint is an OpenAPI change with its own gate work.\n\nThe UI never sees this today because the band resolves missing-ness independently \u2014 so this is API ergonomics, not a correctness bug. Natural to do alongside item 1, which makes the same distinction cheap.\n\nAcceptance: an unknown or foreign `list_id` is distinguishable from an empty one, through the API, without reading a second endpoint.\n\n## 3. `.field input` over-reach in the shared stylesheet\n\nsrc/styles/components.css:135 \u2014 `.field input, .field select, .field textarea { ... width: 100%; min-height: 34px; }`\n\nThis is the IDENTICAL bug PR #224 fixed one level down in `.people-field input`, where `width: 100%` on a radio inside a flex label stretched the control across the dialog, pinned its glyph to the far left and pushed its words to the other side of the modal, one word per line. That was the defect the operator reported.\n\nIt is live here: EvaluationPage.tsx:953 and :988 put `type=\"checkbox\"` inside `<fieldset class=\"field invite-tracks\">`. It is already hand-patched twice \u2014 evaluation.css:136 (`.scope-check input { min-height: 0; width: auto; }`) and evaluation.css:14 (`.round-toggle input { flex: none; margin: 0; }`). A third instance is a matter of time.\n\nDeliverable: guard the shared selector the same way \u2014 `:not([type=\"radio\"]):not([type=\"checkbox\"])` \u2014 and remove whichever local hand-patches the guard makes redundant.\n\nAcceptance:\n- No radio or checkbox anywhere inherits text-entry sizing from a `.field` ancestor.\n- The evaluation screen's checkboxes and round toggles render unchanged (verify in a browser, not only by test).\n- Hand-patches that exist solely to undo the over-reach are gone.\n\n## 4. Facet counts are org-wide inside a list\n\nsrc/routes/people.queries.ts \u2014 `listPeopleFacets(db, orgId)` takes no filters and never has, so the People filter panel's counts are always org-wide. Pre-existing, but PR #224 changed which way the mismatch reads: inside a 12-person list the panel still offers \"AI \u00b7 300\", and clicking it now correctly returns a handful, because the list intersection actually holds. The behaviour is right; the counts are what is now visibly stale.\n\nAcceptance: facet counts reflect the population actually in view (list, search and chips applied), or the panel says plainly that they do not. Either is honest; silently showing 300 next to a filter that yields 4 is not.\n\n## Notes for whoever takes this\n\n- Items 1 and 2 are one touch. Item 3 is independent and small. Item 4 is independent and the largest of the four \u2014 split it out if it grows.\n- Verify item 3 and the band changes in a real browser, not only under test. The bug that started this was invisible to a green suite and obvious on screen.\n- Full context: PR #224 and its three review passes.",
+  "done_at": "2026-08-14T17:47:25Z",
+  "evidence_refs": [
+    {
+      "id": "art_01M00JNEEF8SJRVJ7QBNTTVRR3",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01M00M9V3NFE226KQ45DXY0DAQ",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01M00P4SBNV64YGDCAY4CN53HM",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01M00P4X1X6VMNBBQ6Y8VAG3KE",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01M00P5HJDGSV1QR710KE5A2KK",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01M00P5HJDGSV1QR710KE5A2KJ",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01M00J9JRFAF0928N8MH8WWWQJ",
+  "last_event_id": "ev_01M00P5HJEDAHJ555PFYDSBY6W",
+  "last_status_changed_at": "2026-08-14T17:47:25Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-200",
+  "status": "done",
+  "tags": null,
+  "title": "Lists cleanup: cheap list resolution, honest facet counts, and the shared .field input over-reach",
+  "type": "task",
+  "updated_at": "2026-08-14T17:47:25Z",
+  "urgency": null
+}

@@ -1,0 +1,14 @@
+{
+  "agent_type": "advance",
+  "base_name": "Gatekeeper",
+  "framework": "codex-cli",
+  "last_active": "2026-08-13T21:26:20Z",
+  "model": "gpt-5.6",
+  "name": "Gatekeeper-1",
+  "parent": "human:atin",
+  "prompt": "MRQ-166",
+  "serial": 1,
+  "session": "sess_01KZYG9NKCC6ZQ3ZCZH4KQGHSN",
+  "started_at": "2026-08-13T21:26:20Z",
+  "status": "active"
+}

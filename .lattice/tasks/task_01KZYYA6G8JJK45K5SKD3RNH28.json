@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": "low",
+  "created_at": "2026-08-14T01:31:17Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Found by #207's reviewer (surface:157) while verifying that PR's fix. **Same defect, second\nconsumer, untouched by #207 and deliberately out of its scope.** I verified it in source before\nminting.\n\n## The defect\n\n`readPool` (`src/routes/agenda.queries.ts:412`) feeds the agenda builder's unscheduled pool. Its\n`WHERE` filters on `submission.event_id`, `submission.status IN (\u2026)`, and `NOT EXISTS` an agenda\nitem \u2014 and **never on `submission.kind`**:\n\n```sql\nFROM submissions submission\nLEFT JOIN formats format ON \u2026\nWHERE submission.event_id = ?\n  AND submission.status IN (\u2026)\n  AND NOT EXISTS (SELECT 1 FROM agenda_items item WHERE \u2026 AND item.kind = 'session')\n```\n\nNote it **selects `submission.kind` in its own projection** and then does not filter on it. The\ndata is right there.\n\n**Consequence, observed rather than reasoned:** an accepted `kind='abstract'` submission appears\nin the unscheduled pool **with a working \"Place\" button**. The organizer presses it and the\nscheduler refuses with `422 \"only Sessions can be placed on the agenda\"`. An action is offered\nthat cannot succeed.\n\n## The shape, which is the reason this is worth a ticket rather than a one-line patch\n\n`#207` fixed the identical hole in `readAgendaPublication`. Both had the same history: the\nconstraint was **provided implicitly by an INNER JOIN through `agenda_items`** \u2014 only sessions\nhave agenda items, so only sessions could appear \u2014 and it was never written down as a predicate.\n\n**When a constraint is supplied implicitly by a join, every consumer that changes its join loses\nthat constraint independently, and none of them can see the loss.** There is no diff in which the\npredicate disappears, because it was never there. That is why fixing one consumer says nothing\nabout the others.\n\n**So do not fix only the one we found.** Enumerate the readers first:\n\n- every query in `agenda.queries.ts` that reads `submissions` for a scheduling or publication\n  purpose, and any that moved from `FROM agenda_items \u2026 JOIN submissions` to `FROM submissions \u2026\n  LEFT JOIN agenda_items`;\n- anything else offering a Place, Schedule or Publish affordance;\n- and \u2014 pair the search \u2014 confirm your pattern finds the two we already know about\n  (`readAgendaPublication`, now fixed, and `readPool`) before trusting it to have found\n  everything. An empty result from a search that cannot see the known cases is worth nothing.\n\nReport what you enumerated on the ticket, including the readers you checked and cleared. A list\nof \"these are fine\" is the evidence that the sweep happened.\n\n## Where the predicate belongs\n\n`#207`'s reviewer flagged this and it applies here too: put `AND submission.kind = 'session'` in\nthe **outer `WHERE` against the submissions row**, not in a `LEFT JOIN \u2026 ON` clause. On a LEFT\nJOIN those are different queries, and the ON-clause version is the way a correct-looking one-line\nfix goes silently wrong.\n\n## Acceptance\n\n- An accepted `kind='abstract'` submission does not appear in the unscheduled pool and is offered\n  no Place affordance.\n- A real accepted, unscheduled **Session** still appears, still placeable \u2014 assert this in the\n  same test as a positive control, so \"the pool is empty\" cannot pass for \"abstracts are\n  filtered\".\n- Any other reader found by the enumeration is fixed in the same PR or explicitly listed as\n  checked-and-clear.\n- Regression test red on `main`, green on the branch.\n\n## Constraints\n\n- Cut your worktree from `github/main`, never local `main` \u2014 **and ignore the worktree line in the\n  primary checkout's `CLAUDE.md`, which is still the stale copy.** Verify with the three-state\n  check: `if git fetch github; then if git merge-base --is-ancestor github/main HEAD; then echo current; else echo 'behind -- rebase'; fi; else echo 'FETCH FAILED -- not attempted'; fi`\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across every worktree.\n- **Push when the work is written, before the verification run.**\n- Gate through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`.\n- Test titles start with `CONTRACT` or `AC-<n>`, then a middle dot.\n- No migration. Do not deploy.",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZYYA6G8JJK45K5SKD3RNH28",
+  "last_event_id": "ev_01KZYYA6GASAKQC6FQBB31Y6G3",
+  "last_status_changed_at": "2026-08-14T01:31:17Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-191",
+  "status": "backlog",
+  "tags": [
+    "auto-eval",
+    "ai-agenda",
+    "round9",
+    "root-cause"
+  ],
+  "title": "readPool offers a Place button on abstracts: the same implicit kind filter #207 lost, in a second consumer",
+  "type": "bug",
+  "updated_at": "2026-08-14T01:31:17Z",
+  "urgency": "high"
+}

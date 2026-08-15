@@ -1,0 +1,64 @@
+{
+  "assigned_to": "agent:codex-mrq-185",
+  "branch_links": [],
+  "comment_count": 5,
+  "complexity": "low",
+  "created_at": "2026-08-14T00:40:13Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Round-9 **minor** defect, recorded independently by **two** area judges in the same run \u2014\n`ai-agenda` and `public-widgets` \u2014 and a repeat of a round-4 defect. No rubric item punishes it;\nboth areas scored 100% and 97.1%.\n\n## The judges' own words\n\n`public-widgets`:\n\n> **`/agenda?event=aie-ny-2026` (first Mon Oct 12 09:00 card) and the `/embed/config` live\n> preview.** A published session renders with no speaker on the public program: the 'Lightning:\n> Agents in Production Q&A' card shows a bare em dash '\u2014' where the speaker line belongs, on the\n> public agenda, and **the same empty line reproduces inside the embed widget's live preview**.\n> Attendees see a scheduled talk with nobody attached to it.\n\n`ai-agenda` adds the part that identifies the cause:\n\n> although the same session lists 'Marcus Okafor' as its speaker **in the builder tile and in the\n> publish review list**. Sibling cards on the same page (e.g. 'Advanced AI Engineering with AI\n> SDK' \u2014 Nico Albanese) render speaker name, title and company correctly, so the speaker data is\n> dropped for this record rather than absent by design.\n\nRound 4 logged the same shape: *\"A session with no assigned speaker renders a bare em dash '\u2014' in\nplace of the speaker line rather than [an honest empty state].\"*\n\n## The cause, traced \u2014 and the filtering is CORRECT\n\n`src/lib/participants.ts:40-44`:\n\n```ts\nfunction roleFilterSql(alias: string, audience: ParticipantAudience): string {\n  if (audience === \"program\") return \"\";\n  const roles = SPEAKING_PARTICIPATION_ROLES.map((role) => `'${role}'`).join(\", \");\n  return ` AND ${alias}.role IN (${roles})`;\n}\n```\n\n`SPEAKING_PARTICIPATION_ROLES` is `speaker`, `co_speaker`, `moderator`, `chairperson`. The agenda\nbuilder tile and the publish review list read audience **`program`**, which applies **no** role\nfilter and therefore prints everyone including a `submitter`. The public agenda card and the embed\nread audience **`public`**, which correctly restricts to on-stage roles.\n\n**So the person the judge saw in the builder is attached in a non-speaking role, and filtering them\noff the public page is right.** Do not widen `SPEAKING_PARTICIPATION_ROLES` and do not make the\npublic audience read `program`. A submitter is not on stage and the public programme must not say\nthey are \u2014 `participants.ts:12-15` says exactly this and it is correct.\n\n**The defect is the empty state.** When the filter removes everyone, the card renders a bare `\u2014`,\nwhich reads to an attendee as a data error and to a judge as a dropped record. The product knows\nthe difference between \"nobody is on stage for this session\" and \"we lost the speaker\"; the card\ndoes not say either.\n\n## What to build\n\n1. **An honest empty state on the public session card** when no participant survives the public\n   audience filter. Say what is true \u2014 \"Speaker to be announced\" is the conference's own language\n   for it \u2014 rather than printing punctuation. Whatever the wording, it must not read as a\n   rendering failure.\n2. **The same treatment inside the embed preview and the embed output**, since the judge saw it\n   reproduce there. One renderer, not two.\n3. **Elements never jump** \u2014 the speaker line must occupy the same height whether it names a\n   person or states the absence, so cards in a grid stay aligned.\n4. **Give the organizer the other half.** A published session with no on-stage participant is\n   usually a mistake the organizer would want to know about before attendees do. If there is a\n   cheap place to surface it \u2014 the publish review list already enumerates exactly these sessions \u2014\n   name it there. Keep this small; if it grows beyond a line and a count, stop and say so on the\n   ticket rather than expanding the PR.\n\n## Acceptance\n\n- A published session whose participants are all non-speaking roles renders a stated empty line on\n  the public agenda and in the embed, never a bare em dash.\n- A session with a real speaker renders exactly as it does today.\n- `SPEAKING_PARTICIPATION_ROLES` and the public/program audience split are unchanged.\n- Regression test fails on `main` and passes on the branch, covering both the public agenda and the\n  embed path.\n\n## Constraints\n\n- Your **own linked worktree**, created as your first act, then `pwd` and `git branch --show-current` to prove it. Never the primary checkout (it is the Lattice board's home); never `mrq-auto-eval*`.\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across every worktree.\n- **No migration without the operator.**\n- **Do not deploy.** Deploys are queued and coordinated by the merge captain; shipping is not yours even though the freeze has lifted.\n- **Gate serialization is a fleet rule.** Route EVERY `npm run pr-gate` and EVERY full `npm test` through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`, one-off runs included.\n- **Read the `status` field before you believe a red.** `fail` is load-invariant \u2014 believe it. `pass-over-budget` is a warn. `timeout` is the only status contention can manufacture: re-run the SAME sha once on CI (safe and recommended \u2014 CI is idempotent) and compare the parent commit's `elapsedMs` before investigating.\n- PR: `gh pr create --repo Stage-11-Agentics/marquee --base main`.",
+  "done_at": "2026-08-14T03:34:55Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYWDCDG98DS0W7448N37KAG",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYXS02CEWBXK830MV903KXC",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYY1WSNZS6HMZSF3W9K41FN",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYZ9Y1VP16H95YSPQJFSP20",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZZ50FXD9Z9KV0WY9QAD7TEV",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZZ5CJKXCYR4J40ATC1YDPS8",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYVCNSAX5YPH0M3R4N5G9ZN",
+  "last_event_id": "ev_01KZZ5CJQ0DK32WVVZCEKB89FR",
+  "last_status_changed_at": "2026-08-14T03:34:55Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-185",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "public-widgets",
+    "ai-agenda",
+    "round9",
+    "craft"
+  ],
+  "title": "A published session with no on-stage participant renders a bare em dash to attendees",
+  "type": "bug",
+  "updated_at": "2026-08-14T03:34:55Z",
+  "urgency": "normal"
+}

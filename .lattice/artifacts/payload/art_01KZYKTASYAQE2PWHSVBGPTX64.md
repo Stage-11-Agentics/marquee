@@ -1,0 +1,46 @@
+# Plan Review: MRQ-170 — submitter cannot edit their own submission while the call is open
+
+## 1. Verdict
+
+**FAIL (plan-level)** — Send back to `in_planning`.
+
+## 2. Summary
+
+The plan is well-grounded in a genuine, twice-confirmed judge finding and correctly identifies that most of the needed machinery (talk editing, history/audit, disabled-with-reason UI, status column) already exists. But its account of that machinery is wrong in a way that matters: it describes `talkIsEditable()`/`editableTalk()` as gated by *decision status* ("built for the accepted talk"), when the code actually gates on CFP-open-ness and speaker membership, with **no decision check at all**. That misreading steers the plan toward adding a second, parallel editability rule instead of fixing/widening the one that exists — which would leave `waitlisted`/`accepted` submissions silently editable through the old path with no decision gate while the new path enforces one, a real correctness regression on the very columns (`title`, `abstract`) this ticket touches. The plan also stops at restating the task's requirements; it names no files to modify, no chosen authorization mechanism, and no fix for the server-side 403/409 that will reject a "reopened" resume-link edit unless explicitly addressed.
+
+## 3. Issues
+
+**[CRITICAL] "Where the code already is" — the existing editability gate is mischaracterized**
+The plan states `talkIsEditable()`/`editableTalk()` (`src/routes/portal.routes.ts`) are "built for the *accepted* talk" (post-decision). In the actual code, `talkIsEditable()` (line 952, not 976 as cited — see minor issue below) returns `row.form_status === "open" && (row.closes_at === null || row.closes_at > Date.now())`, short-circuited by the staff-reopen override. There is no reference to `status`, `decided_at`, or any decision state anywhere in either function. So the existing path is *already* CFP-open-gated — it is the decision gate that is missing, not the CFP-open gate. As written today, a `waitlisted` or `accepted` submission remains editable via this path for as long as the CFP form stays open (or the staff override is set), which is arguably a latent bug independent of this ticket. Building a second, additive "pre-decision" path on top of this without also adding a decision check to the *existing* one produces two inconsistent editability rules on the same `title`/`abstract` columns: the new path says "editable while undecided," the old path still says "editable whenever the form is open," and a waitlisted talk falls through both with no gate at all.
+**Recommendation:** Reframe the plan around widening and correcting the single existing check rather than adding a parallel one: (a) drop the `membership.role = 'speaker'` join in `editableTalk()` (portal.routes.ts:1245-1267) so a pre-decision submitter — who may not hold that membership role — can reach it, and (b) add an explicit "not yet decided" predicate (`status IN ('submitted','in_review')`, matching the existing `SUBMITTER_AWAITING_DECISION` list at portal.routes.ts:77) to the *same* gate function, so there is exactly one notion of "editable by its own submitter right now" — CFP-open OR staff override, AND not yet decided (or staff override), for both the pre- and post-decision cases the ticket describes.
+
+**[MAJOR] "Round-trips" (req. 2) — server-side rejection on the public-form route is not addressed**
+The plan's requirement that "the resume link must reopen the form in an editable state" only describes client-side behavior. `public-form.routes.ts:569-571` currently 403s any autosave on a non-draft submission, and `:625` 409s a re-submit of an already-submitted row; `PublicForm.tsx:603/630` disables the whole fieldset once `state === "submitted"`. None of this is mentioned as something to change. Without it, "reopening the form" is UI-only and every edit attempt will fail server-side.
+**Recommendation:** Either (a) explicitly plan to loosen these two server checks for the CFP-open + undecided case (carefully — they exist to prevent post-submission tampering, so the loosened condition needs the same decision-status gate as issue #1), or (b) decide the resume link is not the right surface and route all edits through the `/portal` submission row instead, using the existing `editableTalk`/session-based endpoint. The plan should pick one and say so; right now it asks for both without acknowledging the server-side blocker on the resume-link half.
+
+**[MAJOR] "Authorization" (req. 6) — no authorization mechanism is chosen**
+Two viable patterns exist in the codebase with different consequences: session-based (`editableTalk`'s triple-bound `org_id`/`person_id`/`submission_id` query, portal.routes.ts:1245-1257) yields an actor `person_id` for the audit row "for free"; resume-token-based (`findResumeSubmission`, public-form.shared.ts:153-168) is scoped by construction to one form/event/person but has no session actor, so an audit row written from that path would have a null actor and render without a name in HISTORY (history.ts:42) — undermining requirement 5's "who" component. The plan doesn't decide between them.
+**Recommendation:** State explicitly that edits go through the session-authenticated `/portal` path (reusing `editableTalk`'s triple-bind), not the resume token, specifically so the HISTORY entry has a real actor. If the resume link is kept as an entry point, it should still resolve to a person session before allowing the write, not write directly off the token.
+
+**[MINOR] "What to build" (req. 5, HISTORY) — plan doesn't specify reusing the cleaner write path**
+`portal.routes.ts:1502` hand-writes `search_blob` on the existing speaker-talk-update endpoint, which is dead code (a trigger recomputes it regardless). `submission-record.routes.ts:338` (`contentWriteStatements`) already produces the correct write + `auditStatement` pairing without that redundancy, and `CONTENT_ACTIONS` (history.ts:25) already includes `speaker_talk_updated` for exactly this "organizer sees speaker edits in the same timeline" purpose.
+**Recommendation:** Name `contentWriteStatements` (submission-record.routes.ts:338) as the mechanism to reuse for the write + audit pair, rather than copying the portal route's hand-rolled version.
+
+**[MINOR] Completeness — no file-level breakdown**
+The "Plan" section is a verbatim restatement of the task description with no added implementation detail: no list of files to modify, no description of the new/changed endpoint(s), no mention of the UI components on `/portal` and the resume-link form that need the new control. "Does the plan identify which files will be created or modified?" — no, only files read for context are named.
+**Recommendation:** Before implementation, add a short concrete step list: which endpoint gains the widened gate (or is a new one added — see issue #1), which `PortalPage.tsx` component gets the edit control (precedent at PortalPage.tsx:426/431 for the disabled-with-reason button), and where the resume-link form-side check changes.
+
+**[MINOR] Citations have drifted**
+The plan cites `talkIsEditable()` at line 976 and `editableTalk()` at line 1268; current code has them at 952 and 1240 respectively. Not blocking, but the implementer should re-locate rather than trust the line numbers.
+
+**[MINOR] Latent bug adjacent to this change, worth a one-line flag**
+`submissionView` at portal.routes.ts:927 hardcodes `talk_editable: true` and relies on the caller to overwrite it. If the new work adds another caller of `submissionView` for the `/portal` list, it must remember to overwrite this field or every row will render as editable regardless of the real gate.
+**Recommendation:** Add a one-line note in the plan to explicitly set `talk_editable` from the real gate wherever `submissionView` is reused for this feature.
+
+## 4. Positive Observations
+
+- The ticket is unusually well-sourced: it quotes the judge's reasoning verbatim from two independent rounds, which correctly rules out judge variance and justifies real engineering effort here.
+- Explicitly banning a schema migration and asking the implementer to stop and say so if one turns out to be needed is good practice — and, per the research done during this review, matches the code: `title`/`abstract` are existing columns, `event_settings` is a flexible key/value table, and the `status` CHECK constraint already includes the values this ticket needs (no new value required). The plan should say this explicitly rather than leave it implicit.
+- Requirement 4 (disabled-with-reason rather than a vanishing control) directly encodes a lesson from a previously-found defect class and has real precedent already in the codebase to copy (`PortalPage.tsx:426/431`), which is exactly the right instinct — reuse the shape of an already-approved pattern.
+- The "one notion of editable, not two" framing in the plan's closing paragraph is the *correct* architectural instinct — the critical issue above is that the supporting description of the existing code doesn't match reality closely enough to actually deliver on that framing without correction.
+- Explicit exclusion from `git stash` and correct instruction to work in a linked worktree shows the plan absorbed prior repo-wide incident history rather than repeating it.

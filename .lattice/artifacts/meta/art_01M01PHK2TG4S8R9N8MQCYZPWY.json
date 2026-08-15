@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-15T03:13:14Z",
+  "created_by": "agent:mrq-214-opus",
+  "custom_fields": {},
+  "id": "art_01M01PHK2TG4S8R9N8MQCYZPWY",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01M01PHK2TG4S8R9N8MQCYZPWY.md",
+    "size_bytes": 5221
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "MERGED as 1cce684a (PR #274, squash). CI fast-gate green; board home fast-forwarded to the merge commit and the working copy verified (sponsor-portal.routes.ts, migrations/0023_sponsors.sql, SPEC Amen",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

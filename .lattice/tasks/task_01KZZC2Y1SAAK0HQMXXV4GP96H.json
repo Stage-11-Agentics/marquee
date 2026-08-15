@@ -1,0 +1,31 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": "low",
+  "created_at": "2026-08-14T05:31:59Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "## What happens\n\n`cmd_barrier` (sequence/auto-eval/loop.sh:225) runs its five steps in this order:\n\n    0/5  lift the deploy freeze\n    1/5  POST /api/v1/admin/reset-demo   <-- hits the OLD Worker\n    2/5  verify the landing header       <-- verifies the OLD build\n    3/5  wrangler deploy github/main     <-- the new code goes live HERE\n    4/5  verify by build hash\n    5/5  'barrier clear - demo verified clean'\n\nThe reset at step 1 and the verification at step 2 both execute against the\ndeployment that is about to be replaced. The seed data a round is then graded\nagainst was produced by the *previous* round's seeder, running under the\nprevious round's code.\n\n## Why it is not theoretical\n\nThree seed scripts changed in the 27 commits shipped at the round-9 barrier:\n\n  - seed/agenda.ts\n  - seed/accepted-core.ts\n  - seed/ugliness.ts\n\nSo the live demo went into round 10's staging seeded by the old seeder while\nserving new code. The Runner caught it, re-reset by hand afterwards, and\nverified the header. Nothing is currently wrong on live because of the manual\nrepair - this ticket is about the ordering that made the repair necessary.\n\n## The second half: step 5/5 asserts something it did not check\n\n'barrier clear - demo verified clean' is printed after the deploy, but the only\nverification of the demo (step 2/5) ran before it. The line is a false\nassurance: it claims a property of a build that was not live when the property\nwas checked. An agent reading that line has been told the post-deploy demo is\nclean and it has never been looked at.\n\n## Acceptance criteria\n\n1. The demo reset runs against the build that will actually serve the round.\n   Either move reset+verify after the deploy, or reset on both sides of it\n   (pre-deploy to clear the measured round's pollution, post-deploy to seed the\n   next one under the code that will grade it). State which and why in a comment\n   in the script - the ordering is the whole content of this fix.\n2. The header verification at step 2/5 runs against the post-deploy build, so\n   step 5/5's claim is earned.\n3. `--no-deploy` still works: with no deploy in the run, one reset and one\n   verification is correct and there must not be a redundant second pass.\n4. tests/node/auto-eval-guards.test.mjs (or a sibling) pins the ordering, so a\n   future edit that reverts it fails rather than being noticed by a human at a\n   barrier.\n\n## Adjacent defect found while reading this function - fix or split, reviewer's call\n\ncmd_guard's halt message (loop.sh:215) tells the operator to recover with:\n\n    git revert / checkout <anchor> && loop.sh barrier --deploy-only\n\n`--deploy-only` is not implemented. cmd_barrier only branches on `--force`\nand `--no-deploy`, so `--deploy-only`:\n  - does NOT skip the reset (it resets the demo, despite its name), and\n  - does NOT bypass the round-in-flight refusal (it is not --force).\n\nThis is the rollback instruction, printed at the moment the loop has halted on a\nfalling score - the worst moment to hand someone a flag that does not do what it\nsays. Either implement `--deploy-only` or correct the message.",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZZC2Y1SAAK0HQMXXV4GP96H",
+  "last_event_id": "ev_01KZZC2Y1TZQBXXBZ4MQMHFEG2",
+  "last_status_changed_at": "2026-08-14T05:31:59Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-197",
+  "status": "backlog",
+  "tags": [
+    "auto-eval",
+    "loop.sh",
+    "barrier"
+  ],
+  "title": "loop.sh barrier resets the demo before it deploys, so every round is seeded by the previous build's seeder",
+  "type": "bug",
+  "updated_at": "2026-08-14T05:31:59Z",
+  "urgency": "normal"
+}

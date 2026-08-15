@@ -1,0 +1,63 @@
+{
+  "assigned_to": "agent:codex-mrq-170",
+  "branch_links": [],
+  "comment_count": 4,
+  "complexity": "medium",
+  "created_at": "2026-08-13T22:21:49Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Rubric item **CFP-09** \u2014 `call-for-papers`, weight **2**, lane **absence**\n(`not_found` \u2192 `pass` recovers the full 2.0 points). Failed identically in round 4\n(build 29300ecf/0c169abf) and round 5 (build f9630de0), so this is a real absent\ncapability, not judge variance. Scenarios that walk it: **CFP-S2** (speaker side),\n**CFP-S3** (organizer side).\n\n## Acceptance criterion \u2014 the rubric's `pass_criteria`, verbatim\n\n> The appended abstract sentence (\"Updated: now includes 2026 benchmark data.\")\n> persists across reload in the speaker's view and appears verbatim in the\n> organizer's view of the same submission\n\nThe rubric's `criterion` for context, verbatim:\n\n> A submitter can edit an existing submission while the CFP is open, and the edited\n> content is what the organizer subsequently sees (inferred norm from\n> Sessionize/EasyChair, confirmed by SessionBoard participant docs)\n\nRequired evidence, verbatim:\n\n> Speaker-side screenshot of the edited abstract after reload (CFP-S2);\n> organizer-side screenshot of the submission detail containing the same sentence\n> (CFP-S3)\n\n## Why it fell short \u2014 the judge's own reasoning\n\nRound 5 (`runs/2026-08-13T20-13-03/judgements/call-for-papers.json`, confidence\nmedium):\n\n> The app offers the submitter no way to edit a submitted abstract while the call is\n> open, so the scripted edit ('Updated: now includes 2026 benchmark data.') could\n> never be applied and the organizer-side check has nothing to find. Two paths were\n> tried while the CFP was open: (a) the submitter portal /portal lists each\n> submission with its status but exposes no Edit / View submission / Withdraw\n> control \u2014 the only controls on the page are Sign out, 'Sign in with your email',\n> 'Open the call for speakers', 'Return to conference', 'View the agenda'; (b)\n> re-opening the resume link that produced the submission renders only the read-only\n> confirmation card, not an editable form. Drafts remain editable via the resume\n> link, but only before submission. The organizer's copy of the abstract accordingly\n> lacks the appended sentence. Caveat lowering confidence: the post-acceptance\n> speaker portal does carry a per-talk edit affordance (seen later as a disabled\n> 'Closed' button), so an edit surface exists for accepted speakers \u2014 but it was\n> never reachable for a pending submission with the CFP open, which is what this\n> criterion asks for.\n\nRound 4 said the same thing independently, and added that CFP-S4 re-confirmed after\nacceptance that \"there is still no path anywhere for the speaker to edit the\nsubmitted abstract text itself\", and that this is \"absence of the feature in the\nproduct, not a run shortfall: the CFP was open at the time of the attempt and the\nscenario completed.\"\n\n## Where the code already is (read this before designing)\n\nThe product already has almost all the machinery; what is missing is the\n*pre-decision* seat.\n\n- `src/routes/portal.routes.ts:976` `talkIsEditable()` and `:1268` `editableTalk()`\n  implement speaker-side talk editing, gated by a per-submission settings row\n  `speaker_talk_editing:<submissionId>` that program staff reopen or close\n  (`:1557`). `talk_editable` is projected into the portal view at `:951`/`:1129`.\n  That path is built for the *accepted* talk, and it edits title/description.\n- The public form's resume link renders read-only once the response leaves draft.\n- So the gap is: a **submitted, not-yet-decided** proposal has no editable surface\n  for the person who submitted it, on either the resume link or `/portal`.\n\n## What to build\n\nWhile the CFP is open and the submission has not been decided, the submitter can\nedit their own submission's answers \u2014 at minimum the abstract/description \u2014 and the\norganizer's view of that record shows the edited text.\n\n1. **Reachable from the submitter's seat.** `/portal` must expose the control on\n   the submission row (not a hidden URL), and the resume link must reopen the form\n   in an editable state for a submitted-but-undecided response.\n2. **Round-trips.** The edit persists across reload in the speaker's view.\n3. **Organizer sees the same text**, verbatim, on the submission detail \u2014 the same\n   record, not a copy or a pending-change queue.\n4. **Honest when it is not available.** Once the CFP closes or a decision lands, the\n   control renders **disabled with the reason stated** rather than disappearing.\n   A capability that vanishes when inapplicable is undiscoverable \u2014 that is the\n   (b)-class defect this loop keeps finding, and this ticket must not add another.\n5. **History.** The record's HISTORY panel should show the speaker's edit (who,\n   what, when). Round 4 separately logged \"the record's HISTORY panel, captioned\n   'Every change, who made it, and when', reads 'No history recorded yet'\" as a\n   minor defect; a speaker edit that leaves no trace would make the organizer's\n   record untrustworthy.\n6. **Authorization.** Only the submitter of that response, on their own submission,\n   in that event. No cross-event or cross-person reach through a resume token.\n\nPrefer extending the existing editing machinery over building a second one \u2014 one\nnotion of \"this submission is editable by its speaker right now\", with the CFP-open\n+ undecided case added to the existing staff-reopened case.\n\n## Constraints\n\n- Work in your **own linked worktree**, created as your first act:\n  `git worktree add ../Marquee-worktrees/mrq-170-submitter-edit -b mrq-170-submitter-edit main`.\n  Verify with `pwd` and `git branch --show-current`. Never the primary checkout (it\n  is the Lattice board's home); never `mrq-auto-eval*` (that is the loop's own\n  machinery branch).\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across all\n  worktrees and two agents stashing at once swap each other's work.\n- **No migration without the operator.** If this needs a schema change, stop and say\n  so on the ticket rather than adding one.\n- **Do not deploy.** An eval round is running; a `.deploy-freeze` marker sits at the\n  primary checkout. Merging is wanted; deploying is not, and is not yours.\n- Gate serialized: `flock /tmp/marquee-gate.lock -c 'npm run pr-gate'`.\n- PR: `gh pr create --repo Stage-11-Agentics/marquee --base main`.",
+  "done_at": "2026-08-13T23:49:11Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYKTASYAQE2PWHSVBGPTX64",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYMWGA5KC92Z1NHSJ2R1GPB",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZYP2EZF9QS3YH4D99MZMKGX",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZYRF3GV8R9Y1VY578P1WTE1",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZYRJP0ZXMW5TQ65N81NN93M",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYRX24DFTQ5W84CKKXZPTFK",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZYKF8Q762G5R5F5RK8NAKGS",
+  "last_event_id": "ev_01KZYRX24G68JNFW9RZ6EE6FB1",
+  "last_status_changed_at": "2026-08-13T23:49:11Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "MRQ-170",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "call-for-papers",
+    "CFP-09",
+    "round5"
+  ],
+  "title": "CFP-09: a submitter cannot edit their own submission while the call is open",
+  "type": "bug",
+  "updated_at": "2026-08-13T23:56:44Z",
+  "urgency": "high"
+}

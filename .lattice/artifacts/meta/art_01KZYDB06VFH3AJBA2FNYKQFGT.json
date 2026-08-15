@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-13T20:34:38Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZYDB06VFH3AJBA2FNYKQFGT",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZYDB06VFH3AJBA2FNYKQFGT.md",
+    "size_bytes": 424
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Merged in PR #177 (merge commit d3c979327151e440c34750f6d428990c62f244f1). The submitter seat now chooses the newest participating event explicitly for submitters, carries eventId through public-form ",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

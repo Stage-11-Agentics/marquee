@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-14T21:28:21Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01M012T2K8WGEFKSX2VV3C343E",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01M012T2K8WGEFKSX2VV3C343E.md",
+    "size_bytes": 1278
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Shipped in PR #254, squashed to 7068e268 on 2026-08-14; the feature branch was deleted after merge.\n\nImplemented the conference-local event-time seam and the organizer-set/read behavior: SubmissionRec",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,33 @@
+{
+  "assigned_to": "agent:claude",
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": "medium",
+  "created_at": "2026-08-13T22:55:57Z",
+  "created_by": "agent:claude",
+  "custom_fields": {},
+  "description": "Three items from Atin using the app on 2026-08-13.\n\n1. Decision delivery says 'correct the address, then send again' but never names the address the last attempt used. Show the last send (address, moment, outcome), flag it when the speaker record now reads something else, and offer a 'Review previous sends' disclosure.\n2. The acceptance-reversal inventory reports counts for portal tasks, scheduled emails and calendar invites but the counts are inert. Each should open onto the rows it counts.\n3. Clicking 'Speaker portal' in the organizer sidebar renders 'We could not load your portal - conference not found'. The 404 is a true answer (an organizer holds no speaker seat); the screen must say so and offer a route out.",
+  "done_at": "2026-08-14T00:19:18Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYNRQ3TDB217Q5DRT8AVWZN",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZYNDRVHY8YRYP0S7NNPD9C4",
+  "last_event_id": "ev_01KZYT6C638ADBGWPMDMEZF04P",
+  "last_status_changed_at": "2026-08-14T00:19:18Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-173",
+  "status": "done",
+  "tags": null,
+  "title": "Operator UI intake: decision delivery shows no send history, reversal counts do not open, and the organizer's Speaker portal link dead-ends",
+  "type": "bug",
+  "updated_at": "2026-08-14T00:19:18Z",
+  "urgency": null
+}

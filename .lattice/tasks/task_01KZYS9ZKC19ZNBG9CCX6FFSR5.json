@@ -1,0 +1,58 @@
+{
+  "assigned_to": "agent:codex-cli",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": "medium",
+  "created_at": "2026-08-14T00:03:47Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Rubric item **CNT-04** \u2014 `content-management`, weight **2**, **pass in round 4, partial in round 9**. Scenarios: **CNT-S2**, **CNT-S3**. Also recorded separately as the round's only **CRITICAL** defect.\n\n## Acceptance criterion \u2014 the rubric's `pass_criteria`, verbatim\n\n> After the second slides.pdf upload, a version list shows two entries with timestamps, the latest is flagged as current, and the older version remains individually viewable/downloadable (a control exists) rather than being overwritten\n\n## Why it fell short \u2014 the judge's own reasoning\n\n> The end state satisfies the criterion: after the second upload the speaker panel shows \"slides.pdf V2 OF 2 \u00b7 uploaded Aug 13, 2026, 7:40 PM\" with a version list beneath [...] The gap that keeps this off a pass: **the first \"Upload new version\" attempt silently failed.** The panel sat at \"Uploading \u00b7 0% \u00b7 0 B / 608 B\" with a Cancel upload button for ~15 s, no error was ever shown, and a full reload revealed \"This is the only version uploaded so far\" \u2014 the new version had never been written. Only an identical retry produced v2. Versioning therefore works, but the re-upload path can drop a replacement without telling the speaker.\n\nAnd the critical defect entry:\n\n> **`/portal` \u2014 speaker portal, file task deliverable panel, \"Upload a new version\".** Silent upload failure on the speaker deliverable replacement path. [...] A speaker can therefore believe a deliverable was replaced when it was not.\n\nPlus the matching minor, which is the reason the failure was invisible:\n\n> **`/portal` \u2014 speaker portal upload control.** Upload progress indicator never advances. Throughout every upload the line reads \"Uploading \u00b7 0% \u00b7 0 B / 608 B\" with an empty progress bar, for a 608-byte file, and only ever changes by disappearing. It conveys no progress information and makes a hung upload indistinguishable from a working one.\n\n## Why this one is first in the queue\n\nVersioning already works \u2014 the points are not the reason to fix this. A speaker who uploads the corrected deck, watches a progress line, and closes the tab has every reason to believe the conference has their file. It does not, and nothing ever told them. That is the same class of harm as the CSV overwrite: the product quietly discards work a human did and reports success by saying nothing.\n\n## What to build\n\n1. **Find the actual failure.** Root-cause it before changing anything \u2014 presigned PUT, the completion call, a race between them, an aborted request, a token that expired. An identical retry succeeded, so it is very likely a race or a stale token rather than a rejected file. A fix you cannot explain will not survive the next round.\n2. **A failed upload says so.** Terminal failure state on the panel, in the speaker's language, with a retry affordance. Never a silent return to the pre-upload state.\n3. **A stuck upload times out** rather than sitting at 0% indefinitely, and the timeout is also a stated failure, not a disappearance.\n4. **The progress indicator reports real progress** or does not pretend to. If byte-level progress is not available on this path, show an indeterminate working state \u2014 an empty bar reading \"0% \u00b7 0 B / 608 B\" for the entire life of a 608-byte upload is a lie that made this bug invisible.\n5. **The panel's post-upload state is read from the server**, so a claimed success that did not persist cannot render as a success.\n\n## Acceptance\n\n- A failed or aborted new-version upload leaves a visible, stated failure and no false success.\n- A regression test exercises the replacement path's failure branch and proves the panel does not report success when nothing was written.\n\n## Constraints\n\n- Your **own linked worktree**, created as your first act, then `pwd` and `git branch --show-current` to prove it. Never the primary checkout (it is the Lattice board's home); never `mrq-auto-eval*`.\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across every worktree and two agents stashing at once swap each other's work.\n- **No migration without the operator.** If you conclude one is needed, stop and say so on the ticket.\n- **Do not deploy.** An eval round is running and a `.deploy-freeze` marker sits at the primary checkout. Merging is wanted; deploying is not, and is not yours.\n- **Elements never jump** \u2014 reserve space for anything that swaps.\n- Ship a regression test that fails on `main` and passes on your branch.\n- **Gate serialization is a fleet rule, not an option.** Route EVERY `npm run pr-gate` and EVERY full\n  `npm test` through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`,\n  including one-off \"just checking\" runs \u2014 a lock only serializes its participants, so a single\n  unlocked run lands on top of a lock-holder and inflates it. Cheap scoped things (tsc, one test\n  file) stay unlocked.\n- **A timeout and a red are indistinguishable in an unserialized run.** Check `uptime` before you\n  believe a red; load has ranged 14 to 164 tonight and the same branch measured 78s and 276s\n  against a 120s budget. If your only evidence for a defect is \"it timed out\", you have no\n  evidence. CI fast-gate runs on a quiet box and is tonight's oracle.\n- PR: `gh pr create --repo Stage-11-Agentics/marquee --base main`.",
+  "done_at": "2026-08-14T04:27:08Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYSFZ9MW8BTWW4WE2C8KZ7R",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZZ4GEM37QPN6PSJGD7NS4ST",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZZ4RC1FQSAQ31SDDPVHFCJM",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZZ69S2MKCSWBCNK63PW7D4E",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZZ8C64PNJKC02RVGF699W1Y",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYS9ZKC19ZNBG9CCX6FFSR5",
+  "last_event_id": "ev_01KZZ8C67P7XJFPY3Y15BW4EFH",
+  "last_status_changed_at": "2026-08-14T04:27:08Z",
+  "linked_files": [],
+  "priority": "critical",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-177",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "content-management",
+    "CNT-04",
+    "round9"
+  ],
+  "title": "CNT-04: the speaker portal can drop a replacement upload and say nothing",
+  "type": "bug",
+  "updated_at": "2026-08-14T04:27:08Z",
+  "urgency": "immediate"
+}

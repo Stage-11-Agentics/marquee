@@ -1,0 +1,53 @@
+{
+  "assigned_to": "agent:codex-MRQ-180",
+  "branch_links": [],
+  "comment_count": 2,
+  "complexity": "low",
+  "created_at": "2026-08-14T00:03:48Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Rubric item **CNT-08** \u2014 `content-management`, weight **2**, `partial` in round 4 and round 9 (1.0 recoverable). Scenario: **CNT-S3**. Also a **major** defect this round.\n\nRound 4 could not judge the send at all (the agent ran out of turns). Round 9 reached it, and found something worse than \"unverified\".\n\n## Acceptance criterion \u2014 the rubric's `pass_criteria`, verbatim\n\n> A bulk reminder action is available from the dashboard for incomplete/outstanding tasks (with or without a template picker) and the UI confirms the send (toast, dialog, or sent count). Actual delivery is verified manually\n\n## Why it fell short \u2014 the judge's own reasoning (confidence high)\n\n> The bulk reminder path exists and was exercised on the filtered outstanding set: with both speakers ticked, \"Send reminder (2)\" opened a COMPOSE drawer headed \"Reminder for 2 speakers \u00b7 Demo-safe outbox \u00b7 no email will be delivered\" with RECIPIENTS 2 (Priya Raman \u00b7 Marcus Okafor), a template picker, subject/body with merge fields and a working \"Preview merge\" [...] Pressing \"Queue reminder (2)\" returned an in-drawer confirmation line. **The gap is in that confirmation: it reads \"1 queued \u00b7 0 already in outbox\" for a send the same drawer describes as going to 2 speakers, and the UI gives no indication which recipient was skipped or why.** So the action and a send confirmation exist, but the confirmation contradicts the selection.\n\nAnd the defect entry: *\"Only one of the two selected speakers was queued and the UI never says which one was skipped or why, so an organizer reasonably believes both were reminded.\"*\n\n## What to build\n\nFirst establish which of the two this is, because the fix differs:\n\n- **The drop is real** \u2014 one recipient was genuinely not queued (no address, an existing suppression, a dedupe against an earlier outbox row, a per-recipient failure). Then the queueing is correct and the *reporting* is the defect.\n- **The count is wrong** \u2014 both were queued and the confirmation miscounts. Then the count is the defect.\n\nEither way the product must end up here:\n\n1. **The confirmation reconciles to the selection.** If 2 were selected, the confirmation accounts for 2: queued, skipped, and already-in-outbox must sum to the number the button promised.\n2. **A skipped recipient is named, with its reason**, at the moment of the send \u2014 not in a log the organizer would have to know to open. \"Marcus Okafor \u2014 no email address on file\" is the shape.\n3. **The organizer can act on it.** A skip the organizer cannot see is a speaker who never gets chased, which is the one thing PHILOSOPHY.md says the system exists to do.\n\n## Acceptance\n\n- Queueing a reminder for N selected speakers produces a confirmation whose parts sum to N.\n- A recipient that cannot be queued is listed by name with a reason.\n- Regression test covers the mixed case: one queueable recipient and one not.\n\n## Constraints\n\n- Your **own linked worktree**, created as your first act, then `pwd` and `git branch --show-current` to prove it. Never the primary checkout (it is the Lattice board's home); never `mrq-auto-eval*`.\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across every worktree and two agents stashing at once swap each other's work.\n- **No migration without the operator.** If you conclude one is needed, stop and say so on the ticket.\n- **Do not deploy.** An eval round is running and a `.deploy-freeze` marker sits at the primary checkout. Merging is wanted; deploying is not, and is not yours.\n- **Elements never jump** \u2014 reserve space for anything that swaps.\n- Ship a regression test that fails on `main` and passes on your branch.\n- **Gate serialization is a fleet rule, not an option.** Route EVERY `npm run pr-gate` and EVERY full\n  `npm test` through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`,\n  including one-off \"just checking\" runs \u2014 a lock only serializes its participants, so a single\n  unlocked run lands on top of a lock-holder and inflates it. Cheap scoped things (tsc, one test\n  file) stay unlocked.\n- **A timeout and a red are indistinguishable in an unserialized run.** Check `uptime` before you\n  believe a red; load has ranged 14 to 164 tonight and the same branch measured 78s and 276s\n  against a 120s budget. If your only evidence for a defect is \"it timed out\", you have no\n  evidence. CI fast-gate runs on a quiet box and is tonight's oracle.\n- PR: `gh pr create --repo Stage-11-Agentics/marquee --base main`.",
+  "done_at": "2026-08-14T03:28:35Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYSF9YY8JJNCHNEPTHY5XJA",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYVJN4EQSP0BVFWYGZPFQYZ",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYVVKK5HSWHQVKV3A1KDCXZ",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZZ07N9QHGC3XA4KV76BYZCV",
+      "role": "validation",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYS9ZXD955FJPCNCM8J40D1",
+  "last_event_id": "ev_01KZZ50ZDZKT4KWFM2MZWT9FDS",
+  "last_status_changed_at": "2026-08-14T03:28:35Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-180",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "content-management",
+    "CNT-08",
+    "round9"
+  ],
+  "title": "CNT-08: a bulk reminder for two speakers confirms one, and never says which",
+  "type": "bug",
+  "updated_at": "2026-08-14T03:28:35Z",
+  "urgency": "high"
+}

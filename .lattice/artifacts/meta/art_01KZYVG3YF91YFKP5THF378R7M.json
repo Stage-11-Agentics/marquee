@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-14T00:42:06Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZYVG3YF91YFKP5THF378R7M",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZYVG3YF91YFKP5THF378R7M.md",
+    "size_bytes": 810
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Root cause: compose/save and bulk enqueue lacked a shared unknown-token validation boundary, so an unsupported token such as {{portal.link}} could be queued literally. Fix: PR #200 centralizes the mer",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

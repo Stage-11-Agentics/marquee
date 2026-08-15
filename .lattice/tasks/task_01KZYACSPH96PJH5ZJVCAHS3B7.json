@@ -1,27 +1,48 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:mrq-163-clock-guard",
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 4,
   "complexity": "low",
   "created_at": "2026-08-13T19:43:11Z",
   "created_by": "agent:pr136-security-review",
   "custom_fields": {},
   "description": "npm run pr-gate is red on main right now, and will stay red on every branch until this is fixed. 22 tests fail. None of them are about the change under test.\n\nThe cause is a frozen clock meeting a real one. tests/integration/api/participants-editable.MRQ-139.test.ts:59 pins the fixture's notion of now:\n\n  const now = Date.UTC(2026, 7, 12, 12, 0, 0);\n\nand mints the organizer's session with expires_at = now + 86_400_000 \u2014 2026-08-13T12:00:00Z. But resolveSession (src/lib/auth/auth-sessions.ts:45-57) validates with 'expires_at > ?' bound to the REAL Date.now(). So the fixture session was born already counting down against wall-clock time, and it died at 12:00 UTC today. Every request in the file now answers 401. tests/integration/api/people.MRQ-131.test.ts:92 has the same shape and fails the same way.\n\nThat is the whole of it: 8 failures in MRQ-139 plus 14 in MRQ-131 equals the 22. The product is not broken, and neither is the change that happened to be on main when it fired.\n\nTwo things make this worth a high priority rather than a shrug:\n\n1. It is not self-limiting. It went red at 12:00 UTC 2026-08-13 and it does not come back. Every agent who runs the gate from now on sees a red suite caused by nothing they did.\n2. It teaches the fleet to ignore a red gate, which is the expensive failure. A gate that is red for reasons unrelated to the diff is worse than no gate \u2014 it converts the one signal that should stop a merge into noise. This project already merged PR #136 over a REQUEST CHANGES and merged PR #169 on an admittedly stale gate; a permanently-red suite makes that the norm rather than the exception.\n\nScope. Sixteen test files insert into auth_sessions with an expiry offset. Most compute now from Date.now(), so their sessions are always valid and they are fine. Only the ones that pin a literal date are bombs:\n\n  - participants-editable.MRQ-139.test.ts \u2014 Date.UTC(2026,7,12,12,0,0) + 24h \u2014 FIRING since 2026-08-13T12:00Z\n  - people.MRQ-131.test.ts \u2014 same shape \u2014 FIRING\n  - submission-record-board.AC-118-120-238-240-243-251.test.ts \u2014 Date.UTC(2026,9,20,15,30) + 24h \u2014 fires 2026-10-21, currently green and will look fine right up until it is not\n\nAcceptance criteria:\n1. The gate is green on main with no other change.\n2. Fixture sessions cannot expire against the wall clock. Either mint expires_at from Date.now() rather than the fixture's frozen now, or give resolveSession's now a test-injectable value the fixture controls \u2014 the first is smaller, the second is more honest about the coupling. Pick one and apply it to all three files, not just the two that are currently red.\n3. A check that would have caught this before a date boundary rather than after: no test may insert an auth_sessions row whose expires_at is computed from a literal date. A grep-level check in scripts/checks is enough; it does not need to be clever.\n4. Sweep for the same frozen-clock-vs-real-clock shape in other expiry-checked tables \u2014 magic_links.expires_at and forms.closes_at are the obvious neighbours.\n\nFiles: tests/integration/api/participants-editable.MRQ-139.test.ts (:59, :63-65), tests/integration/api/people.MRQ-131.test.ts (:92), tests/integration/api/submission-record-board.AC-118-120-238-240-243-251.test.ts, src/lib/auth/auth-sessions.ts (:45-57, the real-clock read).\n\nProvenance: found while gating 07dd8870 before a deploy. I first mis-attributed it to PR #157, which was the newest commit; checking out e29d4bd8 \u2014 which had gated clean 30 minutes earlier \u2014 reproduced the identical 8 failures, which is what ruled the diff out and the clock in.",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-13T20:28:53Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KZYCB48YZCSQKGHFHB624ZRD",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYCFZ92YV0ZZDJH0DAE8ESQ",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZYCTM281FYJPP9EJXBGHSB5",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYD0E9RKZ2QXHTV3G75QVJ2",
+      "role": "validation",
+      "source_type": "comment"
+    }
+  ],
   "id": "task_01KZYACSPH96PJH5ZJVCAHS3B7",
-  "last_event_id": "ev_01KZYACSPW78VGAY2YAYZP0XE5",
-  "last_status_changed_at": "2026-08-13T19:43:11Z",
+  "last_event_id": "ev_01KZYD0FNGS38D1HM4X9KFC1BN",
+  "last_status_changed_at": "2026-08-13T20:28:53Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "MRQ-163",
-  "status": "backlog",
+  "status": "done",
   "tags": null,
   "title": "A test fixture mints auth sessions against a frozen clock, so the gate goes red on a date nobody chose",
   "type": "bug",
-  "updated_at": "2026-08-13T19:43:11Z",
+  "updated_at": "2026-08-13T20:28:53Z",
   "urgency": null
 }

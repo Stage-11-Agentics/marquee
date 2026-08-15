@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": "low",
+  "created_at": "2026-08-14T05:55:08Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "## The rule as written\n\nCLAUDE.md says that merging a change to `CLAUDE.md` or `AGENTS.md` does not\ndeliver it, because both are auto-loaded from the **primary checkout's working\ncopy**, and the board-home rule keeps that checkout parked on `main`. So a\nmerged guidance fix sits on the ref while every session goes on reading the old\ntext. Whoever merges such a change fast-forwards the board home as part of the\nmerge, and verifies the working copy rather than the ref.\n\nThat is correct. It is also too narrow.\n\n## The property is not about those two files\n\n`sequence/auto-eval/prompts/*.md` have exactly the same property and are not\ncovered. They are dispatched with:\n\n    c11 launch-agent ... --prompt-file sequence/auto-eval/prompts/implementer.md \\\n      --cwd /Users/atin/Projects/Stage11/deployments/Marquee\n\n`--prompt-file` resolves against `--cwd`, which is the primary checkout \u2014 so\nthe prompt is read from the **working copy**, not from the ref, exactly like\nCLAUDE.md. A merged change to a prompt file changes nothing about what executes\nuntil someone fast-forwards that tree.\n\nThis was live during PR #222. That PR's whole point was removing\n`implementer.md`'s instruction to hand off to a 'merge warden' deleted four PRs\nearlier. Merging it would have changed nothing: every implementer and reviewer\ndispatched before the fast-forward would still have read the old line \u2014 the exact\nline the review had blocked the PR over. A PR that merges and does not take\neffect is worse than one that does not merge, because the board says done.\n\n## The fix, stated as a class rather than a list\n\nWiden the rule to cover **anything auto-loaded or `--prompt-file`'d from the\nprimary checkout's working copy**. Today that is:\n\n  - `CLAUDE.md`\n  - `AGENTS.md`\n  - `sequence/auto-eval/prompts/*.md`\n\nDo not ship it as that list. The next prompt directory someone adds inherits the\ntrap silently, and a list is exactly what fails to warn them. Name the property \u2014\n*read from the working copy of a checkout that is parked by design* \u2014 and give\nthe list as an illustration of it.\n\n## Acceptance criteria\n\n1. CLAUDE.md's fast-forward section states the rule as a class, not as two\n   filenames, and names the mechanism (working copy vs ref) as the reason.\n2. `sequence/auto-eval/prompts/` is explicitly included.\n3. The verification step still insists on reading the file rather than the ref \u2014\n   `grep` the working copy, not `git show`. That is the half of the existing\n   rule that actually catches the failure.\n4. The recovery path for a refused fast-forward is preserved verbatim: untracked\n   `.lattice` files that the incoming commits also add \u2014 back them up, remove,\n   fast-forward, restore byte-identical, verify with `diff`. Never `git clean`,\n   never `--force`; that tree is the fleet's board.\n5. Because this ticket edits CLAUDE.md, its own merge is subject to the rule it\n   is fixing: whoever merges it fast-forwards the board home and verifies by\n   reading the working copy.\n\n## Note\n\nThe operator is watching PR #222 and will fast-forward the board home by hand the\nmoment it merges, so tonight's run is not blocked on this. This ticket is about\nthe rule misleading the next agent, not about tonight.",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZZDDA4NAJQEHWK5V47PAJVV",
+  "last_event_id": "ev_01KZZDDA4PH24HMG69K3QEDKBK",
+  "last_status_changed_at": "2026-08-14T05:55:08Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-199",
+  "status": "backlog",
+  "tags": [
+    "claude-md",
+    "auto-eval",
+    "prompts",
+    "delivery"
+  ],
+  "title": "CLAUDE.md's fast-forward rule names two files when the property belongs to a class: every prompt read from the primary checkout's working copy",
+  "type": "bug",
+  "updated_at": "2026-08-14T05:55:08Z",
+  "urgency": "normal"
+}

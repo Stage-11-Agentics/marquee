@@ -1,27 +1,53 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:codex-mrq-161",
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 6,
   "complexity": "low",
   "created_at": "2026-08-13T02:00:07Z",
   "created_by": "agent:pr136-security-review",
   "custom_fields": {},
   "description": "tests/integration/api/meta.test.ts:149-150 carries a docstring that is factually wrong about this repo's own history, in a repo that is public:\n\n  * The document used to state that mutations carry `ETag`/`If-Match` optimistic\n  * concurrency; two of two hundred did.\n\nIt did not state that at the base of the PR that added this comment. MRQ-146 had already narrowed the sentence to 'Strong `ETag`/`If-Match` optimistic concurrency currently applies only to the two agenda item mutation operations that require it' (commit 5441cf1c). The overclaim the comment describes was fixed one ticket earlier; the PR that wrote this comment was rewriting an already-correct sentence.\n\nThis is small, but it is the specific failure mode CLAUDE.md's skill-writing rule names \u2014 a comment that rationalizes the present against a past the reader has no way to check, and that in this case did not happen. Someone reading the test to understand why the assertion is shaped that way is told a false story about the codebase.\n\nAcceptance criteria:\n1. The docstring describes what the test guards NOW \u2014 that info.description's concurrency claim is held to the route table \u2014 with no narrative about what the document 'used to' say.\n2. No other comment introduced by the same change carries the same false history; check the surrounding block.\n3. No assertion changes. This is comment-only; the contract the test enforces is correct and recently strengthened by PR #158.\n\nFiles: tests/integration/api/meta.test.ts (:145-155).\n\nProvenance: finding 6 of the 8-finding post-merge review on MRQ-150.",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-13T20:34:59Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYBA0EAWGJFQTZZT4AFJEQP",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYBGZD2GWKJQ7BQNH7KD5A2",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYBK3MDXQ79KJW3VEAHJ93N",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYDBMBVDJQCRW1SE3GB7WE7",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYDBMBVDJQCRW1SE3GB7WE6",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZWDJ8DHRAX0MNMQMTRJKANM",
-  "last_event_id": "ev_01KZWDJ8DJBJK32W0ETXF82FB0",
-  "last_status_changed_at": "2026-08-13T02:00:07Z",
+  "last_event_id": "ev_01KZYDBMBVDJQCRW1SE3GB7WEA",
+  "last_status_changed_at": "2026-08-13T20:34:59Z",
   "linked_files": [],
   "priority": "low",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-161",
-  "status": "backlog",
+  "status": "done",
   "tags": null,
   "title": "The OpenAPI concurrency test's docstring tells a history that never happened",
   "type": "chore",
-  "updated_at": "2026-08-13T02:00:07Z",
+  "updated_at": "2026-08-13T20:34:59Z",
   "urgency": null
 }

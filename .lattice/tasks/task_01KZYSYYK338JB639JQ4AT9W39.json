@@ -1,0 +1,53 @@
+{
+  "assigned_to": "agent:codex-cli",
+  "branch_links": [],
+  "comment_count": 2,
+  "complexity": "medium",
+  "created_at": "2026-08-14T00:15:15Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Two round-9 **minor** defects from the `ai-agenda` judgement\n(`runs/2026-08-13T22-25-26/judgements/ai-agenda.json`). **The area scored 8/8 \u2014 no rubric\nitem punishes either of these.** They are on the list because the agenda builder is the\nsurface where an organizer makes irreversible scheduling decisions, and both defects hide\ninformation the product already holds.\n\n---\n\n## Part 1 \u2014 a conflict badge that names nothing\n\n> **`/agenda-builder` \u2014 session tiles in the placement grid and the conflict counter in the\n> page header.** The conflict indicator on a scheduled session tile reads only '\u26a0 Conflict'\n> \u2014 it never states the reason or the counterpart. When the two Priya Raman sessions were\n> overlapped, four tiles in the same 10:00 row carried a conflict marker (two from the new\n> overlap, two seeded), and nothing on any tile names the double-booked speaker or the\n> session it clashes with, so an organizer cannot tell which tile pairs with which. The\n> toolbar's '\u26a0 7 conflicts' counter is likewise a bare number with no drill-down shown.\n\n**The product already knows the answer.** Round 4's judge recorded the conflicts panel doing\nexactly the right thing: a `LIVE DETECTION \u2014 Agenda conflicts \u00b7 7` panel naming\n*\"Grace Isford is double-booked across two sessions.\"* with both colliding titles and a\n`JUMP TO SESSION` action. That panel still exists and it is good.\n\nSo this is not a missing feature. It is the same failure the loop keeps finding in different\ncostumes \u2014 **the information exists and the surface the eye lands on does not carry it, and\ndoes not visibly lead to the place that does.** A row with four identical `\u26a0 Conflict`\nbadges and a bare `7` in the toolbar gives an organizer no way to pair them up, which is\nprecisely the moment the detector was built for.\n\n### What to build\n\n1. **The tile badge names its counterpart.** At minimum the double-booked person; better,\n   the person and the clashing session. Hover/title text is not enough on its own \u2014 the\n   organizer is scanning, not pointing.\n2. **The counter is a door.** `\u26a0 7 conflicts` opens the existing LIVE DETECTION panel. It\n   should be visibly actionable rather than a number that happens to be next to a panel.\n3. **Pairing is legible.** When several tiles in one row conflict, an organizer must be able\n   to tell which two collide \u2014 on hover/selection of one tile, mark its counterpart.\n4. Do not build a second detector. `src/lib/conflicts.ts` already types this and already\n   admits `co_speaker` (MRQ-164). Project what it knows; do not recompute it in the view.\n5. **Elements never jump** \u2014 a badge that grows to carry a name must not reflow the grid.\n   Reserve the space or render into a fixed-width slot.\n\n---\n\n## Part 2 \u2014 eleven rooms, four visible\n\n> **`/agenda-builder` \u2014 room-column grid.** The agenda builder grid renders one column per\n> room and scrolls horizontally with no column condensing or room picker; at a 1280px\n> viewport only four of the venue's eleven rooms are visible at once, and a newly created\n> room is appended to the far right, so the organizer must scroll sideways to see or verify\n> it. The verification that the new 'Overflow Room' had a grid column had to be done through\n> the placement-target list rather than the visible grid.\n\n**This is the same defect as MRQ-178** (the `/onboarding` chase grid pushing its newest task\ncolumns off the right edge at 1280px). Same shape, same viewport, same consequence: the\ncolumn an organizer most needs \u2014 the one they just created \u2014 is the one furthest from the\neye, and the judge had to verify it somewhere else.\n\nRead MRQ-178 before designing this, and prefer the same answer in both places so the product\nhas one idea of a wide grid rather than two. A room picker (or column chooser) with the\nnewest rooms on by default, a sticky time column, and a visible scroll affordance is the\nshape I would expect.\n\n### Acceptance\n\n- At 1280px an organizer can reach and verify a newly created room's column without\n  horizontal-scrolling blind, and without leaving the grid to confirm it exists.\n- The time (row header) column stays fixed while room columns move.\n- No layout jump when columns are toggled or scrolled.\n\n---\n\n## Constraints\n\n- Your **own linked worktree**, created as your first act, then `pwd` and `git branch --show-current` to prove it. Never the primary checkout (it is the Lattice board's home); never `mrq-auto-eval*`.\n- **Cut your branch from `github/main`, never local `main`.** The primary checkout's local\n  `main` is parked and stale; a local branch pointer in a shared checkout only moves when\n  somebody pulls, and nobody does. `git fetch github` then\n  `git worktree add ../Marquee-worktrees/<branch> -b <branch> github/main`.\n- **Verify freshness with a check that can still fail:**\n  `git fetch github && git merge-base --is-ancestor github/main HEAD && echo current || echo 'behind github/main \u2014 rebase'`.\n  It asks \"am I current with main\", not \"do I have some particular fix\" \u2014 a check pinned to\n  one commit goes vacuous the moment that commit is deep in history and then reassures you\n  forever. Behind is normal on a busy night and does not by itself mean broken; but if you\n  also see ~22 auth 401 failures, that is expired test-fixture sessions and **rebasing is the\n  only cure \u2014 re-running never clears it.**\n- **Confirm the instrument before you believe a negative browser result.** A dead or stale local\n  Worker produces exactly the symptoms of a broken change \u2014 blank surface, stuck loader, missing\n  styling \u2014 and a stale one answers confidently with the wrong program. Before trusting any\n  negative reading: `lsof -i :<port>` to confirm something is listening, and\n  `curl -s localhost:<port>/health` to confirm the `build_sha` is the commit you think you are\n  testing. Ports taken tonight: 8853, 8841, 8871, 8791, 8823. When you report verification\n  evidence, name the port, the build_sha, and what you saw.\n- **New test titles must start with `CONTRACT` or an `AC-<n>` reference, then a middle dot.**\n  `scripts/checks/trace-ac-core.mjs:44` enforces\n  `/^((?:AC-\\d+(?:\\s*[,+]\\s*AC-\\d+)*)|CONTRACT)\\s+\u00b7\\s+/`, so a bare ticket prefix is rejected:\n  `'MRQ-000 \u00b7 does the thing'` fails, `'CONTRACT \u00b7 MRQ-000 \u00b7 does the thing'` passes. Keep the\n  ticket reference, just put `CONTRACT` in front of it. This has cost three CI cycles tonight and\n  it is invisible until the gate says no.\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across every worktree.\n- **No migration without the operator.** This needs none.\n- **Do not deploy.** An eval round is running and a `.deploy-freeze` marker sits at the primary checkout. Merging is wanted; deploying is not, and is not yours.\n- Ship a regression test that fails on `main` and passes on your branch.\n- **Gate serialization is a fleet rule, not an option.** Route EVERY `npm run pr-gate` and EVERY full\n  `npm test` through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`,\n  including one-off \"just checking\" runs \u2014 a lock only serializes its participants, so a single\n  unlocked run lands on top of a lock-holder and inflates it. Cheap scoped things (tsc, one test\n  file) stay unlocked.\n- **A timeout and a red are indistinguishable in an unserialized run.** Check `uptime` before you\n  believe a red; load has ranged 14 to 164 tonight and the same branch measured 78s and 276s\n  against a 120s budget. If your only evidence for a defect is \"it timed out\", you have no\n  evidence. CI fast-gate runs on a quiet box and is tonight's oracle.\n- PR: `gh pr create --repo Stage-11-Agentics/marquee --base main`.",
+  "done_at": null,
+  "evidence_refs": [
+    {
+      "id": "art_01KZYXWH9GS7XY59PNM4TMTKXC",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZZ053JEH91VSTV0WFXA2RXK",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZZ0EFF1575JHM4R28P6RCSP",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZZ8YM93Z2FP137K6AEVBWCV",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYSYYK338JB639JQ4AT9W39",
+  "last_event_id": "ev_01KZZ8YM93Z2FP137K6AEVBWCV",
+  "last_status_changed_at": "2026-08-14T02:03:36Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-183",
+  "status": "review",
+  "tags": [
+    "auto-eval",
+    "ai-agenda",
+    "round9",
+    "craft"
+  ],
+  "title": "The agenda builder hides what it knows: a nameless conflict badge and eleven rooms in four columns",
+  "type": "bug",
+  "updated_at": "2026-08-14T04:37:13Z",
+  "urgency": "normal"
+}

@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-08-14T20:15:43Z",
+  "created_by": "agent:org-settings-design",
+  "custom_fields": {},
+  "description": "Rulings 2026-08-14 (sequence/org-settings-design.md iteration 3; design contract prototypes/pipeline-v1.1 v1.15 #org/organizers). (1) Role legend as ruled \u2014 Owner / Organizer / Ops / Reviewer, one capability line each \u2014 rendered on the Organizers surface and live under the invite modal's role picker (the Reviewer line says sign-in only, assign work in Evaluation). UI 'Organizer' maps to schema program_lead; write the mapping down once where roles render. (2) Permission model: the org-settings surface is visible to Owner + org-wide Organizers only; only the Owner removes members; Organizer and up invite. Enforce server-side, reflect in UI (permission-aware action column exactly as the prototype demonstrates). (3) Owner transfer, safe and simple: Owner-only action on their own row; eligible recipients are org-wide Organizers who have signed in; confirm requires the organization name typed back; the flip is immediate and atomic, old owner becomes Organizer, both notified by mail (outbox rules), recorded to audit_log. (4) Stale seats: a seat scoped to an ended conference never expires silently \u2014 banner on the Organizers surface + data for the Org Home attention line. Builds directly on MRQ-207's removal-cascade and scoped-invite work \u2014 coordinate, do not duplicate.",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01M00YN2X7GF6CYWF2ZRQSQ2GZ",
+  "last_event_id": "ev_01M014RAZ69SG51161PV26BM4Y",
+  "last_status_changed_at": "2026-08-14T20:15:43Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-14T20:15:52Z",
+      "created_by": "agent:org-settings-design",
+      "note": null,
+      "target_task_id": "task_01M00Y3WPXYJ5Z5X9HKSQRNP3V",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-212",
+  "status": "backlog",
+  "tags": null,
+  "title": "Organizer governance: role legend, Owner-only removal, owner transfer, stale seats",
+  "type": "task",
+  "updated_at": "2026-08-14T22:02:21Z",
+  "urgency": null
+}

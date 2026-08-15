@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": "medium",
+  "created_at": "2026-08-14T04:26:06Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Found by #218's second reviewer while confirming MRQ-183's newest-first room ordering. **Correctly\ncalled pre-existing and non-blocking** \u2014 it did not hold the PR for it, and should not have. **I\nverified the schema claim before minting.**\n\n## The gap\n\n`orderNewestFirst(rooms, room => room.position)` gives \"highest position first\". The ticket's\nlanguage \u2014 and the reviewer's, and mine \u2014 calls that **newest first**. Those are the same thing\nonly if `position` is venue-wide monotonic. It is not.\n\n`migrations/0001_init.sql`:\n\n```sql\nCREATE TABLE rooms (\n  building_id TEXT NOT NULL,\n  position    INTEGER NOT NULL,          -- line 79: no uniqueness, nothing enforcing global order\n  FOREIGN KEY (building_id, event_id) REFERENCES buildings(id, event_id),\n);\nCREATE INDEX idx_rooms_event_position    ON rooms(event_id, position);     -- line 733\nCREATE INDEX idx_rooms_building_position ON rooms(building_id, position);  -- line 734\n```\n\n**Nothing constrains `position` to be unique or monotonic across the venue**, and the schema\ncarries a *building-scoped* position index alongside the event-scoped one \u2014 which is the\nstructural evidence that position is treated as an ordering **within** a building.\n\n(Control: 39 `position` occurrences in that migration, so the search sees position columns\ngenerally; the absence of a uniqueness constraint on this one is a real absence.)\n\n## Why it matters, and why it is not urgent\n\n**Today it is invisible.** The demo conference's rooms are effectively one venue, so local and\nglobal order coincide and \"newest first\" does what it says.\n\n**The moment someone adds a second building it becomes visible and wrong.** Room 1 of the new\nbuilding sorts against room 1 of the old one; a room created five minutes ago can appear after a\nroom created last month. The organizer sees an order that looks arbitrary, on the grid whose whole\nrecent fix was \"put the column you just created where the eye lands.\"\n\n**And MRQ-183 will look like the culprit**, because it is the change that introduced the ordering\nand the language. It is not \u2014 the data model was always like this \u2014 but nobody reading the blame\nwill know that. That is the main reason to write this down now rather than when it bites.\n\n## What to do\n\n1. **Decide what \"newest\" should mean and make the data say it.** Either order by `created_at`\n   (which is unambiguous and is what the word means), or make `position` venue-wide monotonic with\n   a constraint that enforces it. Do not leave a field whose meaning depends on how many buildings\n   exist.\n2. **If `created_at` is the answer, say why in the code** \u2014 `position` is right there and the next\n   person will assume it was the obvious choice and reach for it.\n3. **Fix the language wherever it says \"newest\"** if the ordering ends up being something else.\n   Half of this defect is that the code and the sentence disagree.\n4. **Schema changes stop at the operator.** If (1) needs a migration, say so on this ticket and\n   stop \u2014 one was cleared tonight for MRQ-167 and that clearance does not extend to another.\n\n## Acceptance\n\n- With rooms across **two or more buildings**, the grid's leading column is the most recently\n  created room, and a test proves it \u2014 **paired**, so that a single-building conference still\n  orders correctly in the same test. \"It is sorted somehow\" must not pass for \"it is sorted by\n  recency\".\n- Whatever ordering is chosen, the code's own words match it.\n\n## Constraints\n\n- Cut your worktree from `github/main`. Verify:\n  `if git fetch github; then if git merge-base --is-ancestor github/main HEAD; then echo current; else echo 'behind -- rebase'; fi; else echo 'FETCH FAILED -- not attempted'; fi`\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across every worktree.\n- **Push when the work is written, before the verification run.**\n- **A red gate is real.** `fail` from a findings-derived check is load-invariant; `pass-over-budget`\n  is a warn; `timeout` is the only status contention can manufacture.\n- Gate through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`.\n- Test titles start with `CONTRACT` or `AC-<n>`, then a middle dot.\n- **No migration without the operator.** Do not deploy.",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01KZZ8A8STR336V9M12C486HGH",
+  "last_event_id": "ev_01KZZ8A8SW1VZZQ8EF04WD9HDG",
+  "last_status_changed_at": "2026-08-14T04:26:06Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-196",
+  "status": "backlog",
+  "tags": [
+    "auto-eval",
+    "ai-agenda",
+    "follow-up",
+    "data-model"
+  ],
+  "title": "Room 'newest first' orders by a position that resets per building, so it is not newest",
+  "type": "bug",
+  "updated_at": "2026-08-14T04:26:06Z",
+  "urgency": "normal"
+}

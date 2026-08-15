@@ -1,0 +1,58 @@
+{
+  "assigned_to": "agent:delegator-mrq-209",
+  "branch_links": [],
+  "comment_count": 9,
+  "complexity": null,
+  "created_at": "2026-08-14T20:15:20Z",
+  "created_by": "agent:org-settings-design",
+  "custom_fields": {},
+  "description": "Build the Organization Home page the MRQ-203 nav row points at (Organization group: Home \u00b7 People CRM \u00b7 Outreach \u00b7 Settings). Design contract: prototypes/pipeline-v1.1 v1.15 #org/home + sequence/org-settings-design.md iteration 3 (green-lit by Atin 2026-08-14). A composition, not a system: (1) conferences as seasons \u2014 every event with dates/state/headline stats, live one opens /dashboard, plus create; (2) the attention strip \u2014 outreach follow-ups overdue (from the next-touch data MRQ-205 builds), seats scoped to ended conferences (governance ticket), server connection state (existing instance status) \u2014 each line links to its surface, and each source that does not exist yet renders an honest empty, never a fake number; (3) relationship KPIs \u2014 people count, returning speakers (2+ conferences via participations), in-outreach count, organizer count; (4) recent org activity (audit_log, newest 4) linking to the full Activity lens. Server-side queries, R7 budgets apply. MRQ-207 is building the org-settings shell in parallel: mount Home at its own route (per prototype: org home is a page, not a settings tab) so there is no shell dependency.",
+  "done_at": "2026-08-15T00:29:20Z",
+  "evidence_refs": [
+    {
+      "id": "art_01M00Z42GWMA0RB4YACFCNAVW0",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01M01D5EYNBJDSN21S42BZ0YJP",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01M01D5EYNBJDSN21S42BZ0YJN",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01M00YMCSRVB6WAH2J389Q239D",
+  "last_event_id": "ev_01M01D5EYNBJDSN21S42BZ0YJR",
+  "last_status_changed_at": "2026-08-15T00:29:20Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-14T20:15:51Z",
+      "created_by": "agent:org-settings-design",
+      "note": null,
+      "target_task_id": "task_01M00Y2ZC6EKQX3BEA1SVN8K9H",
+      "type": "depends_on"
+    },
+    {
+      "created_at": "2026-08-14T20:15:52Z",
+      "created_by": "agent:org-settings-design",
+      "note": null,
+      "target_task_id": "task_01M00Y3E5Y0BYKK9DQYBMJTTPJ",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-209",
+  "status": "done",
+  "tags": null,
+  "title": "Organization Home: the between-conferences view",
+  "type": "task",
+  "updated_at": "2026-08-15T00:29:20Z",
+  "urgency": null
+}

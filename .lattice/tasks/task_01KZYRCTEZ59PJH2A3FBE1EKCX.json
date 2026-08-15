@@ -1,0 +1,43 @@
+{
+  "assigned_to": "agent:codex-mrq-176",
+  "branch_links": [],
+  "comment_count": 5,
+  "complexity": "medium",
+  "created_at": "2026-08-13T23:47:52Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Two round-9 defects (`runs/2026-08-13T22-25-26/judgements/speaker-management.json`), one\nshape: **a count on the page contradicts what the page itself is showing.** Grouped because\nthe fix is the same discipline in two places, not because the code is shared.\n\n**No rubric item punishes either \u2014 speaker-management scored 15/15 this round.** They are on\nthe list because an organizer who catches the roster lying about its own size stops trusting\nevery other number in the product, and this one repeated and got worse.\n\n---\n\n## Part 1 \u2014 a hand-added speaker is not on the roster (major, escalated from round 4)\n\n### The judge's own words\n\n> **`/roster` \u2014 speaker count header and status tabs after \"Add speaker\".** The roster's\n> counts do not reflect a speaker added by hand. Before Marcus Okafor was created the tabs\n> read All 509 / Pending 468 / Invited 4 / Confirmed 36 / Declined 1; after he was saved\n> (his record opening with CONFERENCE STATUS = Invited) and after a subsequent full page\n> reload the tabs still read All 509 with Invited unchanged at 4, and the total only moved\n> to 510 when the CSV import created Dana Kowalski (Pending 468\u2192+1). The header \"N speakers\n> on the roster for this conference \u2014 everyone who submitted, was accepted, was imported, or\n> was added by hand\" therefore undercounts, and **the hand-added speaker's row was never\n> observed in the roster table** even though his record is reachable by URL, appears in the\n> task-assignment picker and received the bulk email.\n\nRound 4 recorded the same thing as a **minor** (\"Roster totals do not visibly account for\nnewly added or imported speakers\"). Round 9 is sharper and worse: this is not a stale\ncounter, the row is **absent from the list**. The person exists everywhere else in the\nproduct and is missing from the one page whose entire job is to list him.\n\n### What I checked, so you do not repeat it\n\nThe obvious cause is not the cause. `createSpeaker` (`src/routes/speakers.routes.ts:238`)\npushes `speakerMembershipStatement(...)` into its batch **unconditionally**\n(`:324-331`), with `invitedAt` set when `body.invited` \u2014 which matches the observed\n\"CONFERENCE STATUS = Invited\" on his record. The membership write is not skipped.\n\nSo look downstream of the write:\n\n- `src/lib/roster-source.ts` \u2014 `SPEAKER_ROSTER_PERSON_SOURCE` is\n  `memberships WHERE event_id = ? AND role = 'speaker'` UNION participations on submissions\n  whose status is in `ROSTER_SUBMISSION_STATUSES`. A membership row alone is supposed to be\n  sufficient. Confirm it actually is, for this row, with the values `createSpeaker` writes.\n- `speakerMembershipStatement` (`src/lib/speaker-membership.ts:42`) is idempotent via a\n  conflict clause. Check what happens when a row for that (event, person) already exists\n  with a **different role** \u2014 `DO NOTHING` would leave no `speaker` row and produce exactly\n  this symptom.\n- The counts and the list may not read the same source. The header, the status tabs, and the\n  table rows must all resolve from `SPEAKER_ROSTER_PERSON_SOURCE`; if any of them has its\n  own query, that divergence is the bug and consolidating it is the fix.\n- The contrast is the strongest clue you have: **the CSV import path did move the count**\n  (Dana Kowalski, Pending 468\u2192+1) and the hand-add path did not. Diff those two writes\n  against each other before anything else.\n\n### Acceptance\n\n1. A speaker added by hand appears in the roster table **and** in the header count **and**\n   in the correct status tab, on the response to the very next read \u2014 no manual refresh\n   beyond normal navigation.\n2. The status tab he lands in matches the CONFERENCE STATUS his own record shows. Today the\n   record says Invited while the Invited tab does not move; those are the same fact and must\n   never disagree.\n3. Adding the same person twice does not double-count him.\n4. A regression test that fails on `main` and passes on the branch, driving the real\n   create-speaker route and then reading the roster list and counts \u2014 not a unit test of the\n   membership helper, which already passes today.\n\n---\n\n## Part 2 \u2014 the FILES panel contradicts itself (minor)\n\n### The judge's own words\n\n> **`/roster` speaker record \u2192 FILES panel.** The FILES panel on a speaker record reads\n> \"0 of 1 requested file received.\" immediately above a listed, speaker-provided file\n> (headshot.png, V1 OF 1, 569 B). The two statements read as contradictory to an organizer\n> scanning the record for what has arrived.\n\nAlmost certainly correct-but-unreadable rather than wrong: the headshot is a\n`person_headshot` attachment while the \"1 requested file\" is a `task_upload` deliverable, so\n\"0 of 1 received\" is true of the deliverable and says nothing about the headshot listed\nunder it. That is a defensible model and an indefensible sentence \u2014 the organizer reads one\npanel, not two data types.\n\n### Acceptance\n\nThe panel never states a received-count that its own visible contents contradict. Either\ncount what is listed, or separate the two groups so each carries its own honest line (a\nprofile photo is not a requested deliverable and should not be filed as if it were).\nWhichever you choose, an organizer scanning the panel must not have to know the schema to\nread it.\n\n---\n\n## Constraints\n\n- Your **own linked worktree**, created first:\n  `git worktree add ../Marquee-worktrees/mrq-176-roster-truth -b mrq-176-roster-truth main`.\n  Verify with `pwd` and `git branch --show-current`. Never the primary checkout (it is the\n  Lattice board's home); never `mrq-auto-eval*`.\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across worktrees.\n- **No migration without the operator.** If Part 1 turns out to need a schema change, stop\n  and say so on this ticket rather than adding one.\n- **Do not deploy.** An eval round is running; a `.deploy-freeze` marker sits at the primary\n  checkout. Merging is wanted; deploying is not, and is not yours.\n- **Elements never jump** \u2014 if a count or a line swaps, reserve its space.\n- **Gate serialization is a fleet rule, not an option.** Route EVERY `npm run pr-gate` and EVERY full\n  `npm test` through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`,\n  including one-off \"just checking\" runs \u2014 a lock only serializes its participants, so a single\n  unlocked run lands on top of a lock-holder and inflates it. Cheap scoped things (tsc, one test\n  file) stay unlocked.\n- **A timeout and a red are indistinguishable in an unserialized run.** Check `uptime` before you\n  believe a red; load has ranged 14 to 164 tonight and the same branch measured 78s and 276s\n  against a 120s budget. If your only evidence for a defect is \"it timed out\", you have no\n  evidence. CI fast-gate runs on a quiet box and is tonight's oracle.\n- PR: `gh pr create --repo Stage-11-Agentics/marquee --base main`.",
+  "done_at": "2026-08-14T00:45:05Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYRN4VPRTN4NHRHPP5ASC6Y",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYVMYTQTYR9KSASNYM89R3D",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYRCTEZ59PJH2A3FBE1EKCX",
+  "last_event_id": "ev_01KZYVNK1ZK6JN8GKTRSFDJGC4",
+  "last_status_changed_at": "2026-08-14T00:45:05Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-176",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "speaker-management",
+    "round9",
+    "craft"
+  ],
+  "title": "The roster does not list a speaker added by hand, and the FILES panel contradicts itself",
+  "type": "bug",
+  "updated_at": "2026-08-14T00:45:05Z",
+  "urgency": "high"
+}

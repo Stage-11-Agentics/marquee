@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-15T00:28:39Z",
+  "created_by": "agent:org-settings-design",
+  "custom_fields": {},
+  "id": "art_01M01D471J1H2BYABJNVYPTGVQ",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01M01D471J1H2BYABJNVYPTGVQ.md",
+    "size_bytes": 1092
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "One audit substrate, three lenses \u2014 merged as 2f659904 (PR #267). Migration 0019 org-scopes audit_log (event_id nullable, org_id backfilled, CHECK requires at least one scope, MRQ-204's no-FK decision",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,7 @@
+Shipped in PR #254, squashed to 7068e268 on 2026-08-14; the feature branch was deleted after merge.
+
+Implemented the conference-local event-time seam and the organizer-set/read behavior: SubmissionRecordPage session placement, CFP close writes and reminder timing, conference-local task overdue enforcement, public/embed/mail/merge displays, and the person-only comms fallback timezone path. Reviewer 323 approved the final fix at d2b6e4d9 after verifying the rendered person-only outbox body and that the inner join is lossless for eligible rows. GitHub CI fast-gate passed; the three TypeScript projects and targeted mail regression passed; the five protected test files remained unmodified.
+
+Important shipped consequence and boundary: no stored epoch is rewritten. Existing instants can now display a different wall time or date because rendering is event-local. Historically mis-stored browser-zone values remain mis-stored and may now be displayed confidently in the conference zone. Auditing or repairing those rows is an operator-owned follow-up and is NOT covered by MRQ-201; no audit or repair was performed here. Do not infer that fixing the writer repaired historical rows.
+
+No migration, deployment, frozen-build change, demo reset, or follow-up ticket was created.

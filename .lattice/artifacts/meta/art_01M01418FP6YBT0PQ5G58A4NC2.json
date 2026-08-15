@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-14T21:49:45Z",
+  "created_by": "agent:delegator-mrq-210",
+  "custom_fields": {},
+  "id": "art_01M01418FP6YBT0PQ5G58A4NC2",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01M01418FP6YBT0PQ5G58A4NC2.md",
+    "size_bytes": 1698
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Files changed: .dev.vars.example; docs/ROUTES.md; src/index.ts; src/jobs/mail/consumer.ts; src/lib/instance-status.ts; src/lib/mail/config.ts; src/routes/instance.routes.ts; src/ui/settings/ServerPage",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

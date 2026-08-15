@@ -1,0 +1,68 @@
+{
+  "assigned_to": "agent:codex-cli",
+  "branch_links": [],
+  "comment_count": 5,
+  "complexity": "medium",
+  "created_at": "2026-08-14T00:03:48Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "Rubric item **CNT-07** \u2014 `content-management`, weight **3**, `partial` in both rounds \u2014 **1.5 recoverable, the joint-largest single item left in my queue.** Scenarios: **CNT-S1**, **CNT-S3**.\n\n**Round 4's cause is fixed; this is the next layer.** Round 4 failed because the grid hard-wired its columns to the conference's six original task types, so a task authored later got no column at all. MRQ-164 fixed that and it shows \u2014 the page now reports **9 task columns**. The new gap is that the columns it gained are off-screen.\n\n## Acceptance criterion \u2014 the rubric's `pass_criteria`, verbatim\n\n> The dashboard shows all speaker-task pairs as incomplete in S1, and in S3 accurately reflects the S2 state: Priya's presentation task complete/uploaded (either label passes - clones without an explicit mark-complete action must not be penalized), her headshot task incomplete, Marcus's tasks incomplete; applying a filter visibly changes the displayed set\n\n## Why it fell short \u2014 the judge's own reasoning\n\n> A real deliverables dashboard exists at /onboarding [...] Filtering visibly changes the set [...] **The gap: in both the S1 and S3 captures the two newly created task columns sit off the right edge** (the page itself says \"9 task columns \u00b7 scroll the grid sideways to reach 'Upload Final Headshot (print quality)'\"), so the dashboard was never observed reflecting the S2 upload \u2014 Priya's \"Upload Session Presentation\" cell is not visible in any dashboard screenshot, and the visible PRESENTATION UPLOAD column is the seeded task, still crossed.\n\nAnd the matching defect:\n\n> With 9 task columns the two newest sit off the right edge at 1280px; the only affordance is a line of text (\"9 task columns \u00b7 scroll the grid sideways to reach 'Upload Final Headshot (print quality)'\") with no visible horizontal scrollbar, pagination or column chooser, so the per-speaker status of the newest deliverables is effectively unreachable.\n\n## The shape of this defect\n\nIt is the loop's recurring pattern in a new costume: **a capability that is present but not where the eye lands is undiscoverable, and the judge cannot score a cell it cannot see.** The page even knows the problem \u2014 it prints a sentence asking the reader to scroll sideways \u2014 which is the product apologising instead of fixing. A sentence is not an affordance.\n\nNote that the newest columns are the ones an organizer most needs: a task authored today is the one whose chase state is live. Sorting the newest to the far right puts the most urgent column furthest from the eye.\n\n## What to build\n\nAny of these is acceptable if it makes the newest task's per-speaker cells reachable and visible at 1280px without the reader being told to scroll:\n\n1. **A column chooser** \u2014 the organizer picks which task columns are shown; the newest are on by default. This is the strongest answer because it also scales past 9.\n2. **Real horizontal scroll with a visible scrollbar and sticky speaker column**, so the grid is obviously scrollable and the reader never loses the row identity.\n3. **Ordering that puts recently created tasks first**, so the live chase is what the viewport opens on.\n\nWhatever you choose:\n\n- The **TASK TYPE filter already works** and narrows to \"2 shown\" \u2014 lean on it rather than duplicating it.\n- The speaker (row header) column stays fixed while task columns move.\n- No layout jump when columns are toggled or the grid scrolls \u2014 reserve widths.\n- The \"9 task columns \u00b7 scroll the grid sideways\" sentence goes away, or becomes true and actionable rather than an instruction to compensate for the UI.\n\n## Acceptance\n\nAt 1280px, with 9 task columns configured, an organizer can see the per-speaker status cell of the most recently created task without being told to scroll \u2014 and a regression test proves the newest task's column is reachable in the rendered output.\n\n## Constraints\n\n- Your **own linked worktree**, created as your first act, then `pwd` and `git branch --show-current` to prove it. Never the primary checkout (it is the Lattice board's home); never `mrq-auto-eval*`.\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across every worktree and two agents stashing at once swap each other's work.\n- **No migration without the operator.** If you conclude one is needed, stop and say so on the ticket.\n- **Do not deploy.** An eval round is running and a `.deploy-freeze` marker sits at the primary checkout. Merging is wanted; deploying is not, and is not yours.\n- **Elements never jump** \u2014 reserve space for anything that swaps.\n- Ship a regression test that fails on `main` and passes on your branch.\n- **Gate serialization is a fleet rule, not an option.** Route EVERY `npm run pr-gate` and EVERY full\n  `npm test` through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`,\n  including one-off \"just checking\" runs \u2014 a lock only serializes its participants, so a single\n  unlocked run lands on top of a lock-holder and inflates it. Cheap scoped things (tsc, one test\n  file) stay unlocked.\n- **A timeout and a red are indistinguishable in an unserialized run.** Check `uptime` before you\n  believe a red; load has ranged 14 to 164 tonight and the same branch measured 78s and 276s\n  against a 120s budget. If your only evidence for a defect is \"it timed out\", you have no\n  evidence. CI fast-gate runs on a quiet box and is tonight's oracle.\n- PR: `gh pr create --repo Stage-11-Agentics/marquee --base main`.",
+  "done_at": "2026-08-14T01:14:33Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYSHN44SZT8B3YST0V74AD6",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYV78679H97T5WGCVG1JTXW",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYVHDX3DRGHEDX1GJK2ECFJ",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYW4TJCM3NG5MQG4HFEHJFS",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZYX3KXS1M2W87K12S2W0S08",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "ev_01KZYXBH94GZF4M4FDKRWPRVQC",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYXK9F4B0H9504RVYCEYNTA",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01KZYS9ZPWD311GBVSDNME5YVG",
+  "last_event_id": "ev_01KZYXK9FA8JVGTDSQ7Y88SQM2",
+  "last_status_changed_at": "2026-08-14T01:14:33Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 2,
+  "schema_version": 1,
+  "short_id": "MRQ-178",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "content-management",
+    "CNT-07",
+    "round9"
+  ],
+  "title": "CNT-07: the chase grid pushes its newest task columns off the screen",
+  "type": "bug",
+  "updated_at": "2026-08-14T01:18:47Z",
+  "urgency": "high"
+}

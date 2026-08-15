@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-13T20:34:59Z",
+  "created_by": "agent:codex-mrq-161",
+  "custom_fields": {},
+  "id": "art_01KZYDBMBVDJQCRW1SE3GB7WE6",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZYDBMBVDJQCRW1SE3GB7WE6.md",
+    "size_bytes": 606
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Outcome: PR #175 merged via squash at 36d7c8dd. The change is prose-only in tests/integration/api/meta.test.ts: the true falsifiable-claim rationale remains, the false historical backstory is removed,",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

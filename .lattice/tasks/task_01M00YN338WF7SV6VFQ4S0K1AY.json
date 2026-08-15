@@ -1,0 +1,35 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": null,
+  "created_at": "2026-08-14T20:15:43Z",
+  "created_by": "agent:org-settings-design",
+  "custom_fields": {},
+  "description": "Completes the one-invite-machinery ruling (2026-08-14; design contract prototypes/pipeline-v1.1 v1.15 invite modal + evaluation committee card). (1) The invite modal renders the one-time join link as a real, scannable QR (vendor a minimal zero-dependency QR encoder or generate inline SVG server-side \u2014 flag before adding any npm dependency) beside the copyable URL and MRQ-207's short join code. (2) The committee door: Evaluation's Program committee card gains + Invite reviewer, which opens the same invite flow preset to role Reviewer scoped to the current conference \u2014 same link, same expiry, same pending row. One machinery, two entry points; no duplicated mint path. Depends on MRQ-207's role+scope invite mint landing first.",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01M00YN338WF7SV6VFQ4S0K1AY",
+  "last_event_id": "ev_01M00YNC7TWEFS1924G6D6KTD3",
+  "last_status_changed_at": "2026-08-14T20:15:43Z",
+  "linked_files": [],
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-14T20:15:53Z",
+      "created_by": "agent:org-settings-design",
+      "note": null,
+      "target_task_id": "task_01M00Y3WPXYJ5Z5X9HKSQRNP3V",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-213",
+  "status": "backlog",
+  "tags": null,
+  "title": "Invite machinery completions: QR code and the committee door",
+  "type": "task",
+  "updated_at": "2026-08-14T20:15:53Z",
+  "urgency": null
+}

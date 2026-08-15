@@ -1,0 +1,48 @@
+{
+  "assigned_to": "agent:auto-eval-coordinator",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": "medium",
+  "created_at": "2026-08-13T21:36:18Z",
+  "created_by": "agent:auto-eval-coordinator",
+  "custom_fields": {},
+  "description": "## What happens\n\nEvery stored file \u2014 a speaker's headshot, a signed contract, an uploaded slide deck \u2014 is\nrepresented outbound as one thing: `publicMediaUrl()`\n(`src/lib/r2/keys.ts:29`), a URL on the media origin that anyone holding it can fetch.\nThe API says so out loud: `files.queries.ts:215` sets\n`link_policy: \"unauthenticated-capability-url\"`, and the OpenAPI text for the files\nexport (`files.routes.ts:32`) states \"Every returned file URL is an unauthenticated\ncapability URL on the media origin.\"\n\nTo be fair to the design as it stands: the key is **not guessable**. `objectKeyFor()`\nappends a fresh `crypto.randomUUID()` per object, so 122 bits of entropy sit between an\nattacker and a URL, and `serveMediaObject` forces `Content-Disposition: attachment` and\n`nosniff`. This is a capability-URL design, not an open bucket.\n\nThe defect is what the capability lacks:\n\n- **No expiry.** The URL is valid forever. `publicMediaUrl` is called \"stable\" on purpose.\n- **No revocation.** There is no way to cut a link that escaped. Removing the person from\n  the event, deleting the participation, or revoking the organizer's access does nothing\n  to a URL already in someone's hand.\n- **It is handed out in bulk.** The files export returns one row per deliverable with the\n  URL in it, to any caller with `program:read`. One CSV in a Slack channel or a forwarded\n  email publishes every speaker's uploads to everyone downstream of it, permanently.\n\nA speaker uploading a contract to a conference has not consented to a link that outlives\ntheir involvement and cannot be withdrawn.\n\n## Why it is worth building anyway\n\nNo rubric item covers it; it surfaced in round-5 browsing. It is on the list because it is\na privacy defect in someone else's data, which does not need a judge to be worth fixing.\n\n## Shape of a fix\n\nThe pieces are already there \u2014 the app origin already authorizes reads, and\n`serveInlineImageObject` shows the pattern of gating bytes behind an authorized caller.\n\nPreferred: **short-lived signed media URLs**. Keep the separate media origin (the\nisolation it buys is real and documented in `serve.ts`), but sign the path with an expiry\nand verify at the edge, so a leaked link dies on its own. Mint them at read time in the\nsurfaces that need them.\n\nAcceptable alternative: serve through the app origin behind the existing authorization,\nfor everything except the narrow inline-headshot case already argued for.\n\nEither way, the files export must stop being a permanent bulk grant: it should either\ncarry short-lived links or say plainly that it carries none.\n\n## Acceptance\n\n- A media URL obtained today stops working after a bounded lifetime, proven by a test.\n- Revoking a person's participation, or deleting the attachment, invalidates outstanding\n  links rather than leaving them live.\n- The `link_policy` field and the OpenAPI description are updated to describe what is\n  actually true afterwards \u2014 this codebase says what its links do, and that stays true.\n- The separate-origin isolation and `Content-Disposition: attachment` / `nosniff` behaviour\n  in `serve.ts` are preserved.",
+  "done_at": "2026-08-13T22:34:58Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYH138Y6PAGYK6ZFR6895K9",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01KZYJKT6PG68215F3BSJHT6XQ",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYM76223K0DJGGZY7GA61YA",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYGVXH93VZ5S2ZHDMEVQQF0",
+  "last_event_id": "ev_01KZYM7ARD5RZD2GJ32F8TDXCR",
+  "last_status_changed_at": "2026-08-13T22:34:58Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-168",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "round5",
+    "privacy",
+    "files"
+  ],
+  "title": "Speaker-uploaded files are reachable by permanent unauthenticated links that cannot be revoked",
+  "type": "bug",
+  "updated_at": "2026-08-13T22:34:58Z",
+  "urgency": "normal"
+}

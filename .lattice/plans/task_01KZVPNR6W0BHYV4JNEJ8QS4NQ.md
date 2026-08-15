@@ -15,3 +15,21 @@ FIX SHAPE: on a conference date change, either reconcile scheduled sessions into
 SIZE: medium.
 
 PROVENANCE: sbek run 2026-08-12T15-33-34, ai-agenda judgement defects[0] and public-widgets judgement defects[0].
+
+## Current implementation plan
+
+The operator cleared this ticket on 2026-08-14. The accepted behavior is to keep every day in the
+conference date window, label days with no published or scheduled sessions, and surface the count
+of sessions outside the window after a date change on both settings and the agenda builder.
+
+1. Trace the public agenda, agenda-builder, and conference-date update paths to identify the shared
+   date/session-window seam and reproduce the defect with a fixture that has one populated day and
+   one empty conference day.
+2. Implement one canonical divergence calculation and use it for the public empty-day state, the
+   builder day state, and the organizer-facing outside-window warning. Preserve stable geometry for
+   populated and empty day views; do not add a migration or deploy.
+3. Add regression coverage whose test names begin with `CONTRACT` or `AC-`, covering paired public
+   populated/empty days, the builder, and date changes with out-of-window session counts.
+4. Run focused tests, `npm test`, and the gated `npm run pr-gate`; push before verification. Record
+   the root cause, exact commands, and PR on MRQ-142, then leave the ticket at `pr_open` for the
+   coordinator and merge warden.

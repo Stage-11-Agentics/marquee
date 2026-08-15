@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-14T21:06:40Z",
+  "created_by": "agent:codex-mrq-206",
+  "custom_fields": {
+    "url": "https://github.com/Stage-11-Agentics/marquee/pull/255"
+  },
+  "id": "art_01M011JC4MQFMH4NWRYM2XNKNB",
+  "model": null,
+  "payload": {
+    "content_type": null,
+    "file": null,
+    "size_bytes": null
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Fixed-width kind segment and Sessions-only board explainer; captain review pending.",
+  "tags": [],
+  "title": "MRQ-206 PR #255",
+  "token_usage": null,
+  "type": "reference"
+}

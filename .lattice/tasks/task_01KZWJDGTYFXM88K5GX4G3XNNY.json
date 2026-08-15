@@ -1,27 +1,53 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:codex-cli",
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": "low",
   "created_at": "2026-08-13T03:24:55Z",
   "created_by": "agent:pr136-security-review",
   "custom_fields": {},
   "description": "src/ui/portal/PortalPage.tsx:807 tells an accepted submitter: 'This page becomes your speaker portal. Tasks and session details will arrive here.' It is false for 100% of the people who can see it.\n\nThe reachability is the whole point:\n\n1. portalSnapshot (src/routes/portal.routes.ts:1058-1061) tries the SPEAKER seat first. The submitter seat is reached only when findSpeakerEvent returns null \u2014 i.e. the person holds no memberships row with role='speaker'.\n2. The acceptance cascade creates exactly that membership, for participants with role IN ('speaker','co_speaker') (src/lib/speaker-membership.ts:87).\n3. So anyone accepted who holds a speaker or co_speaker participation gets the membership and lands on the SPEAKER seat. They never see this string.\n4. The only people who reach submitterOutcomeDetail('accepted') are those accepted WITHOUT a speaker/co_speaker participation \u2014 submitter-only participants, reachable through the organizer's participant editor (src/routes/submission-record.routes.ts:40 includes 'submitter' in the role enum). For them the membership is never written, so the page never becomes a speaker portal, and no tasks or session details ever arrive.\n\nThe promise is structurally unreachable for its only audience.\n\nThis is a regression. Before PR #169 the accepted branch used submitterOutcomeCopy('accepted') \u2014 'The program team accepted this abstract for the conference.' \u2014 which is true and makes no forward promise. PR #169 replaced it with the forward promise while polishing outcome copy.\n\nIt is the same defect class MRQ-150 exists to close: the portal saying something the record cannot support. It also answers, in the wrong direction, the open question left on MRQ-150's review \u2014 whether a submitter-only participant is ever bridged to a speaker seat. They are not.\n\nAcceptance criteria:\n1. The accepted branch of the submitter seat states what is true of the record and makes no promise about a speaker portal that this seat cannot keep.\n2. If the product wants the promise to be true instead, the fix is the membership bridge, not the copy \u2014 decide which, and say so in the ticket before writing either.\n3. A unit test renders the accepted submitter seat and asserts the absence of any claim about tasks, session details, or the page becoming a speaker portal. tests/unit/submitter-portal.MRQ-150.test.ts already renders every other status; this one is missing.\n\nFiles: src/ui/portal/PortalPage.tsx (:806-811, :921), tests/unit/submitter-portal.MRQ-150.test.ts.\n\nSeverity note: the branch is rare, so this is not judge-facing and must not hold a deploy. main e29d4bd8 gates clean (pr-gate pass, 59.5s/120s) and should ship as-is; this is follow-up work.",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-08-13T20:34:42Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYB5Z28FFPWT90MBQ7AHPM4",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYC4Z9HCW4SS6M96HXQ69SW",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYCAFS8CXMRCQGAW3FVEPYX",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYDB4AJARSEZ8SV6NPGYVRF",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYDB4AJARSEZ8SV6NPGYVRE",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
   "id": "task_01KZWJDGTYFXM88K5GX4G3XNNY",
-  "last_event_id": "ev_01KZWJDGTZPZ3TA1S4EMZA81GP",
-  "last_status_changed_at": "2026-08-13T03:24:55Z",
+  "last_event_id": "ev_01KZYDB4AJARSEZ8SV6NPGYVRJ",
+  "last_status_changed_at": "2026-08-13T20:34:42Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-162",
-  "status": "backlog",
+  "status": "done",
   "tags": null,
   "title": "The submitter seat promises a speaker portal to exactly the people who will never get one",
   "type": "bug",
-  "updated_at": "2026-08-13T03:24:55Z",
+  "updated_at": "2026-08-13T20:34:42Z",
   "urgency": null
 }

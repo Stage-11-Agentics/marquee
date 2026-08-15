@@ -1,41 +1,87 @@
-# MRQ-166 — require a real speaker email in Sessionize import
+# MRQ-166: Sessionize import: require a speaker email instead of inventing one
 
-## Objective
+The Sessionize speaker import treats a speaker's email as optional and invents
+one when it is missing. It should require it.
 
-Close the Sessionize speaker-import failure where a blank email becomes a fabricated `@example.invalid` address and can corrupt an existing person matched by name. The importer must reject an unusable export or row before it creates an inert speaker record, while preserving the existing profile merge behavior from MRQ-164.
+## The bug this closes
+
+`src/lib/sessionize-import.ts:472`
+
+```js
+const email = normalizeEmail(row.email || `speaker+${hashPart(...)}@example.invalid`);
+const byEmail = await personByEmail(db, org, email);
+const current = byEmail ?? await personByName(db, org, name);   // name fallback
+const next = { email, ... };                                     // written wholesale
+```
+
+A CSV row whose **name matches an existing person and whose email cell is blank**
+writes the fabricated `@example.invalid` address over that person's real one.
+Mail to them then silently goes nowhere, and the next import no longer matches
+them by email — it falls to the name path again, so the corruption is sticky and
+invisible. Batch undo does restore it (`restoreSnapshot` writes `email` back),
+but only if somebody notices first.
+
+Found by the code review of MRQ-164 (PR #182), which fixed the same failure class
+for bio/title/company. Pre-existing, unchanged on `main` before that PR.
+
+## The ruling (Atin, 2026-08-13)
+
+**Require the email. Delete the placeholder.** The fallbacks exist to satisfy
+`people.email NOT NULL` + `UNIQUE(org_id, email)`, not to serve an organizer, and
+a speaker imported with a fabricated address **cannot participate in the product**
+— no portal invite, no task assignment, no reminder, no onboarding chase, all of
+which need a real address. The record looks imported and is inert, and the failure
+surfaces weeks later as a bounced invite rather than at import time.
 
 ## Scope
 
-1. Enforce that the speaker mapping maps an actual CSV column to `email` at the mapping endpoint, before the mapping is persisted or any conference data is written. Return a 422 with a message naming the missing `speakers.email` column.
-2. Make a speaker row with a blank or whitespace-only email fail through the existing per-row error boundary with a readable `speaker email is required` reason; other rows continue.
-3. Remove only the speaker placeholder fallback. Leave the unattributed reviewer placeholder intact because reviewer identity is optional and semantically distinct.
-4. Change name lookup to return a person only for exactly one case-insensitive name match; duplicate names must not be selected arbitrarily.
-5. When a unique name match is used, retain the stored email while importing the remaining profile fields and record that retention in the row reason. Email-based matches continue to use the normalized incoming email.
+1. **Refuse at the mapping step** when no column maps to `email`. There is no
+   required-field enforcement there today (`normalizeMapping` merely merges
+   defaults over auto-detected headers). The mapping step is already write-free
+   and shows a preview, so a bad export is turned away before anything is
+   written — far better than failing 200 rows one at a time mid-run.
+2. **Fail the row** when the email cell is empty, with a reason the ROW DETAIL
+   table shows. Precedent three lines away: `if (!name) throw new Error("speaker
+   name is required")`. The per-row try/catch already exists, so one bad row does
+   not stop the import.
+3. **Delete the speaker placeholder.** Nothing depends on it — no test, fixture
+   or seed. Leave the *unattributed reviewer* placeholder at line 607 alone: a
+   score with no identity attached is a genuinely different case.
+4. **Narrow the name match to unique matches only.** `personByName` is
+   `lower(name) = ? ORDER BY id LIMIT 1`, so a name collision writes to an
+   arbitrary human. Select two, and decline the match if two come back. Do **not**
+   drop name matching: a speaker re-registering under a new address would then be
+   created as a second person, splitting their history — the duplicate-person
+   problem `src/lib/participants.ts` exists to prevent.
+5. **A name-matched row never rewrites the email.** Identity by name is a guess;
+   acting on it can redirect one real person's conference mail to another's
+   address. Import the rest of the profile and say so in the row reason.
+
+## Acceptance
+
+- A mapping with no email column is refused at the mapping step, before any write,
+  with a message naming the missing column.
+- A speaker row with an empty email cell lands as `failed` with a readable reason;
+  the other rows in the same import still succeed.
+- A name-matched row keeps the stored email and says so in its row reason.
+- A name that matches two people matches neither; the row does not silently write
+  to one of them.
+- Re-importing the same export twice is still idempotent (the placeholder's only
+  legitimate job was keeping blank-email rows re-findable, so prove nothing else
+  regressed).
+- Each test verified failing before the fix.
+
+## Before shipping
+
+Check whether any live or demo `people` row already carries an
+`@example.invalid` address from a previous import. The seed does not generate
+them, so none are expected — but a stricter import should not be the thing that
+discovers a stranded record.
 
 ## Non-goals
 
-- Do not change the raw `uq_people_org_email` uniqueness wart or add a migration/dedupe pass.
-- Do not change `/submissions/new` or its submitter-only behavior.
-- Do not change the unattributed reviewer placeholder.
-
-## Implementation and test plan
-
-- Add a focused MRQ-166 integration test fixture with an authenticated organizer, duplicate-name people, a pre-existing name-matched person, and multiple speaker rows. Exercise the mapping API, row outcomes/reasons, stored profile/email values, placeholder absence, duplicate-name non-match, and repeat-run idempotence.
-- Add the tests before the implementation and run the focused test file against the current branch, recording the expected failures. Commit that failing test checkpoint.
-- Update `src/lib/sessionize-import.ts` beside the MRQ-164 merge helper: validate/normalize the email before lookup, query at most two name matches and accept only one, retain email on name matches, and remove the speaker-only fabricated address. Keep reviewer synthesis unchanged.
-- Update the mapping route boundary as needed so a selected email mapping must name a real speaker CSV header and is refused before persistence.
-- Run the focused test again, then the relevant existing Sessionize integration tests and static checks. Inspect the diff and test titles for `trace:ac` compliance.
-
-## Validation gates
-
-1. Focused MRQ-166 tests fail before the fix and pass after it.
-2. Existing Sessionize import tests pass, including speakers-only import, reviewer placeholder, merge/undo, and repeat import behavior.
-3. `npm run pr-gate` passes within the documented contention-aware 120s budget.
-4. Build and exercise the real local Worker import at least once using the README recipe, with a unique port and a demo-organizer cookie/API path. Capture the observed mapping rejection and/or row outcomes, plus a check that no `speaker+...@example.invalid` person is created. Attach validation evidence to MRQ-166.
-5. Commit and push the implementation, open one ready PR against `github/main`, move the ticket through review/validation/pr-open, address any review findings, and merge only after an independent review and green gate. Do not deploy.
-
-## Handoff evidence
-
-- Commits on `mrq-166-require-speaker-email` for the failing test checkpoint and implementation/gate checkpoints.
-- Lattice validation attachment for the running import proof.
-- PR body states the ruling: a fabricated address cannot participate (no portal invite, task, or reminder), so clear import-time rejection is preferable to a later bounced invite; it also states what remains unfixed.
+- The `uq_people_org_email` index is on the raw column while every lookup compares
+  `lower(email)`, so `Ada@x.com` and `ada@x.com` can coexist and `personByEmail`
+  picks one arbitrarily. Real, latent, needs a migration and a dedupe pass. **Its
+  own ticket, not this one.**
+- `/submissions/new` collecting only a submitter (noted on MRQ-164).

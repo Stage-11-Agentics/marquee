@@ -1,0 +1,53 @@
+{
+  "assigned_to": "agent:codex-cli",
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": "low",
+  "created_at": "2026-08-14T00:48:47Z",
+  "created_by": "agent:eval-triage",
+  "custom_fields": {},
+  "description": "**No check script may turn a red on wall clock alone.** `scripts/checks/check-seed.mjs` does, and\ntonight it was a coin flip that wore the costume of a defect.\n\nFound by #198's owner, generalised by the merge captain across all 17 check scripts, and I\nverified both halves in the source before this ticket was written.\n\n## The defect, verified\n\n`scripts/checks/check-seed.mjs`:\n\n```js\nconst budgetMs = 30_000;\nconst result = { command: \"check:seed\", status: elapsedMs <= budgetMs ? \"pass\" : \"fail\", ... };\n...\nif (result.status === \"fail\") process.exitCode = 1;\n```\n\nThere is no verdict/warn split and no hard limit. **Elapsed time is the only input to `status`.**\nEvery assertion in the file can pass and the script still exits 1.\n\nMeasured: **29638ms against a 30000ms budget** on #198 \u2014 362ms of headroom \u2014 and **31142ms** on a\nfollow-up branch, both under the shared gate lock at load 26\u201333 after waiting 250s to acquire it.\nThe report was written with `transit_conflicts: 1` and `pinned_buildings: 2`, and the assertions\nrun *before* `writeReport`, so an assertion failure could not have produced that file. The run was\ncorrect and slow, and the script called it a failure.\n\nAlmost all of that 30s is `withLocalRuntime` booting wrangler, which is exactly the cost that\nmoves with machine load.\n\n## Contrast with the scripts that got this right\n\n`run-test.mjs` and `pr-gate.mjs` already separate the two concepts, and `run-test.mjs:11-18` argues\nthe case in its own comment \u2014 the budget is *an objective*, the hard limit is *a hang detector*:\n\n```\nrun-test.mjs:84    const overBudget = elapsedMs > BUDGET_MS;\nrun-test.mjs:88    verdict: overBudget ? \"warn\" : \"pass\"\nrun-test.mjs:102   status: timedOut ? \"timeout\" : exitCode === 0 ? (overBudget ? \"pass-over-budget\" : \"pass\") : \"fail\"\nrun-test.mjs:111   process.exitCode = timedOut ? 1 : exitCode\nrun-test.mjs:33    HARD_LIMIT_MS = 600_000\n```\n\nOver budget prints loudly and passes. Only a genuine hang fails. `check-seed.mjs` simply never\nreceived the same treatment.\n\n## The audit, so this is scoped rather than filed as one anecdote\n\n| script | reds on wall clock alone? |\n|---|---|\n| `check-seed.mjs` | **YES** \u2014 pure stopwatch, no warn tier. **This is the bug.** |\n| `check-speed.mjs` | **YES** \u2014 `status: classified.shouldFail ? \"fail\" : \"pass\"` (`:20`), `process.exitCode = 1` (`:33`), via `classifySpeedMeasurements`. Arguably *by design* \u2014 R7 makes speed a graded feature \u2014 but it deserves a written decision rather than an inheritance. |\n| everything else | no \u2014 `check-clocks`, `check-repo`, `check-routes`, `check-schema`, `check-shell-truth`, `check-deploy`, `trace-ac`, `verify-design-contract`, `run-test`, `pr-gate` all derive status from findings |\n\nI verified the table's shape independently: grepping every script in `scripts/checks/` for a\nstatus-from-elapsed comparison returns exactly two files \u2014 `check-seed.mjs` (one hit, the bug) and\n`pr-gate.mjs` (two hits, both the correct `verdict` split).\n\n## What to build\n\n1. **Give `check-seed.mjs` the split `run-test.mjs` already has.** Over budget prints loudly,\n   records `verdict: \"warn\"`, emits `status: \"pass-over-budget\"`, and **does not set\n   `exitCode`**. Keep the loud print \u2014 the budget is still an objective worth defending.\n2. **Add a genuine hard limit well clear of the budget** so a real hang still fails. Follow\n   `run-test.mjs`'s ratio rather than inventing one: its limit is 13\u00d7 its objective.\n3. **`recordSpeedHarness` currently receives `verdict: result.status`** \u2014 make sure it keeps\n   receiving a meaningful verdict once status stops being a pass/fail stopwatch, so the speed\n   history does not silently start recording `\"pass-over-budget\"` where it used to record\n   `\"fail\"`, or lose the over-budget signal entirely.\n4. **Decide `check:speed` deliberately and write the decision down** in the script's header: what\n   it should do locally on a contended box versus in CI. Do not change its behaviour silently in\n   either direction \u2014 if the answer is \"it stays strict because R7 makes speed a graded feature\",\n   say that in the file so the next person does not read it as the same bug.\n5. **A test that pins the property**: an over-budget `check:seed` run exits 0 with status\n   `pass-over-budget`, and a hang still exits 1.\n\n## Why this is worth a ticket rather than a shrug\n\nThis is the third instance tonight of one shape: CI's suite at 305s against a 600s ceiling,\n`check:seed` at 29.6s against 30s, and the 45s/120s objectives that half the fleet was reading as\nfailures. **A budget close enough to the wall stops measuring the change and starts measuring the\nmachine** \u2014 and it does it while presenting as the one signal everyone was told to trust\nunconditionally. It cost real time tonight and it will cost more on any night with a busy box.\n\n## Constraints\n\n- Your **own linked worktree**, created as your first act, then `pwd` and `git branch --show-current` to prove it. Never the primary checkout (it is the Lattice board's home); never `mrq-auto-eval*`.\n- **Never `git stash` anywhere in this repo** \u2014 the stash stack is shared across every worktree.\n- **No migration** \u2014 this touches no schema.\n- **Do not deploy.** Deploys are queued and coordinated by the merge captain.\n- **Gate serialization is a fleet rule.** Route EVERY `npm run pr-gate` and EVERY full `npm test` through `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/.gate-lock/gate-lock.sh`, one-off runs included.\n- **Before believing a red, check how THAT script computes status** \u2014 findings-derived is load-invariant and real; wall-clock-derived can be pure contention. You are, fittingly, fixing the reason that rule has to be per-script.\n- PR: `gh pr create --repo Stage-11-Agentics/marquee --base main`.",
+  "done_at": "2026-08-14T04:17:43Z",
+  "evidence_refs": [
+    {
+      "id": "art_01KZYW4CW3CJKKM3C88JVFDSF2",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZYYTND97R9W7Y29MG9G2T4X",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01KZYZ1PNZGYJMP6Y85F5D1ECB",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01KZZ7TXBTJVF6Q7NGT8AHJA7W",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KZYVWBDP2ZB9N9QMV8ZFKXSP",
+  "last_event_id": "ev_01KZZ7TXM7XM3F3SQ5TPQNT1Z3",
+  "last_status_changed_at": "2026-08-14T04:17:43Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-187",
+  "status": "done",
+  "tags": [
+    "auto-eval",
+    "tooling",
+    "round9",
+    "gate"
+  ],
+  "title": "No check script may red on wall clock alone: check:seed is a stopwatch with an exit code",
+  "type": "bug",
+  "updated_at": "2026-08-14T04:17:43Z",
+  "urgency": "high"
+}

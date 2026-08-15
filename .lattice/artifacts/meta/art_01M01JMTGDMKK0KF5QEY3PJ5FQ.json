@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-15T02:05:06Z",
+  "created_by": "agent:codex-noop-test-guard",
+  "custom_fields": {},
+  "id": "art_01M01JMTGDMKK0KF5QEY3PJ5FQ",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01M01JMTGDMKK0KF5QEY3PJ5FQ.md",
+    "size_bytes": 446
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "PR #271 merged as 0963729e957a315733faa02bcbde9f6b81362659 from exact head 740843c7e9307e690f2478f2e8e8cc0c1d9a5404. Hosted fast-gate passed: new source-text test guard, three typechecks, build, desig",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}

@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-13T21:32:55Z",
+  "created_by": "agent:codex-cli",
+  "custom_fields": {},
+  "id": "art_01KZYGNQ7JT6PEG89PP6YF2P2K",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01KZYGNQ7JT6PEG89PP6YF2P2K.md",
+    "size_bytes": 1808
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": null,
+  "tags": [],
+  "title": "local-import-validation.md",
+  "token_usage": null,
+  "type": "file"
+}

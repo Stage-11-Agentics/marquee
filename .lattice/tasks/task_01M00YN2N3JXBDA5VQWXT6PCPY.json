@@ -1,0 +1,67 @@
+{
+  "assigned_to": "agent:delegator-mrq-211",
+  "branch_links": [],
+  "comment_count": 12,
+  "complexity": null,
+  "created_at": "2026-08-14T20:15:43Z",
+  "created_by": "agent:org-settings-design",
+  "custom_fields": {},
+  "description": "Ruling 2026-08-14 (sequence/org-settings-design.md iteration 3): one audit substrate projected three ways, never three logs. The substrate exists \u2014 audit_log (migration 0006, src/lib/audit.ts). (1) Instrument the org-level writers that do not yet record: invite mint/claim/revoke, member removal (with what was revoked), token create/revoke, org default changes, ownership transfer \u2014 some of these writers are being built by MRQ-207 and the governance ticket in parallel; instrument what exists on main and leave a named seam the parallel tickets call. (2) Org admin lens: reverse-chron log of admin actions (design: prototype v1.15 #org/activity) \u2014 steady-state home is an org-settings tab (MRQ-207 shell; standalone route if 207 unmerged, noted in PR). (3) Person lens: the person record activity feed merges audit rows touching that person with the existing annotations/history. (4) Submission lens: a timeline on the submission record \u2014 submitted, routed, reviewed, decided, reversed, re-accepted, mail sent \u2014 each with author and timestamp; extend the existing ContentHistory/history machinery rather than inventing parallel storage. Server-side pagination; R7 budgets; tests per lens.",
+  "done_at": "2026-08-15T00:28:39Z",
+  "evidence_refs": [
+    {
+      "id": "art_01M00Z90EY8HADHKBF2QH4CTK8",
+      "role": "plan-review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01M014WJPHNN9N2W2B5R1GTEZN",
+      "role": "validation",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01M0152ZA8WM2MDNXHDWT7ZJP8",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "ev_01M01D471J1H2BYABJNVYPTGVR",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01M01D471J1H2BYABJNVYPTGVQ",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01M01DDJ7V1MZHF112ERKA8063",
+      "role": "review",
+      "source_type": "artifact"
+    }
+  ],
+  "id": "task_01M00YN2N3JXBDA5VQWXT6PCPY",
+  "last_event_id": "ev_01M01DDJ7Y7X5BFTNF733TP955",
+  "last_status_changed_at": "2026-08-15T00:28:39Z",
+  "linked_files": [],
+  "needs_human": null,
+  "priority": "high",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-14T20:15:53Z",
+      "created_by": "agent:org-settings-design",
+      "note": null,
+      "target_task_id": "task_01M00Y3WPXYJ5Z5X9HKSQRNP3V",
+      "type": "related_to"
+    }
+  ],
+  "reopened_count": 2,
+  "schema_version": 1,
+  "short_id": "MRQ-211",
+  "status": "done",
+  "tags": null,
+  "title": "Activity: one append-only log, three lenses (org admin, person, submission)",
+  "type": "task",
+  "updated_at": "2026-08-15T00:33:45Z",
+  "urgency": null
+}

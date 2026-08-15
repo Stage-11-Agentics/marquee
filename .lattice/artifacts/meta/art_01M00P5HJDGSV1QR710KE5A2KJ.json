@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-14T17:47:25Z",
+  "created_by": "agent:codex-mrq-200",
+  "custom_fields": {},
+  "id": "art_01M00P5HJDGSV1QR710KE5A2KJ",
+  "model": null,
+  "payload": {
+    "content_type": "text/markdown",
+    "file": "art_01M00P5HJDGSV1QR710KE5A2KJ.md",
+    "size_bytes": 485
+  },
+  "schema_version": 1,
+  "sensitive": false,
+  "summary": "Implemented all four MRQ-200 cleanups. PR #246 merged to github/main as c41ce702af797848d2224170d0d2551e32a8ae82 from reviewed head 5950cbdef1ffd4eb22f7d860890a0750d109a33b. Independent final review a",
+  "tags": [],
+  "title": "Review findings",
+  "token_usage": null,
+  "type": "note"
+}
