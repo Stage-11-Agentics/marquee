@@ -1167,6 +1167,6 @@ handing the committee's judgment to a vendor's idea of a good reviewer.
 - **AC-312** `SKILL.md` and the setup guide document the flow, and an agent can complete it end to end through the API with no screen opened.
 - **AC-313** Connect, status, and disconnect are scoped under `mirror:write`; status is readable under a read scope and no scope ever returns the token.
 
-`EVALUATION.md` §2.8 owns the verification rows. Built by MRQ-221 (screen, connect, discovery surfaces) and MRQ-222 (agent-native surface). Post-deadline band; no gate count changes.
+`EVALUATION.md` §2.8 owns the verification rows. Built by MRQ-223 (the Airtable finisher — one ticket for connect, inbound, the door, and the agent surface). Post-deadline band; no gate count changes.
 
 **Next mint: AC-314.**
