@@ -4,6 +4,7 @@ import { dispatchPendingMirrorMessages } from "../../src/jobs/mirror/outbox";
 import { drainMirrorOutbox, MAX_MIRROR_ATTEMPTS } from "../../src/jobs/mirror/consumer";
 import { FakeAirtableTransport } from "../../src/jobs/mirror/fake-transport";
 import { MirrorTokenBucket } from "../../src/jobs/mirror/rate-limiter";
+import { encryptMirrorSecret, tokenFingerprint } from "../../src/jobs/mirror/credentials";
 import type { MirrorConsumerEnvironment } from "../../src/jobs/mirror/consumer";
 import { applyMigrations, env } from "./apply-migrations";
 
@@ -12,6 +13,7 @@ const ORG_ID = "org_mrq217";
 const EVENT_ID = "evt_mrq217";
 const PERSON_ID = "per_mrq217";
 const TEMPLATE_ID = "tpl_mrq217";
+const MIRROR_CREDENTIAL_SECRET = "mrq217-credential-secret";
 
 const MIRROR_TABLE_IDS = {
   people: "tbl_people_mrq217",
@@ -22,8 +24,7 @@ const MIRROR_TABLE_IDS = {
 function mirrorEnvironment(overrides: Partial<MirrorConsumerEnvironment> = {}): MirrorConsumerEnvironment {
   return {
     ...env,
-    AIRTABLE_API_KEY: "pat_mrq217_fake",
-    AIRTABLE_BASE_ID: "app_mrq217_fake",
+    MIRROR_CREDENTIAL_SECRET,
     MEDIA_PUBLIC_ORIGIN: "media.example.test",
     UPLOAD_TOKEN_SECRET: "mrq217-upload-secret",
     MIRROR_QUEUE: { send: async () => {} } as unknown as typeof env.MIRROR_QUEUE,
@@ -33,6 +34,7 @@ function mirrorEnvironment(overrides: Partial<MirrorConsumerEnvironment> = {}): 
 
 async function clearMirrorFixture(): Promise<void> {
   await env.DB.batch([
+    env.DB.prepare("DELETE FROM mirror_credentials WHERE org_id = ?").bind(ORG_ID),
     env.DB.prepare("DELETE FROM mirror_outbox"),
     env.DB.prepare(
       "DELETE FROM mirror_state WHERE table_name IN ('people', 'submissions', 'speaker_tasks', '__mirror_suppressed__')",
@@ -77,6 +79,25 @@ async function seedCore(submissionCount = 1, withTask = true): Promise<void> {
        VALUES (?, ?, 'MRQ-217 task', 'acknowledge', 7, 0, ?, ?)`,
     ).bind(TEMPLATE_ID, EVENT_ID, NOW, NOW),
   ]);
+
+  const token = "pat_mrq217_fake";
+  await env.DB.prepare(
+    `INSERT INTO mirror_credentials
+      (id, org_id, token_ciphertext, token_fingerprint, base_id, set_at,
+       set_by_person_id, last_verified_at, last_error, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+  ).bind(
+    "credential_mrq217",
+    ORG_ID,
+    await encryptMirrorSecret(token, MIRROR_CREDENTIAL_SECRET),
+    await tokenFingerprint(token),
+    "app_mrq217_fake",
+    NOW,
+    PERSON_ID,
+    NOW,
+    NOW,
+    NOW,
+  ).run();
 
   await env.DB.batch(Array.from({ length: submissionCount }, (_, index) => env.DB.prepare(
     `INSERT INTO submissions
@@ -202,9 +223,7 @@ test("CONTRACT · missing credentials leave pending mirror work inert and the co
 
   const sends: unknown[] = [];
   const disabled = mirrorEnvironment({
-    AIRTABLE_API_KEY: undefined,
-    AIRTABLE_BASE_ID: undefined,
-    AIRTABLE_BASE: undefined,
+    MIRROR_CREDENTIAL_SECRET: undefined,
     MIRROR_QUEUE: { send: async (message: unknown) => sends.push(message) } as unknown as typeof env.MIRROR_QUEUE,
   });
   expect(await dispatchPendingMirrorMessages(disabled)).toBe(0);

@@ -5,16 +5,19 @@ import { mirrorConfig, type MirrorEnvironment } from "./config";
 import { currentAirtableRecord, currentRowIds, MIRRORED_TABLES, type MirroredTable } from "./records";
 import {
   MIRROR_OUTBOX_MESSAGE_TYPE,
+  MIRROR_INBOUND_MESSAGE_TYPE,
   MIRROR_RECONCILE_MESSAGE_TYPE,
   type MirrorQueueMessage,
 } from "./messages";
+import { MAX_MIRROR_ATTEMPTS } from "./limits";
+import { pullMirrorPayloads } from "./inbound";
 import { MirrorTokenBucket, type MirrorClock } from "./rate-limiter";
-import { createFetchAirtableTransport, type AirtableTransport } from "./transport";
+import { createFetchAirtableTransport, rateLimitedAirtableTransport, type AirtableTransport } from "./transport";
 import { parseMirrorOutboxPayload } from "./outbox";
 
 const PROCESSING_LEASE_MS = 5 * 60_000;
 const PROVIDER_BATCH_SIZE = 10;
-export const MAX_MIRROR_ATTEMPTS = 5;
+export { MAX_MIRROR_ATTEMPTS } from "./limits";
 
 export interface MirrorConsumerEnvironment extends MirrorEnvironment {
   MIRROR_QUEUE: Queue<unknown>;
@@ -51,20 +54,9 @@ function isMirroredTable(value: string): value is MirroredTable {
 function isMirrorMessage(value: unknown): value is MirrorQueueMessage {
   if (!value || typeof value !== "object") return false;
   const body = value as { type?: unknown };
-  return body.type === MIRROR_OUTBOX_MESSAGE_TYPE || body.type === MIRROR_RECONCILE_MESSAGE_TYPE;
-}
-
-function rateLimitedTransport(transport: AirtableTransport, limiter: MirrorTokenBucket): AirtableTransport {
-  return {
-    async patchRecords(input) {
-      await limiter.take();
-      await transport.patchRecords(input);
-    },
-    async deleteRecords(input) {
-      await limiter.take();
-      await transport.deleteRecords(input);
-    },
-  };
+  return body.type === MIRROR_OUTBOX_MESSAGE_TYPE
+    || body.type === MIRROR_RECONCILE_MESSAGE_TYPE
+    || body.type === MIRROR_INBOUND_MESSAGE_TYPE;
 }
 
 async function claimRow(db: D1Database, id: string, now: number): Promise<ClaimedMirrorRow | null> {
@@ -148,6 +140,7 @@ async function sendBatch(
   env: MirrorConsumerEnvironment,
   rows: readonly ClaimedMirrorRow[],
   transport: AirtableTransport,
+  config: NonNullable<Awaited<ReturnType<typeof mirrorConfig>>>,
   now: number,
 ): Promise<void> {
   const tableGroups = new Map<MirroredTable, ClaimedMirrorRow[]>();
@@ -170,7 +163,7 @@ async function sendBatch(
       const upserts = [];
       const deletes: string[] = [];
       for (const row of groupChunk) {
-        const current = await currentAirtableRecord({ DB: env.DB, mirror: mirrorConfig(env)! }, tableName, row.row_id);
+        const current = await currentAirtableRecord({ DB: env.DB, mirror: config }, tableName, row.row_id);
         if (current) upserts.push(current);
         else deletes.push(parseMirrorOutboxPayload(row).marquee_id ?? row.row_id);
       }
@@ -193,7 +186,7 @@ export async function drainMirrorOutbox(
   ids: readonly string[] = [],
   options: MirrorDrainOptions = {},
 ): Promise<{ claimed: number; drained: number }> {
-  const config = mirrorConfig(env);
+  const config = await mirrorConfig(env);
   if (!config) return { claimed: 0, drained: 0 };
   const clock = clockFor(options);
   const now = clock.now();
@@ -210,10 +203,10 @@ export async function drainMirrorOutbox(
 
   const limiter = options.limiter ?? new MirrorTokenBucket(clock);
   const transport = options.transport
-    ? rateLimitedTransport(options.transport, limiter)
+    ? rateLimitedAirtableTransport(options.transport, limiter)
     : createFetchAirtableTransport({ apiKey: config.apiKey, baseId: config.baseId, beforeRequest: () => limiter.take() });
   try {
-    await sendBatch(db, env, claimed, transport, now);
+    await sendBatch(db, env, claimed, transport, config, now);
   } catch (error) {
     await markFailed(db, claimed, error, clock.now());
     throw error;
@@ -231,12 +224,12 @@ export async function reconcileMirror(
   env: MirrorConsumerEnvironment,
   options: MirrorDrainOptions = {},
 ): Promise<{ requests: number; records: number }> {
-  const config = mirrorConfig(env);
+  const config = await mirrorConfig(env);
   if (!config) return { requests: 0, records: 0 };
   const clock = clockFor(options);
   const limiter = options.limiter ?? new MirrorTokenBucket(clock);
   const transport = options.transport
-    ? rateLimitedTransport(options.transport, limiter)
+    ? rateLimitedAirtableTransport(options.transport, limiter)
     : createFetchAirtableTransport({ apiKey: config.apiKey, baseId: config.baseId, beforeRequest: () => limiter.take() });
   let requests = 0;
   let records = 0;
@@ -266,12 +259,13 @@ export async function processMirrorQueue(
 ): Promise<{ outbox: number; reconcile: number }> {
   const messages = batch.messages.filter((message): message is typeof message & { body: MirrorQueueMessage } => isMirrorMessage(message.body));
   if (messages.length === 0) return { outbox: 0, reconcile: 0 };
-  if (!mirrorConfig(env)) return { outbox: 0, reconcile: 0 };
+  if (!(await mirrorConfig(env))) return { outbox: 0, reconcile: 0 };
   const outboxIds = messages
     .map((message) => message.body)
     .filter((body): body is Extract<MirrorQueueMessage, { type: typeof MIRROR_OUTBOX_MESSAGE_TYPE }> => body.type === MIRROR_OUTBOX_MESSAGE_TYPE)
     .map((body) => body.outbox_id);
   const reconcileCount = messages.filter((message) => message.body.type === MIRROR_RECONCILE_MESSAGE_TYPE).length;
+  const inboundCount = messages.filter((message) => message.body.type === MIRROR_INBOUND_MESSAGE_TYPE).length;
   const sharedLimiter = options.limiter ?? new MirrorTokenBucket(clockFor(options));
   const sharedOptions = { ...options, limiter: sharedLimiter };
   const transport = options.transport;
@@ -282,6 +276,12 @@ export async function processMirrorQueue(
   let reconcile = 0;
   if (reconcileCount > 0) {
     reconcile = (await reconcileMirror(env.DB, env, { ...sharedOptions, transport })).records;
+  }
+  for (let index = 0; index < inboundCount; index += 1) {
+    // Inbound payload pulls deliberately use the same limiter object as
+    // outbound drain and reconcile. The base-wide Airtable budget is a
+    // composition invariant, not three individually green assertions.
+    await pullMirrorPayloads(env, { ...sharedOptions, transport });
   }
   return { outbox, reconcile };
 }
