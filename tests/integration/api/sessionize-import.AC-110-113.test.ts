@@ -149,6 +149,7 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     );
     const repairedLegacyTrack = await env.DB.prepare("SELECT track_id, is_primary FROM submission_tracks WHERE submission_id = ?").bind(legacySubmissionId).first<{ is_primary: number; track_id: string }>();
     expect(repairedLegacyTrack).toEqual({ is_primary: 1, track_id: "track_mrq31_platform" });
+    await env.DB.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(legacySubmissionId).run();
     await env.DB.prepare("DELETE FROM submissions WHERE id = ?").bind(legacySubmissionId).run();
 
     const matchedEvaluation = await env.DB.prepare("SELECT score, comment, reviewer_person_id FROM evaluations WHERE submission_id = (SELECT id FROM submissions WHERE external_ref = 'sess-trust-101')").first<{ score: number; comment: string; reviewer_person_id: string }>();

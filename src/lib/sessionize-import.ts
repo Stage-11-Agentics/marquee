@@ -102,6 +102,15 @@ interface SubmissionRow {
   updated_at: number;
 }
 
+interface SubmissionTrackRow {
+  id: string;
+  submission_id: string;
+  track_id: string;
+  is_primary: number;
+  created_at: number;
+  updated_at: number;
+}
+
 interface ParticipationRow {
   id: string;
   submission_id: string;
@@ -183,6 +192,7 @@ interface ImportSnapshot {
   membership_created?: boolean;
   membership_id?: string | null;
   submission: SubmissionRow | null;
+  tracks?: SubmissionTrackRow[];
   participations: ParticipationRow[];
   answers: AnswerRow[];
   evaluations: EvaluationRow[];
@@ -561,8 +571,8 @@ async function importSpeaker(
   const beforeMembership = current ? await speakerMembershipForPerson(db, event.id, current.id) : null;
   const before: ImportSnapshot = current ? {
     kind: "speaker", person: current, attachment: beforeAttachment, speaker_changes: {}, membership_created: false, membership_id: null, submission: null,
-    participations: [], answers: [], evaluations: [],
-  } : { kind: "speaker", person: null, attachment: null, speaker_changes: {}, membership_created: false, membership_id: null, submission: null, participations: [], answers: [], evaluations: [] };
+    tracks: [], participations: [], answers: [], evaluations: [],
+  } : { kind: "speaker", person: null, attachment: null, speaker_changes: {}, membership_created: false, membership_id: null, submission: null, tracks: [], participations: [], answers: [], evaluations: [] };
   const now = nowAfter(current?.updated_at);
   const id = current?.id ?? stableImportId("person", event.id, externalRef || email);
   // An import is additive, never destructive. A blank CSV cell means "this
@@ -698,13 +708,44 @@ async function ensureSessionizeForm(db: D1Database, eventId: string, customField
   return { form, fields };
 }
 
-async function importedSessionRelations(db: D1Database, submissionId: string): Promise<{ participations: ParticipationRow[]; answers: AnswerRow[]; evaluations: EvaluationRow[] }> {
-  const [participations, answers, evaluations] = await Promise.all([
+async function importedSessionRelations(db: D1Database, submissionId: string): Promise<{ tracks: SubmissionTrackRow[]; participations: ParticipationRow[]; answers: AnswerRow[]; evaluations: EvaluationRow[] }> {
+  const [tracks, participations, answers, evaluations] = await Promise.all([
+    db.prepare("SELECT * FROM submission_tracks WHERE submission_id = ? ORDER BY is_primary DESC, id").bind(submissionId).all<SubmissionTrackRow>(),
     db.prepare("SELECT * FROM participations WHERE submission_id = ? AND id LIKE 'part_import_%' ORDER BY id").bind(submissionId).all<ParticipationRow>(),
     db.prepare("SELECT * FROM submission_answers WHERE submission_id = ? AND id LIKE 'answer_import_%' ORDER BY id").bind(submissionId).all<AnswerRow>(),
     db.prepare("SELECT * FROM evaluations WHERE submission_id = ? AND id LIKE 'eval_import_%' ORDER BY id").bind(submissionId).all<EvaluationRow>(),
   ]);
-  return { participations: participations.results, answers: answers.results, evaluations: evaluations.results };
+  return { tracks: tracks.results, participations: participations.results, answers: answers.results, evaluations: evaluations.results };
+}
+
+function importedPrimaryTrackStatements(db: D1Database, submissionId: string, trackId: string | null, now: number): D1PreparedStatement[] {
+  if (!trackId) return [];
+  return [
+    db.prepare(
+      "UPDATE submission_tracks SET is_primary = 0, updated_at = ? WHERE submission_id = ? AND is_primary = 1 AND track_id <> ?",
+    ).bind(now, submissionId, trackId),
+    db.prepare(
+      `INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at)
+       VALUES (?, ?, ?, 1, ?, ?)
+       ON CONFLICT(submission_id, track_id) DO UPDATE SET is_primary = 1, updated_at = excluded.updated_at`,
+    ).bind(stableImportId("track", submissionId, trackId), submissionId, trackId, now, now),
+  ];
+}
+
+/** Repair rows written before the importer populated the canonical track join. */
+async function backfillImportedPrimaryTracks(db: D1Database, eventId: string): Promise<void> {
+  await db.prepare(
+    `INSERT OR IGNORE INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at)
+     SELECT 'track_import_backfill_' || submission.id, submission.id, submission.primary_track_id, 1,
+       submission.created_at, submission.updated_at
+     FROM submissions submission
+     WHERE submission.event_id = ?
+       AND submission.origin = 'import'
+       AND submission.primary_track_id IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM submission_tracks carried WHERE carried.submission_id = submission.id
+       )`,
+  ).bind(eventId).run();
 }
 
 async function speakerForToken(db: D1Database, orgId: string, token: string, speakerMap: Map<string, PersonRow>): Promise<PersonRow | null> {
@@ -799,11 +840,11 @@ async function importSession(
   if (!status.status) throw new Error("session status is required");
   const current = await db.prepare("SELECT * FROM submissions WHERE event_id = ? AND external_ref = ?")
     .bind(event.id, externalRef).first<SubmissionRow>();
-  const relations = current ? await importedSessionRelations(db, current.id) : { participations: [], answers: [], evaluations: [] };
+  const relations = current ? await importedSessionRelations(db, current.id) : { tracks: [], participations: [], answers: [], evaluations: [] };
   const before: ImportSnapshot = current ? {
     kind: "session", person: null, attachment: null, submission: current,
-    participations: relations.participations, answers: relations.answers, evaluations: relations.evaluations,
-  } : { kind: "session", person: null, attachment: null, submission: null, participations: [], answers: [], evaluations: [] };
+    tracks: relations.tracks, participations: relations.participations, answers: relations.answers, evaluations: relations.evaluations,
+  } : { kind: "session", person: null, attachment: null, submission: null, tracks: [], participations: [], answers: [], evaluations: [] };
   const now = nowAfter(current?.updated_at);
   const speakerTokens = splitValues(row.speaker_emails);
   const speakers: PersonRow[] = [];
@@ -836,15 +877,22 @@ async function importSession(
     submitterId: submitter.id,
   };
   const changed = !current || current.form_id !== next.formId || current.title !== next.title || current.abstract !== next.abstract || current.status !== next.status || current.format_id !== next.formatId || current.primary_track_id !== next.trackId || current.submitter_person_id !== next.submitterId;
+  const trackChanged = next.trackId !== null && !relations.tracks.some((trackRow) => trackRow.track_id === next.trackId && trackRow.is_primary === 1);
   if (!current) {
-    await db.prepare(
-      `INSERT INTO submissions (id, event_id, form_id, kind, bypass_evaluation, title, abstract, status, format_id, primary_track_id, origin, vendor_affiliation, wave_id, submitter_person_id, submitted_at, last_saved_at, is_published, external_ref, last_write_source, created_at, updated_at)
-       VALUES (?, ?, ?, 'session', 1, ?, ?, ?, ?, ?, 'import', 'none', NULL, ?, ?, ?, 0, ?, 'marquee', ?, ?)`,
-    ).bind(id, event.id, next.formId, next.title, next.abstract, next.status, next.formatId, next.trackId, next.submitterId, now, now, externalRef, now, now).run();
-  } else if (changed) {
-    await db.prepare(
-      `UPDATE submissions SET form_id = ?, title = ?, abstract = ?, status = ?, format_id = ?, primary_track_id = ?, submitter_person_id = ?, last_write_source = 'marquee', updated_at = ? WHERE id = ? AND event_id = ?`,
-    ).bind(next.formId, next.title, next.abstract, next.status, next.formatId, next.trackId, next.submitterId, now, current.id, event.id).run();
+    await db.batch([
+      db.prepare(
+        `INSERT INTO submissions (id, event_id, form_id, kind, bypass_evaluation, title, abstract, status, format_id, primary_track_id, origin, vendor_affiliation, wave_id, submitter_person_id, submitted_at, last_saved_at, is_published, external_ref, last_write_source, created_at, updated_at)
+         VALUES (?, ?, ?, 'session', 1, ?, ?, ?, ?, ?, 'import', 'none', NULL, ?, ?, ?, 0, ?, 'marquee', ?, ?)`,
+      ).bind(id, event.id, next.formId, next.title, next.abstract, next.status, next.formatId, next.trackId, next.submitterId, now, now, externalRef, now, now),
+      ...importedPrimaryTrackStatements(db, id, next.trackId, now),
+    ]);
+  } else if (changed || trackChanged) {
+    await db.batch([
+      ...(changed ? [db.prepare(
+        `UPDATE submissions SET form_id = ?, title = ?, abstract = ?, status = ?, format_id = ?, primary_track_id = ?, submitter_person_id = ?, last_write_source = 'marquee', updated_at = ? WHERE id = ? AND event_id = ?`,
+      ).bind(next.formId, next.title, next.abstract, next.status, next.formatId, next.trackId, next.submitterId, now, current.id, event.id)] : []),
+      ...importedPrimaryTrackStatements(db, id, next.trackId, now),
+    ]);
   }
   const desiredParticipationIds = new Set<string>();
   for (const [position, speaker] of speakers.entries()) {
@@ -907,10 +955,12 @@ async function importSession(
   }
   const currentAfter = await db.prepare("SELECT * FROM submissions WHERE id = ?").bind(id).first<SubmissionRow>();
   const relationsAfter = await importedSessionRelations(db, id);
-  const sameRelations = JSON.stringify(relations.participations.map(({ created_at: _a, updated_at: _b, ...value }) => value)) === JSON.stringify(relationsAfter.participations.map(({ created_at: _a, updated_at: _b, ...value }) => value))
+  const sameTracks = JSON.stringify(relations.tracks.map(({ created_at: _a, updated_at: _b, ...value }) => value)) === JSON.stringify(relationsAfter.tracks.map(({ created_at: _a, updated_at: _b, ...value }) => value));
+  const sameRelations = sameTracks
+    && JSON.stringify(relations.participations.map(({ created_at: _a, updated_at: _b, ...value }) => value)) === JSON.stringify(relationsAfter.participations.map(({ created_at: _a, updated_at: _b, ...value }) => value))
     && JSON.stringify(relations.answers.map(({ created_at: _a, updated_at: _b, ...value }) => value)) === JSON.stringify(relationsAfter.answers.map(({ created_at: _a, updated_at: _b, ...value }) => value))
     && JSON.stringify(relations.evaluations.map(({ created_at: _a, updated_at: _b, ...value }) => value)) === JSON.stringify(relationsAfter.evaluations.map(({ created_at: _a, updated_at: _b, ...value }) => value));
-  const actualChanged = !current || changed || !sameRelations;
+  const actualChanged = !current || changed || trackChanged || !sameRelations;
   const outcome = !current ? "created" : actualChanged ? "updated" : "skipped";
   const reason = [
     status.note,
@@ -1021,9 +1071,11 @@ async function restoreSnapshot(db: D1Database, snapshot: ImportSnapshot): Promis
     `UPDATE submissions SET event_id = ?, form_id = ?, kind = ?, bypass_evaluation = ?, title = ?, abstract = ?, status = ?, format_id = ?, primary_track_id = ?, origin = ?, vendor_affiliation = ?, wave_id = ?, submitter_person_id = ?, decided_at = ?, decided_by_person_id = ?, submitted_at = ?, last_saved_at = ?, resume_token_hash = ?, is_published = ?, external_ref = ?, applied_rule_id = ?, last_write_source = ?, created_at = ?, updated_at = ? WHERE id = ?`,
   ).bind(submission.event_id, submission.form_id, submission.kind, submission.bypass_evaluation, submission.title, submission.abstract, submission.status, submission.format_id, submission.primary_track_id, submission.origin, submission.vendor_affiliation, submission.wave_id, submission.submitter_person_id, submission.decided_at, submission.decided_by_person_id, submission.submitted_at, submission.last_saved_at, submission.resume_token_hash, submission.is_published, submission.external_ref, submission.applied_rule_id, submission.last_write_source, submission.created_at, submission.updated_at, submission.id).run();
   await db.batch([
+    ...(snapshot.tracks !== undefined ? [db.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(submission.id)] : []),
     db.prepare("DELETE FROM participations WHERE submission_id = ? AND id LIKE 'part_import_%'").bind(submission.id),
     db.prepare("DELETE FROM submission_answers WHERE submission_id = ? AND id LIKE 'answer_import_%'").bind(submission.id),
     db.prepare("DELETE FROM evaluations WHERE submission_id = ? AND id LIKE 'eval_import_%'").bind(submission.id),
+    ...(snapshot.tracks ?? []).map((row) => db.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(row.id, row.submission_id, row.track_id, row.is_primary, row.created_at, row.updated_at)),
     ...snapshot.participations.map((row) => db.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, confirmed_at, invited_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET person_id = excluded.person_id, role = excluded.role, position = excluded.position, confirmation_status = excluded.confirmation_status, confirmed_at = excluded.confirmed_at, invited_at = excluded.invited_at, updated_at = excluded.updated_at").bind(row.id, row.submission_id, row.person_id, row.role, row.position, row.confirmation_status, row.confirmed_at, row.invited_at, row.created_at, row.updated_at)),
     ...snapshot.answers.map((row) => db.prepare("INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET field_id = excluded.field_id, value_text = excluded.value_text, value_json = excluded.value_json, updated_at = excluded.updated_at").bind(row.id, row.submission_id, row.field_id, row.value_text, row.value_json, row.created_at, row.updated_at)),
     ...snapshot.evaluations.map((row) => db.prepare("INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET round_id = excluded.round_id, reviewer_person_id = excluded.reviewer_person_id, score = excluded.score, comment = excluded.comment, updated_at = excluded.updated_at").bind(row.id, row.round_id, row.submission_id, row.reviewer_person_id, row.recommendation, row.score, row.criteria_scores, row.comment, row.abstained, row.created_at, row.updated_at)),
@@ -1035,6 +1087,7 @@ async function deleteCreatedSubmission(db: D1Database, submissionId: string): Pr
     db.prepare("DELETE FROM evaluations WHERE submission_id = ? AND id LIKE 'eval_import_%'").bind(submissionId),
     db.prepare("DELETE FROM submission_answers WHERE submission_id = ? AND id LIKE 'answer_import_%'").bind(submissionId),
     db.prepare("DELETE FROM participations WHERE submission_id = ? AND id LIKE 'part_import_%'").bind(submissionId),
+    db.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(submissionId),
     db.prepare("DELETE FROM submissions WHERE id = ? AND origin = 'import'").bind(submissionId),
   ]);
 }
@@ -1080,6 +1133,7 @@ export async function runSessionizeImport(
   mapping: SessionizeMapping,
 ): Promise<{ counts: ImportRunCounts; rows: ImportRowRow[] }> {
   const event = await eventFor(db, eventId);
+  await backfillImportedPrimaryTracks(db, eventId);
   const counts: ImportRunCounts = { created: 0, updated: 0, skipped: 0, failed: 0, sessions: 0, speakers: 0, evaluations: 0 };
   const speakerMap = new Map<string, PersonRow>();
   const speakerRows = mappedRows("speakers", manifest.speakers_csv, mapping.speakers);
