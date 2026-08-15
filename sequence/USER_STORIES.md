@@ -1170,3 +1170,23 @@ handing the committee's judgment to a vendor's idea of a good reviewer.
 `EVALUATION.md` §2.8 owns the verification rows. Built by MRQ-223 (the Airtable finisher — one ticket for connect, inbound, the door, and the agent surface). Post-deadline band; no gate count changes.
 
 **Next mint: AC-314.**
+
+---
+
+## Amendment 26 — one named mail-idempotency seam *(2026-08-15, plumbing fold)*
+
+The outbox's idempotency grain is now one named, frozen registry rather than a
+scattering of inline expressions. This is a post-deadline addition; it does not
+change the live competition count or tier arithmetic.
+
+**AC-314** *(appended to US-45/US-68, post-deadline)*: A manual ad-hoc send
+repeated with the same durable `Idempotency-Key` produces exactly one outbox row
+per recipient, while a genuinely new nudge with no key produces a new row even
+when recipient and copy are identical. Draft-resume requests carry a per-request
+tail so asking for the same draft link again is not swallowed. The registry
+inventory proves unchanged idempotency-key bytes across the pure refactor, and a
+type-level guard rejects raw-string `entityId` values at the outbox boundary.
+
+`EVALUATION.md` §2.9 owns the verification row. Built by MRQ-226.
+
+**Next mint: AC-315.**

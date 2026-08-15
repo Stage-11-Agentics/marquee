@@ -291,10 +291,31 @@ Writer: Comms → Templates (AC-126). Reader: outbox render, preview (AC-115, AC
 | `status` | TEXT `queued\|sent\|suppressed\|failed` | queue consumer | log chip, gate evidence |
 | `send_policy` | TEXT `demo_safe\|always_live` — **default `demo_safe`** | **exactly two call sites write `always_live`**: the public-form confirmation for an address the submitter typed *in this request*, and the `smoke:mail`/`smoke:ics` harness. Everything else takes the default. | the queue consumer's suppression rule (G3) |
 | `suppressed_reason` | TEXT — e.g. `demo_mode_not_allowlisted` | demo-safe filter (G5) | log; **the judge sees the full rendered message with an honest "not delivered" label** |
-| `idempotency_key` | TEXT UNIQUE — `sha256(template_key, entity_id, person_id)` | send path | **AC-117: a repeated bulk action cannot notify twice** |
+| `idempotency_key` | TEXT UNIQUE — `sha256(template_key:entity_id:person_id)` | send path | **AC-117: a repeated bulk action cannot notify twice** |
 | `provider_message_id`, `error` | TEXT | consumer | delivery outcome (AC-189) |
 | `scheduled_for` | INTEGER NULL | pre-close reminder, scheduled sends | consumer eligibility |
 | `sent_at` | INTEGER | consumer | log |
+
+**Idempotency grains are named in one registry.** Every outbox writer supplies its
+`entity_id` through the frozen builders in
+`src/jobs/mail/idempotency.ts`, whose comments name its business grain and the
+revision slot. The registry is the only producer of the branded `EntityId`
+accepted by `enqueueOutbox`; `buildIdempotencyKey` remains the single hash seam.
+The pure registry refactor keeps the key bytes unchanged for existing grains,
+including calendar `sequence` and method, and the registry's inventory test
+proves that byte identity.
+
+Two intentional exceptions make the action grain explicit. A draft-resume request
+uses `submission_id:request_id`, where the request tail is a fresh non-secret
+value, so requesting the same draft link again is not swallowed. An ad-hoc manual
+send keeps the recipient id in the stored row for record-history joins, while its
+hash seed includes the durable per-compose id. The conference and organization
+send routes accept the standard `Idempotency-Key` header for retries; when it is
+absent, the route mints a fresh per-send id, so a genuinely new nudge produces a
+new row. The calendar composite is intentionally revisioned, but the consumer's
+post-send audit mapper cannot currently parse it into a submission/person
+timeline row; that known limitation is deferred to the calendar-truth work
+rather than hidden in a second entity-id format.
 
 **`calendar_invites`** (AC-95–AC-97, AC-124) — `submission_id`, `person_id`, `uid` (`{submission_id}.{person_id}@marquee.stage11.dev`), `sequence` INTEGER, `last_method` ∈ `REQUEST\|CANCEL`, `last_sent_at`, `status`.
 Writer: schedule/reschedule/un-accept. Reader: ICS builder — same `UID`, `SEQUENCE+1` on every material change; `METHOD:CANCEL` + `STATUS:CANCELLED` on reversal.
@@ -1027,3 +1048,12 @@ The route `SITEMAP.md` has always drawn and no build has ever installed. Unconfi
 **Airtable joins the Server panel's connection rows.** That panel's own lead copy is *"What this Marquee is connected to, and whether each piece is working"*; it lists Email sending, File uploads, Spam protection and Web address, and the mirror is now exactly such a connection. System health's existing `Airtable sync` row gains the `href` its comment correctly withheld while there was nowhere to send anyone.
 
 **Agent-native, per `PHILOSOPHY.md`.** The flow is documented in `SKILL.md` and the setup guide, and is completable end to end through the API. An organizer who runs their conference through an agent must be able to connect Airtable the same way — the API is not a mirror of the screen, it is the other way round.
+
+---
+
+## Amendment 26 — one named mail-idempotency seam *(2026-08-15, plumbing fold)*
+
+Folds `USER_STORIES.md` Amendment 26 and `EVALUATION.md` §2.9. AC-117's existing
+bulk-send criterion is strengthened with the full registry byte-identity proof;
+AC-314 adds the manual-nudge resend contract. This is a post-deadline band and
+does not change the live in-scope count or tier arithmetic.
