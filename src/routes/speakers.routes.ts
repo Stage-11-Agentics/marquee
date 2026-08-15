@@ -11,6 +11,7 @@ import { z } from "@hono/zod-openapi";
 
 import { ApiError } from "../api/errors";
 import { newUlid } from "../api/ids";
+import { LIST_DEFAULTS, createListResponseSchema } from "../api/list";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import { auditStatement } from "../lib/audit";
@@ -33,8 +34,9 @@ const rosterQuery = z.object({
   q: z.string().trim().max(200).optional(),
   status: z.enum(["all", "pending", "invited", "confirmed", "declined"]).default("all"),
   track: z.string().trim().min(1).max(100).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  per_page: z.coerce.number().int().min(1).max(100).default(50),
+  page: z.coerce.number().int().min(1).optional().catch(undefined).openapi({ type: "integer", minimum: 1 }),
+  per_page: z.coerce.number().int().min(1).max(LIST_DEFAULTS.maxPerPage).optional().catch(undefined)
+    .openapi({ type: "integer", minimum: 1, maximum: LIST_DEFAULTS.maxPerPage }),
 });
 
 const customFieldsSchema = z.record(z.string().min(1).max(80), z.string().max(2_000));
@@ -87,16 +89,10 @@ const speakerSchema = z.object({
   updated_at: z.number(),
 }).openapi("Speaker");
 
-const rosterSchema = z.object({
+const rosterSchema = createListResponseSchema(speakerSchema, "Speaker").extend({
   generated_at: z.number(),
   counts: z.record(z.string(), z.number()),
   tracks: z.array(z.object({ id: z.string(), name: z.string(), color: z.string() })),
-  rows: z.array(speakerSchema),
-  total: z.number(),
-  matching_total: z.number(),
-  page: z.number(),
-  per_page: z.number(),
-  total_pages: z.number(),
 }).openapi("SpeakerRoster");
 
 const speakerResponseSchema = z.object({ speaker: speakerSchema }).openapi("SpeakerResponse");

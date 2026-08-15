@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 
 import { ApiError } from "../api/errors";
+import { LIST_DEFAULTS, createListResponseSchema } from "../api/list";
 import { getOnboardingSpeaker, listOnboarding, ONBOARDING_FILTERS } from "./onboarding.queries";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 
@@ -11,9 +12,19 @@ const onboardingQuery = z.object({
   task_type: z.string().trim().min(1).max(100).optional(),
   track: z.string().trim().min(1).max(100).optional(),
   q: z.string().trim().min(1).max(200).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  per_page: z.coerce.number().int().min(1).max(100).default(50),
+  page: z.coerce.number().int().min(1).optional().catch(undefined).openapi({ type: "integer", minimum: 1 }),
+  per_page: z.coerce.number().int().min(1).max(LIST_DEFAULTS.maxPerPage).optional().catch(undefined)
+    .openapi({ type: "integer", minimum: 1, maximum: LIST_DEFAULTS.maxPerPage }),
 });
+
+const onboardingListSchema = createListResponseSchema(z.unknown(), "OnboardingRow").extend({
+  generated_at: z.number(),
+  risk_window_days: z.number(),
+  metrics: z.unknown(),
+  counts: z.unknown(),
+  facets: z.unknown(),
+  task_templates: z.array(z.unknown()),
+}).openapi("OnboardingBoard");
 
 const listOnboardingRoute = defineApiRoute(
   {
@@ -25,7 +36,7 @@ const listOnboardingRoute = defineApiRoute(
     tags: ["Speaker onboarding"],
     request: { params: eventParams, query: onboardingQuery },
     policy: { auth: { kind: "grants", grants: ["program:read"] }, rateLimit: { bucket: "read" }, concurrency: "none" },
-    responses: { 200: jsonResponse(z.unknown(), "Onboarding board snapshot"), ...errorResponses([400, 401, 403, 429, 500]) },
+    responses: { 200: jsonResponse(onboardingListSchema, "Onboarding board snapshot"), ...errorResponses([400, 401, 403, 429, 500]) },
   },
   async (context) => {
     const { eventId } = context.req.valid("param");

@@ -159,21 +159,21 @@ export function SpeakersPage({
   }, [deepLinkedPerson]);
 
   const ready = state.kind === "ready" ? state.snapshot : null;
-  const rows = ready?.rows ?? [];
+  const rows = ready?.data ?? [];
   // Two speakers may legitimately share a name; the roster must not print them
   // as one indistinguishable pair.
   const displayNames = disambiguatedNames(rows);
   const counts = ready?.counts ?? { all: 0, pending: 0, invited: 0, confirmed: 0, declined: 0 };
   const hasFilters = filters.status !== "all" || Boolean(filters.track) || filters.query.trim().length > 0;
   const clearFilters = () => updateFilters({ status: "all", track: "", query: "" });
-  const matchingTotal = ready?.matching_total ?? ready?.total ?? 0;
+  const matchingTotal = ready?.total ?? 0;
   const totalPages = Math.max(1, ready?.total_pages ?? Math.ceil(matchingTotal / pageSize));
 
   return <div class="speakers-page">
     <PageHeader
       title="Speakers"
       copy={ready
-        ? `${ready.total} speaker${ready.total === 1 ? "" : "s"} on the roster for this conference — everyone who submitted, was accepted, was imported, or was added by hand.`
+        ? `${ready.counts.all} speaker${ready.counts.all === 1 ? "" : "s"} on the roster for this conference — everyone who submitted, was accepted, was imported, or was added by hand.`
         : "Reading the conference roster…"}
       actions={<button class="speaker-fixed-action" type="button" onClick={() => setAdding((open) => !open)}>{adding ? "Close form" : "Add speaker"}</button>}
     />
@@ -257,7 +257,7 @@ export function SpeakersPage({
       </div> : null}
       {state.kind === "ready" && (rows.length > 0 || page > 1) ? <div class="speaker-tablefoot">
         <span class="tabular">Showing {rows.length} of {matchingTotal} speakers</span>
-        <span class="speaker-pager"><Button small disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</Button><span class="tabular">Page {ready?.page ?? page} of {totalPages}</span><Button small disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>Next</Button></span>
+        <span class="speaker-pager"><Button small disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</Button><span class="speaker-pager-label tabular">Page {ready?.page ?? page} of {totalPages}</span><Button small disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>Next</Button></span>
       </div> : null}
     </section>
 

@@ -548,8 +548,8 @@ test("CONTRACT · MRQ-131 · one query, two entrances: event_id narrows People t
   expect(roster.data.map((row) => row.name)).toEqual(["Priya Raman"]);
 
   // And the conference's own roster endpoint agrees, because it is the same query.
-  const conferenceRoster = await json<{ rows: Array<{ name: string }> }>(`/api/v1/events/${EVENT_ID}/speakers`);
-  expect(conferenceRoster.rows.map((row) => row.name)).toEqual(roster.data.map((row) => row.name));
+  const conferenceRoster = await json<{ data: Array<{ name: string }> }>(`/api/v1/events/${EVENT_ID}/speakers`);
+  expect(conferenceRoster.data.map((row) => row.name)).toEqual(roster.data.map((row) => row.name));
 });
 
 test("CONTRACT · MRQ-131 · People is organizer staff only, and never leaks another organization", async () => {
