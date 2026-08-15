@@ -16,11 +16,11 @@
        program builder), each one sentence plus one prompt, a next-year
        line (event create --from), and two short honesty cards: built
        for verification / what stays human. The API & CLI reference
-       keeps its sidebar-foot door; the page links into it and into API
-       tokens. The cold-start replay is deliberately NOT linked from the
-       setup card (client ruling: cards are small containers — a core
-       action like entering the walkthrough belongs on a main page, and
-       the landing page already carries it).
+       keeps its sidebar-foot door; the page-head links into it and into
+       API tokens. The agent cards deliberately carry NO navigation —
+       Copy prompt is their only action (client ruling: this page tells
+       you how to set up your agent, it does not shuttle you elsewhere;
+       the cold-start replay stays on the landing page, its main home).
        v1.15 (2026-08-14): the Organization concept completed (fresh-eyes
        review rulings, sequence/org-settings-design.md iteration 3). The
        Organization group becomes Home · People CRM · Outreach · Settings:
@@ -3478,16 +3478,13 @@
           prompt:"Set up Marquee for our conference — Great Lakes Infra Days, April 14–15 2027, Buffalo." },
         { num:"02", name:"The reviewer seat", role:"A committee member that reads everything",
           copy:"Takes an evaluator seat, scores its assigned queue, and files a rationale your chair reads verbatim. It recommends; an organizer decides.",
-          prompt:"Work through your review queue. Score each abstract against the rubric and explain every recommendation.",
-          link:["evaluation","Open evaluation"] },
+          prompt:"Work through your review queue. Score each abstract against the rubric and explain every recommendation." },
         { num:"03", name:"The chase agent", role:"The deadline work nobody wanted",
           copy:"Finds who still owes what and sends the reminders. The queued count is its receipt.",
-          prompt:"Find every speaker still owing a headshot, nudge each one politely, and tell me who is left.",
-          link:["onboarding","Open onboarding"] },
+          prompt:"Find every speaker still owing a headshot, nudge each one politely, and tell me who is left." },
         { num:"04", name:"The program builder", role:"Triage → agenda → published",
           copy:"Accepts a wave, places Sessions into rooms, and publishes. Writes are version-guarded, so two agents cannot clobber each other.",
-          prompt:"Place the accepted Platform-track talks into Lakeside A on day one — no conflicts — then publish them.",
-          link:["agenda","Open the agenda"] },
+          prompt:"Place the accepted Platform-track talks into Lakeside A on day one — no conflicts — then publish them." },
       ];
       function agentsView() {
         return shell(`<div class="page">
@@ -3509,7 +3506,7 @@
               <div class="card-body">
                 <p>${esc(a.copy)}</p>
                 <div class="message-preview">“${esc(a.prompt)}”</div>
-                <div class="agent-card-actions"><button class="button small" data-copy-prompt="${esc(a.prompt)}">Copy prompt</button>${a.link?`<a class="button small" href="#${a.link[0]}">${esc(a.link[1])} →</a>`:""}</div>
+                <div class="agent-card-actions"><button class="button small" data-copy-prompt="${esc(a.prompt)}">Copy prompt</button></div>
               </div>
             </section>`).join("")}
           </div>
