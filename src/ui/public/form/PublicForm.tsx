@@ -237,6 +237,23 @@ export function PublicForm({ initial }: PublicFormProps) {
     [state.fields, answers],
   );
 
+  /**
+   * A refusal is a navigation event, not just a message. Scroll the first
+   * offending control into view and put keyboard/screen-reader focus on it so
+   * the person can recover without hunting through a long form.
+   */
+  function focusFirstInvalidField(keys: readonly string[]) {
+    const firstKey = keys.find((key) => visibleFields.some((field) => field.key === key))
+      ?? (keys.length === 0 ? visibleFields[0]?.key : undefined);
+    if (!firstKey) return;
+    window.setTimeout(() => {
+      const field = fieldRefs.current[firstKey];
+      if (!field) return;
+      field.focus({ preventScroll: true });
+      field.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    }, 0);
+  }
+
   useEffect(() => {
     if (typeof document === "undefined" || typeof window === "undefined") return;
     const globals = window as unknown as TurnstileGlobals;
@@ -339,7 +356,7 @@ export function PublicForm({ initial }: PublicFormProps) {
     setErrors(next);
     const first = visibleFields.find((field) => next[field.key]);
     if (first) {
-      window.setTimeout(() => fieldRefs.current[first.key]?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+      focusFirstInvalidField([first.key]);
       return false;
     }
     return true;
@@ -553,6 +570,9 @@ export function PublicForm({ initial }: PublicFormProps) {
         for (const issue of issues) if (issue.fieldKey && issue.message) next[issue.fieldKey] = issue.message;
         setErrors(next);
       }
+      if (error instanceof MarqueeApiError && error.status === 422) {
+        focusFirstInvalidField(issues.flatMap((issue) => issue.fieldKey ? [issue.fieldKey] : []));
+      }
       setPageError(publicErrorMessage(error));
     } finally { setBusy(false); }
   }
@@ -592,7 +612,7 @@ export function PublicForm({ initial }: PublicFormProps) {
       control = <select id={`public-${field.key}`} ref={ref as never} value={typeof value === "string" ? value : ""} onChange={(event) => setAnswer(field.key, (event.currentTarget as HTMLSelectElement).value)} aria-invalid={Boolean(error)}><option value="">Choose one</option>{options.map((option) => <option value={option}>{option}</option>)}</select>;
     } else if (field.type === "multi_select") {
       const selected = Array.isArray(value) ? value : [];
-      control = <div class="public-option-list" ref={ref as never}>{options.map((option) => <label class="public-option"><input type="checkbox" checked={selected.includes(option)} onChange={(event) => { const next = (event.currentTarget as HTMLInputElement).checked ? [...selected, option] : selected.filter((item) => item !== option); setAnswer(field.key, next); }} />{option}</label>)}</div>;
+      control = <div class="public-option-list" ref={ref as never} tabIndex={-1}>{options.map((option) => <label class="public-option"><input type="checkbox" checked={selected.includes(option)} onChange={(event) => { const next = (event.currentTarget as HTMLInputElement).checked ? [...selected, option] : selected.filter((item) => item !== option); setAnswer(field.key, next); }} />{option}</label>)}</div>;
     } else if (field.type === "file") {
       const existing = typeof value === "object" && value !== null && "filename" in value ? String((value as { filename: unknown }).filename) : null;
       const acceptList = Array.isArray(field.config.accept) ? field.config.accept.filter((entry): entry is string => typeof entry === "string") : [];

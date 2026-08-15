@@ -17,6 +17,9 @@ test("AC-35 + AC-36 + AC-155 + AC-156 + AC-157 · the public form has a 375px fi
   assert.match(styles, /visibility: hidden/);
   assert.match(styles, /overflow-x: clip/);
   assert.match(component, /scrollIntoView/);
+  assert.match(component, /focusFirstInvalidField/);
+  assert.ok((component.match(/focusFirstInvalidField/g) ?? []).length >= 3, "client validation and 422 handling must focus through the same first-field helper");
+  assert.match(component, /focus\(\{ preventScroll: true \}\)/);
   assert.match(component, /visualViewport/);
   assert.match(component, /getBoundingClientRect/);
   assert.match(component, /scrollWidth > root\.clientWidth/);

@@ -259,7 +259,7 @@ test("CONTRACT · a contact sees the WHOLE sponsorship, with every deliverable's
   expect(snapshot.seat).toBe("sponsor_contact");
   expect(snapshot.viewer.name).toBe("Dana Okafor");
   expect(snapshot.sponsorship.tier).toBe("Gold");
-  expect(snapshot.sponsorship.status_label).toBe("Committed");
+  expect(snapshot.sponsorship.status_label).toBe("Confirmed");
   expect(snapshot.sponsorship.company.name).toBe("Ashworth–Meridian Capital Intelligence Group");
 
   // Deliverables assigned to a colleague are present, not filtered away.
