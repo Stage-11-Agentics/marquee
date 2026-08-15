@@ -93,7 +93,12 @@ test("AC-255 · seeded physical venues carry verified coordinates, access, and b
 });
 
 test("CONTRACT · the accepted core is exactly 60 accepted records over at least 75 people", () => {
-  const submissions = table("submissions").filter((row) => row.status === "accepted");
+  // The accepted CORE is the real, checkable Feb-2025 program (SPEC §6 Option
+  // A'). Sponsor Sessions are also accepted, and they are fabricated by design —
+  // counting them here would let a fabricated row satisfy an assertion whose
+  // entire subject is "every record real and checkable", so they are excluded and
+  // asserted separately below.
+  const submissions = table("submissions").filter((row) => row.status === "accepted" && !row.sponsorship_id);
   assert.equal(submissions.length, 60);
   assert.equal(submissions.filter((row) => row.status === "accepted").length, 60);
   assert.equal(submissions.filter((row) => row.kind === "session").length, 30);
@@ -112,12 +117,71 @@ test("CONTRACT · the accepted core is exactly 60 accepted records over at least
   assert.deepEqual([...waves].sort(), [["wav_wave-1", 32], ["wav_wave-2", 28]]);
 });
 
+/**
+ * The two assertions above exclude sponsor Sessions. This is what is true of them
+ * instead — so "excluded" never quietly means "unchecked".
+ */
+test("CONTRACT · seeded sponsor Sessions are guaranteed placements, not competitive ones", () => {
+  const people = byId("people");
+  const formats = byId("formats");
+  const sponsored = table("submissions").filter((row) => row.sponsorship_id);
+  const sponsorships = new Set(table("sponsorships").map((row) => row.id));
+  assert.ok(sponsored.length >= 3, `expected the Gold/Silver demo Sessions, found ${sponsored.length}`);
+
+  for (const submission of sponsored) {
+    assert.ok(sponsorships.has(submission.sponsorship_id), `${submission.id} names no seeded sponsorship`);
+    assert.equal(submission.kind, "session");
+    assert.equal(submission.bypass_evaluation, 1, `${submission.id} must bypass the competitive path`);
+    assert.equal(submission.status, "accepted");
+    // Never in a decision batch, and never decided against criteria: a guaranteed
+    // Session has no wave and no decision row, and inventing either would be a
+    // fabricated verdict on the record.
+    assert.equal(submission.wave_id, null, `${submission.id} must not sit in a decision wave`);
+    assert.ok(formats.has(submission.format_id));
+    assert.ok(people.has(submission.submitter_person_id));
+  }
+  const sponsoredIds = new Set(sponsored.map((row) => row.id));
+  assert.equal(
+    table("submission_decisions").filter((row) => sponsoredIds.has(row.submission_id)).length,
+    0,
+    "a sponsor Session must carry no decision row",
+  );
+
+  // Only real speakers hold a participation. A sponsor contact is the submitter
+  // of record — the column — and holding a `speaker` row would publish their name
+  // as the person on stage.
+  const contacts = new Set(table("sponsorship_contacts").map((row) => row.person_id));
+  for (const participation of table("participations").filter((row) => sponsoredIds.has(row.submission_id))) {
+    assert.equal(participation.role, "speaker");
+    assert.ok(!contacts.has(participation.person_id), `${participation.person_id} is a contact, not a speaker`);
+  }
+
+  // One Session with nobody named yet, so the portal's "Speaker not named yet"
+  // state and the name-your-speaker write path are both demonstrable.
+  const named = new Set(table("participations").filter((row) => sponsoredIds.has(row.submission_id)).map((row) => row.submission_id));
+  assert.ok(sponsored.some((row) => !named.has(row.id)), "one sponsor Session must have no speaker named");
+  assert.ok(sponsored.some((row) => named.has(row.id)), "one sponsor Session must have a speaker named");
+
+  // Every named sponsor speaker holds the membership and the required task set
+  // every other accepted speaker holds (SPEC §6).
+  const speakerMembers = new Set(table("memberships").filter((row) => row.role === "speaker").map((row) => row.person_id));
+  const requiredTitles = ["Hotel and Travel Reservations", "Presentation Upload"];
+  for (const submissionId of named) {
+    for (const participation of table("participations").filter((row) => row.submission_id === submissionId)) {
+      assert.ok(speakerMembers.has(participation.person_id), `${participation.person_id} lacks speaker authority`);
+      const required = table("speaker_tasks").filter((row) =>
+        row.person_id === participation.person_id && requiredTitles.includes(row.title));
+      assert.equal(required.length, 2, `${participation.person_id} is missing the required task set`);
+    }
+  }
+});
+
 test("CONTRACT · every accepted submission resolves its taxonomy, decision and speakers", () => {
   const people = byId("people");
   const formats = byId("formats");
   const tracks = byId("tracks");
   const waves = byId("waves");
-  const submissions = table("submissions").filter((row) => row.status === "accepted");
+  const submissions = table("submissions").filter((row) => row.status === "accepted" && !row.sponsorship_id);
   const submissionIds = new Set(submissions.map((row) => row.id));
 
   for (const submission of submissions) {

@@ -6,7 +6,12 @@ import test from "node:test";
 const root = path.resolve(import.meta.dirname, "../..");
 const page = fs.readFileSync(path.join(root, "src/ui/settings/TaskTemplatesPage.tsx"), "utf8");
 const appShell = fs.readFileSync(path.join(root, "src/ui/shell/AppShell.tsx"), "utf8");
-const portal = fs.readFileSync(path.join(root, "src/ui/portal/PortalPage.tsx"), "utf8");
+// The portal is two files since MRQ-214 extracted the task machinery the sponsor
+// portal shares. Read both, so the assertion follows the code.
+const portal = [
+  fs.readFileSync(path.join(root, "src/ui/portal/PortalPage.tsx"), "utf8"),
+  fs.readFileSync(path.join(root, "src/ui/portal/task-machinery.tsx"), "utf8"),
+].join("\n");
 const styles = fs.readFileSync(path.join(root, "src/ui/settings/settings.css"), "utf8");
 
 test("CONTRACT · MRQ-96 · the existing task-template route is a real organizer editor", () => {

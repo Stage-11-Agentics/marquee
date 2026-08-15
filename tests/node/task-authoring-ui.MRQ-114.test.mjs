@@ -100,7 +100,9 @@ test("CONTRACT · MRQ-114 · every surface renders a task deadline as the same c
   // speaker east of them. Task due dates go through the shared UTC formatter
   // instead — the portal and the chase board must agree with the page that
   // authored the date.
-  const portal = fs.readFileSync(path.join(root, "src/ui/portal/PortalPage.tsx"), "utf8");
+  // The shared due-date formatter now lives in the extracted task machinery,
+  // which is the file both portals render their rows from.
+  const portal = fs.readFileSync(path.join(root, "src/ui/portal/task-machinery.tsx"), "utf8");
   const onboarding = fs.readFileSync(path.join(root, "src/ui/onboarding/OnboardingPage.tsx"), "utf8");
   for (const [name, source] of [["portal", portal], ["onboarding", onboarding]]) {
     assert.match(source, /import \{ formatDueDate \} from "\.\.\/\.\.\/lib\/task-due";/, `${name} does not use the shared due-date formatter`);

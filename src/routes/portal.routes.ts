@@ -32,7 +32,7 @@ import {
 } from "../lib/form-conditions";
 import { listFormFields } from "./forms.queries";
 import { sponsorContactTaskAccess } from "../lib/sponsors/task-access";
-import { sponsorWritebackStatements } from "../lib/sponsors/session-writeback";
+import { applySponsorWriteback } from "../lib/sponsors/session-writeback";
 import {
   listPortalTasks,
   parseJson,
@@ -1209,7 +1209,7 @@ async function completeTask(
   // the completion lands. See session-writeback.ts for why that order: of the two
   // half-states D1 can leave, "the Session was filled, the task is still open" is
   // the recoverable one.
-  const writeback = await sponsorWritebackStatements({
+  await applySponsorWriteback({
     db,
     orgId: auth.orgId,
     task,
@@ -1218,7 +1218,6 @@ async function completeTask(
     requestId,
     now,
   });
-  if (writeback.length > 0) await db.batch(writeback);
 
   const result = await db
     .prepare(

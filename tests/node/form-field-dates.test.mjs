@@ -14,7 +14,10 @@ const [migration, initialMigration, applier, seed, formsRoutes, publicRoutes, bu
   read("src/routes/forms.routes.ts"),
   read("src/routes/public-form.routes.ts"),
   read("src/ui/forms/FormsPage.tsx"),
-  read("src/ui/portal/PortalPage.tsx"),
+  // The portal is two files since MRQ-214 extracted the task machinery the
+  // sponsor portal shares. Read both, so the assertion follows the code.
+  Promise.all([read("src/ui/portal/PortalPage.tsx"), read("src/ui/portal/task-machinery.tsx")])
+    .then((parts) => parts.join("\n")),
   read("src/ui/public/form/PublicForm.tsx"),
 ]);
 

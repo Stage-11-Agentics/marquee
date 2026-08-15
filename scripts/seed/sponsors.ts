@@ -497,35 +497,11 @@ function addSponsorSession(
     updated_at: ctx.now,
   });
 
-  // The sponsor contact is the submitter of record and nothing more. Making them
-  // a `speaker` participation would publish a marketing lead's name as the
-  // person on stage; "Speaker not named yet" is the honest state until the
-  // name-your-speaker deliverable fills it.
-  ctx.add("participations", {
-    id: seedId("par", `${input.id}-submitter`),
-    submission_id: input.id,
-    person_id: input.submitterPersonId,
-    role: "submitter",
-    position: 1,
-    confirmation_status: "pending",
-    confirmed_at: null,
-    invited_at: null,
-    created_at: ctx.now,
-    updated_at: ctx.now,
-  });
-  ctx.add("participations", {
-    id: seedId("par", `${input.id}-sponsor-contact`),
-    submission_id: input.id,
-    person_id: input.submitterPersonId,
-    role: "sponsor_contact",
-    position: 2,
-    confirmation_status: "pending",
-    confirmed_at: null,
-    invited_at: null,
-    created_at: ctx.now,
-    updated_at: ctx.now,
-  });
-
+  // The sponsor contact is the submitter of record — the column — and holds no
+  // participation at all. A `speaker` row would publish a marketing lead's name
+  // as the person on stage, and a `submitter` row would hand them a submitter
+  // seat in the SPEAKER portal, which is not the surface they were invited to.
+  // "Speaker not named yet" is the honest state until the deliverable fills it.
   if (input.speakerPersonId) {
     ctx.add("participations", {
       id: seedId("par", `${input.id}-speaker`),
@@ -539,6 +515,12 @@ function addSponsorSession(
       created_at: ctx.now,
       updated_at: ctx.now,
     });
+    // A named sponsor speaker is a speaker of this conference, so they hold the
+    // membership every other accepted speaker holds — the row the roster, portal
+    // sign-in, headshot ownership and comms audience all read. Their onboarding
+    // task set is minted by `ugliness.ts`, which runs after this module and
+    // applies SPEC §6's "every accepted speaker carries these two" to them for
+    // the same reason it applies it to everybody else.
     ctx.add("memberships", {
       id: seedId("mem", `${input.speakerPersonId}-speaker`),
       org_id: ORG_ID,
@@ -869,4 +851,8 @@ function completedResponse(deliverable: DeliverableSpec): Record<string, unknown
   return {};
 }
 
-export const seed: SeedModule = { name: "sponsors", order: 80, run };
+// Order 55: after the spine and the submissions it needs, and deliberately
+// BEFORE `ugliness` (60), whose job includes minting every accepted speaker's
+// required task set. A named sponsor speaker is an accepted speaker, and having
+// that rule reach them automatically beats restating it here.
+export const seed: SeedModule = { name: "sponsors", order: 55, run };

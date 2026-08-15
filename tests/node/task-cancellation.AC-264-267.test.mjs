@@ -10,7 +10,12 @@ const consumer = await readFile(new URL("../../src/jobs/mail/consumer.ts", impor
 const board = await readFile(new URL("../../src/api/board.ts", import.meta.url), "utf8");
 const submissions = await readFile(new URL("../../src/routes/submissions.queries.ts", import.meta.url), "utf8");
 const audience = await readFile(new URL("../../src/jobs/mail/audience.ts", import.meta.url), "utf8");
-const portal = await readFile(new URL("../../src/ui/portal/PortalPage.tsx", import.meta.url), "utf8");
+// The portal is two files since MRQ-214 extracted the task machinery the sponsor
+// portal shares. Read both, so the assertion follows the code.
+const portal = [
+  await readFile(new URL("../../src/ui/portal/PortalPage.tsx", import.meta.url), "utf8"),
+  await readFile(new URL("../../src/ui/portal/task-machinery.tsx", import.meta.url), "utf8"),
+].join("\n");
 const audit = await readFile(new URL("../../src/lib/audit.ts", import.meta.url), "utf8");
 
 test("AC-264 · cancellation is a timestamp tombstone over open tasks", () => {

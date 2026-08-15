@@ -24,7 +24,7 @@
 
 import { newUlid } from "../../api/ids";
 import { auditStatement } from "../audit";
-import { speakerMembershipStatement } from "../speaker-membership";
+import { reconcileTaskSet } from "../../jobs/cascade/decisions";
 import { SPONSOR_WRITEBACK_TEMPLATE_IDS } from "./deliverable-templates";
 
 export { SPONSOR_WRITEBACK_TEMPLATE_IDS };
@@ -58,11 +58,16 @@ function text(answers: Record<string, unknown>, key: string): string | null {
  * Fill the Session's speaker.
  *
  * The named person becomes a real speaker of this conference, not a string on a
- * card: a `people` row (found by email or created), a `speaker` participation,
- * and the `memberships` bridge — which is what makes their own speaker portal
- * reachable, exactly as the copy on the deliverable promises. No mail is sent
- * from here; inviting is the organizer's existing machinery, and a portal task
- * completion is not the place to start mailing strangers.
+ * card: a `people` row (found by email or created) and a `speaker` participation.
+ * Their membership and their onboarding task set are then minted by
+ * `reconcileTaskSet` — the same idempotent reconciliation the acceptance
+ * boundary runs — so the deliverable's own promise comes true literally: they
+ * get their speaker portal with their bio, headshot, and A/V tasks in it. A
+ * hand-written membership row here would have given them the seat and left the
+ * portal empty.
+ *
+ * No mail is sent. Inviting is the organizer's existing machinery, and a portal
+ * task completion is not the place to start mailing strangers.
  */
 async function nameSpeakerStatements(input: SponsorWritebackInput): Promise<D1PreparedStatement[]> {
   const { db, task, answers, now } = input;
@@ -115,14 +120,6 @@ async function nameSpeakerStatements(input: SponsorWritebackInput): Promise<D1Pr
        VALUES (?, ?, ?, 'speaker', 0, 'pending', NULL, NULL, ?, ?)
        ON CONFLICT (person_id, submission_id, role) DO NOTHING`,
     ).bind(newUlid(now), task.submission_id, personId, now, now),
-  );
-  statements.push(
-    speakerMembershipStatement(db, {
-      orgId: input.orgId,
-      eventId: task.event_id,
-      personId,
-      now,
-    }),
   );
   statements.push(
     auditStatement(db, {
@@ -227,10 +224,7 @@ async function companyDetailsStatements(input: SponsorWritebackInput): Promise<D
 }
 
 /** Every extra write this deliverable owes, or none for an ordinary one. */
-export async function sponsorWritebackStatements(
-  input: SponsorWritebackInput,
-): Promise<D1PreparedStatement[]> {
-  if (input.task.sponsorship_id === null) return [];
+async function writebackStatements(input: SponsorWritebackInput): Promise<D1PreparedStatement[]> {
   switch (input.task.template_id) {
     case SPONSOR_WRITEBACK_TEMPLATE_IDS.nameYourSpeaker:
       return nameSpeakerStatements(input);
@@ -240,5 +234,26 @@ export async function sponsorWritebackStatements(
       return companyDetailsStatements(input);
     default:
       return [];
+  }
+}
+
+/**
+ * Apply whatever this deliverable owes the thing it is about.
+ *
+ * Two phases, because the second one reads what the first one wrote: the
+ * participation has to exist before `reconcileTaskSet` can see a speaker to
+ * onboard. Both are idempotent, so a retry after a partial failure converges.
+ */
+export async function applySponsorWriteback(input: SponsorWritebackInput): Promise<void> {
+  if (input.task.sponsorship_id === null) return;
+  const statements = await writebackStatements(input);
+  if (statements.length === 0) return;
+  await input.db.batch(statements);
+  if (input.task.template_id === SPONSOR_WRITEBACK_TEMPLATE_IDS.nameYourSpeaker && input.task.submission_id) {
+    await reconcileTaskSet(input.db, input.task.event_id, [input.task.submission_id], input.now, {
+      kind: "user",
+      personId: input.actorPersonId,
+      requestId: input.requestId,
+    });
   }
 }

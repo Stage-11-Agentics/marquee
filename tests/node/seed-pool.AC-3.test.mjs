@@ -26,10 +26,23 @@ function groups(rowsToGroup, key) {
 
 test("AC-3 · the seed has 1,000 submissions and a populated agenda", () => {
   const submissions = table("submissions");
-  assert.equal(submissions.length, 1_000);
-  assert.equal(submissions.filter((row) => row.status === "accepted").length, 60);
-  assert.ok(submissions.filter((row) => row.status === "accepted" && row.kind === "session" && row.bypass_evaluation === 1).length >= 25);
-  assert.equal(table("agenda_items").filter((row) => row.kind === "session").length, 24);
+  // SPEC §6 Option A' sizes the COMPETITIVE pool: 940 synthetic rows plus the 60
+  // real accepted records. Sponsor Sessions are guaranteed placements bought by a
+  // deal — they never entered that pool — so they are counted apart rather than
+  // allowed to loosen the number that matters. Scoping the assertion this way is
+  // strictly stronger than the bare total it replaces: it can no longer be
+  // satisfied by adding one class of row while dropping another.
+  const sponsored = submissions.filter((row) => row.sponsorship_id);
+  const competitive = submissions.filter((row) => !row.sponsorship_id);
+  assert.equal(competitive.length, 1_000);
+  assert.equal(competitive.filter((row) => row.status === "accepted").length, 60);
+  assert.ok(sponsored.length > 0, "the seed must demonstrate sponsor Sessions");
+  assert.ok(sponsored.every((row) => row.status === "accepted" && row.bypass_evaluation === 1));
+  assert.ok(competitive.filter((row) => row.status === "accepted" && row.kind === "session" && row.bypass_evaluation === 1).length >= 25);
+  assert.equal(
+    table("agenda_items").filter((row) => row.kind === "session" && !sponsored.some((sponsor) => sponsor.id === row.submission_id)).length,
+    24,
+  );
 
   const scheduledIds = new Set(table("agenda_items").filter((row) => row.submission_id).map((row) => row.submission_id));
   const acceptedSessions = submissions.filter((row) => row.status === "accepted" && row.kind === "session");
@@ -103,6 +116,7 @@ test("AC-246 · the demo organizer has event reviewer authority, every track, an
   const acceptedPeople = new Set(
     table("participations").filter((row) => acceptedIds.has(row.submission_id)).map((row) => row.person_id),
   );
+  assert.ok(acceptedPeople.size > 0, "accepted submissions must name people");
   const speakerMembers = new Set(memberships.filter((row) => row.role === "speaker").map((row) => row.person_id));
   for (const personId of acceptedPeople) assert.ok(speakerMembers.has(personId), `${personId} lacks speaker authority`);
 });

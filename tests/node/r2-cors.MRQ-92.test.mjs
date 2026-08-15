@@ -8,7 +8,9 @@ const policyPath = resolve(root, "scripts/platform/r2-cors.json");
 const applyPath = resolve(root, "scripts/platform/apply-r2-cors.mjs");
 const checkPath = resolve(root, "scripts/checks/check-r2-cors.mjs");
 const e2ePath = resolve(root, "scripts/checks/run-e2e.mjs");
-const portalPath = resolve(root, "src/ui/portal/PortalPage.tsx");
+// Browser-upload behaviour lives in the extracted task machinery, shared by the
+// speaker and sponsor portals.
+const portalPath = resolve(root, "src/ui/portal/task-machinery.tsx");
 
 test("CONTRACT · the reviewed R2 policy names real origins and browser upload requirements", () => {
   const source = readFileSync(policyPath, "utf8");
@@ -53,7 +55,10 @@ test("CONTRACT · speaker upload transport failures keep diagnostics and show re
   const portal = readFileSync(portalPath, "utf8");
   const uploadClient = readFileSync(resolve(root, "src/ui/upload/upload-client.ts"), "utf8");
 
-  assert.match(portal, /console\.error\("Speaker upload failed", caught\)/);
+  // "Portal upload failed": the machinery is shared with the sponsor portal, so
+  // the log line names the surface honestly. The contract is that the caught
+  // error still reaches the console, not which noun labels it.
+  assert.match(portal, /console\.error\("Portal upload failed", caught\)/);
   assert.match(portal, /speakerUploadFailureMessage\(caught(?:,|\))/);
   assert.match(portal, /isUploadAborted\(caught\)/);
   assert.match(uploadClient, /UPLOAD_PUT_NETWORK_ERROR/);

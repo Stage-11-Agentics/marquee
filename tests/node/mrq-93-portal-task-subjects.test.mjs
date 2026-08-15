@@ -2,9 +2,19 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const portal = await readFile(new URL("../../src/ui/portal/PortalPage.tsx", import.meta.url), "utf8");
+// The portal is two files since MRQ-214 extracted the task machinery the sponsor
+// portal shares. Read both, so the assertion follows the code.
+const portal = [
+  await readFile(new URL("../../src/ui/portal/PortalPage.tsx", import.meta.url), "utf8"),
+  await readFile(new URL("../../src/ui/portal/task-machinery.tsx", import.meta.url), "utf8"),
+].join("\n");
 const styles = await readFile(new URL("../../src/ui/portal/portal.css", import.meta.url), "utf8");
-const routes = await readFile(new URL("../../src/routes/portal.routes.ts", import.meta.url), "utf8");
+// The portal API is two files since MRQ-214 extracted the task projection both
+// portals read. Read both, so the assertion follows the code.
+const routes = [
+  await readFile(new URL("../../src/routes/portal.routes.ts", import.meta.url), "utf8"),
+  await readFile(new URL("../../src/routes/portal-tasks.queries.ts", import.meta.url), "utf8"),
+].join("\n");
 const seed = await readFile(new URL("../../scripts/seed/ugliness.ts", import.meta.url), "utf8");
 
 test("CONTRACT · MRQ-93 keeps generic acknowledgement separate from the two subject-bearing templates", () => {

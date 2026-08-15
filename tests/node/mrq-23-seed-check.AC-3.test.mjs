@@ -11,7 +11,9 @@ const rows = await buildSeedRows();
 const table = (name) => rows.filter((entry) => entry.table === name).map((entry) => entry.row);
 
 test("AC-3 · MRQ-23 check contract keeps the full seed and reachable reviewer work", () => {
-  const submissions = table("submissions");
+  // The competitive pool, not the row count: sponsor Sessions are guaranteed
+  // placements that never entered it (SPEC §6, Amendment 23).
+  const submissions = table("submissions").filter((submission) => !submission.sponsorship_id);
   assert.equal(submissions.length, 1_000);
   assert.equal(submissions.filter((submission) => submission.status === "accepted").length, 60);
 
