@@ -18,57 +18,62 @@ import type { Id } from "../../db/schema";
  * inventory below.
  */
 
-function entityId(value: string): Id {
-  return value;
+declare const entityIdBrand: unique symbol;
+
+/** A value that has crossed the named idempotency registry. */
+export type EntityId = Id & { readonly [entityIdBrand]: "outbox-entity-id" };
+
+function entityId(value: string): EntityId {
+  return value as EntityId;
 }
 
 export const IDEMPOTENCY_REGISTRY = Object.freeze({
   /** Automated trigger: one configured action for the entity selected by the trigger. */
-  trigger: (businessEntityId: Id): Id => entityId(businessEntityId),
+  trigger: (businessEntityId: Id): EntityId => entityId(businessEntityId),
 
   /** Initial decision mail: one notification for the submission's current decision action. */
-  decision: (submissionId: Id): Id => entityId(submissionId),
+  decision: (submissionId: Id): EntityId => entityId(submissionId),
 
   /** Decision retry/notify: the recorded decision remains the business entity. */
-  decisionRetry: (decisionId: Id): Id => entityId(decisionId),
+  decisionRetry: (decisionId: Id): EntityId => entityId(decisionId),
 
   /** Pre-close reminder: one form-closing action per form and recipient. */
-  preCloseReminder: (formId: Id): Id => entityId(formId),
+  preCloseReminder: (formId: Id): EntityId => entityId(formId),
 
   /** Overdue reminder: one overdue action per speaker-task row and recipient. */
-  overdueTaskReminder: (taskId: Id): Id => entityId(taskId),
+  overdueTaskReminder: (taskId: Id): EntityId => entityId(taskId),
 
   /** Co-speaker invitation: the participation row is the invitation being sent. */
-  coSpeakerInvitation: (participationId: Id): Id => entityId(participationId),
+  coSpeakerInvitation: (participationId: Id): EntityId => entityId(participationId),
 
   /** Public form confirmation: one confirmation for the newly created submission. */
-  formConfirmation: (submissionId: Id): Id => entityId(submissionId),
+  formConfirmation: (submissionId: Id): EntityId => entityId(submissionId),
 
   /** Draft resume link: currently one action per draft submission; Bug A adds the request tail. */
-  draftResume: (submissionId: Id): Id => entityId(submissionId),
+  draftResume: (submissionId: Id): EntityId => entityId(submissionId),
 
   /** Admin notification: one newly received submission per notified admin. */
-  adminNotification: (submissionId: Id, adminId: Id): Id => entityId(`${submissionId}:admin:${adminId}`),
+  adminNotification: (submissionId: Id, adminId: Id): EntityId => entityId(`${submissionId}:admin:${adminId}`),
 
   /**
    * Attendee claim: deliberately never deduplicated. Every request is a new
    * claim-mail action, even when the code and recipient are unchanged.
    */
-  attendeeClaim: (code: string, requestedAt: number): Id => entityId(`attendee_schedule_claim:${code}:${requestedAt}`),
+  attendeeClaim: (code: string, requestedAt: number): EntityId => entityId(`attendee_schedule_claim:${code}:${requestedAt}`),
 
   /** Reviewer reminder: one rung per reviewer, round, and conference-local day. */
-  reviewerReminder: (roundId: Id, personId: Id, reminderDay: string): Id => entityId(`${roundId}:${personId}:${reminderDay}`),
+  reviewerReminder: (roundId: Id, personId: Id, reminderDay: string): EntityId => entityId(`${roundId}:${personId}:${reminderDay}`),
 
   /** Calendar request/cancel: submission, recipient, sequence, and RFC method are the revisioned grain. */
-  calendar: (submissionId: Id, personId: Id, sequence: number, method: "REQUEST" | "CANCEL"): Id =>
+  calendar: (submissionId: Id, personId: Id, sequence: number, method: "REQUEST" | "CANCEL"): EntityId =>
     entityId(`${submissionId}:${personId}:${sequence}:${method}`),
 
   /** Auth mail tied to a minted link: the link row is the one-time send action. */
-  authLink: (linkId: Id): Id => entityId(linkId),
+  authLink: (linkId: Id): EntityId => entityId(linkId),
 
   /** Auth mail without a pre-minted link: one template/person/clock attempt. */
-  authAttempt: (templateKey: string, personId: Id, requestedAt: number): Id => entityId(`${templateKey}:${personId}:${requestedAt}`),
+  authAttempt: (templateKey: string, personId: Id, requestedAt: number): EntityId => entityId(`${templateKey}:${personId}:${requestedAt}`),
 
   /** Ad-hoc send: preserve the recipient business entity for timeline joins. */
-  customRecipient: (recipientId: Id): Id => entityId(recipientId),
+  customRecipient: (recipientId: Id): EntityId => entityId(recipientId),
 });

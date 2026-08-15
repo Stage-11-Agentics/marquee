@@ -1,5 +1,5 @@
 import type { Id } from "../../db/schema";
-import { IDEMPOTENCY_REGISTRY } from "../../jobs/mail/idempotency";
+import { IDEMPOTENCY_REGISTRY, type EntityId } from "../../jobs/mail/idempotency";
 import { enqueueOutbox } from "../../jobs/mail/outbox";
 
 export const AUTH_TEMPLATE_KEYS = ["magic_link_login", "portal_invite", "draft_resume", "task_link"] as const;
@@ -22,7 +22,7 @@ export async function enqueueAuthMail(
     subject: string;
     text: string;
     html: string;
-    entityId?: Id;
+    entityId?: EntityId;
     now?: number;
   },
 ): Promise<Id> {

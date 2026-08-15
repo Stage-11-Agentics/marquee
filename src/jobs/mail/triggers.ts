@@ -1,7 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import type { Id } from "../../db/schema";
-import { IDEMPOTENCY_REGISTRY } from "./idempotency";
+import { IDEMPOTENCY_REGISTRY, type EntityId } from "./idempotency";
 import { enqueueOutbox, type EnqueuedOutbox } from "./outbox";
 import { selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "./schedule";
 import { findTemplate, TRIGGER_TEMPLATE_KEYS, type MailTemplateKey } from "./templates";
@@ -14,7 +14,7 @@ export interface TriggerInput {
   db: D1Database;
   eventId: Id;
   templateKey: TriggerKey;
-  entityId: Id;
+  entityId: EntityId;
   personId: Id;
   toEmail: string;
   data?: MergeData;
@@ -37,7 +37,7 @@ export async function enqueueBulkReminder(input: {
   eventId: Id;
   templateKey?: MailTemplateKey;
   recipients: Array<{
-    entityId: Id;
+    entityId: EntityId;
     personId: Id;
     toEmail: string;
     data?: MergeData;

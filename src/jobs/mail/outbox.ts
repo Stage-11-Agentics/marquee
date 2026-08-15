@@ -2,6 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import type { Id, OutboxRow, OutboxSendPolicy } from "../../db/schema";
 import { sha256Hex } from "../../lib/auth/random-token";
+import type { EntityId } from "./idempotency";
 import { renderAdHocMail, renderMail, type MergeData } from "./render";
 import { findTemplate } from "./templates";
 
@@ -9,7 +10,7 @@ export interface EnqueueOutboxInput {
   db: D1Database;
   eventId: Id;
   templateKey: string;
-  entityId: Id;
+  entityId: EntityId;
   personId?: Id | null;
   toEmail: string;
   data?: MergeData;
