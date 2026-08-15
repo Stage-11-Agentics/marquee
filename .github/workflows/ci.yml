@@ -32,6 +32,7 @@ jobs:
       - run: npx tsc -p tsconfig.json --noEmit
       - run: npx tsc -p tsconfig.client.json --noEmit
       - run: npx tsc -p tsconfig.test.json --noEmit
+      - run: npm run check:no-op-tests
       - run: npx vite build
       - run: npm run check:design
       - run: npm run check:clocks
