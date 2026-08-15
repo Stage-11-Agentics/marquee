@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, test } from "vitest";
 import sessionsCsv from "../../../fixtures/sessionize/sessions.csv?raw";
 import speakersCsv from "../../../fixtures/sessionize/speakers.csv?raw";
 import { createSession } from "../../../src/lib/auth/auth-sessions";
+import { defaultMapping, parseCsv, runSessionizeImport, stableImportId } from "../../../src/lib/sessionize-import";
 import { applyMigrations, env } from "../apply-migrations";
 
 const ORIGIN = "https://marquee.stage11.dev";
@@ -18,6 +19,8 @@ const PREEXISTING_MEMBERSHIP_ID = "membership_mrq31_preexisting";
 const SEEDED_SUBMISSION_ID = "submission_mrq31_seeded";
 const SEEDED_EVALUATION_ID = "evaluation_mrq31_seeded";
 const SESSION_ID = "session_mrq31_import";
+const MRQ231_REVIEWER_ID = "person_mrq231_reviewer";
+const MRQ231_REVIEWER_SESSION_ID = "session_mrq231_reviewer";
 
 let ownerCookie = "";
 
@@ -58,7 +61,7 @@ async function request(path: string, init: RequestInit = {}, cookie = ownerCooki
 }
 
 async function counts(): Promise<Record<string, number>> {
-  const tables = ["people", "submissions", "participations", "evaluations", "submission_answers", "attachments", "forms"];
+  const tables = ["people", "submissions", "submission_tracks", "participations", "evaluations", "submission_answers", "attachments", "forms"];
   const entries = await Promise.all(tables.map(async (table) => {
     const row = await env.DB.prepare(`SELECT COUNT(*) AS count FROM ${table}`).first<{ count: number }>();
     return [table, Number(row?.count ?? 0)] as const;
@@ -96,6 +99,58 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     expect(headshot?.r2_key).toBe("external:https://cdn.example.test/ada.jpg");
     const relationships = await env.DB.prepare("SELECT COUNT(*) AS count FROM participations p JOIN submissions s ON s.id = p.submission_id WHERE s.event_id = ? AND s.origin = 'import'").bind(EVENT_ID).first<{ count: number }>();
     expect(Number(relationships?.count)).toBe(4);
+    const importedTrack = await env.DB.prepare(
+      `SELECT s.id AS submission_id, st.track_id, st.is_primary
+       FROM submissions s
+       JOIN submission_tracks st ON st.submission_id = s.id
+       WHERE s.event_id = ? AND s.external_ref = 'sess-trust-101'`,
+    ).bind(EVENT_ID).first<{ is_primary: number; submission_id: string; track_id: string }>();
+    expect(importedTrack).toMatchObject({ is_primary: 1, track_id: "track_mrq31_platform" });
+
+    const filtered = await request(`/api/v1/events/${EVENT_ID}/submissions?track=track_mrq31_platform&per_page=50`);
+    expect(filtered.status).toBe(200);
+    const filteredBody = await filtered.json<{ data: Array<{ id: string; tracks: Array<{ id: string }> }> }>();
+    expect(filteredBody.data.some((row) => row.id === importedTrack?.submission_id && row.tracks.some((track) => track.id === "track_mrq31_platform"))).toBe(true);
+
+    if (!importedTrack?.submission_id) throw new Error("imported submission was not found");
+    const importedRoundId = stableImportId("round", EVENT_ID);
+    const now = Date.now();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, 'mrq231-reviewer@example.test', 'MRQ-231 Reviewer', '[]', 0, 'marquee', ?, ?)").bind(MRQ231_REVIEWER_ID, ORG_ID, now, now),
+      env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('membership_mrq231_reviewer', ?, ?, ?, 'reviewer', ?, ?)").bind(ORG_ID, EVENT_ID, MRQ231_REVIEWER_ID, now, now),
+      env.DB.prepare("INSERT INTO reviewer_track_scopes (id, event_id, person_id, track_id, created_at, updated_at) VALUES ('scope_mrq231_platform', ?, ?, 'track_mrq31_platform', ?, ?)").bind(EVENT_ID, MRQ231_REVIEWER_ID, now, now),
+      env.DB.prepare("INSERT INTO round_assignments (id, round_id, submission_id, reviewer_person_id, committee_id, status, created_at, updated_at) VALUES ('assignment_mrq231_imported', ?, ?, ?, NULL, 'assigned', ?, ?)").bind(importedRoundId, importedTrack.submission_id, MRQ231_REVIEWER_ID, now, now),
+      env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'reviewer', ?, 'mrq231-reviewer', NULL, ?, ?)").bind(MRQ231_REVIEWER_SESSION_ID, MRQ231_REVIEWER_ID, now + 86_400_000, now, now),
+    ]);
+    const reviewerQueue = await request(`/api/v1/events/${EVENT_ID}/rounds/${importedRoundId}/queue`, {}, `mq_session=${MRQ231_REVIEWER_SESSION_ID}`);
+    expect(reviewerQueue.status).toBe(200);
+    const reviewerQueueBody = await reviewerQueue.json<{ data: Array<{ id: string }> }>();
+    expect(reviewerQueueBody.data.map((row) => row.id)).toContain(importedTrack.submission_id);
+    await env.DB.prepare("DELETE FROM round_assignments WHERE id = 'assignment_mrq231_imported'").run();
+
+    // A legacy import-origin row can predate the join write. A speakers-only
+    // run has no session row to touch it, so only the scoped backfill can repair
+    // the missing canonical track relation.
+    const legacySubmissionId = "submission_mrq231_legacy";
+    await env.DB.prepare(
+      `INSERT INTO submissions
+       (id, event_id, kind, bypass_evaluation, title, abstract, status, primary_track_id, origin,
+        vendor_affiliation, submitter_person_id, submitted_at, last_saved_at, is_published,
+        external_ref, last_write_source, created_at, updated_at)
+       VALUES (?, ?, 'abstract', 0, 'Legacy imported row', 'Needs track backfill.', 'submitted',
+        'track_mrq31_platform', 'import', 'none', ?, ?, ?, 0, ?, 'marquee', ?, ?)`,
+    ).bind(legacySubmissionId, EVENT_ID, OWNER_ID, now, now, "legacy-mrq231", now, now).run();
+    await runSessionizeImport(
+      env.DB,
+      EVENT_ID,
+      uploadBody.id,
+      { speakers_csv: speakersCsv },
+      { sessions: defaultMapping("sessions", []), speakers: defaultMapping("speakers", parseCsv(speakersCsv).headers) },
+    );
+    const repairedLegacyTrack = await env.DB.prepare("SELECT track_id, is_primary FROM submission_tracks WHERE submission_id = ?").bind(legacySubmissionId).first<{ is_primary: number; track_id: string }>();
+    expect(repairedLegacyTrack).toEqual({ is_primary: 1, track_id: "track_mrq31_platform" });
+    await env.DB.prepare("DELETE FROM submissions WHERE id = ?").bind(legacySubmissionId).run();
+
     const matchedEvaluation = await env.DB.prepare("SELECT score, comment, reviewer_person_id FROM evaluations WHERE submission_id = (SELECT id FROM submissions WHERE external_ref = 'sess-trust-101')").first<{ score: number; comment: string; reviewer_person_id: string }>();
     expect(matchedEvaluation).toMatchObject({ score: 4.5, comment: "Clear and useful for organizers.", reviewer_person_id: "person_mrq31_reviewer" });
     const unattributed = await env.DB.prepare("SELECT score, comment FROM evaluations WHERE submission_id = (SELECT id FROM submissions WHERE external_ref = 'sess-trust-102')").first<{ score: number; comment: string }>();
@@ -166,6 +221,7 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     expect(undoFirst.status).toBe(200);
     expect(await undoFirst.json()).toMatchObject({ retained_manifest: true });
     expect(await env.DB.prepare("SELECT id FROM submissions WHERE origin = 'import'").all()).toMatchObject({ results: [] });
+    expect(await env.DB.prepare("SELECT id FROM submission_tracks WHERE submission_id NOT IN (SELECT id FROM submissions)").all()).toMatchObject({ results: [] });
     expect(await env.DB.prepare("SELECT id FROM people WHERE email = 'ada@example.test'").first()).toBeNull();
     expect(await env.DB.prepare("SELECT id FROM attachments WHERE owner_type = 'person_headshot' AND r2_key LIKE 'external:%'").first()).toBeNull();
     expect(await Promise.all([
