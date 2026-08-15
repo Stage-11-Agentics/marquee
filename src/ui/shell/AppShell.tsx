@@ -66,6 +66,26 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const { eventId } = useEventContext();
   const [resetting, setResetting] = useState(false);
   const [toast, setToast] = useState("");
+  // A receipt is an event, not a state the shell settles into. The binding
+  // design clears a receipt after 2.4s and re-shows it on every call — holding
+  // one forever means a screen whose buttons all say the same words (Agents:
+  // four Copy prompts, one message) stops answering the second click. The
+  // counter is what makes a repeat of the SAME string an event: it changes when
+  // the message does not, so the timer below restarts.
+  const [toastSeq, setToastSeq] = useState(0);
+  // A failure is the one receipt that must not time out from under the person
+  // reading it. Everything else on this channel is a confirmation.
+  const [toastHolds, setToastHolds] = useState(false);
+  const showToast = useCallback((message: string, holds = false) => {
+    setToast(message);
+    setToastHolds(holds);
+    setToastSeq((seq) => seq + 1);
+  }, []);
+  useEffect(() => {
+    if (toast.length === 0 || toastHolds) return;
+    const timer = window.setTimeout(() => setToast(""), 2400);
+    return () => window.clearTimeout(timer);
+  }, [toast, toastSeq, toastHolds]);
   const { seat, blocked } = useSeat();
   // The portal and the co-speaker page already answer their own 401 in their own
   // chrome; raising a second wall over theirs would be two answers to one
@@ -95,7 +115,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
     if (!window.confirm("Reset the demo conference? This removes demo edits, submissions, uploads, and queued work.")) return;
 
     setResetting(true);
-    setToast("Resetting demo…");
+    showToast("Resetting demo…");
     try {
       const body = await apiFetch<ResetResponse>("/api/v1/admin/reset-demo", {
         method: "POST",
@@ -121,24 +141,24 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
       }
       if (status !== "done") throw new Error("The demo reset timed out after 20 seconds");
 
-      setToast("Demo reset complete. Reloading…");
+      showToast("Demo reset complete. Reloading…");
       window.setTimeout(() => window.location.reload(), 250);
     } catch (error) {
       setResetting(false);
-      setToast("Reset failed: " + errorSummary(error));
+      showToast("Reset failed: " + errorSummary(error), true);
     }
-  }, [resetting]);
+  }, [resetting, showToast]);
 
   // A screen that is about to navigate away hands its receipt to the host that
   // outlives it.
   useEffect(() => {
     const onAnnounced = (event: Event) => {
       const message = (event as CustomEvent<string>).detail;
-      if (typeof message === "string" && message.length > 0) setToast(message);
+      if (typeof message === "string" && message.length > 0) showToast(message);
     };
     window.addEventListener(TOAST_EVENT, onAnnounced);
     return () => window.removeEventListener(TOAST_EVENT, onAnnounced);
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     const isNonAdminShell = location.pathname === "/portal" || location.pathname === "/sponsor-portal" || location.pathname === "/reviewer" || location.pathname === "/reviewer/queue" || location.pathname === "/co-speaker";

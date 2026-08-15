@@ -128,7 +128,7 @@ describe("MRQ-219 · the roster and the contract cards", () => {
     for (const agent of AGENTS_ROSTER) {
       expect(markup, agent.name).toContain(agent.name);
       expect(markup, agent.role).toContain(agent.role);
-      expect(markup, agent.prompt).toContain(agent.prompt.replaceAll("—", "—"));
+      expect(markup, agent.prompt).toContain(agent.prompt);
       // One sentence per card is the ruling; a second full stop mid-copy is
       // allowed only where the prototype has one, so assert the copy itself.
       expect(markup).toContain(agent.copy);
@@ -172,8 +172,24 @@ describe("MRQ-219 · copying is the page's only write", () => {
     expect(page).toContain("navigator.clipboard");
     // Nothing swaps a button label: the toast is the confirmation, so no
     // control resizes under the operator's cursor (DESIGN.md, elements never
-    // jump). Every button on the page renders a fixed string.
-    expect(page).not.toMatch(/setState\(["']copied["']\)/);
+    // jump). Every button on the page renders a literal, so the rendered labels
+    // are the whole set — assert them rather than a spelling of their absence.
+    const labels = [...markup.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((match) => match[1]);
+    expect(labels).toEqual(["Copy prompt", "Copy the URL →", "Copy prompt", "Copy prompt", "Copy prompt", "Copy prompt"]);
+  });
+
+  it("CONTRACT · MRQ-219 AC2/AC3 — a repeated receipt is still an event", () => {
+    // Four of this page's five buttons announce the SAME words, and the shell
+    // holds one message: writing an identical string renders nothing, so the
+    // second Copy would leave the screen unchanged. The binding prototype's
+    // toast clears itself after 2.4s and re-shows on every call; the shell now
+    // does the same, and the counter is what makes a repeat a change.
+    const shell = read("src/ui/shell/AppShell.tsx");
+    expect(shell).toMatch(/setToastSeq\(\(seq\) => seq \+ 1\)/);
+    expect(shell).toMatch(/setTimeout\(\(\) => setToast\(""\), 2400\)/);
+    expect(shell).toMatch(/\}, \[toast, toastSeq, toastHolds\]\)/);
+    // …and a failure is the one receipt that does not time out.
+    expect(shell).toMatch(/showToast\("Reset failed: " \+ errorSummary\(error\), true\)/);
   });
 
   it("CONTRACT · MRQ-219 AC8 — the instance still serves the skill the prompt tells an agent to fetch", () => {
