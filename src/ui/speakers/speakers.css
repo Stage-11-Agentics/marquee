@@ -66,6 +66,8 @@
 
 .speaker-board-state { align-items: center; color: var(--muted); display: grid; gap: 6px; min-height: 180px; padding: 24px; place-items: center; text-align: center; }
 .speaker-board-state.error { color: var(--alarm); }
+.speaker-tablefoot { align-items: center; background: var(--sunk); border-top: 1px solid var(--line); color: var(--muted); display: flex; font: 10px/1 var(--mono); gap: 12px; justify-content: space-between; padding: 9px 10px; }
+.speaker-pager { align-items: center; display: flex; gap: 8px; }
 
 /* Above the sticky topbar (z-index 50), matching the drawer layer convention
    in components.css and the onboarding board. At 40 the topbar painted over the
@@ -118,4 +120,18 @@
   .speaker-form-grid { grid-template-columns: minmax(0, 1fr); }
   .speaker-board-tools { align-items: stretch; flex-direction: column; }
   .speaker-search { min-width: 0; }
+}
+
+@media (max-width: 760px) {
+  .speaker-table-wrap { overflow-x: hidden; }
+  .speaker-table { min-width: 0; table-layout: fixed; }
+  .speaker-table th, .speaker-table td { padding: 9px 6px; }
+  .speaker-table .speaker-profile-column, .speaker-table .speaker-sessions-column, .speaker-table .speaker-tasks-column { display: none; }
+  .speaker-status-column { width: 98px; }
+  .speaker-action-column { width: 68px; }
+  .speaker-link { min-width: 0; }
+  .speaker-link > span:last-child { min-width: 0; }
+  .speaker-status { min-height: 32px; width: 100%; }
+  .speaker-tablefoot { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .speaker-pager { width: 100%; justify-content: space-between; }
 }

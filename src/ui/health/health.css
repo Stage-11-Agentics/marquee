@@ -7,7 +7,8 @@
  * a state flips.
  */
 
-.health-page { display: grid; gap: 14px; }
+.health-page { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.health-page > * { min-width: 0; }
 
 /* --- status mark: one fixed-width part used by every surface on the screen --- */
 .health-level { align-items: center; display: inline-flex; flex: 0 0 auto; gap: 6px; width: 86px; }
@@ -109,7 +110,8 @@
 @media (max-width: 760px) {
   .health-summary { grid-template-columns: 86px minmax(0, 1fr); }
   .health-checked { grid-column: 2; text-align: left; }
-  .health-quota-figures, .health-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .health-quota-figures { grid-template-columns: minmax(0, 1fr); }
+  .health-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .health-total:nth-child(2n) { border-right: 0; }
   .health-total:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
 }

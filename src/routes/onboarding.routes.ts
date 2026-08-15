@@ -11,6 +11,8 @@ const onboardingQuery = z.object({
   task_type: z.string().trim().min(1).max(100).optional(),
   track: z.string().trim().min(1).max(100).optional(),
   q: z.string().trim().min(1).max(200).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  per_page: z.coerce.number().int().min(1).max(100).default(50),
 });
 
 const listOnboardingRoute = defineApiRoute(
@@ -33,6 +35,8 @@ const listOnboardingRoute = defineApiRoute(
       taskType: query.task_type,
       track: query.track,
       search: query.q,
+      page: query.page,
+      perPage: query.per_page,
     }), 200);
   },
 );

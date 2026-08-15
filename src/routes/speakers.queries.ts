@@ -129,12 +129,18 @@ export interface SpeakerRosterSnapshot {
   tracks: SpeakerTrack[];
   rows: SpeakerRow[];
   total: number;
+  matching_total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
 }
 
 export interface SpeakerFilters {
   search?: string;
   status?: SpeakerStatus | "all";
   track?: string;
+  page?: number;
+  perPage?: number;
 }
 
 interface PersonQueryRow {
@@ -344,7 +350,7 @@ export async function listSpeakers(
   const participationsByPerson = groupBy(participations, (row) => row.person_id);
   const tracksByPerson = groupBy(tracks, (row) => row.person_id);
   const tasksByPerson = new Map(tasks.map((row) => [row.person_id, row]));
-  const rows = people.map((person) =>
+  const allRows = people.map((person) =>
     buildRow(
       person,
       participationsByPerson.get(person.id) ?? [],
@@ -353,20 +359,28 @@ export async function listSpeakers(
     ),
   );
   const counts = {
-    all: rows.length,
-    pending: rows.filter((row) => row.status === "pending").length,
-    invited: rows.filter((row) => row.status === "invited").length,
-    confirmed: rows.filter((row) => row.status === "confirmed").length,
-    declined: rows.filter((row) => row.status === "declined").length,
+    all: allRows.length,
+    pending: allRows.filter((row) => row.status === "pending").length,
+    invited: allRows.filter((row) => row.status === "invited").length,
+    confirmed: allRows.filter((row) => row.status === "confirmed").length,
+    declined: allRows.filter((row) => row.status === "declined").length,
   };
   const trackFacets = new Map<string, SpeakerTrack>();
   for (const track of tracks) trackFacets.set(track.id, { id: track.id, name: track.name, color: track.color });
+  const filteredRows = allRows.filter((row) => speakerMatchesFilters(row, filters));
+  const page = Math.max(1, filters.page ?? 1);
+  const perPage = Math.max(1, filters.perPage ?? 50);
+  const totalPages = filteredRows.length === 0 ? 0 : Math.ceil(filteredRows.length / perPage);
   return {
     generated_at: now,
     counts,
     tracks: [...trackFacets.values()],
-    rows: rows.filter((row) => speakerMatchesFilters(row, filters)),
-    total: rows.length,
+    rows: filteredRows.slice((page - 1) * perPage, page * perPage),
+    total: allRows.length,
+    matching_total: filteredRows.length,
+    page,
+    per_page: perPage,
+    total_pages: totalPages,
   };
 }
 

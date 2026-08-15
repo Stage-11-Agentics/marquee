@@ -101,6 +101,10 @@ export interface OnboardingSnapshot {
   };
   task_templates: OnboardingTaskTemplate[];
   rows: OnboardingRow[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
 }
 
 export interface OnboardingFilters {
@@ -108,6 +112,8 @@ export interface OnboardingFilters {
   taskType?: string;
   track?: string;
   search?: string;
+  page?: number;
+  perPage?: number;
 }
 
 interface SpeakerBaseRow {
@@ -536,6 +542,10 @@ export async function listOnboarding(
     timezone: task.timezone,
   }, now)).length;
   const filteredRows = rows.filter((row) => rowMatchesOnboardingFilters(row, filters)).sort(compareOnboardingRows);
+  const page = Math.max(1, filters.page ?? 1);
+  const perPage = Math.max(1, filters.perPage ?? 50);
+  const total = filteredRows.length;
+  const totalPages = total === 0 ? 0 : Math.ceil(total / perPage);
   return {
     generated_at: now,
     risk_window_days: ONBOARDING_RISK_WINDOW_DAYS,
@@ -553,7 +563,11 @@ export async function listOnboarding(
     },
     facets: { task_types: taskTypeFacets(rows, templates), tracks: trackFacets(rows) },
     task_templates: templates,
-    rows: filteredRows,
+    rows: filteredRows.slice((page - 1) * perPage, page * perPage),
+    total,
+    page,
+    per_page: perPage,
+    total_pages: totalPages,
   };
 }
 

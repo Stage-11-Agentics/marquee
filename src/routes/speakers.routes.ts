@@ -33,6 +33,8 @@ const rosterQuery = z.object({
   q: z.string().trim().max(200).optional(),
   status: z.enum(["all", "pending", "invited", "confirmed", "declined"]).default("all"),
   track: z.string().trim().min(1).max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  per_page: z.coerce.number().int().min(1).max(100).default(50),
 });
 
 const customFieldsSchema = z.record(z.string().min(1).max(80), z.string().max(2_000));
@@ -91,6 +93,10 @@ const rosterSchema = z.object({
   tracks: z.array(z.object({ id: z.string(), name: z.string(), color: z.string() })),
   rows: z.array(speakerSchema),
   total: z.number(),
+  matching_total: z.number(),
+  page: z.number(),
+  per_page: z.number(),
+  total_pages: z.number(),
 }).openapi("SpeakerRoster");
 
 const speakerResponseSchema = z.object({ speaker: speakerSchema }).openapi("SpeakerResponse");
@@ -174,7 +180,7 @@ const listRoster = defineApiRoute(
     const query = context.req.valid("query");
     await eventFor(context.env.DB, eventId);
     return context.json(
-      await listSpeakers(context.env.DB, eventId, { search: query.q, status: query.status, track: query.track }),
+      await listSpeakers(context.env.DB, eventId, { search: query.q, status: query.status, track: query.track, page: query.page, perPage: query.per_page }),
       200,
     );
   },
