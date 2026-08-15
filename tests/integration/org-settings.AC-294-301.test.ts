@@ -24,6 +24,10 @@ import { applyMigrations, env } from "./apply-migrations";
 
 const ORIGIN = "https://marquee.stage11.dev";
 const NOW = Date.UTC(2026, 7, 14, 12, 0, 0);
+// Agenda starts are compared with the server's real clock; keep this future
+// enough for the live test without pinning a time-compared column to the
+// fixture's calendar anchor.
+const LIVE_AGENDA_START = Date.now() + 86_400_000;
 /**
  * Task deadlines are compared against the real clock by the server, so this one
  * column is derived from it rather than from the pinned fixture anchor — a
@@ -583,7 +587,7 @@ test("AC-299 · removing a person from a conference ends their work there and le
     env.DB.prepare(
       `INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
        VALUES ('agenda_live', ?, 'sub_live', 'session', ?, 30, 'room_remove207', 1, ?, ?)`,
-    ).bind(eventId, NOW + 86_400_000, NOW, NOW),
+    ).bind(eventId, LIVE_AGENDA_START, NOW, NOW),
     env.DB.prepare(
       "INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_a', 'sub_live', 'per_speaker', 'speaker', 0, ?, ?)",
     ).bind(NOW, NOW),
