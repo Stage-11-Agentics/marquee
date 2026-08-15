@@ -312,6 +312,30 @@ function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
+const UTF8_ENCODER = new TextEncoder();
+
+/** SQLite NOCASE folds ASCII letters only, then compares UTF-8 bytes. */
+function compareSqlNoCase(left: string, right: string): number {
+  const foldAscii = (value: string) => value.replace(/[A-Z]/g, (character) => String.fromCharCode(character.charCodeAt(0) + 32));
+  const leftBytes = UTF8_ENCODER.encode(foldAscii(left));
+  const rightBytes = UTF8_ENCODER.encode(foldAscii(right));
+  const length = Math.min(leftBytes.length, rightBytes.length);
+  for (let index = 0; index < length; index += 1) {
+    if (leftBytes[index] !== rightBytes[index]) return leftBytes[index]! - rightBytes[index]!;
+  }
+  return leftBytes.length - rightBytes.length;
+}
+
+function compareSqlBinary(left: string, right: string): number {
+  const leftBytes = UTF8_ENCODER.encode(left);
+  const rightBytes = UTF8_ENCODER.encode(right);
+  const length = Math.min(leftBytes.length, rightBytes.length);
+  for (let index = 0; index < length; index += 1) {
+    if (leftBytes[index] !== rightBytes[index]) return leftBytes[index]! - rightBytes[index]!;
+  }
+  return leftBytes.length - rightBytes.length;
+}
+
 export function isOwedTask(task: { status: "open" | "done"; cancelled_at: number | null }): boolean {
   return task.status === "open" && task.cancelled_at === null;
 }
@@ -514,8 +538,8 @@ export function compareOnboardingRows(
 ): number {
   return right.severity - left.severity
     || right.risk_task_count - left.risk_task_count
-    || left.person.name.localeCompare(right.person.name)
-    || left.person.id.localeCompare(right.person.id);
+    || compareSqlNoCase(left.person.name, right.person.name)
+    || compareSqlBinary(left.person.id, right.person.id);
 }
 
 function queryJsonIds(ids: readonly string[]): string {
