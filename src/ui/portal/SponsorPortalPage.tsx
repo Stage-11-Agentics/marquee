@@ -505,7 +505,10 @@ function SponsorPortalPage(): JSX.Element {
             </div>
           </header>
           <div class="portal-panel-body">
-            <p class="sponsor-anyone-note">{overdue > 0 ? "Complete the overdue item first. " : "Nothing is overdue right now. "}Anyone at {sponsorship.company.name} can complete any item, and whoever does is recorded on it.</p>
+            {/* "Finish the overdue item" names the button on the rows below it.
+                An instruction whose verb is not the label of the control it
+                points at leaves the reader hunting. */}
+            <p class="sponsor-anyone-note">{overdue > 0 ? "Finish the overdue item first. " : "Nothing is overdue right now. "}Anyone at {sponsorship.company.name} can complete any item, and whoever does is recorded on it.</p>
             <div class="portal-task-list">
               {live.length === 0
                 ? <div class="portal-empty">No deliverables are on this sponsorship yet. Your organizer adds them as the conference approaches.</div>
