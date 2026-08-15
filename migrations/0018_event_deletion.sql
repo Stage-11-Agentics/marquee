@@ -97,14 +97,16 @@ CREATE INDEX idx_magic_links_event_created ON magic_links(event_id, created_at);
 -- counter only leaves zero when no child row references the table at the
 -- moment it is dropped -- which is why an empty database migrates and a
 -- populated one does not.  Park the references, rebuild, then put them back.
-CREATE TABLE attachments_fk_parked (
+-- The `_new` suffix is this repo's marker for a table that exists only inside
+-- a rebuild; it keeps the parking table out of the product table registry.
+CREATE TABLE attachments_fk_parked_new (
   child_table TEXT NOT NULL,
   child_id TEXT NOT NULL,
   attachment_id TEXT NOT NULL
 );
-INSERT INTO attachments_fk_parked SELECT 'people', id, headshot_attachment_id FROM people WHERE headshot_attachment_id IS NOT NULL;
-INSERT INTO attachments_fk_parked SELECT 'speaker_tasks', id, attachment_id FROM speaker_tasks WHERE attachment_id IS NOT NULL;
-INSERT INTO attachments_fk_parked SELECT 'file_comments', id, attachment_id FROM file_comments WHERE attachment_id IS NOT NULL;
+INSERT INTO attachments_fk_parked_new SELECT 'people', id, headshot_attachment_id FROM people WHERE headshot_attachment_id IS NOT NULL;
+INSERT INTO attachments_fk_parked_new SELECT 'speaker_tasks', id, attachment_id FROM speaker_tasks WHERE attachment_id IS NOT NULL;
+INSERT INTO attachments_fk_parked_new SELECT 'file_comments', id, attachment_id FROM file_comments WHERE attachment_id IS NOT NULL;
 
 UPDATE people SET headshot_attachment_id = NULL WHERE headshot_attachment_id IS NOT NULL;
 UPDATE speaker_tasks SET attachment_id = NULL WHERE attachment_id IS NOT NULL;
@@ -158,18 +160,18 @@ CREATE INDEX idx_attachments_submission_files ON attachments(owner_id, created_a
 CREATE INDEX idx_attachments_event_status_created ON attachments(event_id, status, created_at);
 
 UPDATE people SET headshot_attachment_id = (
-  SELECT parked.attachment_id FROM attachments_fk_parked parked
+  SELECT parked.attachment_id FROM attachments_fk_parked_new parked
   WHERE parked.child_table = 'people' AND parked.child_id = people.id
-) WHERE id IN (SELECT child_id FROM attachments_fk_parked WHERE child_table = 'people');
+) WHERE id IN (SELECT child_id FROM attachments_fk_parked_new WHERE child_table = 'people');
 
 UPDATE speaker_tasks SET attachment_id = (
-  SELECT parked.attachment_id FROM attachments_fk_parked parked
+  SELECT parked.attachment_id FROM attachments_fk_parked_new parked
   WHERE parked.child_table = 'speaker_tasks' AND parked.child_id = speaker_tasks.id
-) WHERE id IN (SELECT child_id FROM attachments_fk_parked WHERE child_table = 'speaker_tasks');
+) WHERE id IN (SELECT child_id FROM attachments_fk_parked_new WHERE child_table = 'speaker_tasks');
 
 UPDATE file_comments SET attachment_id = (
-  SELECT parked.attachment_id FROM attachments_fk_parked parked
+  SELECT parked.attachment_id FROM attachments_fk_parked_new parked
   WHERE parked.child_table = 'file_comments' AND parked.child_id = file_comments.id
-) WHERE id IN (SELECT child_id FROM attachments_fk_parked WHERE child_table = 'file_comments');
+) WHERE id IN (SELECT child_id FROM attachments_fk_parked_new WHERE child_table = 'file_comments');
 
-DROP TABLE attachments_fk_parked;
+DROP TABLE attachments_fk_parked_new;
