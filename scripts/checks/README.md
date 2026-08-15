@@ -69,6 +69,15 @@ These fourteen package-script names are immutable: `test`, `e2e`, `check:r2-cors
 
 Scaffold stubs write `status: "stub"` reports and exit zero for ordinary development. With `MARQUEE_GATE=1`, every stub exits non-zero so a terminal gate cannot confuse registration with proof. Stubs never contact a service or imply that a missing capability passed.
 
+`smoke:mail` and `smoke:ics` are live, externally configured oracles. They
+write `artifacts/checks/smoke-mail.json` and `artifacts/checks/smoke-ics.json`.
+Each run creates a new `smoke-<ULID>@<catch-all-domain>` recipient; `--to`
+selects a domain for compatibility with the frozen invocation and its supplied
+localpart is deliberately discarded. A bounced address must never be reused.
+The scripts submit through the real public form, query the private inbox D1 via
+Wrangler, and report `needs-human` when routing, database, credentials, or
+calendar-client setup is missing.
+
 ## Fast and slow suites
 
 `npm test` is hermetic, parallel, and hard-stopped before 30 seconds. It uses small deterministic fixtures and local Workers bindings. Outbound `fetch` is denied. It never uses a deployed URL, real Resend/Airtable/R2, the 1,000-row seed, Playwright, a container/history scan, inbox/calendar clients, or an agent runner.

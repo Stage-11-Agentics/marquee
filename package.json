@@ -30,8 +30,8 @@
     "check:mirror": "node scripts/checks/check-mirror.mjs",
     "check:mirror-imports": "node scripts/checks/check-mirror-imports.mjs",
     "reset:demo": "node scripts/reset-demo.mjs",
-    "smoke:mail": "node scripts/checks/stub-command.mjs smoke:mail MRQ-24 \"mail delivery and inbox oracle are not implemented\"",
-    "smoke:ics": "node scripts/checks/stub-command.mjs smoke:ics MRQ-24 \"calendar delivery and client confirmations are not implemented\"",
+    "smoke:mail": "node scripts/checks/smoke-mail.mjs",
+    "smoke:ics": "node scripts/checks/smoke-ics.mjs",
     "check:skill-agent": "node scripts/checks/stub-command.mjs check:skill-agent MRQ-44 \"SKILL, CLI, and isolated agent runner are not implemented\"",
     "check:design": "node scripts/checks/verify-design-contract.mjs",
     "pr-gate": "node scripts/checks/pr-gate.mjs"
