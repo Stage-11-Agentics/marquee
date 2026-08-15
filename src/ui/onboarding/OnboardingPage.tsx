@@ -5,6 +5,7 @@ import { type OnboardingFilter, type OnboardingRow, type OnboardingSnapshot, typ
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
+import { lockBodyScroll } from "../shell/OverlayHosts";
 import { orderNewestFirst } from "../shell/wide-grid";
 import { formatDueDate } from "../../lib/task-due";
 import { disambiguatedNames } from "../../lib/duplicate-names";
@@ -314,9 +315,8 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
     if (!drawer) return;
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setDrawer(null); };
     document.addEventListener("keydown", onKeyDown);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.removeEventListener("keydown", onKeyDown); document.body.style.overflow = previousOverflow; };
+    const releaseScrollLock = lockBodyScroll();
+    return () => { document.removeEventListener("keydown", onKeyDown); releaseScrollLock(); };
   }, [drawer]);
 
   useEffect(() => {

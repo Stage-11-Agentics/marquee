@@ -31,7 +31,7 @@ function visibleDialogControls(root: HTMLElement): HTMLElement[] {
 let scrollLockDepth = 0;
 let scrollLockPrevious = "";
 
-function lockBodyScroll(): () => void {
+export function lockBodyScroll(): () => void {
   if (scrollLockDepth === 0) scrollLockPrevious = document.body.style.overflow;
   scrollLockDepth += 1;
   document.body.style.overflow = "hidden";

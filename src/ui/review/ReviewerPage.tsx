@@ -8,6 +8,7 @@ import { ProfileForm, type PortalPerson } from "../portal/PortalPage";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, Chip, EmptyState } from "../shell/components";
 import { ThemeSwitch } from "../shell/ThemeSwitch";
+import { lockBodyScroll } from "../shell/OverlayHosts";
 import { useIdentity } from "../shell/identity";
 import { reviewerRevisionFor, reviewStateForRevision, reviewerRevisionId, reviewerRevisionPath } from "./reviewer-revision";
 import "./review.css";
@@ -597,8 +598,7 @@ export function ReviewerPage({ eventId, initialQueue, locationSearch: locationSe
   useEffect(() => {
     if (!detailOpen) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const oldOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = lockBodyScroll();
     detailRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") closeDetail();
@@ -606,7 +606,7 @@ export function ReviewerPage({ eventId, initialQueue, locationSearch: locationSe
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = oldOverflow;
+      releaseScrollLock();
       previous?.focus();
     };
   }, [detailOpen]);

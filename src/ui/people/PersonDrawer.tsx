@@ -13,6 +13,7 @@ import { useEffect, useState } from "preact/hooks";
 
 import { errorSummary } from "../shell/api-client";
 import { Button } from "../shell/components";
+import { lockBodyScroll } from "../shell/OverlayHosts";
 import {
   addNote,
   addTag,
@@ -74,11 +75,10 @@ export function PersonDrawer({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKeyDown);
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = lockBodyScroll();
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previous;
+      releaseScrollLock();
     };
   }, [onClose]);
 

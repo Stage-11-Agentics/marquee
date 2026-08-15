@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 
 import type { SpeakerRosterSnapshot, SpeakerRow, SpeakerStatus } from "../../routes/speakers.queries";
 import { apiFetch, errorSummary } from "../shell/api-client";
+import { lockBodyScroll } from "../shell/OverlayHosts";
 import { disambiguatedNames } from "../../lib/duplicate-names";
 import { Button, EmptyState, PageHeader } from "../shell/components";
 import { SpeakerAvatar } from "./SpeakerAvatar";
@@ -150,11 +151,10 @@ export function SpeakersPage({
     if (!deepLinkedPerson) return;
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeRecord(); };
     document.addEventListener("keydown", onKeyDown);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = lockBodyScroll();
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
     };
   }, [deepLinkedPerson]);
 
