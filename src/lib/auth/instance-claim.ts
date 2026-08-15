@@ -84,13 +84,7 @@ async function resolveOrganization(
     .first<OrganizationRow>();
   if (existing) return existing;
   const organization: OrganizationRow = {
-    accent: null,
-    comms_from_name: null,
-    comms_reply_to: null,
-    default_theme: null,
-    default_timezone: null,
     id: newUlid(now),
-    logo_key: null,
     name: "Your organization",
     slug: `org-${newUlid(now).toLowerCase()}`,
     // A brand-new organization has expressed no preferences. Every default
