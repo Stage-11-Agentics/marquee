@@ -19,6 +19,7 @@
     "check:shell-truth": "node scripts/checks/check-shell-truth.mjs",
     "check:routes": "node scripts/checks/check-routes.mjs",
     "check:clocks": "node scripts/checks/check-clocks.mjs",
+    "check:no-op-tests": "node scripts/checks/check-no-op-tests.mjs",
     "check:deploy": "node scripts/checks/check-deploy.mjs",
     "check:schema": "node scripts/checks/check-schema.mjs",
     "assemble:public": "node scripts/checks/assemble-public.mjs",
