@@ -139,6 +139,8 @@ test("CONTRACT · MRQ-131 · one list query: event_id is the only difference bet
   expect(statusCounts.sql).not.toMatch(/ORDER BY/);
   expect(statusCounts.sql).not.toMatch(/conference_count|person_events|outreach_next_touch_on/);
   expect(statusCounts.bindings).toEqual(["evt_1", "evt_1", "evt_1"]);
+  expect(speakerQueries).toMatch(/async function speakerStatusCounts[\s\S]*buildSpeakerStatusCountsQuery/);
+  expect(speakerQueries).toMatch(/export async function listSpeakers[\s\S]*speakerStatusCounts/);
 });
 
 test("CONTRACT · MRQ-131 · search, filters, and paging bind their values and never interpolate them", () => {
