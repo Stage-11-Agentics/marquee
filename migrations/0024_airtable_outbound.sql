@@ -48,11 +48,16 @@ BEGIN
   INSERT INTO mirror_outbox
     (id, table_name, row_id, op, payload, status, attempts, last_error,
      drained_at, created_at, updated_at)
-  VALUES
-    (lower(hex(randomblob(16))), 'people', NEW.id, 'upsert',
+  SELECT
+    lower(hex(randomblob(16))), 'people', NEW.id, 'upsert',
      json_object('marquee_id', NEW.id, 'org_id', NEW.org_id,
                  'last_write_source', NEW.last_write_source),
-     'queued', 0, NULL, NULL, NEW.created_at, NEW.updated_at);
+     'queued', 0, NULL, NULL, NEW.created_at, NEW.updated_at
+   WHERE NOT EXISTS (
+     SELECT 1 FROM mirror_outbox
+      WHERE table_name = 'people' AND row_id = NEW.id AND op = 'upsert'
+        AND drained_at IS NULL AND status IN ('queued', 'failed')
+   );
 END;
 
 CREATE TRIGGER mirror_people_delete
@@ -115,11 +120,16 @@ BEGIN
   INSERT INTO mirror_outbox
     (id, table_name, row_id, op, payload, status, attempts, last_error,
      drained_at, created_at, updated_at)
-  VALUES
-    (lower(hex(randomblob(16))), 'speaker_tasks', NEW.id, 'upsert',
+  SELECT
+    lower(hex(randomblob(16))), 'speaker_tasks', NEW.id, 'upsert',
      json_object('marquee_id', NEW.id, 'event_id', NEW.event_id,
                  'last_write_source', NEW.last_write_source),
-     'queued', 0, NULL, NULL, NEW.created_at, NEW.updated_at);
+     'queued', 0, NULL, NULL, NEW.created_at, NEW.updated_at
+   WHERE NOT EXISTS (
+     SELECT 1 FROM mirror_outbox
+      WHERE table_name = 'speaker_tasks' AND row_id = NEW.id AND op = 'upsert'
+        AND drained_at IS NULL AND status IN ('queued', 'failed')
+   );
 END;
 
 CREATE TRIGGER mirror_speaker_tasks_delete
@@ -182,11 +192,16 @@ BEGIN
   INSERT INTO mirror_outbox
     (id, table_name, row_id, op, payload, status, attempts, last_error,
      drained_at, created_at, updated_at)
-  VALUES
-    (lower(hex(randomblob(16))), 'submissions', NEW.id, 'upsert',
+  SELECT
+    lower(hex(randomblob(16))), 'submissions', NEW.id, 'upsert',
      json_object('marquee_id', NEW.id, 'event_id', NEW.event_id,
                  'last_write_source', NEW.last_write_source),
-     'queued', 0, NULL, NULL, NEW.created_at, NEW.updated_at);
+     'queued', 0, NULL, NULL, NEW.created_at, NEW.updated_at
+   WHERE NOT EXISTS (
+     SELECT 1 FROM mirror_outbox
+      WHERE table_name = 'submissions' AND row_id = NEW.id AND op = 'upsert'
+        AND drained_at IS NULL AND status IN ('queued', 'failed')
+   );
 END;
 
 CREATE TRIGGER mirror_submissions_delete

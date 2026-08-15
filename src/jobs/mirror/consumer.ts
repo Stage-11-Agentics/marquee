@@ -158,14 +158,16 @@ async function sendBatch(
   for (const [tableName, group] of tableGroups) {
     const airtableTableId = await tableId(db, tableName);
     if (!airtableTableId) continue;
-    for (const groupChunk of chunks(group, PROVIDER_BATCH_SIZE)) {
+    // D1's own derived-column triggers can produce more than one physical
+    // outbox row for a single write. The current D1 row is authoritative, so
+    // collapse one claimed batch to its latest row id before making provider
+    // calls; every physical row is still marked drained below.
+    const latestByRow = new Map<string, ClaimedMirrorRow>();
+    for (const row of group) latestByRow.set(row.row_id, row);
+    for (const groupChunk of chunks([...latestByRow.values()], PROVIDER_BATCH_SIZE)) {
       const upserts = [];
       const deletes: string[] = [];
       for (const row of groupChunk) {
-        if (row.op === "delete") {
-          deletes.push(parseMirrorOutboxPayload(row).marquee_id ?? row.row_id);
-          continue;
-        }
         const current = await currentAirtableRecord({ DB: env.DB, mirror: mirrorConfig(env)! }, tableName, row.row_id);
         if (current) upserts.push(current);
         else deletes.push(parseMirrorOutboxPayload(row).marquee_id ?? row.row_id);
@@ -176,7 +178,8 @@ async function sendBatch(
       if (deletes.length > 0) {
         await transport.deleteRecords({ tableId: airtableTableId, marqueeIds: deletes });
       }
-      await markDrained(db, groupChunk, now);
+      const rowIds = new Set(groupChunk.map((row) => row.row_id));
+      await markDrained(db, group.filter((row) => rowIds.has(row.row_id)), now);
     }
   }
 }
