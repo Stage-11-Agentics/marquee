@@ -2,6 +2,7 @@ import type { D1Database, MessageBatch, Queue } from "@cloudflare/workers-types"
 
 import type { OutboxRow } from "../../db/schema";
 import { writeAudit } from "../../lib/audit";
+import { demoMailAllowlistFor, normalizeAllowlistEmail } from "../../lib/demo-mail-allowlist";
 import { RESEND_MAIL_FROM } from "../../lib/mail/config";
 import { enqueueOverdueTaskReminderRows, enqueuePreCloseReminderRows } from "./triggers";
 
@@ -122,25 +123,6 @@ function createResendProvider(env: MailConsumerEnv): MailProvider {
   };
 }
 
-async function allowlistFor(db: D1Database, eventId: string): Promise<Set<string>> {
-  const setting = await db
-    .prepare("SELECT value_json FROM event_settings WHERE event_id = ? AND key = 'demo_safe_allowlist'")
-    .bind(eventId)
-    .first<{ value_json: string }>();
-  if (!setting) return new Set();
-  try {
-    const parsed = JSON.parse(setting.value_json) as unknown;
-    const values = Array.isArray(parsed)
-      ? parsed
-      : parsed && typeof parsed === "object" && Array.isArray((parsed as { emails?: unknown }).emails)
-        ? (parsed as { emails: unknown[] }).emails
-        : [];
-    return new Set(values.filter((value): value is string => typeof value === "string").map((value) => value.trim().toLowerCase()));
-  } catch {
-    return new Set();
-  }
-}
-
 /**
  * Exported so a route can tell an operator the truth at the moment they act.
  * A UI that says "invitation sent" while the consumer will suppress it is a
@@ -158,8 +140,8 @@ export async function demoMailWouldBeSuppressed(
     .bind(eventId)
     .first<{ demo_mode: 0 | 1 }>();
   if (!event || event.demo_mode !== 1) return false;
-  const allowlist = await allowlistFor(db, eventId);
-  return !allowlist.has(toEmail.trim().toLowerCase());
+  const allowlist = await demoMailAllowlistFor(db, eventId);
+  return !allowlist.includes(normalizeAllowlistEmail(toEmail));
 }
 
 async function shouldSuppress(db: D1Database, row: OutboxRow): Promise<boolean> {

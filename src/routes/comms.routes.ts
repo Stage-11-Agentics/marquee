@@ -19,6 +19,16 @@ import {
 import { renderAdHocMail, renderMail, type MergeData } from "../jobs/mail/render";
 import { mergeDataForRecipient, firstName } from "../jobs/mail/merge-data";
 import { mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../lib/mail-merge-fields";
+import {
+  DEMO_MAIL_ALLOWLIST_LIMIT,
+  demoMailAllowlistForOrgEvent,
+  demoMailEventInOrg,
+  describeRejectedEmail,
+  isAllowlistEmail,
+  normalizeAllowlistEmail,
+  parseAllowlist,
+  writeDemoMailAllowlistForOrgEvent,
+} from "../lib/demo-mail-allowlist";
 import type { OutboxRow } from "../db/schema";
 import {
   arrivalForSession,
@@ -115,6 +125,17 @@ const outboxListResponse = z.object({
   page: z.number(),
   per_page: z.number(),
   total: z.number(),
+});
+const demoMailAllowlistResponse = z.object({
+  data: z.object({
+    /** Whether suppression is actually in force here; outside demo mode the list is inert. */
+    demo_mode: z.boolean(),
+    limit: z.number().int().positive(),
+    emails: z.array(z.string()),
+  }),
+});
+const demoMailAllowlistInput = z.object({
+  emails: z.array(z.string().trim().min(1).max(254)).max(DEMO_MAIL_ALLOWLIST_LIMIT * 4),
 });
 const audienceQuerySchema = createListQuerySchema(
   { ...submissionFilterSchema.shape, task_state: z.enum(["open", "done"]).optional() },
@@ -979,6 +1000,123 @@ const listCommunicationAudience = defineApiRoute(
   },
 );
 
+/**
+ * Turning real mail on for an address is a heavier act than writing a message,
+ * so it takes the same authority as editing the conference record itself
+ * (`program:write`) rather than the ops role that may queue a send.
+ */
+function requireDemoMailAllowlistWrite(
+  context: Parameters<NonNullable<ApiRouteEntry["handler"]>>[0],
+  eventId: string,
+): void {
+  const auth = getAuth(context);
+  if (!auth) throw ApiError.unauthenticated();
+  if (auth.kind === "session") {
+    if (!authHasRole(auth, "program_lead", eventId)) {
+      throw ApiError.forbidden("changing which addresses receive real email requires a program lead or owner");
+    }
+    return;
+  }
+  if (!tokenHasGrant(auth, "program:write", eventId)) {
+    throw ApiError.forbidden("changing which addresses receive real email requires program:write");
+  }
+}
+
+/**
+ * The organization this credential belongs to. Every allowlist query is scoped
+ * by it, because a role alone does not answer "whose conference is this?" — an
+ * org-wide membership carries `event_id = null` and therefore matches any event
+ * id a caller cares to type, including another organization's.
+ */
+function demoMailAllowlistOrg(context: Parameters<NonNullable<ApiRouteEntry["handler"]>>[0]): string {
+  const auth = getAuth(context);
+  if (!auth) throw ApiError.unauthenticated();
+  return auth.orgId;
+}
+
+/**
+ * A conference outside this organization answers 404, not 403: it is not a
+ * permission to explain, it is a conference this caller has no way of knowing
+ * exists. The same convention `createEvent` already uses for `copy_from`.
+ */
+async function demoMailAllowlistState(
+  db: D1Database,
+  orgId: string,
+  eventId: string,
+): Promise<{ demo_mode: boolean; limit: number; emails: string[] }> {
+  const [event, emails] = await Promise.all([
+    demoMailEventInOrg(db, orgId, eventId),
+    demoMailAllowlistForOrgEvent(db, orgId, eventId),
+  ]);
+  if (!event) throw ApiError.notFound("conference not found");
+  return {
+    // The list exists on every conference and is inert outside demo mode; the
+    // screen needs to know which of those it is looking at so it can say so.
+    demo_mode: event.demo_mode,
+    limit: DEMO_MAIL_ALLOWLIST_LIMIT,
+    emails,
+  };
+}
+
+const getDemoMailAllowlist = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/demo-mail-allowlist",
+    operationId: "getDemoMailAllowlist",
+    summary: "List the addresses this conference sends real email to while in demo mode",
+    tags: ["Comms"],
+    request: { params: eventParams },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: jsonResponse(demoMailAllowlistResponse, "Addresses that receive real email"), ...errorResponses([401, 403, 404, 500]) },
+  },
+  async (context) => {
+    const { eventId } = context.req.valid("param");
+    requireComms(context, eventId, false);
+    const orgId = demoMailAllowlistOrg(context);
+    return context.json({ data: await demoMailAllowlistState(context.env.DB, orgId, eventId) }, 200);
+  },
+);
+
+const putDemoMailAllowlist = defineApiRoute(
+  {
+    method: "put",
+    path: "/api/v1/events/{eventId}/demo-mail-allowlist",
+    operationId: "replaceDemoMailAllowlist",
+    summary: "Replace the addresses this conference sends real email to while in demo mode",
+    description:
+      "The whole list is replaced. An empty array is a real choice — nobody receives real email — and is how the last address is removed.",
+    tags: ["Comms"],
+    request: { params: eventParams, body: { content: { "application/json": { schema: demoMailAllowlistInput } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: jsonResponse(demoMailAllowlistResponse, "The saved list"), ...errorResponses([400, 401, 403, 404, 422, 429, 500]) },
+  },
+  async (context) => {
+    const { eventId } = context.req.valid("param");
+    requireDemoMailAllowlistWrite(context, eventId);
+    const orgId = demoMailAllowlistOrg(context);
+    const { emails } = context.req.valid("json");
+    // Validated one address at a time so the message names the address that is
+    // wrong, rather than rejecting a list of five for a typo in one.
+    for (const email of emails) {
+      if (!isAllowlistEmail(email)) {
+        throw ApiError.unprocessable(`${describeRejectedEmail(email, "that")} is not a complete email address`, "emails");
+      }
+    }
+    // Deduplicated before the cap is applied: two spellings of one address are
+    // one address, and refusing the save over a repeat would be a lie.
+    const normalized = parseAllowlist(JSON.stringify(emails.map(normalizeAllowlistEmail)));
+    if (normalized.length > DEMO_MAIL_ALLOWLIST_LIMIT) {
+      throw ApiError.unprocessable(`a conference can list at most ${DEMO_MAIL_ALLOWLIST_LIMIT} addresses`, "emails");
+    }
+    // The write is the authorization. A foreign event id derives no row, so the
+    // statement changes nothing and reports it, rather than a guard above here
+    // having promised something the write could still contradict.
+    const saved = await writeDemoMailAllowlistForOrgEvent(context.env.DB, orgId, eventId, normalized, Date.now());
+    if (saved === null) throw ApiError.notFound("conference not found");
+    return context.json({ data: await demoMailAllowlistState(context.env.DB, orgId, eventId) }, 200);
+  },
+);
+
 export const apiRoutes = [
   getTemplates,
   createTemplate,
@@ -988,6 +1126,8 @@ export const apiRoutes = [
   getOutbox,
   getPersonMessages,
   listCommunicationAudience,
+  getDemoMailAllowlist,
+  putDemoMailAllowlist,
 ];
 
 export type CommunicationAudienceItem = CommsRecipientRow;
