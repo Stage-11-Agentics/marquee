@@ -28,7 +28,7 @@ const inventory = [
 ] as const;
 
 describe("outbox idempotency registry", () => {
-  test("pure refactor preserves every inventoried entity id and hash byte", async () => {
+  test("CONTRACT · MRQ-226 · pure refactor preserves every inventoried entity id and hash byte", async () => {
     for (const entry of inventory) {
       expect(entry.actual, entry.name).toBe(entry.before);
       const beforeKey = await buildIdempotencyKey(entry.template, entry.before, entry.person);
@@ -37,11 +37,11 @@ describe("outbox idempotency registry", () => {
     }
   });
 
-  test("registry is frozen so a call site cannot replace a business grain", () => {
+  test("CONTRACT · MRQ-226 · registry is frozen so a call site cannot replace a business grain", () => {
     expect(Object.isFrozen(IDEMPOTENCY_REGISTRY)).toBe(true);
   });
 
-  test("Bug A · every draft-resume request keeps the submission and adds its request tail", () => {
+  test("CONTRACT · MRQ-226 · Bug A draft-resume requests keep the submission and add a request tail", () => {
     const first = IDEMPOTENCY_REGISTRY.draftResume("submission-1", "request-1");
     const second = IDEMPOTENCY_REGISTRY.draftResume("submission-1", "request-2");
     expect(first).toBe("submission-1:request-1");
@@ -49,7 +49,7 @@ describe("outbox idempotency registry", () => {
     expect(second).not.toBe(first);
   });
 
-  test("Bug B · a custom send seed separates new composes without changing the row entity", () => {
+  test("CONTRACT · MRQ-226 · Bug B custom-send seeds separate composes without changing the row entity", () => {
     expect(IDEMPOTENCY_REGISTRY.customSend("compose-1", "submission-1")).toBe("custom:compose-1:submission-1");
     expect(IDEMPOTENCY_REGISTRY.customSend("compose-2", "submission-1")).not.toBe(
       IDEMPOTENCY_REGISTRY.customSend("compose-1", "submission-1"),
