@@ -1,0 +1,411 @@
+<!doctype html>
+<!--
+  Marquee — mobile navigation fold: the bottom strip retires, a drawer arrives.
+
+  Two live phone frames, same screen (Abstracts & sessions at 390px):
+    LEFT  · what ships today — the ≤760px bottom strip of clipped letters,
+            fighting iOS Safari's own toolbar for the same zone.
+    RIGHT · the proposal — hamburger top-left in the topbar; tap → the real
+            sidebar slides in as an overlay drawer, full parity: switcher,
+            group labels, every destination, footer.
+
+  Ruling encoded here (operator, 2026-08-14): drawer at ≤760px only; the
+  761–1000px icon rail stays as shipped; the drawer carries the sidebar
+  verbatim. Flight Deck tokens from prototypes/skins/skin-c.html.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marquee — mobile nav: strip → drawer (proposal)</title>
+<style>
+  :root {
+    --bg:#eaeef2; --surface:#ffffff; --surface-sunk:#f4f7f9; --graph:#e3e9ee;
+    --ink:#101820; --ink-soft:#2c3a46; --muted:#57646f;
+    --rule:#c8d2da; --rule-soft:#dde4ea;
+    --accent:#0b6a72; --accent-ink:#084f55; --accent-wash:#e2f0f1;
+    --ok:#0f7a4a; --warn:#8a5c00; --alarm:#b02a1f; --alarm-wash:#fbe9e7;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --radius:3px;
+  }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased; }
+  body { margin:0; min-width:360px; }
+  button,input { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  a { color:inherit; text-decoration:none; }
+
+  .ribbon { position:fixed; top:14px; right:-46px; z-index:99; transform:rotate(35deg); background:var(--alarm); color:#fff; font:700 10px/1 var(--mono); letter-spacing:.18em; padding:7px 52px; }
+
+  .wrap { max-width:1180px; margin:0 auto; padding:34px 26px 80px; }
+  h1 { font-size:21px; margin:0 0 6px; }
+  .sub { color:var(--ink-soft); font-size:13.5px; line-height:1.6; max-width:76ch; margin:0 0 6px; }
+  .kicker { color:var(--muted); font:600 10px/1 var(--mono); letter-spacing:.22em; text-transform:uppercase; margin:0 0 10px; }
+
+  .frames { display:flex; gap:44px; flex-wrap:wrap; margin-top:26px; }
+  .frame-block { flex:0 0 auto; }
+  .frame-block h2 { font:600 11px/1 var(--mono); letter-spacing:.2em; text-transform:uppercase; color:var(--muted); margin:0 0 12px; }
+  .frame-block h2 .tag { border:1px solid var(--rule); border-radius:2px; padding:3px 6px; margin-left:8px; letter-spacing:.1em; }
+  .frame-block h2 .tag.now { color:var(--alarm); border-color:var(--alarm); }
+  .frame-block h2 .tag.new { color:var(--accent); border-color:var(--accent); }
+  .caption { max-width:390px; margin-top:14px; color:var(--ink-soft); font-size:12px; line-height:1.6; }
+  .caption b { color:var(--ink); }
+  .caption ul { margin:6px 0 0; padding-left:18px; }
+  .caption li { margin:4px 0; }
+
+  /* ── the phone ── */
+  .phone { width:390px; height:768px; background:#0d1114; border-radius:30px; padding:10px; position:relative; }
+  .screen { background:var(--bg); border-radius:21px; overflow:hidden; position:relative; height:100%; display:flex; flex-direction:column; }
+
+  /* topbar — 52px, matches components.css geometry */
+  .m-topbar { flex:none; height:52px; background:var(--surface); border-bottom:1px solid var(--rule); display:flex; align-items:center; gap:8px; padding:0 12px; position:relative; z-index:5; }
+  /* The one control that unlocks everything on a phone wears the primary-action
+     treatment: ink-filled, white lines — the same register as "+ Add session". */
+  .hamb { flex:none; width:36px; height:30px; background:var(--ink); border:1px solid var(--ink); border-radius:var(--radius); display:grid; place-items:center; padding:0; }
+  .hamb:hover, .hamb:focus-visible { background:var(--accent-ink); border-color:var(--accent-ink); outline:0; box-shadow:0 0 0 2px var(--accent-wash); }
+  .hamb svg { display:block; }
+  .m-search { flex:1; min-width:0; height:30px; background:var(--surface-sunk); border:1px solid var(--rule); border-radius:var(--radius); color:var(--muted); font-family:var(--mono); font-size:11px; text-align:left; padding:0 8px 0 26px; position:relative; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .m-search .glyph { position:absolute; left:8px; top:6px; font-size:12px; }
+  .m-avatar { flex:none; width:28px; height:28px; background:var(--surface-sunk); border:1px solid var(--rule); border-radius:var(--radius); display:grid; place-items:center; font:600 10px/1 var(--mono); color:var(--ink-soft); }
+
+  /* page content */
+  .m-page { flex:1; overflow-y:auto; overflow-x:hidden; padding:18px 14px 24px; }
+  .m-page.strip-pad { padding-bottom:78px; } /* today: content clears the fixed strip */
+  .m-page h1 { font-size:26px; letter-spacing:-.02em; margin:0 0 6px; }
+  .m-count { color:var(--muted); font:400 11px/1.6 var(--mono); margin:0 0 14px; }
+  .m-actions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+  .btn { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius); font-family:var(--mono); font-size:11px; padding:8px 11px; }
+  .btn.primary { background:var(--ink); border-color:var(--ink); color:#fff; }
+  .panel { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius); padding:12px; margin-bottom:12px; }
+  .panel .lbl { color:var(--muted); font:600 9px/1 var(--mono); letter-spacing:.18em; text-transform:uppercase; margin-bottom:8px; }
+  .chip-row { display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; }
+  .chip { flex:none; background:var(--surface); border:1px solid var(--rule); border-radius:999px; font-family:var(--mono); font-size:10.5px; padding:6px 11px; color:var(--ink-soft); white-space:nowrap; }
+  .chip.on { border-color:var(--ink); color:var(--ink); font-weight:600; }
+  .seg { display:flex; border:1px solid var(--rule); border-radius:var(--radius); overflow:hidden; margin-bottom:8px; }
+  .seg button { flex:1; background:var(--surface); border:0; border-right:1px solid var(--rule); font:600 9.5px/1 var(--mono); letter-spacing:.14em; padding:9px 0; color:var(--muted); }
+  .seg button:last-child { border-right:0; }
+  .seg button.on { background:var(--surface-sunk); color:var(--ink); box-shadow:inset 0 -2px 0 var(--accent); }
+  .filters { display:grid; gap:8px; }
+  .f-input { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius); color:var(--muted); font-family:var(--mono); font-size:11px; padding:9px 10px; text-align:left; }
+  .rows { border:1px solid var(--rule); border-radius:var(--radius); background:var(--surface); }
+  .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 10px; padding:11px 12px; border-bottom:1px solid var(--rule-soft); }
+  .row:last-child { border-bottom:0; }
+  .row .t { font-size:12.5px; font-weight:600; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .row .s { grid-row:2; color:var(--muted); font:400 10px/1.3 var(--mono); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .row .st { grid-column:2; grid-row:1 / span 2; align-self:center; font:600 8.5px/1 var(--mono); letter-spacing:.1em; border:1px solid var(--rule); border-radius:2px; padding:4px 6px; color:var(--muted); }
+  .row .st.ok { color:var(--ok); border-color:var(--ok); }
+  .row .st.warn { color:var(--warn); border-color:var(--warn); }
+
+  /* honest placeholder when the prototype "navigates" */
+  .m-blank { border:1px dashed var(--rule); border-radius:var(--radius); background:var(--surface); padding:26px 16px; color:var(--muted); font:400 11.5px/1.7 var(--mono); }
+  .m-blank b { color:var(--ink); display:block; font:600 15px/1.3 var(--sans); margin-bottom:6px; }
+
+  /* ── TODAY: the bottom strip (verbatim geometry from components.css ≤760) ── */
+  .strip { position:absolute; left:0; right:0; bottom:64px; height:54px; background:var(--surface); border-top:1px solid var(--rule); display:flex; overflow-x:auto; padding:6px; z-index:6; }
+  .strip a { flex:none; min-width:47px; min-height:40px; display:flex; align-items:center; justify-content:center; color:var(--ink-soft); font-size:12.5px; border-bottom:2px solid transparent; border-radius:var(--radius); }
+  .strip a .clip { max-width:1.35ch; overflow:hidden; white-space:nowrap; }
+  .strip a.on { background:var(--accent-wash); border-bottom-color:var(--accent); color:var(--accent-ink); font-weight:600; }
+
+  /* faux iOS Safari chrome — the environment both frames live in */
+  .safari { position:absolute; left:0; right:0; bottom:0; height:64px; background:#f2f3f5; border-top:1px solid #d5d8dc; display:flex; align-items:center; justify-content:space-around; color:#3478f6; font-size:17px; z-index:7; }
+  .safari .note { position:absolute; top:-1px; left:0; right:0; transform:translateY(-100%); pointer-events:none; }
+  .safari span { opacity:.85; }
+
+  /* ── PROPOSED: scrim + drawer ── */
+  .scrim { position:absolute; inset:0; background:rgba(16,24,32,.44); opacity:0; pointer-events:none; transition:opacity 160ms ease-out; z-index:20; }
+  .screen.open .scrim { opacity:1; pointer-events:auto; }
+  .drawer { position:absolute; top:0; bottom:0; left:0; width:302px; background:var(--surface); border-right:1px solid var(--rule); transform:translateX(-103%); transition:transform 160ms ease-out; z-index:21; display:flex; flex-direction:column; overflow-y:auto; padding:14px 12px 16px; }
+  .screen.open .drawer { transform:translateX(0); }
+  @media (prefers-reduced-motion: reduce) { .scrim, .drawer { transition:none; } }
+
+  /* Themed scrollbars. The drawer scrolls internally, and an OS-default
+     scrollbar is the one element that would ignore the theme — glaring in dark
+     registers. Colors come from tokens, so every theme inherits: thumb rides
+     --rule (hover --muted), track stays the drawer's own surface. */
+  .drawer, .m-page { scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+  .drawer::-webkit-scrollbar, .m-page::-webkit-scrollbar { width: 8px; }
+  .drawer::-webkit-scrollbar-track, .m-page::-webkit-scrollbar-track { background: transparent; }
+  .drawer::-webkit-scrollbar-thumb, .m-page::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 4px; border: 2px solid var(--surface); }
+  .drawer::-webkit-scrollbar-thumb:hover, .m-page::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  .chip-row::-webkit-scrollbar, .strip::-webkit-scrollbar { height: 6px; }
+  .chip-row::-webkit-scrollbar-thumb, .strip::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 3px; }
+  .chip-row, .strip { scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+
+  .d-head { display:flex; align-items:center; gap:10px; padding:2px 6px 14px; }
+  .d-mark { flex:none; width:28px; height:28px; background:var(--accent-wash); border:1px solid var(--accent); border-radius:var(--radius); display:grid; place-items:center; font:600 13px/1 var(--mono); color:var(--accent-ink); }
+  .d-name { font:600 13px/1 var(--mono); letter-spacing:.22em; }
+  .d-close { flex:none; margin-left:auto; width:34px; height:34px; background:none; border:1px solid var(--rule); border-radius:var(--radius); color:var(--muted); font-size:14px; display:grid; place-items:center; padding:0; }
+  .d-close:hover, .d-close:focus-visible { border-color:var(--accent); color:var(--ink); outline:0; box-shadow:0 0 0 2px var(--accent-wash); }
+
+  .d-label { color:var(--muted); font:600 9px/1.2 var(--mono); letter-spacing:.2em; text-transform:uppercase; margin:14px 10px 6px; padding-bottom:4px; border-bottom:1px solid var(--rule-soft); }
+  .d-nav { display:grid; }
+  .d-nav a { display:flex; align-items:center; gap:9px; min-height:40px; padding:8px 10px; font-size:13px; color:var(--ink-soft); border-left:2px solid transparent; border-radius:0 var(--radius) var(--radius) 0; }
+  .d-nav a:active { background:var(--surface-sunk); }
+  .d-nav a.on { background:var(--accent-wash); border-left-color:var(--accent); color:var(--accent-ink); font-weight:600; }
+  .d-ico { flex:none; width:16px; text-align:center; color:var(--muted); font:400 11px/1 var(--mono); }
+  .d-nav a.on .d-ico { color:var(--accent); }
+  .d-plus { margin-left:auto; width:22px; height:22px; border:1px solid var(--rule); border-radius:var(--radius); display:grid; place-items:center; font:600 12px/1 var(--mono); color:var(--muted); }
+
+  .d-switch { display:flex; gap:6px; margin:0 4px 6px; }
+  .d-switch button.ctx { flex:1; min-width:0; background:none; border:0; border-left:2px solid var(--rule); text-align:left; padding:4px 10px; display:flex; align-items:center; gap:6px; }
+  .d-switch button.ctx strong { font:600 12.5px/1.2 var(--mono); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .d-switch .caret { color:var(--muted); font:400 9px/1 var(--mono); margin-left:auto; }
+  .d-switch .add { flex:none; width:36px; background:var(--surface-sunk); border:1px solid var(--rule); border-radius:var(--radius); font:400 15px/1 var(--mono); color:var(--ink-soft); }
+
+  .d-foot { margin-top:auto; border-top:1px solid var(--rule-soft); padding-top:12px; display:grid; gap:2px; }
+  .d-foot button { display:flex; align-items:center; gap:8px; min-height:38px; background:none; border:0; border-radius:var(--radius); color:var(--muted); font:400 11.5px/1.2 var(--mono); padding:7px 10px; text-align:left; }
+  .d-foot button:active { background:var(--surface-sunk); color:var(--ink); }
+
+  /* toast */
+  #toast { position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:var(--ink); color:#fff; font:400 11.5px/1 var(--mono); padding:10px 16px; border-radius:var(--radius); opacity:0; pointer-events:none; transition:opacity 140ms; z-index:120; }
+  #toast.show { opacity:1; }
+
+  /* notes */
+  .notes { margin-top:44px; max-width:86ch; }
+  .notes h2 { font-size:15px; margin:30px 0 8px; }
+  .notes ul, .notes ol { margin:6px 0; padding-left:20px; }
+  .notes li { font-size:13px; line-height:1.65; margin:6px 0; color:var(--ink-soft); }
+  .notes li b { color:var(--ink); }
+  .notes code { background:var(--surface-sunk); border:1px solid var(--rule-soft); border-radius:2px; font-family:var(--mono); font-size:11px; padding:1px 5px; }
+  .q { background:var(--surface); border:1px solid var(--rule); border-left:3px solid var(--accent); border-radius:var(--radius); padding:12px 14px; margin:10px 0; font-size:13px; line-height:1.6; color:var(--ink-soft); }
+  .q b { color:var(--ink); }
+</style>
+</head>
+<body>
+<div class="ribbon">PROTOTYPE · MOCK DATA</div>
+<div class="wrap">
+  <p class="kicker">Marquee · Flight Deck · mobile navigation fold</p>
+  <h1>The bottom strip retires. A drawer arrives.</h1>
+  <p class="sub">At ≤760px the sidebar currently becomes a 54px bottom strip: fifteen destinations clipped to their first 1.35 characters, horizontally scrollable with no affordance, parked in the exact zone iOS Safari draws its own toolbar. It also <em>hides</em> the conference switcher, the group labels, and the footer — on a phone you cannot switch conferences at all. The proposal: a hamburger top-left in the topbar; tap → the real sidebar slides in as an overlay drawer, verbatim. Both frames below are live — drive them.</p>
+
+  <div class="frames">
+    <!-- ─────────── TODAY ─────────── -->
+    <section class="frame-block">
+      <h2>Today <span class="tag now">shipped · ≤760px</span></h2>
+      <div class="phone"><div class="screen" id="scrA">
+        <div class="m-topbar">
+          <button class="m-search" onclick="toast('Prototype — search not wired')"><span class="glyph">&gt;_</span>Search abstracts, speakers, sessions…</button>
+          <span class="m-avatar">MW</span>
+        </div>
+        <div class="m-page strip-pad" id="pageA"></div>
+        <nav class="strip" id="stripA" aria-label="Shipped bottom strip"></nav>
+        <div class="safari"><span>‹</span><span>›</span><span>⇧</span><span>⌘</span><span>▢</span></div>
+      </div></div>
+      <div class="caption">
+        <b>What the screenshot showed, reproduced.</b>
+        <ul>
+          <li><b>Clipped letters:</b> rows without a glyph show 1.35ch of their label — <i>Pe, O, Pr, Pr, Ab…</i></li>
+          <li><b>Zone collision:</b> the strip sits directly on Safari's toolbar; taps near the seam hit browser chrome.</li>
+          <li><b>Hidden capability:</b> no switcher, no group labels, no footer — dead ends, not just ugliness.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ─────────── PROPOSED ─────────── -->
+    <section class="frame-block">
+      <h2>Proposed <span class="tag new">hamburger → drawer</span></h2>
+      <div class="phone"><div class="screen" id="scrB">
+        <div class="m-topbar">
+          <button class="hamb" id="hamb" aria-label="Open navigation" aria-expanded="false" aria-controls="drawer">
+            <svg width="17" height="13" viewBox="0 0 17 13" aria-hidden="true"><g stroke="#ffffff" stroke-width="2" stroke-linecap="round"><line x1="1.5" y1="1.5" x2="15.5" y2="1.5"/><line x1="1.5" y1="6.5" x2="15.5" y2="6.5"/><line x1="1.5" y1="11.5" x2="15.5" y2="11.5"/></g></svg>
+          </button>
+          <button class="m-search" onclick="toast('Prototype — search not wired')"><span class="glyph">&gt;_</span>Search abstracts, speakers…</button>
+          <span class="m-avatar">MW</span>
+        </div>
+        <div class="m-page" id="pageB"></div>
+        <div class="scrim" id="scrim"></div>
+        <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Navigation">
+          <div class="d-head">
+            <span class="d-mark">M</span><span class="d-name">MARQUEE</span>
+            <button class="d-close" id="dclose" aria-label="Close navigation">✕</button>
+          </div>
+          <div id="dnav"></div>
+          <div class="d-foot" id="dfoot"></div>
+        </aside>
+        <div class="safari"><span>‹</span><span>›</span><span>⇧</span><span>⌘</span><span>▢</span></div>
+      </div></div>
+      <div class="caption">
+        <b>Tap ≡. Everything the desktop sidebar has, one tap away.</b>
+        <ul>
+          <li><b>Full parity:</b> switcher, group labels, all 21 destinations, footer — first time any of it is reachable on a phone.</li>
+          <li><b>Dismissal:</b> scrim tap, ✕, <code>Esc</code>, or any navigation. Focus returns to ≡.</li>
+          <li><b>Nothing jumps:</b> the drawer overlays; the page never shifts. Safari keeps its zone.</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <div class="notes">
+    <h2>The ruling this encodes</h2>
+    <ul>
+      <li><b>≤760px: drawer.</b> The bottom strip is deleted, not restyled — the page gets its bottom padding back, Safari's toolbar owns that zone alone.</li>
+      <li><b>761–1000px: the icon rail stays as shipped.</b> Only the genuinely broken band changes (operator ruling, 2026-08-14).</li>
+      <li><b>The drawer is the <code>Sidebar</code> component, verbatim</b> — same markup, CSS repositions it. One nav implementation; no second truth to drift. It scrolls internally, exactly as the desktop column does.</li>
+      <li><b>Touch geometry:</b> rows are 40px minimum in the drawer (desktop keeps 34px); ≡ and ✕ are ≥34px boxes. The ≡ button exists only at ≤760px — no desktop layout change.</li>
+      <li><b>Motion:</b> 160ms ease-out slide + scrim fade; none under <code>prefers-reduced-motion</code>. A panel, not an iOS sheet: hairlines and the scrim carry depth, no blur, no bounce.</li>
+      <li><b>While open:</b> page scroll locks; drawer takes dialog semantics (<code>aria-modal</code>, focus to ✕ on open, back to ≡ on close).</li>
+    </ul>
+
+    <h2>Build touchpoints (for the ticket)</h2>
+    <ol>
+      <li><code>src/styles/components.css</code> — rewrite the <code>@media (max-width: 760px)</code> block: strip rules out, drawer transform/scrim rules in; <code>.page</code> bottom padding returns to normal. Same block fixes QA blocker M-01: <code>.global-search</code> drops <code>width:100%</code> for <code>flex:1; min-width:0</code>, and <code>.theme-switch</code> folds into the drawer footer at phone width — the topbar must lay out inside the viewport with zero page-level horizontal scroll.</li>
+      <li>The <code>@media (max-width: 1000px)</code> block hides <code>.event-context-row</code>, <code>.nav-label</code>, <code>.sidebar-foot</code> — those hides must band to <code>(max-width: 1000px) and (min-width: 761px)</code> so the drawer gets them back at phone width. (Written prefix-first, the MRQ-203 contract tests' <code>indexOf("@media (max-width: 1000px)")</code> still matches.)</li>
+      <li><code>AppShell.tsx</code> — <code>drawerOpen</code> state; close on navigate; <code>Topbar</code> grows the ≡ (rendered only via the mobile media query); <code>Sidebar</code> grows the ✕ (same). <code>DeliveryHealthShell.tsx</code> mounts the same pair and gets the same wiring.</li>
+      <li>The stage flyout is already <code>display:none</code> below 1000px — the drawer never meets it.</li>
+      <li><b>Scrollbar theming (operator, 2026-08-14):</b> the drawer's internal scrollbar must follow the active theme — <code>scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent</code> on <code>.sidebar</code> plus the <code>::-webkit-scrollbar</code> pair, all token-driven so dark registers inherit without per-theme rules. Never leave the OS-default scrollbar inside themed chrome.</li>
+    </ol>
+
+    <h2>Open questions</h2>
+    <div class="q"><b>Q1 · Drawer width.</b> 302px shown (sidebar's 224px is too tight for 40px touch rows). Alternative: <code>min(320px, 86vw)</code> so a scrim sliver always remains tappable. Current pick: fixed 302px — 88px of scrim on a 390px phone.</div>
+    <div class="q"><b>Q2 · Theme switch — resolved by measurement.</b> Mobile QA (M-01) measured the shipped topbar at <b>549px in a 373px viewport</b>: <code>.global-search</code> gets <code>width:100%</code> at ≤760px and the 118px theme select rides beside it, dragging every screen into a 176px page-level horizontal scroll and pushing the account button off-viewport. The fold fixes both: search becomes <code>flex:1; min-width:0</code>, and the theme select moves into the drawer footer at phone width. Mobile topbar = ≡, search, avatar — nothing else.</div>
+    <div class="q"><b>Q3 · Reviewer / portal shells.</b> They never mount this sidebar, so they are out of scope — confirm.</div>
+    <div class="q"><b>Status.</b> Prototype for the love pass. On approval: worktree <code>mobile-nav-drawer</code> (already cut from <code>github/main</code>) → build → PR → review → merge.</div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+/* ── nav truth: every route-table row with sidebar:true, in table order ── */
+const NAV = [
+  { group:"Organization", rows:[["⌂","Home"],["","People CRM"],["","Outreach"],["⚙","Settings"]] },
+  { group:"Conference", switcher:true, rows:[["","Program pipeline"],["","Program board"],["","Abstracts & sessions","plus"],["","Agenda"],["","Speakers"]] },
+  { group:"Speaker ops", rows:[["","Onboarding"],["","Tasks"],["✉","Communications"],["","Files"],["","Follow-ups"]] },
+  { group:"Call for proposals", rows:[["","Forms"],["","Evaluation"],["","Reviewer"]] },
+  { group:"Public links", rows:[["↗","Conference site"],["↗","Speaker portal"],["↗","Embeds"]] },
+  { group:null, rows:[["⚙","Settings"]] },
+];
+/* Theme joins the footer at phone width: QA measured the topbar at 549px in a
+   373px viewport (M-01) — the 118px theme select is a third of the overflow. */
+const FOOT = [["◐","Theme — Flight Deck ▾"],["⌘","API & CLI"],["◌","System health"],["↻","Reset demo"]];
+const EXTERNAL = new Set(["Conference site","Speaker portal","Embeds","Follow-ups"]);
+let active = "Abstracts & sessions";
+
+/* ── mock submissions screen (both frames) ── */
+const SUBS = [
+  ["Constitutional guardrails for tool-using agents","Priya Natarajan-Iyer · Meridian Bank","IN REVIEW","warn"],
+  ["Evals that survive contact with production","Marcus Oyelaran-Whitfield · Signalpath","ACCEPTED","ok"],
+  ["RAG is dead, long live retrieval","Sofía Herrera-Lindqvist · Norrsken Labs",  "SUBMITTED",""],
+  ["Fine-tuning on a budget: LoRA at the edge","Jun-ho Park · Kestrel AI","ACCEPTED","ok"],
+  ["The agent that files your SOC 2 evidence","Amara Chukwuemeka · Ledgerline","IN REVIEW","warn"],
+  ["Panel — open models in regulated industries","D. Rosen + 4 co-speakers · (panel)","SUBMITTED",""],
+  ["Latency budgets for voice agents","Elif Yıldırım-Baumgartner · Callsign","WAITLIST",""],
+  ["Postmortem: our multi-agent outage","Tomás Aguirre-Ó Braonáin · Fieldwire","ACCEPTED","ok"],
+  ["Guardrailing SQL generation at a bank","Wei-Lin Chandrasekaran · Meridian Bank","SUBMITTED",""],
+  ["Streaming structured output without tears","Nadia Petrov-Okonjo · Hatchline","IN REVIEW","warn"],
+  ["Embeddings drift and how to catch it","Karl-Heinz Obuya · Signalpath","SUBMITTED",""],
+  ["What 40,000 support tickets taught our agent","Renata Silva-MacGregor · Ledgerline","ACCEPTED","ok"],
+];
+function subsHTML(){
+  return `
+    <h1>Abstracts &amp; sessions</h1>
+    <p class="m-count">1,001 matching records · rendered 50 at a time for an instant response at full scale.</p>
+    <div class="m-actions">
+      <button class="btn" onclick="toast('Prototype — not wired')">Export scores (CSV)</button>
+      <button class="btn" onclick="toast('Prototype — not wired')">Export</button>
+      <button class="btn primary" onclick="toast('Prototype — not wired')">+ Add session</button>
+    </div>
+    <div class="panel">
+      <div class="lbl">Views</div>
+      <div class="m-actions" style="margin-bottom:10px">
+        <button class="btn" onclick="toast('Prototype — not wired')">Save current view</button>
+        <button class="btn" onclick="toast('Prototype — not wired')">Columns</button>
+      </div>
+      <div class="chip-row">
+        <span class="chip on">All submissions</span>
+        <span class="chip">Drafts needing attention 40</span>
+        <span class="chip">Decisions overdue 12</span>
+        <span class="chip">Waves</span>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="seg">
+        <button class="on">ALL</button><button>ABSTRACTS</button><button>SESSIONS</button>
+      </div>
+      <div class="filters">
+        <button class="f-input" onclick="toast('Prototype — not wired')">Search 1,001 submissions…</button>
+        <button class="f-input" onclick="toast('Prototype — not wired')">All statuses ⇅</button>
+        <button class="f-input" onclick="toast('Prototype — not wired')">All tracks ⇅</button>
+        <button class="f-input" onclick="toast('Prototype — not wired')">Newest ⇅</button>
+      </div>
+    </div>
+    <div class="rows">${SUBS.map(([t,s,st,c]) =>
+      `<div class="row"><span class="t">${t}</span><span class="s">${s}</span><span class="st ${c}">${st}</span></div>`).join("")}
+    </div>`;
+}
+function blankHTML(label){
+  return `<div class="m-blank"><b>${label}</b>Mock destination — the prototype proves the navigation, not this screen. Selecting a row closed the drawer and moved the active state; the real build routes here.</div>`;
+}
+function renderPages(){
+  const html = active === "Abstracts & sessions" ? subsHTML() : blankHTML(active);
+  document.getElementById("pageA").innerHTML = subsHTML(); // today-frame stays on the screenshot's screen
+  document.getElementById("pageB").innerHTML = html;
+}
+
+/* ── TODAY: the strip, generated from the same nav truth (glyph, else 1.35ch) ── */
+function renderStrip(){
+  const el = document.getElementById("stripA");
+  el.innerHTML = NAV.flatMap(g => g.rows).map(([ico,label]) => {
+    const inner = ico ? ico : `<span class="clip">${label.slice(0,2)}</span>`;
+    return `<a href="#" class="${label===active?"on":""}" title="${label}" onclick="toast('The strip: ${label.replace(/'/g,"")}');return false">${inner}</a>`;
+  }).join("");
+}
+
+/* ── PROPOSED: the drawer, same truth, full rows ── */
+function renderDrawer(){
+  const nav = document.getElementById("dnav");
+  nav.innerHTML = NAV.map(g => {
+    const label = g.group ? `<div class="d-label">${g.group}</div>` : `<div style="height:14px"></div>`;
+    const switcher = g.switcher ? `
+      <div class="d-switch">
+        <button class="ctx" onclick="toast('Prototype — switcher not wired')"><strong>AIE NYC 2026</strong><span class="caret">▾</span></button>
+        <button class="add" onclick="toast('Prototype — not wired')">＋</button>
+      </div>` : "";
+    const rows = g.rows.map(([ico,name,plus]) => `
+      <a href="#" class="${name===active?"on":""}" data-nav="${name}">
+        <span class="d-ico">${ico}</span><span>${name}</span>
+        ${plus ? `<span class="d-plus" onclick="event.preventDefault();event.stopPropagation();toast('Prototype — Add a session')">+</span>` : ""}
+      </a>`).join("");
+    return `${label}${switcher}<nav class="d-nav">${rows}</nav>`;
+  }).join("");
+  document.getElementById("dfoot").innerHTML = FOOT.map(([ico,name]) =>
+    `<button onclick="toast('Prototype — ${name.replace(/'/g,"")} not wired')">${ico} ${name}</button>`).join("");
+  nav.querySelectorAll("a[data-nav]").forEach(a => a.addEventListener("click", e => {
+    e.preventDefault();
+    const name = a.dataset.nav;
+    if (EXTERNAL.has(name)) { toast(`↗ ${name} — real browser navigation`); closeDrawer(); return; }
+    active = name; renderStrip(); renderDrawer(); renderPages(); closeDrawer();
+  }));
+}
+
+/* ── drawer mechanics ── */
+const scrB = document.getElementById("scrB"), hamb = document.getElementById("hamb"), pageB = document.getElementById("pageB");
+function openDrawer(){
+  scrB.classList.add("open");
+  hamb.setAttribute("aria-expanded","true");
+  pageB.style.overflow = "hidden";           /* scroll locks behind the scrim */
+  document.getElementById("dclose").focus();
+}
+function closeDrawer(){
+  scrB.classList.remove("open");
+  hamb.setAttribute("aria-expanded","false");
+  pageB.style.overflow = "";
+  hamb.focus();                              /* focus returns to the ≡ */
+}
+hamb.addEventListener("click", openDrawer);
+document.getElementById("dclose").addEventListener("click", closeDrawer);
+document.getElementById("scrim").addEventListener("click", closeDrawer);
+window.addEventListener("keydown", e => { if (e.key === "Escape" && scrB.classList.contains("open")) closeDrawer(); });
+
+/* ── toast ── */
+let toastTimer = null;
+function toast(msg){
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("show"), 1800);
+}
+
+renderStrip(); renderDrawer(); renderPages();
+</script>
+</body>
+</html>
