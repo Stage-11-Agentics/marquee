@@ -13,13 +13,15 @@
 
 ## 1. The product in one page
 
-Marquee runs one conference's program lifecycle end to end: **call for speakers → review → acceptance → speaker onboarding → agenda → published event site.** The organizer's home is the **pipeline** — seven stages, each a count, each clickable into the work behind it:
+Marquee runs one conference's program lifecycle end to end: **call for speakers → review → acceptance → speaker onboarding → agenda → published event site.** A conference's home is the **pipeline** — seven stages, each a count, each clickable into the work behind it:
 
 ```
 Submitted → In Review → Waved → Accepted → Onboarding → Scheduled → Published
 ```
 
 Three seats use it: the **organizer** (full admin), the **reviewer** (a queue and nothing else), the **speaker** (a portal: status, tasks, profile). A fourth audience — the public — never logs in: they submit on a form and read a published agenda.
+
+**Where a seat lands is `ROLE_HOME`, and only `ROLE_HOME`** (`src/lib/auth/role-home.ts`): program staff on `/org/home`, a reviewer on `/reviewer`, a speaker on `/portal`, a sponsorship contact on `/sponsor-portal`. Program staff land on the *organization* rather than on a conference because a sign-in cannot know which season the person came for — true enough for an org running one, wrong the moment it runs two. Every door reads that one table: the magic-link exchange, the demo seat, and the landing page's demo buttons.
 
 Everything a human can do, a program can do: the admin UI is a client of the same REST API that a token-holding agent or the `marquee` CLI calls (`PHILOSOPHY.md` 3, AC-105).
 

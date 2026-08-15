@@ -8,6 +8,7 @@
  */
 import { describe, expect, test } from "vitest";
 
+import { ROLE_HOME } from "../../src/lib/auth/role-home";
 import { roleHome, signinRedirect } from "../../src/lib/auth/signin-destination";
 import { dealLineChips } from "../../src/lib/sponsors/deal-line";
 import { sponsorHandbookChapters } from "../../src/lib/sponsors/handbook";
@@ -20,8 +21,10 @@ describe("where a sponsorship contact lands", () => {
 
   test("CONTRACT · every membership role still wins over the sponsor seat", () => {
     // A sponsor contact who is also program staff is running the conference.
-    expect(roleHome(["owner"], { sponsorContact: true })).toBe("/dashboard");
-    expect(roleHome(["program_lead"], { sponsorContact: true })).toBe("/dashboard");
+    // What this asserts is the precedence, not the path — read the staff home
+    // from the seat table so moving it never reads as a precedence failure.
+    expect(roleHome(["owner"], { sponsorContact: true })).toBe(ROLE_HOME.staff);
+    expect(roleHome(["program_lead"], { sponsorContact: true })).toBe(ROLE_HOME.staff);
     expect(roleHome(["reviewer"], { sponsorContact: true })).toBe("/reviewer");
     // Someone who both speaks and holds a deal lands where the conference is
     // asking things OF them; their sponsorship is one link from there.
@@ -32,7 +35,7 @@ describe("where a sponsorship contact lands", () => {
     expect(roleHome([])).toBe("/portal");
     expect(roleHome(["speaker"])).toBe("/portal");
     expect(roleHome(["reviewer"])).toBe("/reviewer");
-    expect(roleHome(["ops"])).toBe("/dashboard");
+    expect(roleHome(["ops"])).toBe(ROLE_HOME.staff);
     expect(roleHome([], { sponsorContact: false })).toBe("/portal");
   });
 

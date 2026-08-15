@@ -15,12 +15,15 @@ import {
 } from "../../src/lib/auth/signin-destination";
 
 describe("the seat's home", () => {
-  test("CONTRACT · program staff land on the dashboard, whatever else they hold", () => {
-    expect(roleHome(["owner"])).toBe("/dashboard");
-    expect(roleHome(["program_lead"])).toBe("/dashboard");
-    expect(roleHome(["ops"])).toBe("/dashboard");
+  test("CONTRACT · program staff land on the organization, whatever else they hold", () => {
+    // The organization, not one conference: a sign-in has no way to know which
+    // season the person came for, and asserting one is wrong the moment an org
+    // runs two. The pipeline stays one click away from the conference card.
+    expect(roleHome(["owner"])).toBe("/org/home");
+    expect(roleHome(["program_lead"])).toBe("/org/home");
+    expect(roleHome(["ops"])).toBe("/org/home");
     // The seeded program staffer holds `reviewer` alongside `owner`; staff wins.
-    expect(roleHome(["reviewer", "owner"])).toBe("/dashboard");
+    expect(roleHome(["reviewer", "owner"])).toBe("/org/home");
   });
 
   test("CONTRACT · a reviewer lands on the review queue, not the organizer shell", () => {
@@ -63,7 +66,7 @@ describe("the ?next= target", () => {
   test("CONTRACT · a rejected next falls back to the seat's home rather than to nowhere", () => {
     expect(signinRedirect("//evil.com", ["reviewer"])).toBe("/reviewer");
     expect(signinRedirect("/portal", ["owner"])).toBe("/portal");
-    expect(signinRedirect(undefined, ["owner"])).toBe("/dashboard");
+    expect(signinRedirect(undefined, ["owner"])).toBe("/org/home");
   });
 });
 

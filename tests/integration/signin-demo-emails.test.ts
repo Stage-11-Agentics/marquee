@@ -64,7 +64,7 @@ test("AC-2 · a demo address typed into the form enters the matching seat, sessi
   expect(organizer.status).toBe(200);
   expect(organizer.headers.get("set-cookie")).toMatch(/mq_session=/);
   const organizerBody = await organizer.json<MagicLinkBody>();
-  expect(organizerBody.demo_seat).toEqual({ role: "organizer", redirect_to: "/dashboard" });
+  expect(organizerBody.demo_seat).toEqual({ role: "organizer", redirect_to: "/org/home" });
   expect(organizerBody.magic_link).toBeUndefined();
 
   const speaker = await requestLink({ email: "speaker@demo.com" });
@@ -112,7 +112,7 @@ test("AC-2 · a role the demo has no persona for falls through rather than inven
 test("AC-2 · a hostile redirect_to never becomes the demo seat's destination", async () => {
   await seedDemoFixture();
   const response = await requestLink({ email: "organizer@demo.com", redirect_to: "//evil.example/steal" });
-  expect((await response.json<MagicLinkBody>()).demo_seat?.redirect_to).toBe("/dashboard");
+  expect((await response.json<MagicLinkBody>()).demo_seat?.redirect_to).toBe("/org/home");
 });
 
 test("AC-2 · a demo instance leads with the seats and prints the addresses that open them", async () => {

@@ -4,11 +4,27 @@ import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
 import { instanceIsUnclaimed } from "../lib/auth/instance-claim";
+import { ROLE_HOME } from "../lib/auth/role-home";
 import { DEMO_EVENT_ORDER, SEEDED_DEMO_EVENT_ID } from "../lib/demo-event";
 import { ICON_LINKS } from "../lib/head-icons";
 import { errorFields, loggerForEnv } from "../lib/observability/log";
 import { LANDING_THEMES } from "../ui/shell/theme";
 import { hasSpeakerTaskCancellationColumn, submissionStatusPredicate } from "./submissions.queries";
+
+/**
+ * Where each demo door lands: the seat's own home, never a second opinion.
+ *
+ * These were three hardcoded paths, and the organizer's drifted — it pointed at
+ * the submission register long after `ROLE_HOME` said otherwise, so the same
+ * person landed in two different places depending on whether they clicked a
+ * button or followed a sign-in mail. Deriving them is what makes that class of
+ * drift impossible rather than merely fixed.
+ *
+ * `?demo=<role>` is not read by anything; it is a breadcrumb in the URL bar
+ * saying which door was used, and the landing's own script is what authenticates.
+ */
+const demoDoor = (role: "organizer" | "reviewer" | "speaker"): string =>
+  `${role === "organizer" ? ROLE_HOME.staff : role === "reviewer" ? ROLE_HOME.reviewer : ROLE_HOME.speaker}?demo=${role}`;
 
 export interface LandingCounts {
   submitted: number;
@@ -175,7 +191,7 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
         <div class="landing-links">
           {!data.demoMode && <a class="button" href="/signin">Sign in</a>}
           <a class="button" href="https://github.com/Stage-11-Agentics/marquee">View on GitHub ↗</a>
-          <a class="button primary" href="/org/home?demo=organizer" data-demo-role="organizer">Enter demo</a>
+          <a class="button primary" href={demoDoor("organizer")} data-demo-role="organizer">Enter demo</a>
         </div>
       </header>
 
@@ -214,9 +230,9 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
             onboarding, and a published agenda—in one fast, owned workspace.
           </p>
           <div class="hero-actions">
-            <a class="button primary" href="/org/home?demo=organizer" data-demo-role="organizer">Enter as organizer →</a>
-            <a class="button" href="/reviewer?demo=reviewer" data-demo-role="reviewer">Enter as reviewer</a>
-            <a class="button" href="/portal?demo=speaker" data-demo-role="speaker">Enter as speaker</a>
+            <a class="button primary" href={demoDoor("organizer")} data-demo-role="organizer">Enter as organizer →</a>
+            <a class="button" href={demoDoor("reviewer")} data-demo-role="reviewer">Enter as reviewer</a>
+            <a class="button" href={demoDoor("speaker")} data-demo-role="speaker">Enter as speaker</a>
             <a class="button ghost" href="/f/cfp">View public CFP</a>
             <a class="button ghost" href="/agenda">View public agenda</a>
             <a class="button ghost" href="/speakers">Browse speakers</a>
@@ -440,7 +456,7 @@ const LANDING_SCRIPT = `
     link.addEventListener("click", async (event) => {
       event.preventDefault();
       const role = link.getAttribute("data-demo-role");
-      const destination = link.getAttribute("href") || "/org/home";
+      const destination = link.getAttribute("href") || "${ROLE_HOME.staff}";
       const status = document.getElementById("demo-status");
       link.setAttribute("aria-busy", "true");
       link.classList.add("is-busy");
