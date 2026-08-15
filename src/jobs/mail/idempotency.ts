@@ -49,8 +49,8 @@ export const IDEMPOTENCY_REGISTRY = Object.freeze({
   /** Public form confirmation: one confirmation for the newly created submission. */
   formConfirmation: (submissionId: Id): EntityId => entityId(submissionId),
 
-  /** Draft resume link: currently one action per draft submission; Bug A adds the request tail. */
-  draftResume: (submissionId: Id): EntityId => entityId(submissionId),
+  /** Draft resume link: the submission plus a fresh non-secret request tail. */
+  draftResume: (submissionId: Id, requestId: Id): EntityId => entityId(`${submissionId}:${requestId}`),
 
   /** Admin notification: one newly received submission per notified admin. */
   adminNotification: (submissionId: Id, adminId: Id): EntityId => entityId(`${submissionId}:admin:${adminId}`),

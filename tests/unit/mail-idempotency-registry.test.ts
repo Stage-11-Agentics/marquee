@@ -4,10 +4,10 @@ import { buildIdempotencyKey } from "../../src/jobs/mail/outbox";
 import { IDEMPOTENCY_REGISTRY } from "../../src/jobs/mail/idempotency";
 
 /**
- * These are the complete pre-registry entity-id expressions from the shipped
- * mail writers. Keeping the old strings beside the named builders makes the
- * pure refactor auditable: before the bug fixes, every resulting key must be
- * byte-for-byte identical, not merely equivalent under a new naming scheme.
+ * These are the pre-registry entity-id expressions whose grains remain
+ * unchanged after the two intentional bug fixes below. Keeping the old
+ * strings beside the named builders makes the pure refactor auditable:
+ * before the bug fixes, every resulting key was byte-for-byte identical.
  */
 const inventory = [
   { name: "trigger", template: "submission_confirmation", person: "person-1", before: "submission-1", actual: IDEMPOTENCY_REGISTRY.trigger("submission-1") },
@@ -16,7 +16,6 @@ const inventory = [
   { name: "pre-close reminder", template: "form_closing_reminder", person: "person-1", before: "form-1", actual: IDEMPOTENCY_REGISTRY.preCloseReminder("form-1") },
   { name: "overdue reminder", template: "task_overdue", person: "person-1", before: "task-1", actual: IDEMPOTENCY_REGISTRY.overdueTaskReminder("task-1") },
   { name: "co-speaker invitation", template: "added_to_submission", person: "person-1", before: "participation-1", actual: IDEMPOTENCY_REGISTRY.coSpeakerInvitation("participation-1") },
-  { name: "draft resume", template: "draft_resume", person: "person-1", before: "submission-1", actual: IDEMPOTENCY_REGISTRY.draftResume("submission-1") },
   { name: "form confirmation", template: "submission_confirmation", person: "person-1", before: "submission-1", actual: IDEMPOTENCY_REGISTRY.formConfirmation("submission-1") },
   { name: "admin notification", template: "custom", person: "admin-1", before: "submission-1:admin:admin-1", actual: IDEMPOTENCY_REGISTRY.adminNotification("submission-1", "admin-1") },
   { name: "attendee claim", template: "attendee_schedule_claim", person: null, before: "attendee_schedule_claim:ABC123:1720000000000", actual: IDEMPOTENCY_REGISTRY.attendeeClaim("ABC123", 1720000000000) },
@@ -41,5 +40,12 @@ describe("outbox idempotency registry", () => {
   test("registry is frozen so a call site cannot replace a business grain", () => {
     expect(Object.isFrozen(IDEMPOTENCY_REGISTRY)).toBe(true);
   });
-});
 
+  test("Bug A · every draft-resume request keeps the submission and adds its request tail", () => {
+    const first = IDEMPOTENCY_REGISTRY.draftResume("submission-1", "request-1");
+    const second = IDEMPOTENCY_REGISTRY.draftResume("submission-1", "request-2");
+    expect(first).toBe("submission-1:request-1");
+    expect(second).toBe("submission-1:request-2");
+    expect(second).not.toBe(first);
+  });
+});

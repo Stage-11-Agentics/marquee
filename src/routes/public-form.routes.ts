@@ -537,6 +537,10 @@ async function createDraft(
   });
   const submissionId = crypto.randomUUID();
   const resumeToken = mintToken();
+  // A submitter can ask for the same draft link again. Keep the durable
+  // submission identity for joins, but give this mail request its own
+  // non-secret tail so the outbox does not mistake a resend for a duplicate.
+  const resumeRequestId = crypto.randomUUID();
   const title = answerText(projected.projected.answers, "title") ?? "Untitled abstract";
   await context.env.DB.prepare(
     `INSERT INTO submissions
@@ -558,7 +562,7 @@ async function createDraft(
     personId: person.id,
     toEmail: email,
     templateKey: "draft_resume",
-    entityId: IDEMPOTENCY_REGISTRY.draftResume(submissionId),
+    entityId: IDEMPOTENCY_REGISTRY.draftResume(submissionId, resumeRequestId),
     subject: PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT,
     text: `${PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT} here: ${resumeUrl}`,
     html: `<p><a href="${resumeUrl}">${PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT}</a></p>`,
