@@ -7,6 +7,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
+import { SCHEMA_DELTAS } from "./schema-deltas.mjs";
+
 const [nodeMajor, nodeMinor] = process.versions.node.split(".").map(Number);
 assert.ok(
   nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 5),
@@ -17,10 +19,11 @@ const { DatabaseSync } = await import("node:sqlite");
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const wrangler = join(root, "node_modules", ".bin", "wrangler");
 const state = mkdtempSync(join(tmpdir(), "marquee-schema-"));
-const migrations = readdirSync(join(root, "migrations"))
+const migrationFiles = readdirSync(join(root, "migrations"))
   .filter((name) => /^\d+_.+\.sql$/.test(name))
-  .sort()
-  .map((name) => readFileSync(join(root, "migrations", name), "utf8"));
+  .sort();
+const migrationNames = migrationFiles.map((name) => name.replace(/\.sql$/, ""));
+const migrations = migrationFiles.map((name) => readFileSync(join(root, "migrations", name), "utf8"));
 const migration = migrations.join("\n");
 const initialMigration = migrations[0];
 const typeMirror = readFileSync(join(root, "src", "db", "schema.ts"), "utf8");
@@ -126,6 +129,27 @@ function parseMirrorColumns(source) {
   return mapping;
 }
 
+const missingDeltas = migrationNames.filter((name) => !Object.hasOwn(SCHEMA_DELTAS, name));
+assert.equal(
+  missingDeltas.length,
+  0,
+  `Missing schema delta for ${missingDeltas.join(", ")}. Add scripts/schema-deltas/<migration-name>.json with { "tables": <integer>, "foreignKeys": <integer> }; derive the values from the real schema verifier.`,
+);
+const staleDeltas = Object.keys(SCHEMA_DELTAS).filter((name) => !migrationNames.includes(name));
+assert.equal(
+  staleDeltas.length,
+  0,
+  `Schema delta has no matching migration: ${staleDeltas.join(", ")}. Remove the stale delta file.`,
+);
+const declaredTableTotal = migrationNames.reduce(
+  (total, name) => total + SCHEMA_DELTAS[name].tables,
+  0,
+);
+const declaredForeignKeyTotal = migrationNames.reduce(
+  (total, name) => total + SCHEMA_DELTAS[name].foreignKeys,
+  0,
+);
+
 const initialTables = names(/^CREATE TABLE (\w+) \(/gm, initialMigration);
 // Rebuild migrations create transient *_new tables before dropping and
 // renaming them. They are not part of the final product table registry.
@@ -183,8 +207,16 @@ const requiredIndexes = [
 
 assert.equal(initialTables.length, 46, "0001 must define exactly 46 product tables");
 assert.equal(new Set(initialTables).size, 46, "0001 contains duplicate table names");
-assert.equal(expectedTables.length, 56, "Applied migrations must define exactly 56 product tables");
-assert.equal(new Set(expectedTables).size, 56, "Applied migrations contain duplicate table names");
+assert.equal(
+  expectedTables.length,
+  declaredTableTotal,
+  `Applied migrations define ${expectedTables.length} product tables, but declared schema deltas sum to ${declaredTableTotal}`,
+);
+assert.equal(
+  new Set(expectedTables).size,
+  expectedTables.length,
+  "Applied migrations contain duplicate table names",
+);
 for (const index of requiredIndexes) {
   assert.ok(expectedIndexes.includes(index), `Required schema index is missing: ${index}`);
 }
@@ -315,7 +347,11 @@ try {
       "FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f " +
       "WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%'",
   ).all();
-  assert.equal(foreignKeyRows.length, 115, "Expected the exact foreign-key graph");
+  assert.equal(
+    foreignKeyRows.length,
+    declaredForeignKeyTotal,
+    `Applied migrations build ${foreignKeyRows.length} foreign-key rows, but declared schema deltas sum to ${declaredForeignKeyTotal}`,
+  );
   const foreignKeyCheck = sqlite.prepare("PRAGMA foreign_key_check").all();
   assert.deepEqual(foreignKeyCheck, [], "Fresh migration has unresolved foreign keys");
 
