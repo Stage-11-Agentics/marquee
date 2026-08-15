@@ -27,6 +27,7 @@ import { objectKeyFor } from "../lib/r2/keys";
 import { mediaAttachmentIsActive, publicMediaUrl, verifyMediaUrl } from "../lib/r2/media-links";
 import { extensionOf, parseUploadOwnerConfig, policyFor, sanitizeFilename, validateDeclared } from "../lib/r2/policy";
 import { presignPut, type R2SigningConfig } from "../lib/r2/presign";
+import { sponsorContactTaskAccess } from "../lib/sponsors/task-access";
 import type { UploadOwnerConfig } from "../lib/r2/protocol";
 import { checkUploadRateLimits, rateLimitHeaders } from "../lib/r2/rate-limit";
 import { isMediaHost, serveInlineImageObject, serveMediaObject } from "../lib/r2/serve";
@@ -380,7 +381,14 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
     )
       .bind(ownerId)
       .first<{ id: string; event_id: string; person_id: string; file_config: string | null }>();
-    if (!task || task.person_id !== session.person_id) {
+    // A sponsorship contact may upload for a deliverable assigned to a
+    // colleague — the same predicate the completion route uses, so a file task
+    // can never validate on one route and fail at the PUT on the other.
+    const ownedByCaller = task !== null && task.person_id === session.person_id;
+    const sponsorSeat = task !== null && !ownedByCaller
+      ? await sponsorContactTaskAccess(env.DB, session.person_id, ownerId)
+      : null;
+    if (!task || (!ownedByCaller && !sponsorSeat)) {
       return uploadError(context, "forbidden", "task does not belong to the authenticated principal");
     }
     eventId = task.event_id;

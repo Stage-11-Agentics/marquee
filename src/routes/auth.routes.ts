@@ -17,6 +17,7 @@ import { createSession, resolveSession, revokeSession, SESSION_TTL_MS } from "..
 import { isEventSpeaker, portalPreviewEventId, portalPreviewHint, portalPreviewReturnSessionId } from "../lib/auth/portal-preview";
 import { authHasRole, loadMembershipsForOrg } from "../lib/auth/scope-resolution";
 import { pickOutboxEventId, rolesOf, signinRedirect } from "../lib/auth/signin-destination";
+import { isSponsorshipContact } from "../lib/sponsors/task-access";
 import type { DemoRole } from "../lib/auth/demo-seat";
 import { DEMO_ROLE_TO_MEMBERSHIP, demoRoleForEmail, findDemoPersona } from "../lib/auth/demo-seat";
 import { findDemoEvent } from "../lib/demo-event";
@@ -250,10 +251,15 @@ const requestMagicLink = defineApiRoute(
       // and no link appears on screen to compensate for the mail that is not
       // coming.
       if (event) {
-        const redirectTo = signinRedirect(body.redirect_to, rolesOf(memberships));
+        // A sponsorship contact holds no membership row, so their seat cannot be
+        // read off `memberships` — without this the sponsor portal's own door
+        // lands them on the speaker portal, which correctly tells them they have
+        // no speaker record. A true sentence, and a dead end.
+        const sponsorContact = await isSponsorshipContact(context.env.DB, person.id, person.org_id);
+        const redirectTo = signinRedirect(body.redirect_to, rolesOf(memberships), { sponsorContact });
         const link = await mintMagicLink(context.env.DB, {
           personId: person.id,
-          eventId: /^(\/portal|\/reviewer|\/co-speaker|\/task)(?:[/?]|$)/.test(redirectTo) ? event.id : null,
+          eventId: /^(\/portal|\/sponsor-portal|\/reviewer|\/co-speaker|\/task)(?:[/?]|$)/.test(redirectTo) ? event.id : null,
           purpose: "login",
           redirectTo,
           now,

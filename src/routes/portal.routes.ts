@@ -23,10 +23,6 @@ import {
   type ArrivalProjection,
   type ArrivalSession,
 } from "../lib/venue-geometry";
-import { parseUploadOwnerConfig, policyFor } from "../lib/r2/policy";
-import { listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
-import { readTaskFileConfig } from "../lib/task-template-config";
-import { isTaskOverdue } from "../lib/task-due";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
 import { firstName } from "../jobs/mail/merge-data";
@@ -34,7 +30,15 @@ import {
   isFieldApplicable,
   projectApplicableAnswers,
 } from "../lib/form-conditions";
-import { listFormFields, type FormFieldView } from "./forms.queries";
+import { listFormFields } from "./forms.queries";
+import { sponsorContactTaskAccess } from "../lib/sponsors/task-access";
+import { sponsorWritebackStatements } from "../lib/sponsors/session-writeback";
+import {
+  listPortalTasks,
+  parseJson,
+  parseObject,
+  readSubmissionAnswers,
+} from "./portal-tasks.queries";
 import { auditStatement, writeAudit } from "../lib/audit";
 import { contentHistoryFor } from "../lib/history";
 import { submitterEditability } from "../lib/submission-editing";
@@ -177,6 +181,8 @@ type TaskProjection = {
   event_id: string;
   person_id: string;
   submission_id: string | null;
+  /** Set when this deliverable belongs to a sponsorship rather than a speaker. */
+  sponsorship_id: string | null;
   submission_title: string | null;
   submission_status: string | null;
   template_id: string;
@@ -220,27 +226,6 @@ Your confirmed schedule will show the room and time when it is ready.
 [Conference site](/agenda)
 `,
 };
-
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (typeof value !== "string") return fallback;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function parseObject(value: string | null | undefined): Record<string, unknown> {
-  const parsed = parseJson<unknown>(value, {});
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? parsed as Record<string, unknown>
-    : {};
-}
-
-function readStoredAnswer(row: { value_json: string | null; value_text: string | null }): unknown {
-  if (row.value_json !== null) return parseJson<unknown>(row.value_json, row.value_text ?? "");
-  return row.value_text ?? "";
-}
 
 function eventDateTime(event: EventProjection, startsAt: number | null): { day: string; date: string; time: string } | null {
   if (startsAt === null) return null;
@@ -788,148 +773,6 @@ async function listSubmissions(db: D1Database, event: EventProjection, personId:
   return [...grouped.values()];
 }
 
-async function readSubmissionAnswers(
-  db: D1Database,
-  submissionId: string | null,
-): Promise<Record<string, unknown>> {
-  if (!submissionId) return {};
-  const rows = await db
-    .prepare(
-      `SELECT field.key, answer.value_json, answer.value_text
-       FROM submission_answers answer
-       JOIN form_fields field ON field.id = answer.field_id
-       WHERE answer.submission_id = ?`,
-    )
-    .bind(submissionId)
-    .all<{ key: string; value_json: string | null; value_text: string | null }>();
-  return Object.fromEntries(rows.results.map((row) => [row.key, readStoredAnswer(row)]));
-}
-
-function taskPayload(
-  task: TaskProjection,
-  fields: FormFieldView[],
-  answers: Record<string, unknown>,
-  versions: FileVersionList | null,
-): Record<string, unknown> {
-  if (task.kind === "acknowledge") {
-    return { kind: task.kind, acknowledged: parseObject(task.response_json).acknowledged === true };
-  }
-  if (task.kind === "file") {
-    const config = parseUploadOwnerConfig(task.file_config);
-    const policy = policyFor("task_upload", config);
-    const editedConfig = readTaskFileConfig(task.file_config);
-    const accept = editedConfig?.accept ?? policy?.rules.map((rule) => rule.extension) ?? [];
-    // The speaker needs to see WHAT they uploaded, not just that something
-    // happened: a bare checkmark is indistinguishable from a lost file.
-    return {
-      kind: task.kind,
-      attachment_id: task.attachment_id,
-      accept,
-      max_bytes: editedConfig?.maxBytes ?? policy?.maxBytes ?? null,
-      versions: versions?.versions ?? [],
-      latest: versions?.latest ?? null,
-      version_count: versions?.version_count ?? 0,
-      latest_source: versions?.latest_source ?? "pointer",
-    };
-  }
-  const projection = projectApplicableAnswers(fields, answers);
-  return {
-    kind: task.kind,
-    form_id: task.form_id,
-    fields: fields
-      .filter((field) => isFieldApplicable(field, answers))
-      .map((field) => ({
-        key: field.key,
-        label: field.label,
-        help_text: field.help_text,
-        type: field.type,
-        required: field.required,
-        position: field.position,
-        config: field.config,
-        condition: field.condition,
-        value: projection.answers[field.key] ?? null,
-      })),
-    answers: projection.answers,
-  };
-}
-
-async function listTasks(db: D1Database, event: EventProjection, personId: string, mediaPublicOrigin: string, mediaSigningSecret: string): Promise<Record<string, unknown>[]> {
-  const [rows, cancellationAudits] = await Promise.all([
-    db
-      .prepare(
-        `SELECT task.id, task.event_id, task.person_id, task.submission_id,
-           submission.title AS submission_title, submission.status AS submission_status,
-           task.template_id, template.due_at AS template_due_at,
-           task.title, task.kind, task.description, task.due_at,
-           task.status, task.completed_at, task.cancelled_at,
-           task.response_json, task.attachment_id, template.form_id, template.file_config
-         FROM speaker_tasks task
-         JOIN task_templates template ON template.id = task.template_id AND template.event_id = task.event_id
-         LEFT JOIN submissions submission ON submission.id = task.submission_id AND submission.event_id = task.event_id
-         WHERE task.event_id = ? AND task.person_id = ?
-         ORDER BY task.due_at ASC, task.id ASC`,
-      )
-      .bind(event.id, personId)
-      .all<TaskProjection>(),
-    db
-      .prepare(
-        `SELECT entity_id AS submission_id, after_json
-         FROM audit_log
-         WHERE event_id = ? AND entity_type = 'submission' AND action = 'submission.tasks_cancelled'
-         ORDER BY created_at DESC, id DESC`,
-      )
-      .bind(event.id)
-      .all<{ submission_id: string; after_json: string | null }>(),
-  ]);
-  const cancellationReasons = new Map<string, string>();
-  for (const audit of cancellationAudits.results) {
-    if (cancellationReasons.has(audit.submission_id)) continue;
-    const reason = parseObject(audit.after_json).reason;
-    if (typeof reason === "string" && reason.length > 0) cancellationReasons.set(audit.submission_id, reason);
-  }
-
-  // One batched read for every file task on the page rather than one per row.
-  const versionsByTask = await listVersionsForOwners(
-    db,
-    "task_upload",
-    rows.results.filter((task) => task.kind === "file").map((task) => task.id),
-    mediaPublicOrigin,
-    mediaSigningSecret,
-  );
-
-  return Promise.all(rows.results.map(async (task) => {
-    const fields = task.kind === "form" && task.form_id ? await listFormFields(db, task.form_id) : [];
-    const submissionAnswers = await readSubmissionAnswers(db, task.submission_id);
-    const responseAnswers = task.kind === "form" ? parseObject(task.response_json) : {};
-    const answers = { ...submissionAnswers, ...responseAnswers };
-    const cancelled = task.cancelled_at !== null;
-    const cancelledReason = task.submission_id
-      ? cancellationReasons.get(task.submission_id)
-        ?? (task.submission_status === "rejected" ? "This talk was rejected by the conference." : "This talk was withdrawn from the conference.")
-      : "This task is no longer needed by the conference.";
-    return {
-      id: task.id,
-      submission_id: task.submission_id,
-      submission_title: task.submission_title,
-      template_id: task.template_id,
-      title: task.title,
-      kind: task.kind,
-      description: task.description,
-      due_at: task.due_at,
-      status: task.status,
-      completed_at: task.completed_at,
-      cancelled_at: task.cancelled_at,
-      cancelled_reason: cancelled ? cancelledReason : null,
-      overdue: !cancelled && task.status === "open" && isTaskOverdue({
-        dueAt: task.due_at,
-        templateDueAt: task.template_due_at,
-        timezone: event.timezone,
-      }, Date.now()),
-      payload: taskPayload(task, fields, answers, versionsByTask.get(task.id) ?? null),
-    };
-  }));
-}
-
 function submissionView(event: EventProjection, row: SubmissionProjection, showBuildingComparison: boolean): Record<string, unknown> {
   const dateTime = eventDateTime(event, row.starts_at);
   const waveName = row.wave_name ?? (row.wave_decision_on ? "Next wave" : null);
@@ -1153,7 +996,7 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrig
   const person = await personFor(db, auth.personId);
   const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount, socialPlatforms] = await Promise.all([
     listSubmissions(db, event, auth.personId),
-    listTasks(db, event, auth.personId, mediaPublicOrigin, mediaSigningSecret),
+    listPortalTasks(db, event, { kind: "person", personId: auth.personId }, mediaPublicOrigin, mediaSigningSecret),
     primaryBuildingFor(db, event.id),
     pinnedBuildingCountFor(db, event.id),
     enabledSocialPlatformsFor(db, event.id),
@@ -1217,13 +1060,20 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrig
   };
 }
 
-async function taskFor(db: D1Database, auth: SessionAuth, taskId: string): Promise<TaskProjection> {
-  const task = await db
-    .prepare(
-      `SELECT task.id, task.event_id, task.person_id, task.submission_id, task.template_id,
+const TASK_PROJECTION_COLUMNS = `task.id, task.event_id, task.person_id, task.submission_id,
+         task.sponsorship_id, task.template_id,
          submission.title AS submission_title, submission.status AS submission_status,
          task.title, task.kind, task.description, task.due_at, task.status, task.completed_at, task.cancelled_at,
-         task.response_json, task.attachment_id, template.form_id, template.file_config
+         task.response_json, task.attachment_id, template.form_id, template.file_config`;
+
+/**
+ * The speaker's own deliverable. Unchanged: their task, in their organization,
+ * with a speaker membership behind it.
+ */
+async function speakerTaskFor(db: D1Database, auth: SessionAuth, taskId: string): Promise<TaskProjection | null> {
+  return db
+    .prepare(
+      `SELECT ${TASK_PROJECTION_COLUMNS}
        FROM speaker_tasks task
        JOIN events conference ON conference.id = task.event_id AND conference.org_id = ?
        JOIN task_templates template ON template.id = task.template_id AND template.event_id = task.event_id
@@ -1234,16 +1084,65 @@ async function taskFor(db: D1Database, auth: SessionAuth, taskId: string): Promi
     )
     .bind(auth.orgId, taskId, auth.personId)
     .first<TaskProjection>();
+}
+
+/**
+ * A sponsorship deliverable the caller may act on — possibly assigned to one of
+ * their colleagues, which is the whole point (sponsors-design §5.2 ruling 1).
+ * The seat is proved by the shared predicate rather than restated here, so the
+ * upload signer cannot drift away from this answer.
+ */
+async function sponsorContactTaskFor(db: D1Database, auth: SessionAuth, taskId: string): Promise<TaskProjection | null> {
+  const access = await sponsorContactTaskAccess(db, auth.personId, taskId);
+  if (!access) return null;
+  return db
+    .prepare(
+      `SELECT ${TASK_PROJECTION_COLUMNS}
+       FROM speaker_tasks task
+       JOIN task_templates template ON template.id = task.template_id AND template.event_id = task.event_id
+       LEFT JOIN submissions submission ON submission.id = task.submission_id AND submission.event_id = task.event_id
+       WHERE task.id = ?`,
+    )
+    .bind(access.taskId)
+    .first<TaskProjection>();
+}
+
+/**
+ * One task resolver for both portal seats.
+ *
+ * A cancelled task is found and then refused with 409, never hidden behind a
+ * 404: "this was cancelled" is a true answer a person can act on, and "no such
+ * task" is not.
+ */
+async function taskFor(db: D1Database, auth: SessionAuth, taskId: string): Promise<TaskProjection> {
+  const task = await speakerTaskFor(db, auth, taskId) ?? await sponsorContactTaskFor(db, auth, taskId);
   if (!task) throw ApiError.notFound("task not found");
-  if (task.cancelled_at !== null) throw ApiError.conflict("this task was cancelled because the talk is no longer active");
+  if (task.cancelled_at !== null) {
+    throw ApiError.conflict(
+      task.sponsorship_id === null
+        ? "this task was cancelled because the talk is no longer active"
+        : "this deliverable was cancelled and is no longer needed",
+    );
+  }
   return task;
 }
 
+/**
+ * Complete one deliverable, from either portal seat.
+ *
+ * Two things here are new for the sponsor seat and inert for the speaker one.
+ * The UPDATE is scoped to the task's ASSIGNEE rather than to the caller, because
+ * any sponsorship contact may finish any open deliverable; for a speaker the two
+ * are the same person by construction, so nothing changes. And
+ * `completed_by_person_id` records the caller either way, which is what lets the
+ * row afterwards say who actually did it instead of implying the assignee did.
+ */
 async function completeTask(
   db: D1Database,
   auth: SessionAuth,
   task: TaskProjection,
   body: z.infer<typeof taskCompletionBody>,
+  requestId: string | null = null,
 ): Promise<Record<string, unknown>> {
   const now = Date.now();
   let response: Record<string, unknown> = parseObject(task.response_json);
@@ -1306,13 +1205,29 @@ async function completeTask(
     response = projection.answers as Record<string, unknown>;
   }
 
+  // A sponsor deliverable that is ABOUT something else reaches it here, before
+  // the completion lands. See session-writeback.ts for why that order: of the two
+  // half-states D1 can leave, "the Session was filled, the task is still open" is
+  // the recoverable one.
+  const writeback = await sponsorWritebackStatements({
+    db,
+    orgId: auth.orgId,
+    task,
+    answers: response,
+    actorPersonId: auth.personId,
+    requestId,
+    now,
+  });
+  if (writeback.length > 0) await db.batch(writeback);
+
   const result = await db
     .prepare(
       `UPDATE speaker_tasks
-       SET status = 'done', completed_at = ?, response_json = ?, attachment_id = ?, last_write_source = 'marquee', updated_at = ?
+       SET status = 'done', completed_at = ?, completed_by_person_id = ?, response_json = ?,
+           attachment_id = ?, last_write_source = 'marquee', updated_at = ?
        WHERE id = ? AND event_id = ? AND person_id = ? AND cancelled_at IS NULL`,
     )
-    .bind(now, JSON.stringify(response), attachmentId, now, task.id, task.event_id, auth.personId)
+    .bind(now, auth.personId, JSON.stringify(response), attachmentId, now, task.id, task.event_id, task.person_id)
     .run();
   if (Number(result?.meta?.changes ?? 0) !== 1) {
     throw ApiError.conflict("this task was cancelled before completion");
@@ -1568,7 +1483,9 @@ const completeSpeakerTask = defineApiRoute(
   async (context) => {
     const auth = requireUnscopedSpeakerSession(context);
     const task = await taskFor(context.env.DB, auth, context.req.valid("param").taskId);
-    return context.json({ task: await completeTask(context.env.DB, auth, task, context.req.valid("json")) }, 200);
+    return context.json({
+      task: await completeTask(context.env.DB, auth, task, context.req.valid("json"), context.get("requestId") ?? null),
+    }, 200);
   },
 );
 

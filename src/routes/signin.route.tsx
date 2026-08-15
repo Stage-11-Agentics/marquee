@@ -8,6 +8,7 @@ import type { PersonRow } from "../db/schema";
 import { resolveAuth } from "../lib/auth/auth-middleware";
 import { DEMO_SIGNIN_EMAIL_LIST } from "../lib/auth/demo-seat";
 import { roleHome, rolesOf, safeNext } from "../lib/auth/signin-destination";
+import { isSponsorshipContact } from "../lib/sponsors/task-access";
 import { findDemoEvent } from "../lib/demo-event";
 import { ICON_LINKS } from "../lib/head-icons";
 import { INSTANCE_STATUS_FIXES, mailConfigured } from "../lib/instance-status";
@@ -462,7 +463,11 @@ export async function readSigninState(context: Context<{ Bindings: Env }>): Prom
         signedIn = {
           name: person.name,
           email: person.email,
-          home: next || roleHome(rolesOf(auth.memberships)),
+          // Same resolution as the magic-link mint, including the sponsor seat:
+          // Continue must land where the link would have.
+          home: next || roleHome(rolesOf(auth.memberships), {
+            sponsorContact: await isSponsorshipContact(context.env.DB, person.id, person.org_id),
+          }),
         };
       }
     }

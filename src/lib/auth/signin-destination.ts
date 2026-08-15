@@ -16,13 +16,32 @@ export { ROLE_HOME } from "./role-home";
 const PROGRAM_STAFF_ROLES: readonly string[] = ["owner", "program_lead", "ops"];
 
 /**
+ * Seats that are not membership roles at all.
+ *
+ * A sponsorship contact holds no `memberships` row — they are a `people` row
+ * joined to a deal (`sponsorship_contacts`), which is exactly the doctrine that
+ * keeps workflow state off `people`. So the fact has to arrive beside the roles
+ * rather than inside them.
+ */
+export interface NonMembershipSeats {
+  sponsorContact?: boolean;
+}
+
+/**
  * The seat's own home, resolved at mint time from the roles it actually holds.
  * A person with no membership at all is a speaker as far as this is concerned —
  * the portal is the surface that explains itself to someone who has none.
+ *
+ * The sponsor portal sits below every membership role deliberately. Somebody who
+ * is both a speaker and a sponsor contact still lands on `/portal`: that is the
+ * surface where the conference is asking things OF them, and it is the one they
+ * would be surprised not to see. Their sponsorship is one link away from there.
  */
-export function roleHome(roles: readonly string[]): string {
+export function roleHome(roles: readonly string[], seats: NonMembershipSeats = {}): string {
   if (roles.some((role) => PROGRAM_STAFF_ROLES.includes(role))) return ROLE_HOME.staff;
   if (roles.includes("reviewer")) return ROLE_HOME.reviewer;
+  if (roles.includes("speaker")) return ROLE_HOME.speaker;
+  if (seats.sponsorContact === true) return ROLE_HOME.sponsor;
   return ROLE_HOME.speaker;
 }
 
@@ -88,8 +107,12 @@ function stripReservedParams(next: string): string {
 }
 
 /** Where a magic link should land: the caller's safe `?next=`, else the seat's home. */
-export function signinRedirect(next: string | null | undefined, roles: readonly string[]): string {
-  return safeNext(next) ?? roleHome(roles);
+export function signinRedirect(
+  next: string | null | undefined,
+  roles: readonly string[],
+  seats: NonMembershipSeats = {},
+): string {
+  return safeNext(next) ?? roleHome(roles, seats);
 }
 
 export interface MembershipEventCandidate {
