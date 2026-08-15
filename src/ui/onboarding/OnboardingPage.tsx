@@ -84,6 +84,34 @@ async function readBoard(eventId: string, filters: { filter: OnboardingFilter; t
   return requestJson<OnboardingSnapshot>(`/api/v1/events/${encodeURIComponent(eventId)}/onboarding?${query.toString()}`, "/api/v1/events/{eventId}/onboarding", { signal });
 }
 
+/**
+ * Reconcile only the page that was refreshed. Selection intentionally survives
+ * paging, but a row that was visible on this page and disappears from the
+ * server must not remain actionable through its cached projection.
+ */
+export function reconcileOnboardingSelection(
+  selected: ReadonlySet<string>,
+  previousVisibleIds: ReadonlySet<string>,
+  nextRows: readonly Pick<OnboardingRow, "id">[],
+): Set<string> {
+  const nextVisibleIds = new Set(nextRows.map((row) => row.id));
+  return new Set([...selected].filter((id) => !previousVisibleIds.has(id) || nextVisibleIds.has(id)));
+}
+
+export function reconcileOnboardingSelectionForView(
+  selected: ReadonlySet<string>,
+  visibleRowsByView: ReadonlyMap<string, ReadonlySet<string>>,
+  viewIdentity: string,
+  nextRows: readonly Pick<OnboardingRow, "id">[],
+): Set<string> {
+  const previousVisibleIds = visibleRowsByView.get(viewIdentity);
+  return previousVisibleIds === undefined ? new Set(selected) : reconcileOnboardingSelection(selected, previousVisibleIds, nextRows);
+}
+
+export function shouldApplyOnboardingSnapshot(disposed: boolean, activeRequest: AbortController | null, request: AbortController): boolean {
+  return !disposed && activeRequest === request && !request.signal.aborted;
+}
+
 function formatDate(value: number | null): string {
   if (value === null) return "—";
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
@@ -248,10 +276,12 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
   const matrixRef = useRef<HTMLDivElement>(null);
   const [matrixOverflows, setMatrixOverflows] = useState(false);
   const filterIdentity = JSON.stringify(filters);
+  const visibleRowsByView = useRef<Map<string, Set<string>>>(new Map());
   const updateFilters = (update: typeof filters | ((current: typeof filters) => typeof filters)) => {
     setPage(1);
     setSelected(new Set());
     setKnownRows(new Map());
+    visibleRowsByView.current = new Map();
     setFilters(update);
   };
   const ready = state.kind === "ready"
@@ -267,28 +297,47 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
   const allVisibleSelected = rows.length > 0 && rows.every((row) => selected.has(row.id));
 
   useEffect(() => {
+    setSelected(new Set());
+    setKnownRows(new Map());
+    visibleRowsByView.current = new Map();
+  }, [eventId]);
+
+  useEffect(() => {
     let disposed = false;
     let active: AbortController | null = null;
     const load = (showLoading: boolean) => {
       active?.abort();
-      active = new AbortController();
+      const controller = new AbortController();
+      active = controller;
       if (showLoading) setState({ kind: "loading" });
-      readBoard(eventId, filters, page, pageSize, active.signal)
+      readBoard(eventId, filters, page, pageSize, controller.signal)
         .then((snapshot) => {
-          if (disposed) return;
+          if (!shouldApplyOnboardingSnapshot(disposed, active, controller)) return;
+          const viewIdentity = `${eventId}|${filterIdentity}|${page}`;
+          const previousVisibleIds = visibleRowsByView.current.get(viewIdentity);
+          const nextVisibleIds = new Set(snapshot.data.map((row) => row.id));
           setState({ kind: "ready", snapshot });
+          if (previousVisibleIds !== undefined) {
+            setSelected((current) => reconcileOnboardingSelection(current, previousVisibleIds, snapshot.data));
+          }
           setKnownRows((current) => {
             const next = new Map(current);
+            if (previousVisibleIds !== undefined) {
+              for (const id of previousVisibleIds) {
+                if (!nextVisibleIds.has(id)) next.delete(id);
+              }
+            }
             for (const row of snapshot.data) next.set(row.id, row);
             return next;
           });
+          visibleRowsByView.current.set(viewIdentity, nextVisibleIds);
           // A mutation can shrink the result set while an operator is reading a
           // later page. Ask for the last real page instead of leaving an empty
           // grid behind with no way back to the data.
           const lastPage = Math.max(1, snapshot.total_pages);
           setPage((current) => current > lastPage ? lastPage : current);
         })
-        .catch((error: unknown) => { if (!disposed && !active?.signal.aborted) setState({ kind: "error", message: errorSummary(error) }); });
+        .catch((error: unknown) => { if (shouldApplyOnboardingSnapshot(disposed, active, controller)) setState({ kind: "error", message: errorSummary(error) }); });
     };
     load(true);
     const timer = window.setInterval(() => load(false), 5_000);
@@ -331,6 +380,7 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
     else rows.forEach((row) => next.add(row.id));
     return next;
   });
+  const clearSelection = () => setSelected(new Set());
   const selectForNudge = (row: OnboardingRow, event: Event) => {
     setSelected(new Set([row.id]));
     openDrawer({ kind: "compose" }, event.currentTarget as HTMLElement);
@@ -359,7 +409,7 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
   const totalPages = Math.max(1, ready?.total_pages ?? Math.ceil(matchingTotal / pageSize));
 
   return <div class="onboarding-page">
-    <PageHeader title="Onboarding" copy={ready ? `${counts.incomplete} accepted speakers still owe something. The most behind are first; every task and reminder is visible here.` : "Reading the conference chase board…"} actions={<><AgentBriefLauncher surface="portal" eventId={eventId} small /><Button small onClick={() => navigate?.("/import")}>Import speakers</Button><button class="onboarding-fixed-action onboarding-header-action" type="button" disabled={selectedRows.length === 0 || inviteState.kind === "sending"} onClick={() => void inviteSelected()}>{inviteState.kind === "sending" ? "Inviting…" : `Invite to portal (${selectedRows.length})`}</button><button class="onboarding-fixed-action onboarding-header-action" type="button" disabled={selectedRows.length === 0} onClick={(event) => openDrawer({ kind: "compose" }, event.currentTarget)}>{`Send reminder (${selectedRows.length})`}</button></>} />
+    <PageHeader title="Onboarding" copy={ready ? `${counts.incomplete} accepted speakers still owe something. The most behind are first; every task and reminder is visible here.` : "Reading the conference chase board…"} actions={<><AgentBriefLauncher surface="portal" eventId={eventId} small /><Button small onClick={() => navigate?.("/import")}>Import speakers</Button><Button small class="onboarding-selection-clear" type="button" disabled={selected.size === 0} onClick={clearSelection}>Clear selection</Button><button class="onboarding-fixed-action onboarding-header-action" type="button" disabled={selectedRows.length === 0 || inviteState.kind === "sending"} onClick={() => void inviteSelected()}>{inviteState.kind === "sending" ? "Inviting…" : `Invite to portal (${selectedRows.length})`}</button><button class="onboarding-fixed-action onboarding-header-action" type="button" disabled={selectedRows.length === 0} onClick={(event) => openDrawer({ kind: "compose" }, event.currentTarget)}>{`Send reminder (${selectedRows.length})`}</button></>} />
     <div class="onboarding-invite-result-slot" aria-live="polite">{inviteState.kind === "success" ? <div class="onboarding-invite-result"><strong>{inviteState.result.message}</strong>{inviteState.result.invites.map((item) => item.magic_link ? <a href={item.magic_link} key={item.outbox_id}>Open {displayNames.get(item.person_id) ?? item.name}'s portal link</a> : <span key={item.outbox_id}>{displayNames.get(item.person_id) ?? item.name}: outbox row {item.outbox_id} recorded; delivery remains provider-controlled.</span>)}</div> : null}{inviteState.kind === "error" ? <div class="onboarding-inline-error" role="alert">Invitation failed: {inviteState.message}</div> : null}</div>
     {ready ? <>
       <div class="onboarding-metrics" aria-label="Onboarding metrics">
