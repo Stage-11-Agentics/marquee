@@ -2,6 +2,7 @@ import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, test } from "vitest";
 
 import { DEMO_EVENT_ID, DEMO_ORGANIZER_PERSON_ID, demoFixtureRows } from "../../../src/lib/reset-demo/demo-fixture";
+import { purgePublicEmbedCache } from "../../../src/lib/public-site";
 import { applyMigrations } from "../apply-migrations";
 
 const ORIGIN = "https://marquee.stage11.dev";
@@ -279,5 +280,41 @@ describe.sequential("MRQ-20 agenda API", () => {
     const body = await response.json<{ sessions: Array<{ submission_id: string }>; conflicts: Array<{ kind: string }> }>();
     expect(body.sessions.some((session) => session.submission_id === "sub-agenda-waitlisted")).toBe(true);
     expect(body.conflicts.some((conflict) => conflict.kind === "room")).toBe(true);
+  });
+
+  test("AC-89 · bulk agenda publish purges cached embeds before the KV TTL", async () => {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE submissions SET status = 'accepted', is_published = 0 WHERE id = ? AND event_id = ?")
+        .bind("sub-agenda-placed", DEMO_EVENT_ID),
+      env.DB.prepare("UPDATE agenda_items SET is_published = 0 WHERE id = ? AND event_id = ?")
+        .bind("agenda-already-placed", DEMO_EVENT_ID),
+    ]);
+    await purgePublicEmbedCache(env.CACHE, { eventId: DEMO_EVENT_ID });
+
+    try {
+      const before = await SELF.fetch(`${ORIGIN}/api/v1/public/embeds/aie-nyc-2026-agenda?event=aie-nyc-2026`);
+      expect(before.status).toBe(200);
+      const beforeBody = await before.json<{ sessions: Array<{ title: string }> }>();
+      expect(beforeBody.sessions.some((session) => session.title === "Already placed")).toBe(false);
+
+      const published = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/publish`, {
+        method: "POST",
+        body: JSON.stringify({ submission_ids: ["sub-agenda-placed"] }),
+      });
+      expect(published.status).toBe(200);
+
+      const after = await SELF.fetch(`${ORIGIN}/api/v1/public/embeds/aie-nyc-2026-agenda?event=aie-nyc-2026`);
+      expect(after.status).toBe(200);
+      const afterBody = await after.json<{ sessions: Array<{ title: string }> }>();
+      expect(afterBody.sessions.some((session) => session.title === "Already placed")).toBe(true);
+    } finally {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE submissions SET status = 'accepted', is_published = 0 WHERE id = ? AND event_id = ?")
+          .bind("sub-agenda-placed", DEMO_EVENT_ID),
+        env.DB.prepare("UPDATE agenda_items SET is_published = 0 WHERE id = ? AND event_id = ?")
+          .bind("agenda-already-placed", DEMO_EVENT_ID),
+      ]);
+      await purgePublicEmbedCache(env.CACHE, { eventId: DEMO_EVENT_ID });
+    }
   });
 });

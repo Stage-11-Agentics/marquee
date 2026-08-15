@@ -223,6 +223,7 @@ const reverseAcceptance = defineApiRoute(
     const { eventId, submissionId } = context.req.valid("param");
     const body = context.req.valid("json");
     const result = await writeAcceptanceReversal({
+      cache: context.env.CACHE,
       db: context.env.DB,
       eventId,
       submissionId,

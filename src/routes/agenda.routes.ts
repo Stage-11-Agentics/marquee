@@ -9,6 +9,7 @@ import {
 } from "../api/agenda";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { auditStatementFromSelect } from "../lib/audit";
+import { purgePublicEmbedCache } from "../lib/public-site";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
@@ -307,6 +308,7 @@ const batchPublishRoute = defineApiRoute(
       `, eventId, submissionId, now, now);
     });
     const results = await database.batch([agendaUpdate, submissionUpdate, ...auditStatements]);
+    await purgePublicEmbedCache(context.env.CACHE, { eventId });
     const publishedCount = Number(results[0]?.meta?.changes ?? 0);
     const submissionChanges = Number(results[1]?.meta?.changes ?? 0);
     if (publishedCount !== submissionIds.length || submissionChanges !== submissionIds.length) {

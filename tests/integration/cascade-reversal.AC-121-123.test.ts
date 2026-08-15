@@ -8,6 +8,7 @@ import {
 } from "../../src/jobs/cascade/decisions";
 import { buildIdempotencyKey } from "../../src/jobs/mail/outbox";
 import { enqueueOverdueTaskReminders } from "../../src/jobs/mail/triggers";
+import { purgePublicEmbedCache } from "../../src/lib/public-site";
 import { applyMigrations, env } from "./apply-migrations";
 
 const NOW = Date.parse("2026-08-20T16:00:00.000Z");
@@ -123,6 +124,7 @@ beforeAll(seedFixture);
 test("AC-121, AC-122, AC-123 · cancel choices mutate task, email, calendar, and agenda rows", async () => {
   const taskCountBefore = await env.DB.prepare("SELECT COUNT(*) AS count FROM speaker_tasks WHERE submission_id = 'sub-cancel'").first<{ count: number }>();
   const result = await writeAcceptanceReversal({
+    cache: env.CACHE,
     db: env.DB,
     eventId: "evt-reversal",
     submissionId: "sub-cancel",
@@ -262,7 +264,14 @@ test("AC-121, AC-122, AC-123 · cancel choices mutate task, email, calendar, and
 });
 
 test("AC-121, AC-122, AC-123 · retain choices leave every selected row active while removing placement", async () => {
+  await purgePublicEmbedCache(env.CACHE, { eventId: "evt-reversal" });
+  const before = await SELF.fetch("https://marquee.stage11.dev/api/v1/public/embeds/reversal-agenda?event=reversal");
+  expect(before.status).toBe(200);
+  const beforeBody = await before.json<{ sessions: Array<{ title: string }> }>();
+  expect(beforeBody.sessions.some((session) => session.title === "Retain this acceptance")).toBe(true);
+
   const result = await writeAcceptanceReversal({
+    cache: env.CACHE,
     db: env.DB,
     eventId: "evt-reversal",
     submissionId: "sub-retain",
@@ -302,4 +311,8 @@ test("AC-121, AC-122, AC-123 · retain choices leave every selected row active w
   expect(agenda).toBeNull();
   const publicSession = await SELF.fetch("https://marquee.stage11.dev/s/sub-retain?event=reversal");
   expect(publicSession.status).toBe(404);
+  const after = await SELF.fetch("https://marquee.stage11.dev/api/v1/public/embeds/reversal-agenda?event=reversal");
+  expect(after.status).toBe(200);
+  const afterBody = await after.json<{ sessions: Array<{ title: string }> }>();
+  expect(afterBody.sessions.some((session) => session.title === "Retain this acceptance")).toBe(false);
 });
