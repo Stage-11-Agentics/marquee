@@ -224,6 +224,11 @@ test("CONTRACT · MRQ-215 · speaker badges, status tabs, and counts cannot disa
   // session-less membership still supplies its organizer status.
   await env.DB.batch([
     env.DB.prepare("UPDATE participations SET confirmation_status = 'confirmed', invited_at = ? WHERE id = 'par_mrq111_accepted'").bind(NOW),
+    env.DB.prepare(
+      `INSERT INTO memberships
+         (id, org_id, event_id, person_id, role, confirmation_status, confirmed_at, invited_at, created_at, updated_at)
+       VALUES ('mem_mrq215_declined', ?, ?, ?, 'speaker', 'confirmed', ?, NULL, ?, ?)`,
+    ).bind(ORG_ID, EVENT_ID, MODERATOR_PERSON, NOW, NOW, NOW),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, invited_at, created_at, updated_at) VALUES ('par_mrq215_declined', 'sub_mrq111_accepted', ?, 'speaker', 1, 'declined', ?, ?, ?)").bind(MODERATOR_PERSON, NOW, NOW, NOW),
   ]);
   const invited = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
@@ -232,6 +237,7 @@ test("CONTRACT · MRQ-215 · speaker badges, status tabs, and counts cannot disa
     body: JSON.stringify({ name: "Invited Only", email: "invited-mrq215@example.com", invited: true }),
   });
   expect(invited.status).toBe(201);
+  const { speaker: invitedSpeaker } = await invited.json<{ speaker: { id: string } }>();
   const confirmedOnly = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -247,19 +253,32 @@ test("CONTRACT · MRQ-215 · speaker badges, status tabs, and counts cannot disa
   expect(confirmedPatch.status).toBe(200);
 
   const all = await roster();
+  const expectedRows = [
+    { id: ACCEPTED_SPEAKER, status: "confirmed" },
+    { id: DONE_SPEAKER, status: "pending" },
+    { id: MODERATOR_PERSON, status: "declined" },
+    { id: invitedSpeaker.id, status: "invited" },
+    { id: confirmedSpeaker.id, status: "confirmed" },
+  ];
+  expect(all.data).toHaveLength(5);
+  expect(all.data).toEqual(expect.arrayContaining(expectedRows.map((row) => expect.objectContaining(row))));
+  expect(all.counts).toEqual({ all: 5, pending: 1, invited: 1, confirmed: 2, declined: 1 });
+  for (const expected of expectedRows) {
+    const detail = await request(`/api/v1/events/${EVENT_ID}/speakers/${expected.id}`);
+    expect(detail.status).toBe(200);
+    const detailBody = await detail.json<{ speaker: { id: string; status: string } }>();
+    expect(detailBody.speaker).toEqual(expect.objectContaining(expected));
+  }
+
+  const expectedStatusById = new Map(expectedRows.map((row) => [row.id, row.status]));
   const expectedByStatus = new Map<string, string[]>();
   for (const row of all.data) {
-    const ids = expectedByStatus.get(String(row.status)) ?? [];
+    const expectedStatus = expectedStatusById.get(String(row.id));
+    expect(expectedStatus).toBe(String(row.status));
+    const ids = expectedByStatus.get(expectedStatus) ?? [];
     ids.push(String(row.id));
-    expectedByStatus.set(String(row.status), ids);
+    expectedByStatus.set(expectedStatus, ids);
   }
-  expect(all.counts).toEqual(expect.objectContaining({
-    all: all.data.length,
-    pending: expect.any(Number),
-    invited: expect.any(Number),
-    confirmed: expect.any(Number),
-    declined: expect.any(Number),
-  }));
   for (const status of ["pending", "invited", "confirmed", "declined"]) {
     const filtered = await roster(`?status=${status}`);
     expect(filtered.total).toBe(expectedByStatus.get(status)?.length ?? 0);
