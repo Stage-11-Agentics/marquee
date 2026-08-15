@@ -1,6 +1,12 @@
 .DS_Store
 node_modules/
-.claude/
+# Per-agent Claude state stays local; the shared session-start hook does not.
+# Claude Code on the web reads the hook from the repository, so it has to be
+# tracked — hence `.claude/*` plus negations rather than ignoring the directory.
+.claude/*
+!.claude/hooks/
+!.claude/settings.json
+.claude/settings.local.json
 .env
 .env.*
 !.env.example
