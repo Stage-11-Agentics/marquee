@@ -217,6 +217,57 @@ test("CONTRACT · MRQ-111 · SPK-04 · a status override persists, writes throug
   expect(others.data.map((row) => row.id)).not.toContain(ACCEPTED_SPEAKER);
 });
 
+test("CONTRACT · MRQ-215 · speaker badges, status tabs, and counts cannot disagree", async () => {
+  // Exercise every precedence branch through the real API projection: a
+  // participation decline outranks a membership override, all sessions being
+  // confirmed is Confirmed, an invitation makes pending work Invited, and a
+  // session-less membership still supplies its organizer status.
+  await env.DB.batch([
+    env.DB.prepare("UPDATE participations SET confirmation_status = 'confirmed', invited_at = ? WHERE id = 'par_mrq111_accepted'").bind(NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, invited_at, created_at, updated_at) VALUES ('par_mrq215_declined', 'sub_mrq111_accepted', ?, 'speaker', 1, 'declined', ?, ?, ?)").bind(MODERATOR_PERSON, NOW, NOW, NOW),
+  ]);
+  const invited = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Invited Only", email: "invited-mrq215@example.com", invited: true }),
+  });
+  expect(invited.status).toBe(201);
+  const confirmedOnly = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Confirmed Only", email: "confirmed-mrq215@example.com" }),
+  });
+  expect(confirmedOnly.status).toBe(201);
+  const { speaker: confirmedSpeaker } = await confirmedOnly.json<{ speaker: { id: string } }>();
+  const confirmedPatch = await request(`/api/v1/events/${EVENT_ID}/speakers/${confirmedSpeaker.id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ confirmation_status: "confirmed" }),
+  });
+  expect(confirmedPatch.status).toBe(200);
+
+  const all = await roster();
+  const expectedByStatus = new Map<string, string[]>();
+  for (const row of all.data) {
+    const ids = expectedByStatus.get(String(row.status)) ?? [];
+    ids.push(String(row.id));
+    expectedByStatus.set(String(row.status), ids);
+  }
+  expect(all.counts).toEqual(expect.objectContaining({
+    all: all.data.length,
+    pending: expect.any(Number),
+    invited: expect.any(Number),
+    confirmed: expect.any(Number),
+    declined: expect.any(Number),
+  }));
+  for (const status of ["pending", "invited", "confirmed", "declined"]) {
+    const filtered = await roster(`?status=${status}`);
+    expect(filtered.total).toBe(expectedByStatus.get(status)?.length ?? 0);
+    expect(filtered.data.map((row) => row.id)).toEqual(expectedByStatus.get(status) ?? []);
+    expect(filtered.counts).toEqual(all.counts);
+  }
+});
+
 test("CONTRACT · MRQ-111 · SPK-04 · a session-less speaker can still be confirmed before scheduling", async () => {
   const created = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
     method: "POST",
