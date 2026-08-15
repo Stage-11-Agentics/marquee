@@ -310,24 +310,6 @@ function buildRow(
   };
 }
 
-export function speakerMatchesFilters(row: SpeakerRow, filters: SpeakerFilters): boolean {
-  if (filters.status && filters.status !== "all" && row.status !== filters.status) return false;
-  if (filters.track && filters.track !== "all" && !row.tracks.some((track) => track.id === filters.track)) return false;
-  const search = filters.search?.trim().toLocaleLowerCase();
-  if (search) {
-    const haystack = [
-      row.name,
-      row.email,
-      row.title ?? "",
-      row.company ?? "",
-      row.id,
-      ...row.sessions.map((session) => session.title),
-    ].join(" ").toLocaleLowerCase();
-    if (!haystack.includes(search)) return false;
-  }
-  return true;
-}
-
 function speakerFilterWhere(filters: SpeakerFilters): { sql: string; bindings: (string | number)[] } {
   const where: string[] = [];
   const bindings: (string | number)[] = [];

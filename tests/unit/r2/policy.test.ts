@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 
 import { extensionOf, parseUploadOwnerConfig, policyFor, sanitizeFilename, validateDeclared } from "../../../src/lib/r2/policy";
 import { classify, readPngDimensions } from "../../../src/lib/r2/sniff";
-import { compareOnboardingRows, deriveTaskState, rowMatchesOnboardingFilters, taskGlyph, type OnboardingRow, type OnboardingTaskTemplate } from "../../../src/routes/onboarding.queries";
+import { compareOnboardingRows, deriveTaskState, taskGlyph, type OnboardingRow, type OnboardingTaskTemplate } from "../../../src/routes/onboarding.queries";
 import { orderNewestFirst } from "../../../src/ui/shell/wide-grid";
 import { acceptedExtensions, formatBytes, validateClientUpload } from "../../../src/ui/upload/upload-policy";
 
@@ -99,28 +99,6 @@ test("AC-91, AC-92 · chase task states retain their glyphs and cancelled work s
   expect(taskGlyph("risk")).toBe("×");
   expect(taskGlyph("cancelled")).toBe("–");
   expect(taskGlyph("unassigned")).toBe("—");
-});
-
-test("AC-92 · chase filters match the selected task type, track, and speaker search", () => {
-  const row: OnboardingRow = {
-    id: "per_ada",
-    person: { id: "per_ada", name: "Ada Lovelace", email: "ada@example.com", title: "Engineer", company: "Analytical Engines", bio: null, headshot_attachment_id: null },
-    wave: null,
-    tracks: [{ id: "track-ai", name: "AI", color: "#0a6c73", is_primary: true }],
-    sessions: [],
-    submission_ids: ["sub_ada"],
-    tasks: [{ template_id: "task-deck", task_id: "task-ada", submission_id: "sub_ada", title: "Upload deck", kind: "file", description: "", due_at: ONBOARDING_NOW - 1, completed_at: null, state: "overdue", glyph: "!", owed: true }],
-    cells: {},
-    last_contact: null,
-    owed_count: 1,
-    done_count: 0,
-    overdue_task_count: 1,
-    risk_task_count: 0,
-    severity: 5,
-  };
-  expect(rowMatchesOnboardingFilters(row, { filter: "overdue", taskType: "task-deck", track: "track-ai", search: "analytical" })).toBe(true);
-  expect(rowMatchesOnboardingFilters(row, { filter: "risk" })).toBe(false);
-  expect(rowMatchesOnboardingFilters(row, { taskType: "other-task" })).toBe(false);
 });
 
 test("AC-92 · chase ordering puts the most overdue owed work first and ignores done work", () => {

@@ -518,31 +518,6 @@ export function compareOnboardingRows(
     || left.person.id.localeCompare(right.person.id);
 }
 
-export function rowMatchesOnboardingFilters(row: OnboardingRow, filters: OnboardingFilters): boolean {
-  const filter = filters.filter ?? "all";
-  if (filter === "overdue" && row.overdue_task_count === 0) return false;
-  if (filter === "risk" && row.risk_task_count === 0) return false;
-  if (filter === "incomplete" && row.owed_count === 0) return false;
-  if (filters.taskType && filters.taskType !== "all" && !row.tasks.some((task) => task.template_id === filters.taskType && task.owed)) return false;
-  if (filters.track && filters.track !== "all" && !row.tracks.some((track) => track.id === filters.track)) return false;
-  const search = filters.search?.trim().toLocaleLowerCase();
-  if (search) {
-    const haystack = [
-      row.person.name,
-      row.person.company ?? "",
-      row.person.email,
-      row.person.id,
-      ...row.sessions.map((session) => session.title),
-    ].join(" ").toLocaleLowerCase();
-    if (!haystack.includes(search)) return false;
-  }
-  return true;
-}
-
-function countByFilter(rows: readonly OnboardingRow[], filter: OnboardingFilter): number {
-  return rows.filter((row) => rowMatchesOnboardingFilters(row, { filter })).length;
-}
-
 function queryJsonIds(ids: readonly string[]): string {
   return JSON.stringify(unique(ids));
 }
@@ -553,21 +528,6 @@ async function listTemplates(db: D1Database, eventId: string): Promise<Onboardin
      FROM task_templates WHERE event_id = ? ORDER BY position ASC, id ASC`,
   ).bind(eventId).all<TemplateQueryRow>();
   return result.results.map((row) => ({ ...row }));
-}
-
-async function listPeople(db: D1Database, eventId: string): Promise<SpeakerBaseRow[]> {
-  const result = await db.prepare(
-    `SELECT person.id, person.name, person.email, person.title, person.company, person.bio,
-            person.headshot_attachment_id,
-            MAX(outbox.created_at) AS last_contact
-     FROM people person
-     LEFT JOIN outbox ON outbox.event_id = ? AND outbox.person_id = person.id
-     WHERE person.id IN (${ONBOARDING_PERSON_SOURCE})
-     GROUP BY person.id, person.name, person.email, person.title, person.company, person.bio,
-              person.headshot_attachment_id
-     ORDER BY person.name COLLATE NOCASE, person.id ASC`,
-  ).bind(eventId, eventId, eventId, eventId).all<SpeakerBaseRow>();
-  return result.results.map((row) => ({ ...row, last_contact: row.last_contact === null ? null : Number(row.last_contact) }));
 }
 
 async function listTasks(db: D1Database, eventId: string, personIds: readonly string[]): Promise<TaskQueryRow[]> {
@@ -637,25 +597,6 @@ async function readyToScheduleCount(db: D1Database, eventId: string): Promise<nu
        )`,
   ).bind(eventId).first<{ count: number | null }>();
   return Number(row?.count ?? 0);
-}
-
-function taskTypeFacets(rows: readonly OnboardingRow[], templates: readonly OnboardingTaskTemplate[]): Array<OnboardingTaskTemplate & { count: number }> {
-  return templates.map((template) => ({
-    ...template,
-    count: rows.reduce((count, row) => count + (row.cells[template.id]?.owed ? 1 : 0), 0),
-  }));
-}
-
-function trackFacets(rows: readonly OnboardingRow[]): Array<{ id: string; name: string; color: string; count: number }> {
-  const counts = new Map<string, { id: string; name: string; color: string; count: number }>();
-  for (const row of rows) {
-    for (const track of row.tracks) {
-      const existing = counts.get(track.id);
-      if (existing) existing.count += 1;
-      else counts.set(track.id, { id: track.id, name: track.name, color: track.color, count: 1 });
-    }
-  }
-  return [...counts.values()].sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
 }
 
 interface OnboardingAggregate {
