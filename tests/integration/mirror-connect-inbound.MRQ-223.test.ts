@@ -376,6 +376,7 @@ test("AC-226 · one signed inbound edit applies allowlisted fields and drops the
 });
 
 test("CONTRACT · inbound accepted status stops before tasks and mail until the recovery action is clicked", async () => {
+  const dueAt = Date.now() + 7 * 86_400_000;
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO events
@@ -386,7 +387,7 @@ test("CONTRACT · inbound accepted status stops before tasks and mail until the 
       `INSERT INTO task_templates
         (id, event_id, name, kind, description, due_at, position, auto_assign, created_at, updated_at)
        VALUES ('template_mrq223', ?, 'Speaker details', 'acknowledge', '', ?, 0, 1, ?, ?)`,
-    ).bind(EVENT_ID, NOW + 7 * 86_400_000, NOW, NOW),
+    ).bind(EVENT_ID, dueAt, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO email_templates
         (id, event_id, key, name, subject, body_md, enabled, created_at, updated_at)
