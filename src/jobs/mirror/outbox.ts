@@ -36,10 +36,10 @@ export async function dispatchPendingMirrorMessages(
   now = Date.now(),
 ): Promise<number> {
   if (!mirrorConfig(env)) {
-    // A deployment can be disconnected after it has previously been linked.
-    // Do not leave the old feed queued for a provider that is no longer
-    // configured; the switched-off state must be quiet and retry-free.
-    await clearMirrorOutbox(env.DB);
+    // Missing configuration is an inert, successful off state. An operator
+    // may be provisioning or rotating secrets, so pending work must remain
+    // available for the next configured dispatch. Cleanup belongs only to an
+    // explicit disconnect action, not this request-path probe.
     return 0;
   }
   const rows = await env.DB.prepare(
@@ -69,8 +69,10 @@ export async function dispatchPendingMirrorMessages(
 }
 
 export async function clearMirrorOutbox(db: D1Database): Promise<void> {
-  // check:api intentionally exercises meta routes with no D1 binding. A
-  // disconnected mirror is a successful no-op there as well as in production.
+  // This helper is intentionally explicit: dispatch and queue consumption
+  // never call it implicitly when configuration is absent.
+  // check:api intentionally exercises meta routes with no D1 binding; an
+  // explicit cleanup request is a no-op when that binding is absent.
   if (typeof (db as unknown as { prepare?: unknown })?.prepare !== "function") return;
   const placeholders = MIRRORED_TABLES.map(() => "?").join(",");
   await db.prepare(

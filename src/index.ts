@@ -114,8 +114,12 @@ app.use("*", async (context, next) => {
   // The D1 trigger is the after-write hook. Queue dispatch is deliberately
   // post-response and non-fatal: a committed local write remains committed if
   // Queue is temporarily unavailable, and the outbox is still the recovery
-  // record. With no key/base this path clears any stale local feed work and
-  // returns without touching the provider or Queue.
+  // record. With no key/base this path is a successful no-op: pending feed
+  // work stays inert and no provider, D1 cleanup, or Queue call occurs. This
+  // request-path dispatch makes AC-225 traffic-assisted; on an idle deployment
+  // the hourly scheduled branch below is the backstop, so delivery is bounded
+  // by that cron rather than waiting forever. Explicit disconnect cleanup is
+  // separate from this middleware.
   const dispatch = dispatchPendingMirrorMessages(
     context.env,
     resolveRequestId(context.req.raw),
@@ -326,6 +330,10 @@ const worker: ExportedHandler<Env> = {
       let outcome = "ran";
       if (controller.cron === MAIL_SCHEDULE_CRON) {
         await runMailSchedule(env.DB, correlateQueue(env.MAIL_QUEUE, runId), Date.now());
+        // Request traffic normally dispatches the mirror promptly. The hourly
+        // mail cron is the idle-deployment backstop for committed outbox work.
+        await dispatchPendingMirrorMessages(env, runId, Date.now());
+        outcome = "mail_and_mirror";
       } else if (controller.cron === UPLOAD_SWEEP_CRON) {
         await runUploadOrphanSweep(env.DB, env.MEDIA, Date.now());
       } else {

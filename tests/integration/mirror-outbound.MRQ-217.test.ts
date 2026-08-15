@@ -1,7 +1,7 @@
 import { beforeEach, expect, test } from "vitest";
 
 import { dispatchPendingMirrorMessages } from "../../src/jobs/mirror/outbox";
-import { drainMirrorOutbox } from "../../src/jobs/mirror/consumer";
+import { drainMirrorOutbox, MAX_MIRROR_ATTEMPTS } from "../../src/jobs/mirror/consumer";
 import { FakeAirtableTransport } from "../../src/jobs/mirror/fake-transport";
 import { MirrorTokenBucket } from "../../src/jobs/mirror/rate-limiter";
 import type { MirrorConsumerEnvironment } from "../../src/jobs/mirror/consumer";
@@ -195,7 +195,7 @@ test("AC-225 · fake call log proves 10-record upsert batches, merge key, and <=
   expect(Number(drained?.count)).toBe(25);
 });
 
-test("CONTRACT · missing credentials discard stale feed work and the consumer stays a no-op", async () => {
+test("CONTRACT · missing credentials leave pending mirror work inert and the consumer stays a no-op", async () => {
   await configureMirror(["submissions"]);
   await seedCore(1, false);
   expect(await outboxRows()).toHaveLength(1);
@@ -209,6 +209,31 @@ test("CONTRACT · missing credentials discard stale feed work and the consumer s
   });
   expect(await dispatchPendingMirrorMessages(disabled)).toBe(0);
   expect(sends).toHaveLength(0);
-  expect(await outboxRows()).toHaveLength(0);
+  expect(await outboxRows()).toHaveLength(1);
   expect(await drainMirrorOutbox(env.DB, disabled)).toEqual({ claimed: 0, drained: 0 });
+  expect(await outboxRows()).toHaveLength(1);
+});
+
+test("CONTRACT · exhausted mirror rows cannot starve healthy work", async () => {
+  await configureMirror(["submissions"]);
+  await seedCore(2, false);
+
+  await env.DB.prepare(
+    `UPDATE mirror_outbox
+        SET status = 'failed', attempts = ?, last_error = 'poison', updated_at = ?
+      WHERE table_name = 'submissions' AND row_id = ?`,
+  ).bind(MAX_MIRROR_ATTEMPTS, NOW, "sub_mrq217_000").run();
+
+  const fake = new FakeAirtableTransport(() => NOW);
+  const result = await drainMirrorOutbox(env.DB, mirrorEnvironment(), [], { transport: fake, now: () => NOW });
+  expect(result).toEqual({ claimed: 1, drained: 1 });
+  expect(fake.calls.filter((call) => call.kind === "patch").map((call) => call.records.length)).toEqual([1]);
+
+  const rows = await env.DB.prepare(
+    "SELECT row_id, status, attempts FROM mirror_outbox WHERE table_name = 'submissions' ORDER BY row_id",
+  ).all<{ row_id: string; status: string; attempts: number }>();
+  expect(rows.results).toEqual([
+    { row_id: "sub_mrq217_000", status: "failed", attempts: MAX_MIRROR_ATTEMPTS },
+    { row_id: "sub_mrq217_001", status: "drained", attempts: 1 },
+  ]);
 });

@@ -10,10 +10,11 @@ import {
 } from "./messages";
 import { MirrorTokenBucket, type MirrorClock } from "./rate-limiter";
 import { createFetchAirtableTransport, type AirtableTransport } from "./transport";
-import { clearMirrorOutbox, parseMirrorOutboxPayload } from "./outbox";
+import { parseMirrorOutboxPayload } from "./outbox";
 
 const PROCESSING_LEASE_MS = 5 * 60_000;
 const PROVIDER_BATCH_SIZE = 10;
+export const MAX_MIRROR_ATTEMPTS = 5;
 
 export interface MirrorConsumerEnvironment extends MirrorEnvironment {
   MIRROR_QUEUE: Queue<unknown>;
@@ -72,11 +73,12 @@ async function claimRow(db: D1Database, id: string, now: number): Promise<Claime
         SET status = 'processing', attempts = attempts + 1, updated_at = ?
       WHERE id = ?
         AND drained_at IS NULL
+        AND attempts < ?
         AND (
           status IN ('queued', 'failed')
           OR (status = 'processing' AND updated_at < ?)
         )`,
-  ).bind(now, id, now - PROCESSING_LEASE_MS).run();
+  ).bind(now, id, MAX_MIRROR_ATTEMPTS, now - PROCESSING_LEASE_MS).run();
   if (Number(result.meta.changes ?? 0) !== 1) return null;
   const row = await db.prepare("SELECT * FROM mirror_outbox WHERE id = ?").bind(id).first<MirrorOutboxRow>();
   if (!row || !isMirroredTable(row.table_name)) return null;
@@ -88,9 +90,10 @@ async function claimAllPending(db: D1Database, now: number): Promise<ClaimedMirr
     `SELECT id FROM mirror_outbox
       WHERE drained_at IS NULL
         AND status IN ('queued', 'failed')
+        AND attempts < ?
       ORDER BY created_at ASC, id ASC
       LIMIT 100`,
-  ).all<{ id: string }>();
+  ).bind(MAX_MIRROR_ATTEMPTS).all<{ id: string }>();
   const claimed: ClaimedMirrorRow[] = [];
   for (const row of rows.results) {
     const next = await claimRow(db, row.id, now);
@@ -191,10 +194,7 @@ export async function drainMirrorOutbox(
   options: MirrorDrainOptions = {},
 ): Promise<{ claimed: number; drained: number }> {
   const config = mirrorConfig(env);
-  if (!config) {
-    await clearMirrorOutbox(db);
-    return { claimed: 0, drained: 0 };
-  }
+  if (!config) return { claimed: 0, drained: 0 };
   const clock = clockFor(options);
   const now = clock.now();
   const claimed: ClaimedMirrorRow[] = [];
@@ -266,10 +266,7 @@ export async function processMirrorQueue(
 ): Promise<{ outbox: number; reconcile: number }> {
   const messages = batch.messages.filter((message): message is typeof message & { body: MirrorQueueMessage } => isMirrorMessage(message.body));
   if (messages.length === 0) return { outbox: 0, reconcile: 0 };
-  if (!mirrorConfig(env)) {
-    await clearMirrorOutbox(env.DB);
-    return { outbox: 0, reconcile: 0 };
-  }
+  if (!mirrorConfig(env)) return { outbox: 0, reconcile: 0 };
   const outboxIds = messages
     .map((message) => message.body)
     .filter((body): body is Extract<MirrorQueueMessage, { type: typeof MIRROR_OUTBOX_MESSAGE_TYPE }> => body.type === MIRROR_OUTBOX_MESSAGE_TYPE)
