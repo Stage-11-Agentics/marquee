@@ -16,8 +16,11 @@
        program builder), each one sentence plus one prompt, a next-year
        line (event create --from), and two short honesty cards: built
        for verification / what stays human. The API & CLI reference
-       keeps its sidebar-foot door; the page links into it, into API
-       tokens, and into the setup replay.
+       keeps its sidebar-foot door; the page links into it and into API
+       tokens. The cold-start replay is deliberately NOT linked from the
+       setup card (client ruling: cards are small containers — a core
+       action like entering the walkthrough belongs on a main page, and
+       the landing page already carries it).
        v1.15 (2026-08-14): the Organization concept completed (fresh-eyes
        review rulings, sequence/org-settings-design.md iteration 3). The
        Organization group becomes Home · People CRM · Outreach · Settings:
@@ -3472,8 +3475,7 @@
       const AGENTS_ROSTER = [
         { num:"01", name:"The setup agent", role:"Cloned repo → claimed instance",
           copy:"Stands up a fresh deploy on your own Cloudflare account, then hands you a one-time claim link. Ownership lands on you, never on the agent.",
-          prompt:"Set up Marquee for our conference — Great Lakes Infra Days, April 14–15 2027, Buffalo.",
-          link:["setup/agent","Replay the setup"] },
+          prompt:"Set up Marquee for our conference — Great Lakes Infra Days, April 14–15 2027, Buffalo." },
         { num:"02", name:"The reviewer seat", role:"A committee member that reads everything",
           copy:"Takes an evaluator seat, scores its assigned queue, and files a rationale your chair reads verbatim. It recommends; an organizer decides.",
           prompt:"Work through your review queue. Score each abstract against the rubric and explain every recommendation.",
@@ -3507,7 +3509,7 @@
               <div class="card-body">
                 <p>${esc(a.copy)}</p>
                 <div class="message-preview">“${esc(a.prompt)}”</div>
-                <div class="agent-card-actions"><button class="button small" data-copy-prompt="${esc(a.prompt)}">Copy prompt</button><a class="button small" href="#${a.link[0]}">${esc(a.link[1])} →</a></div>
+                <div class="agent-card-actions"><button class="button small" data-copy-prompt="${esc(a.prompt)}">Copy prompt</button>${a.link?`<a class="button small" href="#${a.link[0]}">${esc(a.link[1])} →</a>`:""}</div>
               </div>
             </section>`).join("")}
           </div>
