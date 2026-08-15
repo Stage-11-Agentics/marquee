@@ -167,9 +167,9 @@ async function trackIdsFor(
   if (requested.length === 0) return [];
   const result = await db.prepare(
     `SELECT id, name FROM tracks
-      WHERE event_id = ? AND (id IN (${requested.map(() => "?").join(",")})
-        OR name IN (${requested.map(() => "?").join(",")}))`,
-  ).bind(eventId, ...requested, ...requested).all<{ id: string; name: string }>();
+      WHERE event_id = ? AND (id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+        OR name IN (SELECT CAST(value AS TEXT) FROM json_each(?)))`,
+  ).bind(eventId, JSON.stringify(requested), JSON.stringify(requested)).all<{ id: string; name: string }>();
   const byKey = new Map(result.results.flatMap((row) => [[row.id, row.id], [row.name, row.id]] as const));
   const ids = requested.map((item) => byKey.get(item));
   return ids.every((id): id is string => Boolean(id)) ? [...new Set(ids)] : null;
