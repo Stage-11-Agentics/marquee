@@ -3,9 +3,6 @@
 .export-button { min-width: 92px; }
 /* Reserved whether or not an evaluation plan exists, so resolving one never shifts the header. */
 .results-export-slot { align-items: center; display: inline-flex; justify-content: flex-end; min-width: 150px; }
-.export-message { color: transparent; font: 400 10.5px/1.3 var(--mono); min-height: 18px; margin: -12px 0 8px; }
-.export-message.visible { color: var(--danger); }
-.export-message.success { color: var(--accent-dark); }
 /*
   Holds a fixed 30px and reserves its control's space from the moment the
   Ready-to-place filter is on, so nothing below it moves when the accepted count
@@ -16,8 +13,6 @@
 .accepted-any-note strong { font-variant-numeric: tabular-nums; }
 .accepted-any-note .button { visibility: hidden; }
 .accepted-any-note.visible .button { visibility: visible; }
-.notify-message { color: transparent; font: 400 10.5px/1.3 var(--mono); min-height: 18px; margin: -12px 0 8px; }
-.notify-message.visible { color: var(--accent-dark); }
 .draft-warning { color: var(--danger); }
 .saved-view-strip { align-items: center; background: var(--panel); border-bottom: 1px solid var(--line-strong); display: flex; gap: 10px; min-height: 52px; padding: 8px 11px; }
 .saved-view-chips { align-items: center; display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
@@ -28,9 +23,6 @@
 .view-count { margin-left: 6px; }
 .view-icon-button { background: transparent; border: 0; border-left: 1px solid var(--line); color: var(--muted); cursor: pointer; font: 600 12px/1 var(--mono); min-height: 28px; padding: 0 7px; }
 .view-icon-button:hover { color: var(--accent-dark); }
-.saved-view-message { color: transparent; font: 400 10px/1.2 var(--mono); min-height: 24px; padding: 6px 12px 0; }
-.saved-view-message.visible { color: var(--danger); }
-.saved-view-message.success { color: var(--accent-dark); }
 .column-panel { background: var(--sunk); border-bottom: 1px solid var(--line-strong); min-height: 170px; padding: 12px; }
 .column-panel-heading { align-items: start; display: flex; justify-content: space-between; gap: 16px; margin-bottom: 9px; }
 .column-panel-heading div { display: grid; gap: 3px; }
@@ -55,14 +47,19 @@
 .search-field input { border-radius: var(--radius) 0 0 var(--radius); min-width: 0; width: 100%; }
 .search-field .button { border-left: 0; border-radius: 0 var(--radius) var(--radius) 0; }
 .toolbar-spacer { flex: 1; }
-.selection-bar { align-items: center; background: transparent; border-bottom: 1px solid var(--line); color: transparent; display: flex; font: 400 10.5px/1.2 var(--mono); gap: 9px; min-height: 42px; padding: 7px 12px; }
-.selection-bar.visible { background: var(--accent-soft); border-bottom-color: var(--accent); color: var(--accent-dark); }
+/* 40px clears the tallest state — a `small` button (26px) plus 12px of padding
+   plus the 1px rule — so the strip is exactly one height whether it carries a
+   sentence or the three bulk decisions. Anything less and checking a row grows
+   the strip by a pixel and nudges the whole table down. */
+.table-status-bar { align-items: center; background: transparent; border-bottom: 1px solid var(--line); color: var(--muted); display: flex; font: 400 10.5px/1.2 var(--mono); gap: 9px; min-height: 40px; padding: 6px 12px; }
+.table-status-bar.error { color: var(--danger); }
+.table-status-bar.success { color: var(--accent-dark); }
+.table-status-bar.selecting { background: var(--accent-soft); border-bottom-color: var(--accent); color: var(--accent-dark); }
+.table-status-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .selection-actions { display: flex; gap: 6px; }
 /* Fixed widths: the three decisions must not resize each other, and the row
    they sit in must not change height between its empty and selected states. */
 .selection-actions .button { min-width: 74px; }
-.bulk-message { color: transparent; font: 400 10px/1.2 var(--mono); min-height: 24px; padding: 6px 12px 0; }
-.bulk-message.visible { color: var(--accent-dark); }
 .bulk-decision-dialog { background: var(--sunk); border-bottom: 1px solid var(--accent); border-top: 1px solid var(--accent); display: grid; gap: 12px; padding: 14px 12px; }
 .bulk-decision-dialog-head { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
 .bulk-decision-dialog-head h2 { font-size: 16px; margin: 5px 0 0; }
@@ -132,9 +129,6 @@
 .state-row .state-row-actions .button { margin: 0; }
 .state-row .accepted-escape-action { display: block; visibility: hidden; }
 .state-row .accepted-escape-action.is-ready { visibility: visible; }
-.submissions-refresh-message { align-items: center; color: transparent; display: flex; font: 400 10px/1.2 var(--mono); gap: 8px; justify-content: center; min-height: 30px; padding: 5px 12px; }
-.submissions-refresh-message.visible { color: var(--accent-dark); }
-.submissions-refresh-message > span { flex: 1; text-align: center; }
 .submission-skeleton-row td { height: 58px; }
 .skeleton-checkbox { background: var(--line); border-radius: 3px; display: inline-block; height: 14px; opacity: .8; width: 14px; }
 .skeleton-title { display: grid; gap: 4px; }
@@ -180,6 +174,6 @@
 @media (max-width: 760px) {
   .column-list { grid-template-columns: 1fr; }
   .submissions-toolbar select { width: 100%; }
-  .selection-bar.visible { align-items: flex-start; flex-wrap: wrap; }
+  .table-status-bar.selecting { align-items: flex-start; flex-wrap: wrap; }
   .submissions-pagination { align-items: flex-start; gap: 10px; }
 }

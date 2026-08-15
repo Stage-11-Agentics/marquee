@@ -56,7 +56,12 @@ test("AC-1, AC-2 · the SSR landing exposes both reachable demo entries and live
   expect(html).toContain("Submitted");
   expect(html).toContain(">1</strong>");
   expect(html).toContain(">1</strong>");
-  expect(html).toContain("/submissions?demo=organizer");
+  // The organizer demo opens the organization home — the seat's widest view,
+  // and the one the sidebar's own first row calls Home. Landing on the
+  // submission register put a signed-in organizer three levels deep in one
+  // conference's list before they had seen the conference.
+  expect(html).toContain("/org/home?demo=organizer");
+  expect(html).not.toContain("/submissions?demo=organizer");
   // The speaker demo must land in the Speaker Portal. Sending it to the
   // organizer register is a 403 dead end: the speaker persona has no read
   // access to the submission list.
@@ -70,7 +75,7 @@ test("AC-1, AC-2 · the SSR landing exposes both reachable demo entries and live
 test("AC-4 · the landing render has crawlable destinations and no placeholder copy", async () => {
   const html = renderLandingDocument(SHELL, await loadLandingData(env.DB));
   expect(html).toContain("https://github.com/Stage-11-Agentics/marquee");
-  expect(html).toContain('href="/submissions?demo=organizer"');
+  expect(html).toContain('href="/org/home?demo=organizer"');
   expect(html).toContain('href="/f/cfp"');
   expect(html).not.toMatch(/lorem|TODO|placeholder|coming soon|Tab \d/i);
   expect(html).not.toContain("No data");

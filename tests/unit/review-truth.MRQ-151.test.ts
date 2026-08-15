@@ -35,5 +35,9 @@ test("CONTRACT · MRQ-151 · submission export reports its row count and filenam
   expect(submissionsPageSource).toContain("setExportNotice");
   expect(submissionsPageSource).toContain("Exported ${exported.length.toLocaleString()} rows · marquee-submissions.csv");
   expect(submissionsPageSource).toContain('"success"');
-  expect(submissionsStyles).toContain(".export-message.success");
+  // The export result shares the table's one status strip with saved views,
+  // bulk decisions and the background refresh; the success tone is the strip's,
+  // and `exportNotice` has to be one of the values that reaches it.
+  expect(submissionsPageSource).toContain("const statusNotice = exportNotice");
+  expect(submissionsStyles).toContain(".table-status-bar.success");
 });

@@ -785,6 +785,13 @@ export function SubmissionsPage({
   const activeView = views.find((view) => view.id === activeViewId);
   const orderedColumns = [...columns, ...SUBMISSION_COLUMN_REGISTRY.map((column) => column.id).filter((column) => !columns.includes(column))];
   const singleVenueName = rows.find((item) => item.slot && !item.slot.show_building)?.slot?.building ?? null;
+  // Errors outrank notices, and both outrank the ambient refresh: whichever is
+  // true, the operator would rather read the one that stops them working.
+  const statusError = exportError || viewsError || bulkError || notifyError || refreshError;
+  const statusNotice = exportNotice || viewMessage || bulkMessage || notifyMessage;
+  const statusTone = statusError ? "error" : statusNotice ? "success" : "";
+  const statusText = statusError || statusNotice
+    || (refreshing ? "Refreshing submissions…" : "Select rows to accept, waitlist, or reject them together.");
   return <div class="submissions-page">
     <PageHeader
       title={notifiedQueue ? "Decided · not notified" : draftQueue ? "Drafts needing attention" : "Abstracts & sessions"}
@@ -794,7 +801,6 @@ export function SubmissionsPage({
         : "Loading the conference submission register…"}
       actions={<><span class="results-export-slot">{resultsPlanId && <a class="button" href={`/api/v1/events/${encodeURIComponent(eventId)}/plans/${encodeURIComponent(resultsPlanId)}/results/export?format=csv`} download="review-results.csv" onClick={(event) => void exportScores(event)}>Export scores (CSV)</a>}</span><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifiedSummary?.sendable === 0} onClick={() => void notifySpeakers()}>{notifying ? "Queuing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
     />
-    <div class={`export-message ${exportError || exportNotice ? "visible" : ""} ${exportNotice && !exportError ? "success" : ""}`} role="status">{exportError || exportNotice || "Export status space reserved"}</div>
     {/*
       Ready to place is a stage, not the decision. Its list is a true answer to
       a question nobody asked, sitting under a URL that reads like the question
@@ -810,7 +816,6 @@ export function SubmissionsPage({
     {acceptedStageFilter && !acceptedStageDeadEnd && <div class={`accepted-any-note ${undercounted ? "visible" : ""}`} role="status">{undercounted
       ? <><span><strong class="tabular">{envelope?.total.toLocaleString()}</strong> in Ready to place · <strong class="tabular">{acceptedAnyTotal?.toLocaleString()}</strong> accepted overall. Ready to place holds accepted talks whose onboarding tasks are finished.</span><Button small onClick={() => navigate(`/submissions?${acceptedAnyQuery.toString()}`)}>View all accepted</Button></>
       : "Accepted-count space reserved"}</div>}
-    {notifiedQueue && <div class={`notify-message ${notifyError || notifyMessage ? "visible" : ""}`} role="status">{notifyError || notifyMessage || "Notification status space reserved"}</div>}
     <section class="card table-card" aria-busy={state.kind === "loading" || refreshing}>
       <div class="saved-view-strip" aria-label="Saved conference views">
         <span class="eyebrow">Views</span>
@@ -828,7 +833,6 @@ export function SubmissionsPage({
         <Button small onClick={() => void saveCurrentView()} disabled={viewBusy}>Save current view</Button>
         <Button small onClick={() => setColumnPanelOpen((open) => !open)} aria-expanded={columnPanelOpen}>{columnPanelOpen ? "Hide columns" : "Columns"}</Button>
       </div>
-      <div class={`saved-view-message ${viewsError ? "visible error" : viewMessage ? "visible success" : ""}`} role="status" aria-live="polite">{viewsError || viewMessage || "Saved view status space reserved"}</div>
       {columnPanelOpen && <div class="column-panel" aria-label="Configure submission columns">
         <div class="column-panel-heading"><div><strong>Columns</strong><span>Title is always visible. Changes stay reserved in this frame and persist for this conference.</span></div><span class="tabular">{columns.length} / {SUBMISSION_COLUMN_REGISTRY.length}</span></div>
         <div class="column-list">{orderedColumns.map((column) => {
@@ -850,10 +854,22 @@ export function SubmissionsPage({
         <label><span class="sr-only">Sort</span><select value={sort} onChange={(event) => updateQuery({ sort: event.currentTarget.value, page: 1 })}>{SORT_OPTIONS.map(([value, label]) => <option value={value}>{label}</option>)}</select></label>
       </form>
 
-      <div class={`selection-bar ${selectedCount ? "visible" : ""}`} aria-live="polite">
-        {selectedCount ? <><strong class="tabular">{selectedCount.toLocaleString()} selected</strong>{!allMatching && envelope && selectedCount < envelope.total ? <Button small onClick={() => setAllMatching(true)}>Select all {envelope.total.toLocaleString()} matching</Button> : <span>All matching records selected</span>}<span class="toolbar-spacer" /><span class="selection-actions">{BULK_ACTIONS.map((option) => <Button key={option.action} small variant={option.variant} disabled={bulkBusy} onClick={() => { setBulkRequest(option.action); setBulkFeedback(""); setBulkError(""); }}>{option.label}</Button>)}</span></> : <span aria-hidden="true">Selection space reserved</span>}
+      {/*
+        One strip, one reserved height. Export, saved views, bulk decisions and
+        the background refresh all used to reserve a row apiece — four blank
+        bands stacked between the filters and the first record, for messages
+        that are absent almost always. They are all the same kind of sentence
+        about the same list, so they share one line: a selection takes it when
+        there is one, otherwise the newest message, otherwise the hint that
+        teaches the bulk actions the strip exists for.
+
+        Reserved rather than conditional, still: the strip must not change
+        height between its four states, or checking a row would push the row
+        out from under the pointer that checked it.
+      */}
+      <div class={`table-status-bar ${selectedCount ? "selecting" : statusTone}`} aria-live="polite">
+        {selectedCount ? <><strong class="tabular">{selectedCount.toLocaleString()} selected</strong>{!allMatching && envelope && selectedCount < envelope.total ? <Button small onClick={() => setAllMatching(true)}>Select all {envelope.total.toLocaleString()} matching</Button> : <span>All matching records selected</span>}<span class="toolbar-spacer" /><span class="selection-actions">{BULK_ACTIONS.map((option) => <Button key={option.action} small variant={option.variant} disabled={bulkBusy} onClick={() => { setBulkRequest(option.action); setBulkFeedback(""); setBulkError(""); }}>{option.label}</Button>)}</span></> : <><span class="table-status-text">{statusText}</span>{refreshError && <Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}</>}
       </div>
-      <div class={`bulk-message ${bulkError || bulkMessage ? "visible" : ""}`} role="status">{bulkError || bulkMessage || "Bulk action status space reserved"}</div>
       {bulkRequest && (() => {
         const option = BULK_ACTIONS.find((entry) => entry.action === bulkRequest)!;
         const scope = allMatching ? "matching records" : selectedCount === 1 ? "record" : "records";
@@ -871,10 +887,6 @@ export function SubmissionsPage({
         </div>;
       })()}
 
-      <div class={`submissions-refresh-message ${refreshError || refreshing ? "visible" : ""}`} role="status" aria-live="polite">
-        <span>{refreshError || refreshing ? refreshError || "Refreshing submissions…" : "Refresh status space reserved"}</span>
-        {refreshError && <Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}
-      </div>
       <div class="submissions-table-wrap" ref={tableWrapRef} style={tableFrameMinHeight ? { minHeight: `${tableFrameMinHeight}px` } : undefined}>
         <table class="submissions-table">
           <thead><tr><th class="check-col"><input type="checkbox" aria-label="Select visible rows" checked={rows.length > 0 && rows.every((item) => allMatching || selectedIds.has(item.id))} onChange={(event) => togglePage(event.currentTarget.checked)} /></th>{columns.map((column) => column === "score"

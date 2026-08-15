@@ -175,7 +175,7 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
         <div class="landing-links">
           {!data.demoMode && <a class="button" href="/signin">Sign in</a>}
           <a class="button" href="https://github.com/Stage-11-Agentics/marquee">View on GitHub ↗</a>
-          <a class="button primary" href="/submissions?demo=organizer" data-demo-role="organizer">Enter demo</a>
+          <a class="button primary" href="/org/home?demo=organizer" data-demo-role="organizer">Enter demo</a>
         </div>
       </header>
 
@@ -214,7 +214,7 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
             onboarding, and a published agenda—in one fast, owned workspace.
           </p>
           <div class="hero-actions">
-            <a class="button primary" href="/submissions?demo=organizer" data-demo-role="organizer">Enter as organizer →</a>
+            <a class="button primary" href="/org/home?demo=organizer" data-demo-role="organizer">Enter as organizer →</a>
             <a class="button" href="/reviewer?demo=reviewer" data-demo-role="reviewer">Enter as reviewer</a>
             <a class="button" href="/portal?demo=speaker" data-demo-role="speaker">Enter as speaker</a>
             <a class="button ghost" href="/f/cfp">View public CFP</a>
@@ -440,7 +440,7 @@ const LANDING_SCRIPT = `
     link.addEventListener("click", async (event) => {
       event.preventDefault();
       const role = link.getAttribute("data-demo-role");
-      const destination = link.getAttribute("href") || "/submissions";
+      const destination = link.getAttribute("href") || "/org/home";
       const status = document.getElementById("demo-status");
       link.setAttribute("aria-busy", "true");
       link.classList.add("is-busy");

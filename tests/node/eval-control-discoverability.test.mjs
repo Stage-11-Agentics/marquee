@@ -69,10 +69,18 @@ test("CONTRACT · ABS-13 · every CSV export on the submissions register reports
       `an export on this page does not report ${filename}`,
     );
   }
+  // The export result shares the table's one reserved status strip with saved
+  // views, bulk decisions and the background refresh — a row apiece was two
+  // dead bands between the filters and the first record. Reserved is still the
+  // rule: the strip holds a fixed height, so a message arriving never moves the
+  // table under the operator's cursor.
+  assert.match(source, /const statusError = exportError\b/, "an export failure must reach the shared status strip");
+  assert.match(source, /const statusNotice = exportNotice\b/, "an export result must reach the shared status strip");
+  assert.match(source, /class=\{`table-status-bar /, "the strip is the one surface those values render into");
   assert.match(
-    source,
-    /class=\{`export-message \$\{exportError \|\| exportNotice \? "visible" : ""\}/,
-    "the export status line must keep its reserved space so the row never jumps",
+    await read("src/ui/submissions/submissions.css"),
+    /\.table-status-bar \{[^}]*min-height: \d+px/,
+    "the status strip must keep its reserved space so the row never jumps",
   );
 
   // Modified clicks still belong to the browser, not to us.
