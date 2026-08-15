@@ -3,8 +3,10 @@ import {
   type Id,
   type MagicLinkPurpose,
   type MagicLinkRow,
+  type MembershipRole,
 } from "../../db/schema";
 import { mintToken, sha256Hex } from "./random-token";
+import { shortCodeHash } from "./short-code";
 
 export const PORTAL_INVITE_TTL_MS = 15 * 24 * 60 * 60_000;
 
@@ -47,6 +49,10 @@ type MintMagicLinkInput = {
   purpose: MagicLinkPurpose;
   redirectTo?: string;
   now?: number;
+  /** The seat an `org_invite` mints. Decided at mint by the inviter, never by the recipient. */
+  invite?: { role: MembershipRole; eventId: Id | null; orgId: Id };
+  /** The speakable second credential (ruling O4). Stored hashed; the raw value is the caller's to return once. */
+  shortCode?: string;
 };
 
 /**
@@ -54,7 +60,10 @@ type MintMagicLinkInput = {
  * narrower shape: only the two personless purposes may pass a null, and no
  * speaker-facing caller should be able to reach that door by accident.
  */
-type PortalMagicLinkInput = Omit<MintMagicLinkInput, "personId" | "purpose"> & {
+type PortalMagicLinkInput = Omit<
+  MintMagicLinkInput,
+  "personId" | "purpose" | "invite" | "shortCode"
+> & {
   eventId: Id;
   personId: Id;
   /** Organizer previews retain ordinary login's one-time behavior. */
@@ -78,20 +87,32 @@ async function mintLink(
   const id = crypto.randomUUID();
   const token = mintToken();
   const tokenHash = await sha256Hex(token);
+  // A malformed short code must never reach the column: the door resolves rows
+  // by this hash, and a row carrying a hash of something unspeakable is a live
+  // credential nobody can present and nobody can revoke by hand.
+  const codeHash = input.shortCode === undefined ? null : await shortCodeHash(input.shortCode);
+  if (input.shortCode !== undefined && codeHash === null) {
+    throw new Error("magic link short code is not a well-formed code");
+  }
   await db
     .prepare(
       `INSERT INTO magic_links
-        (id, token_hash, person_id, event_id, purpose, redirect_to, expires_at, used_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+        (id, token_hash, short_code_hash, person_id, event_id, purpose, redirect_to, expires_at, used_at,
+         invite_role, invite_event_id, invite_org_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
       tokenHash,
+      codeHash,
       input.personId,
       input.eventId ?? null,
       input.purpose,
       redirectTo,
       now + TTL_BY_PURPOSE[input.purpose],
+      input.invite?.role ?? null,
+      input.invite?.eventId ?? null,
+      input.invite?.orgId ?? null,
       now,
       now,
     )
@@ -119,6 +140,31 @@ export type MagicLinkState =
   | { status: "expired" | "used" | "invalid"; link: MagicLinkRow | null };
 
 /**
+ * One credential string, two possible forms, one row.
+ *
+ * The long token is tried first because it is what every purpose has and what
+ * every automated caller presents. The short code is tried only when the string
+ * actually parses as one (`normalizeShortCode` refuses anything else), so a
+ * mistyped token costs one lookup rather than two and no arbitrary string ever
+ * reaches the second index. Both columns hold a SHA-256 hex digest of the
+ * credential and nothing else; the raw values live only in the response that
+ * minted them.
+ */
+async function findLink(db: D1Database, credential: string): Promise<MagicLinkRow | null> {
+  const byToken = await db
+    .prepare("SELECT * FROM magic_links WHERE token_hash = ?")
+    .bind(await sha256Hex(credential))
+    .first<MagicLinkRow>();
+  if (byToken) return byToken;
+  const codeHash = await shortCodeHash(credential);
+  if (codeHash === null) return null;
+  return db
+    .prepare("SELECT * FROM magic_links WHERE short_code_hash = ?")
+    .bind(codeHash)
+    .first<MagicLinkRow>();
+}
+
+/**
  * Read a token without spending it. Callers that need to show a recovery path
  * must inspect the credential before consuming it; otherwise a refusal can
  * burn the only usable link and leave the person with no way through the door.
@@ -130,11 +176,7 @@ export async function readMagicLink(
   now = Date.now(),
   options: MagicLinkOptions = {},
 ): Promise<MagicLinkState> {
-  const tokenHash = await sha256Hex(token);
-  const link = await db
-    .prepare("SELECT * FROM magic_links WHERE token_hash = ?")
-    .bind(tokenHash)
-    .first<MagicLinkRow>();
+  const link = await findLink(db, token);
   if (!link || (options.purposes && !options.purposes.includes(link.purpose))) {
     return { status: "invalid", link: null };
   }

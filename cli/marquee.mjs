@@ -345,7 +345,15 @@ async function execute(command, arguments_, options, flags, client) {
     return client.get("/api/v1/org/members");
   }
   if (root === "organizers" && verb === "invite") {
-    return client.post("/api/v1/org/invites");
+    // The seat the link will mint (SPEC Amendment 21). Both optional: an
+    // invite that names neither is an organization-wide program lead, which is
+    // the least authority that still means "organizer".
+    const role = option(options, "--role");
+    const eventId = option(options, "--event");
+    const body = {};
+    if (role !== undefined) body.role = role;
+    if (eventId !== undefined) body.event_id = eventId;
+    return client.post("/api/v1/org/invites", Object.keys(body).length > 0 ? body : undefined);
   }
   if (root === "event" && verb === "list") {
     return client.get("/api/v1/events");

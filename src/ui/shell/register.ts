@@ -62,6 +62,7 @@ const REGISTER_CHROME: Partial<Record<ThemeId, RegisterChrome>> = {
     // sentence case in the middle of it.
     navLabels: {
       "org-home": "home",
+      "org-settings": "settings",
       people: "people crm",
       sourcing: "outreach",
       dashboard: "pipeline",

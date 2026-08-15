@@ -174,7 +174,24 @@ export interface ImmutableRecord {
   id: Id;
 }
 
+/**
+ * The organization outlives every conference on it, so the values a new
+ * conference should inherit live here. Every default is nullable and means
+ * "this organization has not said": an unset default follows the product, a set
+ * one does not, and the two must stay distinguishable (SPEC Amendment 21).
+ */
 export interface OrganizationRow extends MutableRecord {
+  /** Org-wide brand accent; a conference's own `accent` overrides it. */
+  accent: string | null;
+  /** From-name new conferences inherit. The mail *mechanics* stay on the instance. */
+  comms_from_name: string | null;
+  comms_reply_to: string | null;
+  /** A `ThemeId`, validated at the route; unset means the product's own default. */
+  default_theme: string | null;
+  /** Seeds the timezone field when a conference is created; each conference then owns its own. */
+  default_timezone: string | null;
+  /** Org-wide mark, shown wherever a conference has not set its own `logo_key`. */
+  logo_key: string | null;
   name: string;
   slug: string;
 }
@@ -333,10 +350,18 @@ export interface AuthSessionRow extends MutableRecord {
 export interface MagicLinkRow extends MutableRecord {
   event_id: Id | null;
   expires_at: EpochMilliseconds;
+  /** The conference an `org_invite` is scoped to; null on an org-wide invite and on every other purpose. */
+  invite_event_id: Id | null;
+  /** The organization an `org_invite` was minted by, so the exchange cannot land the seat elsewhere. */
+  invite_org_id: Id | null;
+  /** The membership role an `org_invite` mints. Decided at mint by the inviter, never by the recipient. */
+  invite_role: MembershipRole | null;
   /** Null exactly for `claim` and `org_invite`, whose person is created at exchange. */
   person_id: Id | null;
   purpose: MagicLinkPurpose;
   redirect_to: string;
+  /** The day-of door: a second credential on the same single-use row, hashed exactly as the token is. */
+  short_code_hash: string | null;
   token_hash: string;
   used_at: EpochMilliseconds | null;
 }

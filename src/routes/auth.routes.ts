@@ -129,6 +129,16 @@ const authMeResponseSchema = z.object({
   // that is the question a judge asks after switching demo personas.
   person_name: z.string().nullable().optional(),
   person_email: z.string().nullable().optional(),
+  /**
+   * The organization's default appearance, so the shell can wear it (ruling O7).
+   *
+   * It rides this response rather than the organization-settings read because
+   * that read is organization-admin-only, and the people most likely to meet
+   * the default first — a freshly invited reviewer, a day-of `ops` volunteer —
+   * can never call it. A default that only administrators receive is not an
+   * organization default. Null means the organization has not chosen one.
+   */
+  org_default_theme: z.string().nullable().optional(),
 });
 
 const demoLogin = defineApiRoute(
@@ -464,6 +474,10 @@ const getCurrentAuth = defineApiRoute(
     const auth = getAuth(context);
     if (!auth) return unauthorized(context);
     const demoEvent = await findDemoEvent(context.env.DB);
+    const organization = await context.env.DB
+      .prepare("SELECT default_theme FROM organizations WHERE id = ?")
+      .bind(auth.orgId)
+      .first<{ default_theme: string | null }>();
     if (auth.kind === "session") {
       const person = await context.env.DB
         .prepare("SELECT name, email FROM people WHERE id = ?")
@@ -481,6 +495,7 @@ const getCurrentAuth = defineApiRoute(
         demo_event_name: demoEvent?.name ?? null,
         person_name: person?.name ?? null,
         person_email: person?.email ?? null,
+        org_default_theme: organization?.default_theme ?? null,
       }, 200);
     }
     return context.json({
@@ -491,6 +506,7 @@ const getCurrentAuth = defineApiRoute(
       scopes: { permissions: auth.permissions, event_ids: auth.eventIds },
       demo_event_id: demoEvent?.id ?? null,
       demo_event_name: demoEvent?.name ?? null,
+      org_default_theme: organization?.default_theme ?? null,
     }, 200);
   }) as never,
 );

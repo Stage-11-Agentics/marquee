@@ -1,0 +1,15 @@
+{
+  "ticket": "MRQ-207",
+  "owns": [
+    "AC-294",
+    "AC-295",
+    "AC-296",
+    "AC-297",
+    "AC-298",
+    "AC-299",
+    "AC-300",
+    "AC-301"
+  ],
+  "exercises": [],
+  "notes": "MRQ-207 builds EVALUATION §2.6, the post-deadline organization-settings band: the steady-state home for who can run this Marquee, and the two ways a relationship with it ends. Landing this manifest is what turns §2.6's trace:ac enforcement on — the band was unenforced by construction until the owning ticket claimed it. The slice is one vertical: migration 0017 giving organizations its profile and defaults (every one nullable, because unset must stay distinguishable from chosen) and magic_links the seat an invite mints plus a second speakable credential on the same single-use row; GET/PATCH /api/v1/org/settings; the invite mint gaining role and event_id scope with the exchange reading the seat off the consumed row rather than off the request; organizer removal widening from two arms to four in one transaction (every organizer seat, sessions, unexpired sign-in links, and exactly the created_by tokens the human named); the new person-record routes for remove-from-conference and its preview, and for portal-access revocation alone; readTheme() gaining the organization default as a third layer under the person's own choice; and the /org surface with its four tabs, which is where API tokens now lives. The band is outside the Wednesday terminal gate and this work does not enter it. Deliberately out of scope and left to their own tickets: Organization Home (MRQ-209), governance policy on top of this mechanism — role legend, owner transfer, stale-seat banner (MRQ-212), the invite's QR rendering and its evaluation-committee entry point (MRQ-213), and the Server tab's contents (MRQ-210), for which this lands only the tab. Invite-only stands: there is no join-request queue and none is to be added."
+}

@@ -194,10 +194,22 @@ export async function deleteEventCascade(
     prepared(db, `DELETE FROM email_templates WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     // Every auth link created for an event is carried by its outbox row.
     // Delete the token before deleting the outbox receipt that identifies it.
+    //
+    // Three ways a link can point at this conference, and all three must go or
+    // the event row cannot be deleted at all. `invite_event_id` is the one
+    // added by SPEC Amendment 21 — an organizer invite scoped to one conference
+    // (ruling O4's day-of volunteer). It is a DIFFERENT column from `event_id`
+    // on purpose: `event_id` records the conference a credential was issued
+    // *for*, while `invite_event_id` records the scope of the membership the
+    // link will *mint*, and a scoped invite carries the second without the
+    // first. Populating both to make this query simpler would give one fact two
+    // homes, which is how the next cascade bug gets written; the cascade knows
+    // about the column instead.
     prepared(
       db,
       `DELETE FROM magic_links
        WHERE event_id IN ${eventIdsSql}
+          OR invite_event_id IN ${eventIdsSql}
           OR id IN (
             SELECT queued.entity_id
             FROM outbox queued
@@ -212,6 +224,7 @@ export async function deleteEventCascade(
                     OR candidate.redirect_to LIKE '/task%')
               )
           )`,
+      ...eventBindings,
       ...eventBindings,
       ...eventBindings,
     ),

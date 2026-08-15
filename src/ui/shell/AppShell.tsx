@@ -20,7 +20,6 @@ import { DashboardPage } from "../dashboard/DashboardPage";
 import { EvaluationPage } from "../evaluation/EvaluationPage";
 import { EventSettings } from "../settings/EventSettings";
 import { TaskTemplatesPage } from "../settings/TaskTemplatesPage";
-import { ApiTokensPage } from "../settings/ApiTokensPage";
 import { OrgActivityPage } from "../settings/OrgActivityPage";
 import { WebhooksPage } from "../settings/WebhooksPage";
 import { VenuesPage } from "../venues/VenuesPage";
@@ -36,6 +35,7 @@ import { OnboardingPage } from "../onboarding/OnboardingPage";
 import { SpeakersPage } from "../speakers/SpeakersPage";
 import { SessionizeImportPage } from "../import/SessionizeImportPage";
 import { FilesPage } from "../files/FilesPage";
+import { OrgSettingsPage, type OrgTab } from "../org/OrgSettingsPage";
 import { CreateConferencePage } from "../setup/CreateConferencePage";
 import { HandoffPage } from "../setup/HandoffPage";
 import { PeoplePage } from "../people/PeoplePage";
@@ -158,7 +158,19 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const isOnboarding = location.pathname === "/onboarding";
   const isSpeakers = location.pathname === "/roster";
   const isImport = location.pathname === "/import";
-  const isApiTokens = location.pathname === "/settings/api";
+  // Organization settings answers before the conference guard, for the same
+  // reason People does: an organization outlives every conference, and an
+  // instance with none yet still has organizers to invite and a server to read.
+  const ORG_TABS: Readonly<Record<string, OrgTab>> = {
+    "org-settings": "organization",
+    "org-organizers": "organizers",
+    "org-server": "server",
+    // MRQ-210's standalone alias for the same surface, kept reachable.
+    "org-instance": "server",
+    "org-tokens": "tokens",
+    "api-tokens": "tokens",
+  };
+  const orgTab = route ? ORG_TABS[route.id] : undefined;
   // Four paths, one page: agents guess URLs and each 404 costs turns.
   const isPeople = ["/people", "/crm", "/directory", "/contacts"].includes(location.pathname);
   const isServer = route?.id === "org-server" || route?.id === "org-instance";
@@ -235,7 +247,9 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
               create screen exists precisely when there is no conference yet,
               and People, Lists and Outreach are organization-level
               — a person belongs to the organization, not to one conference. */}
-          {route?.id === "conference-new"
+          {orgTab !== undefined
+            ? <OrgSettingsPage tab={orgTab} eventId={eventId} navigate={navigate} />
+            : route?.id === "conference-new"
             ? <CreateConferencePage navigate={navigate} />
             : isOrganizationHome ? <OrganizationHomePage navigate={navigate} />
             : isPeople ? <PeoplePage search={location.search} navigate={navigate} />
@@ -253,7 +267,6 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             : route?.id === "dashboard" ? <DashboardPage eventId={eventId} navigate={navigate} />
             : isEvaluation ? <EvaluationPage eventId={eventId} />
             : route?.id === "venues" ? <VenuesPage eventId={eventId} />
-            : isApiTokens ? <ApiTokensPage eventId={eventId} navigate={navigate} />
             : route?.id === "webhooks" ? <WebhooksPage eventId={eventId} navigate={navigate} />
             : route?.id === "task-templates" || route?.id === "tasks" ? <TaskTemplatesPage eventId={eventId} />
             : route?.id === "settings" ? <EventSettings eventId={eventId} navigate={navigate} />

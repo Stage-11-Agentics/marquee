@@ -26,6 +26,11 @@ const REVIEW_SUBMISSION_ID = "sub-portal-review";
 // a task from risk to overdue and closing a form window that a test expects
 // open. The suite went red with no commit behind it. Only the anchor moves.
 const NOW = Date.now();
+const DAY_MS = 86_400_000;
+// A one-day millisecond subtraction can still be today's event-local calendar
+// date near UTC midnight. Keep the fixed-day template two calendar days back
+// so its overdue state is stable without changing the production clock.
+const OVERDUE_AT = NOW - 2 * DAY_MS;
 
 let speakerCookie = "";
 let otherSpeakerCookie = "";
@@ -117,7 +122,7 @@ async function seedFixture(): Promise<void> {
        VALUES ('decision-portal', ?, ?, 'approve', 'accepted', 'A useful note from the conference.', ?, ?, ?, ?)`,
     ).bind(EVENT_ID, SUBMISSION_ID, OWNER_ID, NOW, NOW, NOW),
     ...[
-      ["template-portal-ack", "acknowledge", "Read the speaker agreement", null, NOW - 86_400_000],
+      ["template-portal-ack", "acknowledge", "Read the speaker agreement", null, OVERDUE_AT],
       ["template-portal-file", "file", "Upload your deck", null, NOW + 86_400_000],
       ["template-portal-form", "form", "Complete speaker details", FORM_ID, NOW + 172_800_000],
       ["template-portal-finalize-talk", "acknowledge", "Finalize talk description", null, NOW + 259_200_000],
@@ -135,7 +140,7 @@ async function seedFixture(): Promise<void> {
               ('task-portal-subject-bio', ?, ?, ?, 'template-portal-finalize-bio', 'Finalize bio & photos', 'acknowledge', 'Review your bio and add a headshot for the speaker gallery.', ?, 'done', ?, '{"acknowledged":true}', NULL, 'marquee', ?, ?),
               ('task-portal-other', ?, ?, ?, 'template-portal-ack', 'Other speaker private task', 'acknowledge', 'This belongs only to another speaker.', ?, 'open', NULL, NULL, NULL, 'marquee', ?, ?)`,
     ).bind(
-      EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW - 86_400_000, NOW, NOW,
+      EVENT_ID, SPEAKER_ID, SUBMISSION_ID, OVERDUE_AT, NOW, NOW,
       EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 86_400_000, NOW, NOW,
       EVENT_ID, SPEAKER_ID, REVIEW_SUBMISSION_ID, NOW + 172_800_000, NOW, NOW,
       EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 259_200_000, NOW, NOW, NOW,
@@ -199,7 +204,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
   test("AC-46 · task rows expose title, kind, due date, state, and deterministic due-date order", async () => {
     const { body } = await portal();
     expect(body.tasks.map((task: { id: string }) => task.id).slice(0, 3)).toEqual(["task-portal-ack", "task-portal-file", "task-portal-form"]);
-    expect(body.tasks[0]).toMatchObject({ title: "Read the speaker agreement", kind: "acknowledge", status: "open", due_at: NOW - 86_400_000 });
+    expect(body.tasks[0]).toMatchObject({ title: "Read the speaker agreement", kind: "acknowledge", status: "open", due_at: OVERDUE_AT });
   });
 
   test("CONTRACT · MRQ-93 · subject-bearing acknowledgement tasks retain their template identity while generic acknowledgement stays generic", async () => {
@@ -244,7 +249,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
   });
 
   test("AC-48, AC-91, AC-92, AC-94, AC-148 · completed portal work updates organizer attention and the chase matrix", async () => {
-    await env.DB.prepare("UPDATE speaker_tasks SET status = 'open', completed_at = NULL, due_at = ? WHERE id = 'task-portal-ack'").bind(NOW - 86_400_000).run();
+    await env.DB.prepare("UPDATE speaker_tasks SET status = 'open', completed_at = NULL, due_at = ? WHERE id = 'task-portal-ack'").bind(OVERDUE_AT).run();
     await env.DB.prepare("UPDATE speaker_tasks SET status = 'open', completed_at = NULL WHERE id = 'task-portal-file'").run();
     const uploaded = await request("/api/v1/me/tasks/task-portal-file/complete", { method: "POST", body: JSON.stringify({ attachment_id: "attachment-portal-file" }) });
     expect(uploaded.status).toBe(200);
@@ -276,7 +281,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
     const { body } = await portal();
     const overdue = body.tasks.find((task: { id: string }) => task.id === "task-portal-ack");
     expect(overdue).toMatchObject({ overdue: false, status: "done" });
-    await env.DB.prepare("UPDATE speaker_tasks SET status = 'open', completed_at = NULL, due_at = ? WHERE id = 'task-portal-ack'").bind(NOW - 86_400_000).run();
+    await env.DB.prepare("UPDATE speaker_tasks SET status = 'open', completed_at = NULL, due_at = ? WHERE id = 'task-portal-ack'").bind(OVERDUE_AT).run();
     const refreshed = await portal();
     expect(refreshed.body.tasks.find((task: { id: string }) => task.id === "task-portal-ack")).toMatchObject({ overdue: true, status: "open" });
   });

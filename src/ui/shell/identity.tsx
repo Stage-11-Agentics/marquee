@@ -2,6 +2,7 @@ import type { JSX } from "preact";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { apiFetch } from "./api-client";
 import { initialsFor, primaryRole, roleLabel } from "./identity-format";
+import { cacheOrgDefaultTheme } from "./theme";
 
 export { initialsFor, primaryRole, roleLabel };
 
@@ -26,6 +27,8 @@ export interface AuthMeResponse {
   kind: "session" | "api_token";
   person_id?: string;
   memberships?: { event_id: string | null; role: string }[];
+  scopes?: { permissions: string[]; event_ids: string[] };
+  org_default_theme?: string | null;
   demo_event_id?: string | null;
   demo_event_name?: string | null;
   person_name?: string | null;
@@ -45,6 +48,12 @@ export function loadAuthMe(): Promise<AuthMeResponse> {
       headers: { accept: "application/json" },
       cache: "no-store",
       route: AUTH_ME_ROUTE,
+    }).then((body) => {
+      // `/org/settings` is deliberately admin-only. The authenticated boot
+      // payload is the shell's shared seam, so reviewer and ops seats receive
+      // the organization default before their next pre-paint visit too.
+      cacheOrgDefaultTheme(body.org_default_theme ?? null);
+      return body;
     }).catch((error: unknown) => {
       authMeRequest = null;
       throw error;

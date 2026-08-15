@@ -42,7 +42,10 @@ export type Principal =
       actingPersonId: string | null;
       /** Memberships for the acting seat, or issuer memberships for an unbound token. */
       memberships: readonly MembershipRow[];
-      /** Only populated for older isolated fixtures whose token table predates created_by. */
+      /**
+       * Scope-derived fallback for older fixtures, or for an explicitly kept
+       * unbound integration whose human issuer no longer has an organizer seat.
+       */
       legacyRole?: MembershipRole;
     };
 

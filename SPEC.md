@@ -871,6 +871,36 @@ Delivery is unchanged: `HMAC-SHA256` over `id.timestamp.body`, retried with back
 
 **Guardrails.** Claim and invite links ride G6's cookie discipline; the unclaimed landing and inert pages leak no instance state (AC-277); demo removal is scoped by `is_demo` exactly as `reset:demo` is, in reverse.
 
+## Amendment 21 — the organization is a record, and an invite carries its seat (client-directed, 2026-08-14)
+
+*Folds `USER_STORIES.md` Amendment 21 (US-88 – US-89, AC-294 – AC-301). Binding surfaces: prototype **v1.15** (`prototypes/pipeline-v1.1/index.html`, the four `#org` tabs) and `sequence/org-settings-design.md` (rulings O1–O8). **Post-deadline scope** — `EVALUATION.md` §2.6, on §2.4's terms. Amendment numbers in this round are shared across `SPEC.md`, `USER_STORIES.md` and `EVALUATION.md` so two concurrent folds cannot collide; **Amendment 22 belongs to MRQ-204** and the gap in this file's own sequence is deliberate.*
+
+**Why.** Conference settings contains nothing about who can log in. The machinery exists — Amendment 19's org members, one-time invites, `memberships` with roles and a nullable `event_id` — but it only ever surfaced during the cold-start setup walk, so access management had no steady-state home. Two things follow from giving it one. First, the organization stops being a name and becomes a record: it outlives every conference on it, so the values a new conference should start from belong to it. Second, an invite stops meaning one thing. Amendment 19's invite had exactly one shape — organization-wide owner — because there was only one reason to send one; a day-of volunteer needs `ops` scoped to this conference, and a link that cannot say so can only over-grant.
+
+**§3.2 deltas.**
+- `organizations` gains `default_timezone`, `default_theme`, `comms_from_name`, `comms_reply_to`, `logo_key`, `accent`. All nullable, and **null means the organization has not said** — an unset default follows the product when the product changes its mind, a set one does not, and the two must stay distinguishable. Inheritance happens once, at conference creation; changing a default never rewrites a conference that already inherited it.
+- `magic_links` gains `invite_role`, `invite_event_id`, `invite_org_id` and `short_code_hash`. The first three are the seat an `org_invite` mints, decided at mint by the inviter and **never by the recipient**; a row that predates this amendment carries nulls, which mean organization-wide `owner`, which is what such a row already minted. `short_code_hash` is a second credential on the same single-use row (ruling O4) — a token has no speakable form, so the code is minted separately and hashed exactly as the token is, resolved at the same `/join/:token` door and spent by the same statement. Neither raw value is ever stored or logged.
+- Which roles a *link* may offer is narrower than the column: `program_lead`, `ops`, `reviewer` only. `owner` moves by transfer, not by a link someone could forward, and `speaker` is a participation rather than a seat. A `reviewer` invite must name a conference, because `memberships` has always refused an organization-wide reviewer (`CHECK (role <> 'reviewer' OR event_id IS NOT NULL)`, AC-214). **A request that names no role mints `program_lead`, organization-wide** — the least authority that still means "organizer". This supersedes Amendment 19's behaviour, under which a bodyless invite minted a second `owner`: a request that says nothing must not be handed the most powerful seat on the instance by omission. The CLI's `organizers invite` and the cold-start card both mint bodylessly and therefore both move with it.
+- `memberships` gains remover "conference removal (ends the person's participations at that event in the same transaction)". Organizer removal's existing in-transaction revocation widens: **sessions, the unexpired login links already in their inbox, and the `created_by` API tokens named in the request**, all in one batch. Token revocation is show-and-choose, never a sweep — a fired volunteer's tokens may power integrations the organization keeps.
+
+**§4.2 route additions** (all appear in the OpenAPI document; `check:api` registry parity applies):
+
+| Method | Path | Notes |
+|---|---|---|
+| GET/PATCH | `/api/v1/org/settings` | org profile and defaults; organization-wide organizers only (AC-294) |
+| POST | `/api/v1/org/invites` | **gains** `role` and `event_id`; returns the short code once beside the URL (AC-296, AC-297) |
+| DELETE | `/api/v1/org/members/{personId}` | **gains** `revoke_token_ids`; four-arm transaction (AC-298) |
+| GET | `/api/v1/events/{eventId}/people/{personId}/removal-preview` | everything removal would touch, published sessions and sole-speaker cases named (AC-299) |
+| POST | `/api/v1/events/{eventId}/people/{personId}/remove` | remove from this conference (AC-299) |
+| POST | `/api/v1/org/people/{personId}/revoke-access` | credentials only; participation and history untouched (AC-300) |
+
+`GET /api/v1/org/members` widens to list conference-scoped organizer seats beside organization-wide ones: a seat the removal flow ends must be a seat the list shows.
+
+**§5 deltas.** §5.1 gains **Organization settings** at `/org` — four tabs (Organization · Organizers · Server · API tokens), the Organization group's ⚙ row closing it exactly as the conference group ends in its own Settings row (ruling O1). API tokens moves off Conference settings because `api_tokens` is an org-scoped row with a nullable event scope (ruling O2); `/settings/api` still resolves. The Organizers card leaves Conference settings — its home now exists. `readTheme()` gains a third layer: the URL override, then this person's own choice, then the organization's default, then Day. The default is mirrored into storage so the pre-paint script reads it without a fetch, because a fetch there is the flash that script exists to prevent.
+
+**Deliberately not in this amendment.** Invite-only stands — there is no join-request queue and none is to be added. Person delete and merge are CRM-scope. Governance policy on top of this mechanism (the role legend, owner transfer, the stale-seat banner) and the invite's QR rendering and second entry point are separate work; this amendment lands the mechanism they build on.
+
+**Guardrails.** The short-code door carries the write rate limiter and the same inert answer as every other spent credential. A conference-scoped invite is validated against the inviter's own organization at mint *and* at exchange. Removing a person from a conference never unpublishes a session or frees its agenda slot (ruling O5a), and never touches the `people` row, their submissions, their annotations, or their participations at any other conference.
 ## Amendment 22 — delete conference: contract-first cascade *(2026-08-14, merge-captain allocation)*
 
 Conference deletion is an organizer-only, irreversible operation. The wire route is `DELETE /api/v1/events/:id`; its policy is the existing organizer `program:write` grant (`owner` or `program_lead`). The handler resolves the event inside the caller's organization, writes the deletion audit row with the authenticated actor, and performs the cascade in one D1 batch. There is no soft-delete, restore, or second event-removal implementation.
