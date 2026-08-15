@@ -87,7 +87,13 @@ export function parseAllowlist(valueJson: string | null | undefined): string[] {
   return emails;
 }
 
-/** The addresses this conference will send real mail to, in the order they were saved. */
+/**
+ * The addresses this conference will send real mail to, in the order they were
+ * saved. Used by the mail consumer, which is already inside the event it is
+ * delivering for — a queued row's `event_id` came from the row itself, never
+ * from a caller. Anything reached by an HTTP caller must use the org-scoped
+ * pair below instead.
+ */
 export async function demoMailAllowlistFor(db: D1Database, eventId: string): Promise<string[]> {
   const setting = await db
     .prepare("SELECT value_json FROM event_settings WHERE event_id = ? AND key = ?")
@@ -97,23 +103,86 @@ export async function demoMailAllowlistFor(db: D1Database, eventId: string): Pro
 }
 
 /**
- * Replaces the list wholesale. The screen edits a list, not a set of
- * independent rows, so a partial write is not a state anyone asked for.
+ * ── Organization scope lives in the SQL, not in a guard above it ──────────
+ *
+ * An event id arrives from the caller, and a membership does not prove which
+ * organization it belongs to: an org-wide row carries `event_id = null`, so
+ * `roleForEvent` matches it against EVERY event id, in any org. Authorizing on
+ * the role alone therefore lets an owner of one organization read and write
+ * another's — and on this key in particular, that is arming real mail delivery
+ * inside somebody else's conference.
+ *
+ * So the org is a term in the query. A check that runs before the read can
+ * disagree with the read; a `WHERE org_id = ?` cannot. The reads and the write
+ * below are each independently safe, whatever ran before them.
+ * ─────────────────────────────────────────────────────────────────────────
  */
-export async function writeDemoMailAllowlist(
+
+/** The conference, only if it is this organization's. `null` means "not yours, or not real". */
+export async function demoMailEventInOrg(
   db: D1Database,
+  orgId: string,
+  eventId: string,
+): Promise<{ demo_mode: boolean } | null> {
+  const event = await db
+    .prepare("SELECT demo_mode FROM events WHERE id = ? AND org_id = ?")
+    .bind(eventId, orgId)
+    .first<{ demo_mode: number }>();
+  return event ? { demo_mode: Number(event.demo_mode) === 1 } : null;
+}
+
+/** The list, readable only through the organization that owns the conference. */
+export async function demoMailAllowlistForOrgEvent(
+  db: D1Database,
+  orgId: string,
+  eventId: string,
+): Promise<string[]> {
+  const setting = await db
+    .prepare(
+      `SELECT value_json FROM event_settings
+       WHERE key = ?
+         AND event_id = (SELECT id FROM events WHERE id = ? AND org_id = ?)`,
+    )
+    .bind(DEMO_MAIL_ALLOWLIST_SETTING_KEY, eventId, orgId)
+    .first<{ value_json: string }>();
+  return parseAllowlist(setting?.value_json ?? null);
+}
+
+/**
+ * Replaces the list wholesale, and only inside the caller's organization. The
+ * screen edits a list, not a set of independent rows, so a partial write is not
+ * a state anyone asked for.
+ *
+ * `INSERT … SELECT` rather than `VALUES`: the row to be written is *derived*
+ * from an org-scoped select, so a foreign event id produces no row to insert
+ * and the statement writes nothing. Returns `null` in that case, which the
+ * route answers as "no such conference". The `WHERE true` is required — SQLite
+ * cannot parse `ON CONFLICT` after a `SELECT` without it, because it cannot
+ * tell the upsert clause from a join constraint.
+ */
+export async function writeDemoMailAllowlistForOrgEvent(
+  db: D1Database,
+  orgId: string,
   eventId: string,
   emails: readonly string[],
   now: number,
-): Promise<string[]> {
+): Promise<string[] | null> {
   const stored = parseAllowlist(JSON.stringify(emails));
-  await db
+  const result = await db
     .prepare(
       `INSERT INTO event_settings (id, event_id, key, value_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)
+       SELECT ?, id, ?, ?, ?, ? FROM events WHERE id = ? AND org_id = ? AND true
        ON CONFLICT(event_id, key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
     )
-    .bind(`demo-mail-allowlist-${eventId}`, eventId, DEMO_MAIL_ALLOWLIST_SETTING_KEY, JSON.stringify(stored), now, now)
+    .bind(
+      `demo-mail-allowlist-${eventId}`,
+      DEMO_MAIL_ALLOWLIST_SETTING_KEY,
+      JSON.stringify(stored),
+      now,
+      now,
+      eventId,
+      orgId,
+    )
     .run();
-  return stored;
+  return (result.meta.changes ?? 0) > 0 ? stored : null;
 }

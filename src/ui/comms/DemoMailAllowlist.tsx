@@ -115,10 +115,20 @@ export function DemoMailAllowlist({ eventId }: { eventId: string }): JSX.Element
       </div>
       <span class="section-count tabular">{loading ? "—" : `${emails.length} of ${limit}`}</span>
     </div>
+    {/* "Every message" would be false, and falsifiable by anyone who submits the
+        public form: a submitter's own confirmation is written `always_live` and
+        the consumer never consults this list for it. The claim is therefore
+        scoped to what an organizer sends from this screen, and the one exception
+        is named rather than left to be discovered. */}
     <p class="allowlist-copy">
-      This conference is in demo mode, so every message is written to the outbox below instead of
-      being sent — a walkthrough never reaches a real submitter. The addresses listed here are the
-      exception: mail addressed to them genuinely leaves the building. Everything else stays held.
+      This conference is in demo mode, so the messages you send are written to the outbox below
+      instead of being sent — a walkthrough never reaches a real submitter. The addresses listed
+      here are the exception: mail addressed to them genuinely leaves the building.
+    </p>
+    <p class="allowlist-copy allowlist-caveat">
+      One message is never held, listed or not: when somebody submits your public form, their
+      confirmation goes to the address they typed. It is the receipt for something they just did,
+      and it only ever reaches them.
     </p>
     <div class="allowlist-body">
       {/* Fixed height, whatever the list holds: adding the first address must
@@ -128,7 +138,7 @@ export function DemoMailAllowlist({ eventId }: { eventId: string }): JSX.Element
         {emails.length === 0
           ? <p class="allowlist-empty reserved-copy">{loading
             ? "Reading which addresses receive real email…"
-            : "Nobody receives real email. Every message this conference sends is held in the outbox."}</p>
+            : "No address receives real email. Everything you send from here is held in the outbox."}</p>
           : <ul class="allowlist-rows">
             {emails.map((email) => <li class="allowlist-row" key={email}>
               <span class="allowlist-live" title="Mail addressed here is really sent">live</span>

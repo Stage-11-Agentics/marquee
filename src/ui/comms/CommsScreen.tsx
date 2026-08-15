@@ -326,7 +326,7 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
     <div class="comms-banner">
       <span class="status-dot" aria-hidden="true" />
       {demoMode
-        ? <div><strong>Demo-safe outbox</strong><span>Messages render and log here. Only the addresses named under Real email are delivered.</span></div>
+        ? <div><strong>Demo-safe outbox</strong><span>Messages render and log here. Of what you send, only the addresses named under Real email are delivered — a public submitter's own confirmation always is.</span></div>
         : <div><strong>Live outbox</strong><span>Messages render and log here, and every one of them is sent to the person it names.</span></div>}
       <span class="comms-policy">default: demo_safe</span>
       <AgentBriefLauncher surface="chase" eventId={eventId} small />

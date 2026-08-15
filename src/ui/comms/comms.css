@@ -97,6 +97,7 @@
    ─────────────────────────────────────────────────────────────────────── */
 .comms-allowlist .section-heading { margin-bottom: 14px; }
 .allowlist-copy { color: var(--ink-soft); font: 13px/1.55 var(--sans); margin: 0 0 16px; max-width: 78ch; }
+.allowlist-caveat { border-left: 2px solid var(--line-strong); color: var(--muted); font-size: 12px; padding-left: 10px; }
 .allowlist-body { align-items: start; display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr) minmax(240px, .55fr); }
 .allowlist-listing { background: var(--sunk); border: 1px solid var(--line-strong); height: 134px; overflow-y: auto; }
 .allowlist-empty { align-items: center; color: var(--muted); display: flex; font-size: 12px; height: 100%; line-height: 1.5; margin: 0; padding: 0 12px; }

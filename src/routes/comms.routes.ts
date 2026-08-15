@@ -21,12 +21,13 @@ import { mergeDataForRecipient, firstName } from "../jobs/mail/merge-data";
 import { mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../lib/mail-merge-fields";
 import {
   DEMO_MAIL_ALLOWLIST_LIMIT,
-  demoMailAllowlistFor,
+  demoMailAllowlistForOrgEvent,
+  demoMailEventInOrg,
   describeRejectedEmail,
   isAllowlistEmail,
   normalizeAllowlistEmail,
   parseAllowlist,
-  writeDemoMailAllowlist,
+  writeDemoMailAllowlistForOrgEvent,
 } from "../lib/demo-mail-allowlist";
 import type { OutboxRow } from "../db/schema";
 import {
@@ -1021,18 +1022,39 @@ function requireDemoMailAllowlistWrite(
   }
 }
 
+/**
+ * The organization this credential belongs to. Every allowlist query is scoped
+ * by it, because a role alone does not answer "whose conference is this?" — an
+ * org-wide membership carries `event_id = null` and therefore matches any event
+ * id a caller cares to type, including another organization's.
+ */
+function demoMailAllowlistOrg(context: Parameters<NonNullable<ApiRouteEntry["handler"]>>[0]): string {
+  const auth = getAuth(context);
+  if (!auth) throw ApiError.unauthenticated();
+  return auth.orgId;
+}
+
+/**
+ * A conference outside this organization answers 404, not 403: it is not a
+ * permission to explain, it is a conference this caller has no way of knowing
+ * exists. The same convention `createEvent` already uses for `copy_from`.
+ */
 async function demoMailAllowlistState(
   db: D1Database,
+  orgId: string,
   eventId: string,
 ): Promise<{ demo_mode: boolean; limit: number; emails: string[] }> {
-  const event = await db.prepare("SELECT demo_mode FROM events WHERE id = ?").bind(eventId).first<{ demo_mode: number }>();
+  const [event, emails] = await Promise.all([
+    demoMailEventInOrg(db, orgId, eventId),
+    demoMailAllowlistForOrgEvent(db, orgId, eventId),
+  ]);
   if (!event) throw ApiError.notFound("conference not found");
   return {
     // The list exists on every conference and is inert outside demo mode; the
     // screen needs to know which of those it is looking at so it can say so.
-    demo_mode: Number(event.demo_mode) === 1,
+    demo_mode: event.demo_mode,
     limit: DEMO_MAIL_ALLOWLIST_LIMIT,
-    emails: await demoMailAllowlistFor(db, eventId),
+    emails,
   };
 }
 
@@ -1050,7 +1072,8 @@ const getDemoMailAllowlist = defineApiRoute(
   async (context) => {
     const { eventId } = context.req.valid("param");
     requireComms(context, eventId, false);
-    return context.json({ data: await demoMailAllowlistState(context.env.DB, eventId) }, 200);
+    const orgId = demoMailAllowlistOrg(context);
+    return context.json({ data: await demoMailAllowlistState(context.env.DB, orgId, eventId) }, 200);
   },
 );
 
@@ -1070,8 +1093,7 @@ const putDemoMailAllowlist = defineApiRoute(
   async (context) => {
     const { eventId } = context.req.valid("param");
     requireDemoMailAllowlistWrite(context, eventId);
-    const event = await context.env.DB.prepare("SELECT demo_mode FROM events WHERE id = ?").bind(eventId).first<{ demo_mode: number }>();
-    if (!event) throw ApiError.notFound("conference not found");
+    const orgId = demoMailAllowlistOrg(context);
     const { emails } = context.req.valid("json");
     // Validated one address at a time so the message names the address that is
     // wrong, rather than rejecting a list of five for a typo in one.
@@ -1086,8 +1108,12 @@ const putDemoMailAllowlist = defineApiRoute(
     if (normalized.length > DEMO_MAIL_ALLOWLIST_LIMIT) {
       throw ApiError.unprocessable(`a conference can list at most ${DEMO_MAIL_ALLOWLIST_LIMIT} addresses`, "emails");
     }
-    await writeDemoMailAllowlist(context.env.DB, eventId, normalized, Date.now());
-    return context.json({ data: await demoMailAllowlistState(context.env.DB, eventId) }, 200);
+    // The write is the authorization. A foreign event id derives no row, so the
+    // statement changes nothing and reports it, rather than a guard above here
+    // having promised something the write could still contradict.
+    const saved = await writeDemoMailAllowlistForOrgEvent(context.env.DB, orgId, eventId, normalized, Date.now());
+    if (saved === null) throw ApiError.notFound("conference not found");
+    return context.json({ data: await demoMailAllowlistState(context.env.DB, orgId, eventId) }, 200);
   },
 );
 

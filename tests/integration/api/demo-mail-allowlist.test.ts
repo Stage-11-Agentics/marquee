@@ -28,6 +28,18 @@ const LIVE_EVENT = "evt_allowlist_live";
 const OWNER = "per_allowlist_owner";
 const OPS = "per_allowlist_ops";
 
+/**
+ * A second organization, and it is not decoration.
+ *
+ * An org-wide membership is stored with `event_id = null`, so `roleForEvent`
+ * matches it against every event id in existence — including one belonging to
+ * somebody else. A single-org fixture cannot see that, because there is no
+ * other org's event to point at.
+ */
+const OTHER_ORG = "org_allowlist_neighbour";
+const OTHER_EVENT = "evt_allowlist_neighbour";
+const OTHER_OWNER = "per_allowlist_neighbour_owner";
+
 interface AllowlistBody {
   data: { demo_mode: boolean; limit: number; emails: string[] };
 }
@@ -73,18 +85,24 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES (?, ?, 'ops@example.com', 'Cal Renner', ?, ?)").bind(OPS, ORG, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('mem_allowlist_owner', ?, NULL, ?, 'owner', ?, ?)").bind(ORG, OWNER, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('mem_allowlist_ops', ?, NULL, ?, 'ops', ?, ?)").bind(ORG, OPS, NOW, NOW),
+
+    // The neighbouring organization: its own demo conference, its own owner.
+    env.DB.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, 'Neighbour Org', 'neighbour-org', ?, ?)").bind(OTHER_ORG, NOW, NOW),
+    env.DB.prepare("INSERT INTO events (id, org_id, name, slug, starts_on, ends_on, timezone, status, demo_mode, created_at, updated_at) VALUES (?, ?, 'Neighbour Conference', 'neighbour-demo', '2026-10-01', '2026-10-02', 'UTC', 'live', 1, ?, ?)").bind(OTHER_EVENT, OTHER_ORG, NOW, NOW),
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES (?, ?, 'owner@neighbour.example', 'Wren Adeyemi', ?, ?)").bind(OTHER_OWNER, OTHER_ORG, NOW, NOW),
+    env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('mem_allowlist_neighbour', ?, NULL, ?, 'owner', ?, ?)").bind(OTHER_ORG, OTHER_OWNER, NOW, NOW),
   ]);
 });
 
 afterEach(async () => {
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM outbox WHERE event_id IN (?, ?)").bind(DEMO_EVENT, LIVE_EVENT),
-    env.DB.prepare("DELETE FROM event_settings WHERE event_id IN (?, ?)").bind(DEMO_EVENT, LIVE_EVENT),
-    env.DB.prepare("DELETE FROM auth_sessions WHERE person_id IN (?, ?)").bind(OWNER, OPS),
-    env.DB.prepare("DELETE FROM memberships WHERE org_id = ?").bind(ORG),
-    env.DB.prepare("DELETE FROM people WHERE org_id = ?").bind(ORG),
-    env.DB.prepare("DELETE FROM events WHERE org_id = ?").bind(ORG),
-    env.DB.prepare("DELETE FROM organizations WHERE id = ?").bind(ORG),
+    env.DB.prepare("DELETE FROM outbox WHERE event_id IN (?, ?, ?)").bind(DEMO_EVENT, LIVE_EVENT, OTHER_EVENT),
+    env.DB.prepare("DELETE FROM event_settings WHERE event_id IN (?, ?, ?)").bind(DEMO_EVENT, LIVE_EVENT, OTHER_EVENT),
+    env.DB.prepare("DELETE FROM auth_sessions WHERE person_id IN (?, ?, ?)").bind(OWNER, OPS, OTHER_OWNER),
+    env.DB.prepare("DELETE FROM memberships WHERE org_id IN (?, ?)").bind(ORG, OTHER_ORG),
+    env.DB.prepare("DELETE FROM people WHERE org_id IN (?, ?)").bind(ORG, OTHER_ORG),
+    env.DB.prepare("DELETE FROM events WHERE org_id IN (?, ?)").bind(ORG, OTHER_ORG),
+    env.DB.prepare("DELETE FROM organizations WHERE id IN (?, ?)").bind(ORG, OTHER_ORG),
   ]);
 });
 
@@ -209,6 +227,72 @@ test("CONTRACT · an ops seat may read who receives real email but may not chang
   });
   expect(write.status).toBe(403);
   expect(await demoMailAllowlistFor(env.DB, DEMO_EVENT)).toEqual(["judge@example.com"]);
+});
+
+/**
+ * The organization is a term in every query, not a guard above them.
+ *
+ * These three are one finding split by consequence: the read leaks another
+ * org's addresses, the write silently edits them, and the third is why it is
+ * worse than an ordinary tenancy bug — the row being written is the one that
+ * arms real mail delivery, so a foreign write turns somebody else's suppression
+ * off.
+ */
+test("CONTRACT · an owner of one organization cannot read another organization's list", async () => {
+  const neighbour = await cookieFor(OTHER_OWNER, "allowlist-neighbour-seed");
+  await call(`/api/v1/events/${OTHER_EVENT}/demo-mail-allowlist`, neighbour, {
+    method: "PUT",
+    body: JSON.stringify({ emails: ["neighbour@example.org"] }),
+  });
+
+  const intruder = await cookieFor(OWNER, "allowlist-cross-read");
+  const response = await call(`/api/v1/events/${OTHER_EVENT}/demo-mail-allowlist`, intruder);
+  expect(response.status).toBe(404);
+  const body = await response.text();
+  expect(body).not.toContain("neighbour@example.org");
+});
+
+test("CONTRACT · an owner of one organization cannot change another organization's list", async () => {
+  const neighbour = await cookieFor(OTHER_OWNER, "allowlist-neighbour-seed-2");
+  await call(`/api/v1/events/${OTHER_EVENT}/demo-mail-allowlist`, neighbour, {
+    method: "PUT",
+    body: JSON.stringify({ emails: ["neighbour@example.org"] }),
+  });
+
+  const intruder = await cookieFor(OWNER, "allowlist-cross-write");
+  const response = await call(`/api/v1/events/${OTHER_EVENT}/demo-mail-allowlist`, intruder, {
+    method: "PUT",
+    body: JSON.stringify({ emails: ["attacker@example.com"] }),
+  });
+  expect(response.status).toBe(404);
+  // The neighbour's stored list is exactly what the neighbour left there.
+  expect(await demoMailAllowlistFor(env.DB, OTHER_EVENT)).toEqual(["neighbour@example.org"]);
+});
+
+test("CONTRACT · a foreign write cannot arm real mail inside another organization", async () => {
+  const intruder = await cookieFor(OWNER, "allowlist-cross-arm");
+  await call(`/api/v1/events/${OTHER_EVENT}/demo-mail-allowlist`, intruder, {
+    method: "PUT",
+    body: JSON.stringify({ emails: ["attacker@example.com"] }),
+  });
+
+  // The delivery decision is the thing that matters: the neighbour's conference
+  // must still hold mail to that address, not send it.
+  expect(await demoMailWouldBeSuppressed(env.DB, OTHER_EVENT, "attacker@example.com")).toBe(true);
+
+  const held = await enqueueOutbox({
+    db: env.DB,
+    eventId: OTHER_EVENT,
+    templateKey: "reminder_generic",
+    entityId: "entity-cross-org",
+    personId: null,
+    toEmail: "attacker@example.com",
+    data: { "speaker.first_name": "Nobody" },
+  });
+  const fake = provider();
+  expect(await processMailOutbox(env.DB, env, [held.id], { provider: fake, now: NOW, sleep: async () => undefined }))
+    .toEqual({ sent: 0, suppressed: 1, failed: 0 });
+  expect(fake.sent).toEqual([]);
 });
 
 test("CONTRACT · an anonymous caller can neither read nor change the list", async () => {
