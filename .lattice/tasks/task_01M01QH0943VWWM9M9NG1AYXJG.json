@@ -1,7 +1,7 @@
 {
   "assigned_to": null,
   "branch_links": [],
-  "comment_count": 1,
+  "comment_count": 3,
   "complexity": null,
   "created_at": "2026-08-15T03:30:24Z",
   "created_by": "agent:claude-cli",
@@ -10,7 +10,7 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01M01QH0943VWWM9M9NG1AYXJG",
-  "last_event_id": "ev_01M01QHB6T1B67Z2QTNRVZ2RT5",
+  "last_event_id": "ev_01M01RFN7WHGPBP6N8BPH0CC9M",
   "last_status_changed_at": "2026-08-15T03:30:24Z",
   "linked_files": [],
   "priority": "high",
@@ -22,6 +22,6 @@
   "tags": null,
   "title": "Mobile update: drawer nav + phone-width sweep (single PR)",
   "type": "task",
-  "updated_at": "2026-08-15T03:30:35Z",
+  "updated_at": "2026-08-15T03:47:08Z",
   "urgency": null
 }

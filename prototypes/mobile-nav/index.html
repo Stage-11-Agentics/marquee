@@ -68,6 +68,14 @@
   .m-search { flex:1; min-width:0; height:30px; background:var(--surface-sunk); border:1px solid var(--rule); border-radius:var(--radius); color:var(--muted); font-family:var(--mono); font-size:11px; text-align:left; padding:0 8px 0 26px; position:relative; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
   .m-search .glyph { position:absolute; left:8px; top:6px; font-size:12px; }
   .m-avatar { flex:none; width:28px; height:28px; background:var(--surface-sunk); border:1px solid var(--rule); border-radius:var(--radius); display:grid; place-items:center; font:600 10px/1 var(--mono); color:var(--ink-soft); }
+  /* QA M-28: nothing at phone width named the conference. The topbar carries
+     the breadcrumb's mobile form — the name beside ≡, truncating; tapping it
+     opens the drawer, whose head is the switcher. Search pays for the space by
+     collapsing to an icon that opens the same quick-search overlay. */
+  .m-conf { flex:1; min-width:0; background:none; border:0; padding:0 2px; text-align:left; font:600 12px/1.2 var(--mono); color:var(--ink); letter-spacing:.02em; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .m-conf:active, .m-conf:focus-visible { color:var(--accent-ink); outline:0; }
+  .m-sicon { flex:none; width:36px; height:30px; background:var(--surface-sunk); border:1px solid var(--rule); border-radius:var(--radius); color:var(--muted); font:600 11px/1 var(--mono); display:grid; place-items:center; padding:0; }
+  .m-sicon:hover, .m-sicon:focus-visible { border-color:var(--accent); color:var(--ink); outline:0; box-shadow:0 0 0 2px var(--accent-wash); }
 
   /* page content */
   .m-page { flex:1; overflow-y:auto; overflow-x:hidden; padding:18px 14px 24px; }
@@ -210,7 +218,8 @@
           <button class="hamb" id="hamb" aria-label="Open navigation" aria-expanded="false" aria-controls="drawer">
             <svg width="17" height="13" viewBox="0 0 17 13" aria-hidden="true"><g stroke="#ffffff" stroke-width="2" stroke-linecap="round"><line x1="1.5" y1="1.5" x2="15.5" y2="1.5"/><line x1="1.5" y1="6.5" x2="15.5" y2="6.5"/><line x1="1.5" y1="11.5" x2="15.5" y2="11.5"/></g></svg>
           </button>
-          <button class="m-search" onclick="toast('Prototype — search not wired')"><span class="glyph">&gt;_</span>Search abstracts, speakers…</button>
+          <button class="m-conf" id="confName" title="AI Engineer New York 2026">AIE NYC 2026</button>
+          <button class="m-sicon" aria-label="Search" onclick="toast('Prototype — opens quick search')">&gt;_</button>
           <span class="m-avatar">MW</span>
         </div>
         <div class="m-page" id="pageB"></div>
@@ -259,7 +268,8 @@
     <h2>Open questions</h2>
     <div class="q"><b>Q1 · Drawer width.</b> 302px shown (sidebar's 224px is too tight for 40px touch rows). Alternative: <code>min(320px, 86vw)</code> so a scrim sliver always remains tappable. Current pick: fixed 302px — 88px of scrim on a 390px phone.</div>
     <div class="q"><b>Q2 · Theme switch — resolved by measurement.</b> Mobile QA (M-01) measured the shipped topbar at <b>549px in a 373px viewport</b>: <code>.global-search</code> gets <code>width:100%</code> at ≤760px and the 118px theme select rides beside it, dragging every screen into a 176px page-level horizontal scroll and pushing the account button off-viewport. The fold fixes both: search becomes <code>flex:1; min-width:0</code>, and the theme select moves into the drawer footer at phone width. Mobile topbar = ≡, search, avatar — nothing else.</div>
-    <div class="q"><b>Q3 · Reviewer / portal shells.</b> They never mount this sidebar, so they are out of scope — confirm.</div>
+    <div class="q"><b>Q3 · Reviewer / portal shells.</b> They never mount this sidebar, so they are out of scope — confirm. (QA agrees: /reviewer is the only admin route with zero horizontal scroll, precisely because it has no topbar.)</div>
+    <div class="q"><b>Q4 · Conference identity at rest (QA M-28).</b> The breadcrumb is <code>display:none</code> at phone width, so nothing on any admin screen said which conference you are operating on — in a product whose canonical hazard is "Confirmed here, Invited there." Proposed (shown live above): the mobile topbar carries the breadcrumb's mobile form — the conference name beside ≡, truncating, tap opens the drawer whose head is the switcher. Search pays for the space by collapsing to a <code>&gt;_</code> icon opening the same quick-search overlay (the full-width placeholder was being squeezed to ~140px anyway). Desktop and ⌘K unchanged.</div>
     <div class="q"><b>Status.</b> Prototype for the love pass. On approval: worktree <code>mobile-nav-drawer</code> (already cut from <code>github/main</code>) → build → PR → review → merge.</div>
   </div>
 </div>
@@ -393,6 +403,7 @@ function closeDrawer(){
   hamb.focus();                              /* focus returns to the ≡ */
 }
 hamb.addEventListener("click", openDrawer);
+document.getElementById("confName").addEventListener("click", openDrawer); /* the name is a door to the switcher */
 document.getElementById("dclose").addEventListener("click", closeDrawer);
 document.getElementById("scrim").addEventListener("click", closeDrawer);
 window.addEventListener("keydown", e => { if (e.key === "Escape" && scrB.classList.contains("open")) closeDrawer(); });
