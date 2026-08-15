@@ -120,7 +120,7 @@ describe.sequential("MRQ-31 Sessionize import", () => {
       env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('membership_mrq231_reviewer', ?, ?, ?, 'reviewer', ?, ?)").bind(ORG_ID, EVENT_ID, MRQ231_REVIEWER_ID, now, now),
       env.DB.prepare("INSERT INTO reviewer_track_scopes (id, event_id, person_id, track_id, created_at, updated_at) VALUES ('scope_mrq231_platform', ?, ?, 'track_mrq31_platform', ?, ?)").bind(EVENT_ID, MRQ231_REVIEWER_ID, now, now),
       env.DB.prepare("INSERT INTO round_assignments (id, round_id, submission_id, reviewer_person_id, committee_id, status, created_at, updated_at) VALUES ('assignment_mrq231_imported', ?, ?, ?, NULL, 'assigned', ?, ?)").bind(importedRoundId, importedTrack.submission_id, MRQ231_REVIEWER_ID, now, now),
-      env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'reviewer', ?, 'mrq231-reviewer', NULL, ?, ?)").bind(MRQ231_REVIEWER_SESSION_ID, MRQ231_REVIEWER_ID, now + 86_400_000, now, now),
+      env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'reviewer', ?, 'mrq231-reviewer', NULL, ?, ?)").bind(MRQ231_REVIEWER_SESSION_ID, MRQ231_REVIEWER_ID, now + 8 * 24 * 60 * 60 * 1000, now, now),
     ]);
     const reviewerQueue = await request(`/api/v1/events/${EVENT_ID}/rounds/${importedRoundId}/queue`, {}, `mq_session=${MRQ231_REVIEWER_SESSION_ID}`);
     expect(reviewerQueue.status).toBe(200);
