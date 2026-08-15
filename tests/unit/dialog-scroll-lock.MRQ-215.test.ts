@@ -2,9 +2,11 @@
 
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
+import { readFileSync } from "node:fs";
 import { afterEach, expect, test } from "vitest";
+import { useEffect } from "preact/hooks";
 
-import { useDialogLifecycle } from "../../src/ui/shell/OverlayHosts";
+import { lockBodyScroll, useDialogLifecycle } from "../../src/ui/shell/OverlayHosts";
 
 /**
  * Two dialogs can be open at once, and the body scroll lock is one shared
@@ -28,7 +30,47 @@ function Dialog({ open }: { open: boolean }) {
   return h("div", null, null);
 }
 
+function StandaloneDialog({ open }: { open: boolean }) {
+  useEffect(() => {
+    if (!open) return;
+    return lockBodyScroll();
+  }, [open]);
+  return h("div", null, null);
+}
+
 const overflow = () => document.body.style.overflow;
+
+const source = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
+
+const standaloneOverlaySources = [
+  ["PersonDrawer", "../../src/ui/people/PersonDrawer.tsx"],
+  ["ReviewerPage", "../../src/ui/review/ReviewerPage.tsx"],
+  ["SpeakersPage", "../../src/ui/speakers/SpeakersPage.tsx"],
+  ["OnboardingPage", "../../src/ui/onboarding/OnboardingPage.tsx"],
+] as const;
+
+test("CONTRACT · MRQ-215 · every standalone dialog uses the shared body lock", () => {
+  for (const [name, path] of standaloneOverlaySources) {
+    // Ignore prose so this guard cannot be satisfied by a comment describing
+    // the old save/restore pattern.
+    const production = source(path).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(production, `${name} must acquire the shared lock`).toContain("lockBodyScroll");
+    expect(production, `${name} must not restore a private body lock`).not.toContain("document.body.style.overflow");
+  }
+});
+
+test("CONTRACT · MRQ-215 · a standalone dialog keeps the shared lock while another is open", () => {
+  const standalone = mountHost();
+  const shell = mountHost();
+
+  act(() => render(h(StandaloneDialog, { open: true }), standalone));
+  act(() => render(h(Dialog, { open: true }), shell));
+  act(() => render(h(StandaloneDialog, { open: false }), standalone));
+  expect(overflow()).toBe("hidden");
+
+  act(() => render(h(Dialog, { open: false }), shell));
+  expect(overflow()).toBe("");
+});
 
 function mountHost() {
   const host = document.createElement("div");
