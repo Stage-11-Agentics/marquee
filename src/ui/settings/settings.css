@@ -1,6 +1,6 @@
 @import "../social/social-badge.css";
 
-.settings-page { display: grid; gap: 22px; }
+.settings-page { display: grid; gap: 22px; min-width: 0; }
 .settings-list-empty { align-items: start; color: var(--muted); display: grid; gap: 6px; min-height: 112px; padding: 18px 0; }
 .settings-list-empty strong { color: var(--ink-soft); font-size: 12px; }
 .settings-list-empty span { font-size: 11px; line-height: 1.5; }
@@ -197,7 +197,7 @@
 .token-restriction { color: var(--ink-soft); font-size: 12px; }
 .token-form-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .token-table-card { min-width: 0; }
-.table-scroll { overflow-x: auto; }
+.table-scroll { max-width: 100%; min-width: 0; overflow-x: auto; position: relative; }
 .token-table { border-collapse: collapse; min-width: 900px; width: 100%; }
 .token-table th, .token-table td { border-bottom: 1px solid var(--line); font-size: 11px; padding: 12px 14px; text-align: left; vertical-align: top; }
 .token-table thead th { background: var(--sunk); color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }

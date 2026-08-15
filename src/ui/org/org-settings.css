@@ -40,7 +40,7 @@
 
 .org-tabs-scroll-note { display: none; }
 
-.org-tab-body { display: block; }
+.org-tab-body { display: block; min-width: 0; }
 
 .org-grid {
   display: grid;
