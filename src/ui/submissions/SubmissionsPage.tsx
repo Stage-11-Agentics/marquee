@@ -831,10 +831,10 @@ export function SubmissionsPage({
         </div>
         <span class="toolbar-spacer" />
         <Button small onClick={() => void saveCurrentView()} disabled={viewBusy}>Save current view</Button>
-        <Button small onClick={() => setColumnPanelOpen((open) => !open)} aria-expanded={columnPanelOpen}>{columnPanelOpen ? "Hide columns" : "Columns"}</Button>
+        <Button small class="columns-toggle" onClick={() => setColumnPanelOpen((open) => !open)} aria-expanded={columnPanelOpen}>{columnPanelOpen ? "Hide columns" : "Columns"}</Button>
       </div>
       {columnPanelOpen && <div class="column-panel" aria-label="Configure submission columns">
-        <div class="column-panel-heading"><div><strong>Columns</strong><span>Title is always visible. Changes stay reserved in this frame and persist for this conference.</span></div><span class="tabular">{columns.length} / {SUBMISSION_COLUMN_REGISTRY.length}</span></div>
+        <div class="column-panel-heading"><div><strong>Columns</strong><span>Title is always visible. Changes stay reserved in this frame and persist for this conference.</span></div><span class="column-panel-counter tabular">{columns.length} / {SUBMISSION_COLUMN_REGISTRY.length}</span></div>
         <div class="column-list">{orderedColumns.map((column) => {
           const position = columns.indexOf(column);
           const visible = position >= 0;

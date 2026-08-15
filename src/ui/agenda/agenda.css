@@ -202,6 +202,8 @@
   .agenda-toolbar { align-items: stretch; }
   .agenda-view-tabs { width: 100%; overflow-x: auto; }
   .agenda-view-tabs button { flex: 1 0 62px; }
+  .agenda-publication-select-all, .agenda-publication-candidate { min-height: 44px; }
+  .agenda-publication-actions .button { min-height: 40px; }
 }
 
 /* ── Session demand (MRQ-208) ──────────────────────────────────────────

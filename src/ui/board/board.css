@@ -32,6 +32,8 @@
 .program-board-search input { width: 100%; }
 .program-board-filter-summary { color: var(--muted); margin-left: auto; min-width: 108px; text-align: right; }
 .board-kind-note { border-bottom: 1px solid var(--line); color: var(--muted); font: 400 11px/1.4 var(--mono); padding: 8px 14px; }
+.program-board-scroll-note { align-items: center; border-bottom: 1px solid var(--line); color: var(--muted); display: none; font: 500 10px/1.3 var(--mono); gap: 6px; min-height: 30px; padding: 6px 12px; }
+.program-board-scroll-note strong { color: var(--ink); font-weight: 600; }
 .program-board-state { align-items: center; color: var(--muted); display: grid; flex: 1; gap: 8px; min-height: 0; padding: 24px; place-items: center; text-align: center; }
 .program-board-state.error { color: var(--danger); }
 .program-board-card-shell > .program-board-empty-state { border: 0; border-radius: 0; box-shadow: none; flex: 1; min-height: 0; }
@@ -69,9 +71,10 @@
 }
 
 @media (max-width: 760px) {
-  .program-board-page { --board-chrome: 162px; }
+  .program-board-page { --board-chrome: 162px; --board-floor: 520px; }
   .program-board-filters { align-items: stretch; }
   .program-board-search { min-width: 100%; }
   .program-board-filters label:not(.program-board-search) { flex: 1 1 130px; }
   .program-board-filters select { width: 100%; }
+  .program-board-scroll-note { display: flex; }
 }

@@ -128,3 +128,15 @@
 @media (max-width: 980px) { .template-grid, .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 860px) { .comms-grid { grid-template-columns: 1fr; } .comms-banner { align-items: flex-start; flex-wrap: wrap; } .comms-policy { margin-left: 20px; } .trigger-grid { grid-template-columns: 1fr; } .schedule-card { grid-template-columns: 1fr; gap: 10px; } .allowlist-body { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .template-grid, .filter-grid { grid-template-columns: 1fr; } .section-heading { align-items: flex-start; flex-direction: column; } .section-count, .preview-state { margin-left: 0; } .section-heading-compose { align-items: flex-start; } .mode-switch { margin-top: 4px; } }
+
+@media (max-width: 760px) {
+  .comms-screen .panel { padding: 14px; }
+  .message-row summary { align-items: flex-start; gap: 8px; min-width: 0; }
+  .message-row summary > div { flex: 1 1 auto; min-width: 0; }
+  .message-row summary strong, .message-row summary > div > span { overflow-wrap: anywhere; white-space: normal; }
+  .message-status { flex: 0 0 112px; max-width: 112px; overflow-wrap: anywhere; text-align: right; white-space: normal; }
+  .comms-compose input, .comms-compose select, .comms-compose textarea,
+  .filter-grid input, .filter-grid select,
+  .allowlist-entry input, .allowlist-submit { min-height: 40px; }
+  .mode-switch button, .template-select, .toggle-control { min-height: 40px; }
+}

@@ -1,6 +1,7 @@
 .table-card { min-width: 0; overflow: hidden; }
 .submissions-page .page-head p { font-family: var(--mono); font-variant-numeric: tabular-nums lining-nums; min-height: 2.7em; }
 .export-button { min-width: 92px; }
+.columns-toggle { min-width: 100px; }
 /* Reserved whether or not an evaluation plan exists, so resolving one never shifts the header. */
 .results-export-slot { align-items: center; display: inline-flex; justify-content: flex-end; min-width: 150px; }
 /*
@@ -27,6 +28,7 @@
 .column-panel-heading { align-items: start; display: flex; justify-content: space-between; gap: 16px; margin-bottom: 9px; }
 .column-panel-heading div { display: grid; gap: 3px; }
 .column-panel-heading span, .column-panel-note { color: var(--muted); font: 400 10px/1.35 var(--mono); }
+.column-panel-counter { min-width: 4.5ch; text-align: right; white-space: nowrap; }
 .column-list { display: grid; gap: 5px; grid-template-columns: repeat(4, minmax(150px, 1fr)); }
 .column-option { align-items: center; background: var(--panel); border: 1px solid var(--line); display: flex; justify-content: space-between; min-height: 34px; padding: 3px 5px 3px 8px; }
 .column-option.hidden { opacity: .68; }
@@ -176,4 +178,45 @@
   .submissions-toolbar select { width: 100%; }
   .table-status-bar.selecting { align-items: flex-start; flex-wrap: wrap; }
   .submissions-pagination { align-items: flex-start; gap: 10px; }
+
+  /* Keep the three status bands' geometry stable without spending a full
+     phone viewport on transparent copy. Empty bands overlay the next control
+     row; active selection actions become a reachable bottom sheet instead of
+     pushing the first submission down when their buttons wrap. */
+  .saved-view-message, .selection-bar, .bulk-message {
+    position: relative;
+    z-index: 2;
+  }
+  .saved-view-message { margin-bottom: -24px; }
+  .selection-bar { margin-bottom: -42px; }
+  .bulk-message { margin-bottom: -24px; }
+  .saved-view-message:not(.visible), .selection-bar:not(.visible), .bulk-message:not(.visible) { pointer-events: none; }
+  .selection-bar.visible {
+    background: var(--accent-soft);
+    border-bottom: 0;
+    border-top: 1px solid var(--accent);
+    bottom: 0;
+    box-shadow: 0 -5px 18px rgb(18 32 43 / 16%);
+    left: 0;
+    margin-bottom: 0;
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+    padding-bottom: calc(7px + env(safe-area-inset-bottom, 0px));
+    position: fixed;
+    right: 0;
+    z-index: 400;
+  }
+  .bulk-message.visible {
+    background: var(--panel);
+    border-bottom: 0;
+    border-top: 1px solid var(--line-strong);
+    bottom: 0;
+    margin-bottom: 0;
+    min-height: 40px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    padding-top: 10px;
+    position: fixed;
+    right: 0;
+    z-index: 400;
+  }
 }

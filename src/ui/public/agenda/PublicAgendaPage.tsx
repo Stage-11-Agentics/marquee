@@ -347,6 +347,8 @@ export const PUBLIC_SITE_STYLES = `
   .sched-summary { padding: 9px; }
   .sched-export { width: 100%; }
   .sched-export .public-button { flex: 1 1 45%; padding: 7px 4px; font-size: 11px; }
+  .public-speaker-link, .public-session-link { min-height: 44px; }
+  .public-bio summary { align-items: center; display: flex; min-height: 40px; }
 }
 
 /* Speaker social badges, inlined from the one stylesheet the portal and the

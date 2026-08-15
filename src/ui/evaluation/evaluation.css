@@ -164,4 +164,6 @@
   .committee-intro { display: grid; gap: 5px; }
   .committee-person { grid-template-columns: 28px minmax(0, 1fr); padding: 8px 0; }
   .committee-person > .committee-person-action { grid-column: 2; justify-content: flex-start; }
+  .card-actions { flex-wrap: wrap; min-width: 0; }
+  .card-actions .button { flex: 1 1 130px; min-height: 40px; }
 }

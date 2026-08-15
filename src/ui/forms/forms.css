@@ -144,6 +144,8 @@
   .forms-add-row .button, .forms-add-required { grid-column: 1 / -1; }
   .forms-preview-fields { grid-template-columns: 1fr; }
   .forms-rule-row { align-items: start; grid-template-columns: 1fr; padding: 10px 0; }
+  .forms-page .head-actions { align-items: stretch; display: grid; gap: 6px; grid-template-columns: 1fr; width: 100%; }
+  .forms-page .head-actions > *, .forms-page .head-actions .button { width: 100%; }
 }
 
 .forms-options-box { display: grid; gap: 9px; }

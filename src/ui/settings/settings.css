@@ -76,6 +76,13 @@
 @media (max-width: 900px) { .settings-grid { grid-template-columns: 1fr; } .settings-details-card, .settings-venue-link, .settings-organizers { grid-column: auto; } .settings-row-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .settings-row-fields .field:first-child { grid-column: span 2; } }
 @media (max-width: 600px) { .settings-fields, .settings-row-fields, .track-fields { grid-template-columns: 1fr; } .span-2, .settings-row-fields .field:first-child { grid-column: auto; } .settings-venue-link, .settings-danger-card, .settings-savebar { align-items: stretch; flex-direction: column; } .settings-venue-link .button, .settings-danger-card .button, .settings-savebar .button { width: 100%; } .settings-danger-actions { align-items: stretch; flex-direction: column-reverse; } .settings-danger-actions .button { width: 100%; } }
 
+@media (max-width: 760px) {
+  .settings-page .settings-row-actions { align-items: stretch; flex-wrap: wrap; justify-content: flex-start; }
+  .settings-page .settings-row-actions .button { min-height: 40px; min-width: 40px; }
+  .settings-page .settings-social-name { min-width: 0; overflow-wrap: anywhere; }
+  .settings-page .settings-savebar { min-width: 0; }
+}
+
 .task-template-row { gap: 10px; }
 .task-template-row .settings-row-heading { padding-bottom: 2px; }
 .task-template-description { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0; }

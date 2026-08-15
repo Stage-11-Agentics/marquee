@@ -222,7 +222,7 @@
 @media (max-width: 760px) {
   .record-summary { display: grid; }
   .record-summary-meta { align-items: flex-start; text-align: left; }
-  .record-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .record-meta-grid { grid-template-columns: minmax(0, 1fr); }
   .record-slot { grid-template-columns: 1fr; }
   .record-slot-publication { justify-items: start; min-width: 0; }
   .record-publication-action { justify-content: flex-start; min-width: 0; }

@@ -76,6 +76,7 @@ export function OrgSettingsPage({ tab, eventId, navigate }: Props): JSX.Element 
         onClick={() => navigate(entry.path)}
       >{entry.label}</button>)}
     </nav>
+    <p class="org-tabs-scroll-note" role="note"><strong>4 tabs</strong><span>swipe sideways for more</span></p>
     {tab === "organization" && <OrganizationTab />}
     {tab === "organizers" && <div class="org-tab-body"><OrganizersCard /></div>}
     {/* MRQ-210 owns everything this tab says; this surface is only its home,
