@@ -274,6 +274,7 @@ test("CONTRACT · MRQ-215 · speaker badges, status tabs, and counts cannot disa
   const expectedByStatus = new Map<string, string[]>();
   for (const row of all.data) {
     const expectedStatus = expectedStatusById.get(String(row.id));
+    if (expectedStatus === undefined) throw new Error(`Unexpected roster row ${String(row.id)}`);
     expect(expectedStatus).toBe(String(row.status));
     const ids = expectedByStatus.get(expectedStatus) ?? [];
     ids.push(String(row.id));
