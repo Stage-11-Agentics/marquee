@@ -36,6 +36,7 @@ async function seedFixture(): Promise<void> {
      VALUES ('membership_owner', 'org_forms', NULL, 'person_owner', 'owner', ?, ?),
             ('membership_reviewer', 'org_forms', ?, 'person_reviewer', 'reviewer', ?, ?)`,
   ).bind(now, now, EVENT_ID, now, now).run();
+  // clock-check: allow — the form opens_at/closes_at window is compared as exact instants, not event-local calendar days
   await env.DB.prepare(
     `INSERT INTO forms
       (id, event_id, name, slug, kind, status, opens_at, closes_at, welcome_md,
@@ -47,6 +48,7 @@ async function seedFixture(): Promise<void> {
     now - 10_000, now + 86_400_000, "Tell the conference what you are building.",
     3, 1, 4, 0, "submission_confirmation", "[]", 1, now, now,
   ).run();
+  // clock-check: allow — the form opens_at/closes_at window is compared as exact instants, not event-local calendar days
   await env.DB.prepare(
     `INSERT INTO forms
       (id, event_id, name, slug, kind, status, opens_at, closes_at, welcome_md,
@@ -243,6 +245,7 @@ describe.sequential("MRQ-13 form builder API", () => {
   });
 
   test("CONTRACT · an elapsed close date is closed in the catalog, detail, and status filters", async () => {
+    // clock-check: allow — this is an intentional millisecond boundary transition for an exact-instant form close
     await env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = ?").bind(Date.now() - 1, MAIN_FORM_ID).run();
 
     const catalog = await request(`/api/v1/events/${EVENT_ID}/forms?page=1&per_page=20&sort=name`);

@@ -76,6 +76,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'organizer@example.com', 'Priya Raman', '[]', 0, ?, ?)").bind(PERSON_ID, ORG_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'other@example.com', 'Other Speaker', '[]', 0, ?, ?)").bind(OTHER_PERSON_ID, ORG_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('membership_mrq117', ?, ?, ?, 'owner', ?, ?)").bind(ORG_ID, PERSON_ID, EVENT_ID, NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)").bind(AUTH_SESSION, PERSON_ID, SESSION_EXPIRES_AT, NOW, NOW),
     env.DB.prepare(`INSERT INTO submissions
       (id, event_id, form_id, kind, title, abstract, status, origin, submitter_person_id, search_blob, created_at, updated_at)

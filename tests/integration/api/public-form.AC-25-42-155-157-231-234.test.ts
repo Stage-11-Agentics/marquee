@@ -435,6 +435,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     const submission = await json<{ confirmation: { resume_url: string } }>(submitted);
     const resume = new URL(submission.confirmation.resume_url);
 
+    // clock-check: allow — this is an intentional millisecond boundary transition for an exact-instant form close
     await env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = ?").bind(Date.now() - 1, FORM_ID).run();
 
     const api = await request(`/api/v1/public/forms/public-cfp${resume.search}`);
@@ -478,6 +479,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     const editable = await (await request(`/f/public-cfp${resume.search}`)).text();
     expect(editable).toContain("A confirmation is on its way to avery@example.com.");
 
+    // clock-check: allow — this is an intentional millisecond boundary transition for an exact-instant form close
     await env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = ?").bind(Date.now() - 1, FORM_ID).run();
     const panel = await (await request(`/f/public-cfp${resume.search}`)).text();
     expect(panel).toContain("data-receipt-note");
@@ -515,6 +517,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     const editable = await (await request(`/f/public-cfp${resume.search}`)).text();
     expect(editable).not.toContain("on its way to");
 
+    // clock-check: allow — this is an intentional millisecond boundary transition for an exact-instant form close
     await env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = ?").bind(Date.now() - 1, FORM_ID).run();
     const panel = await (await request(`/f/public-cfp${resume.search}`)).text();
     expect(panel).not.toContain("on its way to");

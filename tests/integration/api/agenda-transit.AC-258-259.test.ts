@@ -42,6 +42,7 @@ async function seedFixture(): Promise<void> {
   await applyMigrations();
   for (const row of demoFixtureRows(NOW)) await env.DB.prepare(row.statement).bind(...row.bindings).run();
   await env.DB.batch([
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'agenda-transit-fixture', NULL, ?, ?)").bind(SESSION_ID, DEMO_ORGANIZER_PERSON_ID, NOW + 86_400_000, NOW, NOW),
     env.DB.prepare("INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_minutes, access_note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("building-sheraton", DEMO_EVENT_ID, "Sheraton New York Times Square", "7th Avenue", 0, 40.7625188, -73.9814528, 0, "Main entrance", NOW, NOW),
     env.DB.prepare("INSERT INTO buildings (id, event_id, name, address, position, lat, lng, access_minutes, access_note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("building-marriott", DEMO_EVENT_ID, "New York Marriott Marquis", "Broadway", 1, 40.7585971, -73.9861935, 3, "Use the Broadway lobby", NOW, NOW),
@@ -63,6 +64,7 @@ async function seedFixture(): Promise<void> {
       env.DB.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, 'track-transit', 1, ?, ?)").bind(`submission-track-${submissionId}`, submissionId, NOW, NOW),
     ]),
     env.DB.prepare("INSERT INTO agenda_items (id, event_id, submission_id, kind, title, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at) VALUES (?, ?, ?, 'session', NULL, ?, 45, ?, 'track-transit', 0, ?, ?)").bind("agenda-transit-first", DEMO_EVENT_ID, "sub-transit-first", NOW, "room-sheraton", NOW, NOW),
+    // clock-check: allow — agenda starts_at is an exact schedule instant, not an event-local calendar deadline
     env.DB.prepare("INSERT INTO agenda_items (id, event_id, submission_id, kind, title, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at) VALUES (?, ?, ?, 'session', NULL, ?, 45, ?, 'track-transit', 0, ?, ?)").bind("agenda-transit-second", DEMO_EVENT_ID, "sub-transit-second", NOW + 30 * 60_000, "room-marriott", NOW, NOW),
   ]);
 }

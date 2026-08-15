@@ -584,6 +584,7 @@ test("AC-299 · removing a person from a conference ends their work there and le
       `INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, is_published, created_at, updated_at)
        VALUES ('sub_other', ?, 'session', 'A Session At The Other Conference', 'accepted', 'admin', 'per_speaker', 0, ?, ?)`,
     ).bind(otherEventId, NOW, NOW),
+    // clock-check: allow — agenda starts_at is an exact schedule instant, not an event-local calendar deadline
     env.DB.prepare(
       `INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
        VALUES ('agenda_live', ?, 'sub_live', 'session', ?, 30, 'room_remove207', 1, ?, ?)`,
@@ -603,10 +604,12 @@ test("AC-299 · removing a person from a conference ends their work there and le
     env.DB.prepare(
       "INSERT INTO task_templates (id, event_id, name, kind, due_offset_days, position, created_at, updated_at) VALUES ('tpl_207', ?, 'Send your bio', 'acknowledge', 7, 0, ?, ?)",
     ).bind(eventId, NOW, NOW),
+    // clock-check: allow — this task has a due_offset_days template, so due_at keeps instant semantics
     env.DB.prepare(
       `INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, due_at, status, created_at, updated_at)
        VALUES ('task_open', ?, 'per_speaker', 'sub_live', 'tpl_207', 'Send your bio', 'acknowledge', ?, 'open', ?, ?)`,
     ).bind(eventId, DUE_AT, NOW, NOW),
+    // clock-check: allow — this completed task has a due_offset_days template, so due_at keeps instant semantics
     env.DB.prepare(
       `INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, due_at, status, completed_at, created_at, updated_at)
        VALUES ('task_done', ?, 'per_speaker', 'sub_live', 'tpl_207', 'Signed the release', 'acknowledge', ?, 'done', ?, ?, ?)`,
@@ -751,6 +754,7 @@ test("AC-300 · revoking portal access ends the credentials and touches nothing 
     env.DB.prepare(
       "INSERT INTO task_templates (id, event_id, name, kind, due_offset_days, position, created_at, updated_at) VALUES ('tpl_portal', ?, 'Send your slides', 'file', 7, 0, ?, ?)",
     ).bind(eventId, NOW, NOW),
+    // clock-check: allow — this task has a due_offset_days template, so due_at keeps instant semantics
     env.DB.prepare(
       `INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, due_at, status, created_at, updated_at)
        VALUES ('task_portal', ?, 'per_portal', 'sub_portal', 'tpl_portal', 'Send your slides', 'file', ?, 'open', ?, ?)`,

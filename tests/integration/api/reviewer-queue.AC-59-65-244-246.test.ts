@@ -120,7 +120,9 @@ async function seedReviewerFixture(): Promise<void> {
   await env.DB.batch([
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, 0, 'marquee', ?, ?)").bind(REVIEWER_ID, DEMO_ORGANIZATION_ID, "reviewer@mrq-18.marquee.example", "MRQ-18 Reviewer", NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'reviewer', ?, ?)").bind("membership-mrq-18-reviewer", DEMO_ORGANIZATION_ID, EVENT_ID, REVIEWER_ID, NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'reviewer', ?, 'mrq-18', NULL, ?, ?)").bind(SESSION_ID, REVIEWER_ID, NOW + 86_400_000, NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'mrq-18-organizer', NULL, ?, ?)").bind(ORGANIZER_SESSION_ID, ORGANIZER_ID, NOW + 86_400_000, NOW, NOW),
     env.DB.prepare("INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, 'Agents', '#db4c3f', 0, ?, ?)").bind(TRACK_A, EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, 'Evals', '#0d9488', 1, ?, ?)").bind(TRACK_B, EVENT_ID, NOW, NOW),

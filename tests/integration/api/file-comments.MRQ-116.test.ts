@@ -56,11 +56,14 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'priya@example.com', 'Priya Raman', '[]', 0, ?, ?)").bind(SPEAKER_ID, ORG_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('mem_mrq116_owner', ?, ?, ?, 'owner', ?, ?)").bind(ORG_ID, EVENT_ID, ORGANIZER_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('mem_mrq116_speaker', ?, ?, ?, 'speaker', ?, ?)").bind(ORG_ID, EVENT_ID, SPEAKER_ID, NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)").bind(ORGANIZER_SESSION, ORGANIZER_ID, NOW + 86_400_000, NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'speaker', ?, 'fixture', NULL, ?, ?)").bind(SPEAKER_SESSION, SPEAKER_ID, NOW + 86_400_000, NOW, NOW),
     env.DB.prepare(`INSERT INTO task_templates
       (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
       VALUES (?, ?, 'Upload Session Presentation', 'file', 'Upload your slides.', NULL, 7, NULL, ?, 0, 0, ?, ?)`).bind(TEMPLATE_ID, EVENT_ID, JSON.stringify({ accept: ["pdf"], max_bytes: 1_000_000 }), NOW, NOW),
+    // clock-check: allow — this task uses a relative template, so its due_at is compared as an exact instant
     env.DB.prepare(`INSERT INTO speaker_tasks
       (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, created_at, updated_at)
       VALUES (?, ?, ?, NULL, ?, 'Upload Session Presentation', 'file', 'Upload your slides.', ?, 'done', ?, ?, NULL, ?, ?)`).bind(TASK_ID, EVENT_ID, SPEAKER_ID, TEMPLATE_ID, NOW + 86_400_000, NOW, null, NOW, NOW),

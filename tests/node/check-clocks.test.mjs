@@ -14,9 +14,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { clockFindings } from "../../scripts/checks/clock-policy.mjs";
+import { clockFindings, liveClockFindings } from "../../scripts/checks/clock-policy.mjs";
 
 const rules = (source) => clockFindings("tests/fixture.test.ts", source).map((finding) => finding.rule);
+const marginRules = (source) => liveClockFindings("tests/fixture.test.ts", source).map((finding) => finding.rule);
 
 test("CONTRACT · the session that took the suite red on 2026-08-13 is caught", () => {
   // Verbatim from people.MRQ-131.test.ts at 17242b06: the column is on one line
@@ -67,6 +68,7 @@ test("CONTRACT · a session minted from the real clock is not a finding", () => 
   const source = `
 const NOW = Date.UTC(2026, 7, 20, 16, 0, 0);
 const SESSION_EXPIRES_AT = Date.now() + 86_400_000;
+// clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
 env.DB.prepare("INSERT INTO auth_sessions (id, person_id, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
   .bind(AUTH_SESSION, PERSON_ID, SESSION_EXPIRES_AT, NOW, NOW);
 `;
@@ -112,4 +114,47 @@ env.DB.prepare(
 ).bind(AUTH_SESSION, PERSON_ID, NOW + 86_400_000, NOW, NOW);
 `;
   assert.ok(rules(source).includes("auth-session-expiry-from-literal-date"));
+});
+
+test("CONTRACT · a one-day live-clock offset feeding due_at is caught", () => {
+  const source = `
+const NOW = Date.now();
+const DAY_MS = 86_400_000;
+const OVERDUE_AT = NOW - DAY_MS;
+env.DB.prepare(
+  "INSERT INTO speaker_tasks (id, due_at, created_at, updated_at) VALUES (?, ?, ?, ?)"
+).bind("task", OVERDUE_AT, NOW, NOW);
+`;
+  assert.deepEqual(marginRules(source), ["live-clock-calendar-margin"]);
+  assert.ok(rules(source).includes("live-clock-calendar-margin"));
+});
+
+test("CONTRACT · a two-day live-clock margin is stable across the local-day boundary", () => {
+  const source = `
+const NOW = Date.now();
+const DAY_MS = 86_400_000;
+const OVERDUE_AT = NOW - 2 * DAY_MS;
+env.DB.prepare(
+  "INSERT INTO speaker_tasks (id, due_at, created_at, updated_at) VALUES (?, ?, ?, ?)"
+).bind("task", OVERDUE_AT, NOW, NOW);
+`;
+  assert.deepEqual(marginRules(source), []);
+});
+
+test("CONTRACT · the margin rule sees direct offsets and keeps the existing escape hatch", () => {
+  const armed = `
+env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = ?")
+  .bind(Date.now() - 1_000, FORM_ID);
+`;
+  const excused = armed.replace(
+    "env.DB.prepare(\"UPDATE forms",
+    "// clock-check: allow — this is an intentional millisecond boundary test; forms compare exact instants\nenv.DB.prepare(\"UPDATE forms",
+  );
+  const bare = armed.replace(
+    "env.DB.prepare(\"UPDATE forms",
+    "// clock-check: allow\nenv.DB.prepare(\"UPDATE forms",
+  );
+  assert.deepEqual(marginRules(armed), ["live-clock-calendar-margin"]);
+  assert.deepEqual(marginRules(excused), []);
+  assert.deepEqual(marginRules(bare), ["live-clock-calendar-margin"]);
 });

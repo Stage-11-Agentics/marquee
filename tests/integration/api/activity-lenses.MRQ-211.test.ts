@@ -70,6 +70,7 @@ beforeAll(async () => {
   for (const row of demoFixtureRows(now)) await env.DB.prepare(row.statement).bind(...row.bindings).run();
   const organization = await orgId();
   await env.DB.batch([
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare(
       `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
        VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)`,
@@ -84,6 +85,7 @@ beforeAll(async () => {
     // A live session for the organizer about to be removed. Removal must both
     // revoke it and say so — "access ended" with no count is the half-answer
     // that leaves an owner wondering whether the link in that inbox still works.
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare(
       `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
        VALUES (?, ?, 'program_lead', ?, 'fixture', NULL, ?, ?)`,
@@ -343,6 +345,7 @@ test("CONTRACT · MRQ-211 · the organization log is organizer authority, not op
       `INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
        VALUES ('mem-mrq-211-reviewer', (SELECT org_id FROM events WHERE id = ?), ?, 'per-mrq-211-reviewer', 'reviewer', ?, ?)`,
     ).bind(EVENT_ID, EVENT_ID, now, now),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare(
       `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
        VALUES ('sess-mrq-211-reviewer', 'per-mrq-211-reviewer', 'reviewer', ?, 'fixture', NULL, ?, ?)`,

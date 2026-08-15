@@ -131,8 +131,10 @@ async function seedFixture(): Promise<void> {
       .bind("room_mrq209", UPCOMING_EVENT_ID, "building_mrq209", NOW, NOW),
     env.DB.prepare("INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at) VALUES (?, ?, ?, 'session', ?, 30, ?, 1, ?, ?)")
       .bind("agenda_mrq209", UPCOMING_EVENT_ID, "sub_mrq209_upcoming_returning", NOW, "room_mrq209", NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'program_lead', ?, 'mrq209', NULL, ?, ?)")
       .bind(OWNER_SESSION_ID, OWNER_ID, Date.now() + 86_400_000, NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'speaker', ?, 'mrq209', NULL, ?, ?)")
       .bind(SPEAKER_SESSION_ID, RETURNING_SPEAKER_ID, Date.now() + 86_400_000, NOW, NOW),
     env.DB.prepare("INSERT INTO audit_log (id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at, request_id) VALUES (?, ?, ?, 'user', ?, 'member', ?, NULL, NULL, ?, NULL)")

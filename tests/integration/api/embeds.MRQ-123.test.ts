@@ -23,6 +23,7 @@ beforeEach(async () => {
     env.DB.prepare(`INSERT INTO people (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at)
       VALUES (?, 'org_saved_embeds_mrq123', 'operator@example.com', 'Embed Operator', NULL, NULL, NULL, NULL, '[]', 1, 'marquee', ?, ?)`).bind(PERSON_ID, now, now),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('membership_saved_embeds_mrq123', 'org_saved_embeds_mrq123', ?, ?, 'program_lead', ?, ?)").bind(EVENT_ID, PERSON_ID, now, now),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare(`INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
       VALUES (?, ?, 'program_lead', ?, 'saved-embeds-mrq123', NULL, ?, ?)`).bind(SESSION_ID, PERSON_ID, now + 3_600_000, now, now),
   ]);

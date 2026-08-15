@@ -64,6 +64,7 @@ beforeEach(async () => {
   const sessionExpiresAt = Date.now() + 86_400_000;
   for (const row of demoFixtureRows(now)) await env.DB.prepare(row.statement).bind(...row.bindings).run();
   await env.DB.batch([
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare(
       `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
        VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)`,
