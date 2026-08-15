@@ -1146,4 +1146,27 @@ handing the committee's judgment to a vendor's idea of a good reviewer.
 - **AC-306**: `DELETE /api/v1/events/:id` and the shared cascade remove every event-scoped row, counted per table before and after: both submission kinds and their answers/tracks/participations/decisions, forms/fields/admins and their public links, agenda slots and published schedule/site material, portal magic links, all event outbox mail and calendar invites, embeds, evaluations/reviewer state, tasks/uploads, imports, venues/taxonomy, event settings, webhooks, and mirror rows. Organization-scoped `people`, `person_events` notes/tags, and non-event attachment subjects are byte-identical; the deletion audit row survives with actor identity.
 - **AC-307**: `marquee event delete <event-id>` is documented in `SKILL.md` and calls the same route. `POST /api/v1/admin/remove-demo` is the seeded-demo policy of that same cascade, with only its explicitly broader `is_demo` people cleanup; it is not a parallel deletion list. The legacy `attachments.event_id` wart is handled narrowly by detaching surviving `person_headshot` rows; no second attachment ownership model is introduced.
 
-**Next mint: AC-308.**
+---
+
+## Amendment 25 — connecting Airtable is a thing the product does (client-directed, 2026-08-15)
+
+**The finding this closes.** MRQ-217 merged the outbound mirror with no reachable on switch. Its D1 triggers fire only when `mirror_state` carries a non-empty `airtable_table_id`, the drain resolves that same field per table, and the only `INSERT INTO mirror_state` in the tree is the reset sentinel — which writes NULL. Every test in that PR passes because it inserts `mirror_state` as a fixture. Setting `AIRTABLE_API_KEY` and `AIRTABLE_BASE_ID` as Wrangler secrets changes nothing: no trigger fires, no outbox row is ever written. `SPEC.md` §3.9 never specified a connect flow because it quietly assumed the base was configured out of band, and the shipped `delivery-health.ts` comment says so outright — *"the mirror is configured where the conference is hosted, not from a screen inside Marquee."* That assumption is now retired.
+
+**Credential ruling (Atin, 2026-08-15): the personal access token is stored in D1, encrypted at rest.** A Wrangler secret would mean only somebody with deploy access can turn the mirror on, which contradicts *own your conference* and makes "setup is an item in Settings" untrue for every self-hosted organizer. The cost is accepted and named: an Airtable credential now lives in the database of a public open-source product, so encryption at rest, the never-echo-it-back rule, and a visible revoke path are load-bearing rather than nice — AC-309 exists to make each of them mechanical.
+
+**AC-228 moves to this story** from US-72. The Settings → Airtable screen is one surface and should have one owner; US-72 keeps the sync mechanics, this story owns the screen and the door to it.
+
+### US-92 · Connect Airtable without a deploy *(new)*
+
+**As an** organizer, **I want** to connect our Airtable base from inside Marquee, **so that** the mirror can be switched on by the person who wants it rather than by whoever holds deploy access.
+
+- **AC-308** The connect flow verifies the token and base against Airtable before persisting anything; a rejected credential stores nothing and says which of the two failed.
+- **AC-309** The stored token is encrypted at rest, is never returned or logged on any path, and disconnect removes it and stops all mirror traffic.
+- **AC-310** From an unconfigured deployment, completing the connect flow is sufficient for a local change to reach Airtable — no fixture, no SQL, no deploy.
+- **AC-311** Every surface that says what this deployment is connected to names Airtable with its true state, and System health's row links to the settings screen once one exists.
+- **AC-312** `SKILL.md` and the setup guide document the flow, and an agent can complete it end to end through the API with no screen opened.
+- **AC-313** Connect, status, and disconnect are scoped under `mirror:write`; status is readable under a read scope and no scope ever returns the token.
+
+`EVALUATION.md` §2.8 owns the verification rows. Built by MRQ-221 (screen, connect, discovery surfaces) and MRQ-222 (agent-native surface). Post-deadline band; no gate count changes.
+
+**Next mint: AC-314.**

@@ -678,6 +678,21 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-306 | PD | `auto` | `test:` compare byte-stable snapshots of organization `people`, `person_events` notes/tags/stage rows, and surviving person-headshot subjects before/after while asserting every event-scoped row is gone, including both submission kinds, forms/public links, agenda/site material, portal magic links, outbox/invites, embeds, evaluations, tasks/uploads, imports, venues/taxonomy, webhooks, and mirror rows. |
 | AC-307 | PD | `auto` | `test + static:` assert `marquee event delete <event-id>` appears in generated `SKILL.md`, dispatches to `DELETE /api/v1/events/:id`, and `remove-demo` imports/calls the same `deleteEventCascade` primitive rather than maintaining a second statement list. |
 
+### 2.8 Post-deadline Airtable-connect band — AC-308 – AC-313 *(Amendment 25, 2026-08-15)*
+
+**Outside the Wednesday terminal gate, on the same terms as §2.4–§2.7.** Not folded into the 210 live in-scope count or tier arithmetic. Story: US-92 (`sequence/USER_STORIES.md` Amendment 25). **AC-228 moves here from §2.3's mirror block** — the Settings → Airtable screen is one thing with one owner, and it is this band's screen.
+
+**Why this band exists at all.** MRQ-217 shipped the outbound mirror with no way to switch it on. Its triggers fire only when `mirror_state` holds a row whose `airtable_table_id` is non-empty, the drain resolves the same field per table, and the only `INSERT INTO mirror_state` in the tree is the reset sentinel, which writes NULL. Every MRQ-217 test passes because it inserts `mirror_state` as a fixture. So the machinery is proven against a configured state the product cannot produce — a working feature with no reachable on switch, and the precise failure `CLAUDE.md` names when it says green tests are not a working product. **AC-310 is the on switch, and until it lands AC-225 is unreachable in any deployment.** Every criterion here is verified against a fake Airtable transport; none requires a live base.
+
+| AC | Tier | Tag | How verified |
+|---|---|---|---|
+| AC-308 | PD | `auto` | `test:` posting a token and base to the connect endpoint calls Airtable's schema read **before** any write; on a rejected credential nothing is persisted (`mirror_state` and the credential store are byte-identical before and after) and the error names which of token or base failed. On success the base's tables are returned for mapping. |
+| AC-309 | PD | `auto` | `test:` the stored token is encrypted at rest — assert the persisted bytes do not contain the plaintext — and no response body, log line, error, or telemetry event on any path echoes it. A read returns only a masked fingerprint and a set-at timestamp. Disconnect deletes the credential, clears `mirror_state.airtable_table_id`, and the next dispatch is a no-op. |
+| AC-310 | PD | `auto` | `test:` from a deployment with no configuration, complete the connect flow, then write one mirrored row and assert an outbox row is created and drains to the fake transport — **with no direct `mirror_state` fixture anywhere in the test**. This is the criterion MRQ-217's suite could not state about itself. |
+| AC-311 | PD | `auto` | `test + route scan:` the Server panel's connection rows include Airtable with its true state, and System health's `Airtable sync` row carries an `href` to Settings → Airtable once that route exists. Unconfigured, both read as not-connected rather than absent or errored. |
+| AC-312 | PD | `auto` | `test + static:` `SKILL.md` and the setup guide document the connect flow, and an agent completes it end to end through the API — connect, verify, map, confirm a change reaching the fake provider — with no screen opened. |
+| AC-313 | PD | `auto` | `test:` connect, status, and disconnect are exposed under `mirror:write`; status is readable under a read scope; no scope returns the token. A token lacking `mirror:write` is refused on every write verb. |
+
 ---
 
 ## 3. Felt checkpoints

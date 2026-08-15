@@ -985,3 +985,43 @@ Two smaller notes, ratified rather than fixed: sponsor Sessions carry the confer
 **Scope of the mirrored set.** The three tables §3.9 names — `submissions`, `speaker_tasks`, `people` — and no others. The product has grown a great deal since §3.9 was written (companies, sponsorships, attendances, activity), and every one of those is a candidate for a later band. Widening the mirrored set is a new amendment, not a delegator's judgement call: each table added is a schema surface an ops person can edit, and the inbound allowlist is the only thing standing between that and an unreviewed write path into D1.
 
 **Tickets.** MRQ-217 (outbound) and MRQ-218 (inbound, keepalive, Settings → Airtable). The mirror-isolation audit that MRQ-46 would have performed is folded into MRQ-217 as the import-boundary lint it was going to check for, because a guardrail that ships with the code it guards cannot be skipped for capacity. MRQ-54's spike is not reinstated as a separate item: with an injected transport, the inbound loop is exercised by the suite, and the one thing a spike would have told us that the fake cannot — whether Airtable's real webhook payload matches its documentation — is answered the first time a base is connected.
+
+---
+
+## Amendment 25 — the mirror gets an on switch, and a door *(client-directed, 2026-08-15)*
+
+*Folds `USER_STORIES.md` Amendment 25 (US-92, AC-308 – AC-313) and `EVALUATION.md` §2.8. §3.9's mechanics are unchanged.*
+
+**§3.9 assumed `mirror_state` was configured out of band, and nothing ever configured it.** MRQ-217 shipped the outbound half correctly and unreachably: its triggers fire only on a non-empty `airtable_table_id`, and the only `INSERT INTO mirror_state` in the tree is the reset sentinel, which writes NULL. Secrets alone switch nothing on. This amendment makes connecting a thing the product does.
+
+### §3.9 delta — `mirror_credentials`
+
+**`mirror_credentials`** (org-scoped, at most one row) — `token_ciphertext`, `token_fingerprint`, `base_id`, `set_at`, `set_by_person_id`, `last_verified_at`, `last_error`.
+Writer: the connect and disconnect actions only. Reader: `mirrorConfig`, which now resolves the token from this row rather than from `env.AIRTABLE_API_KEY`. **The plaintext token leaves this table only into the Airtable transport** — never into a response body, a log line, an error, or a telemetry event; a read returns `token_fingerprint` and `set_at` and nothing else. Encryption is at rest under a Worker secret; that secret remains deployment configuration, so a database dump alone does not yield a usable credential.
+
+Connecting writes `mirror_state` rows for the three mirrored tables with their discovered `airtable_table_id` — **this write is the on switch**, and until it happens `AC-225` is unreachable in any deployment regardless of what the outbound code does.
+
+**Disconnect is the one caller of `clearMirrorOutbox`.** That helper exists, is exported, and is deliberately called from nowhere: a review of MRQ-217 found it being invoked whenever configuration was absent, which silently destroyed the pending change feed every time a credential was transiently missing. Absent configuration remains an inert off state. Only an explicit disconnect clears the feed.
+
+### §4.2 route deltas
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/v1/mirror/connect` | token + base; verifies against Airtable's schema read before persisting; returns discovered tables for mapping. `mirror:write` |
+| POST | `/api/v1/mirror/mapping` | maps the three mirrored tables to Airtable table ids; writes `mirror_state` | 
+| GET | `/api/v1/mirror/status` | connection state, both row counts as of `last_sync_at`, outbox depth, retry-capped count, webhook expiry. Read scope; never returns the token |
+| POST | `/api/v1/mirror/disconnect` | removes the credential, clears `mirror_state.airtable_table_id`, calls `clearMirrorOutbox`. `mirror:write` |
+
+`POST /mirror/sync` and `POST /mirror/webhook` remain as §3.9 and §4.2 already specify them.
+
+### §5.15 Settings → Airtable `/settings/airtable` *(new)*
+
+The route `SITEMAP.md` has always drawn and no build has ever installed. Unconfigured it is a connect screen; configured it is AC-228's status screen — base link, both row counts rendered **"as of `last_sync_at`"**, last sync, outbox depth, Sync now, live log, webhook-expiry warning, and disconnect.
+
+**Two additions the MRQ-217 review earned.** The outbox depth figure must distinguish *queued* from *stuck at the retry cap* (`attempts >= MAX_MIRROR_ATTEMPTS`, 5): a depth number that silently includes dead rows is a worse lie than a larger honest one, and the health surface already computes both. And the screen states plainly that delivery is **traffic-assisted** — request dispatch is the fast path, the hourly cron the idle backstop — because an organizer reading "within 60 seconds" on an idle deployment is owed the condition.
+
+### Discovery
+
+**Airtable joins the Server panel's connection rows.** That panel's own lead copy is *"What this Marquee is connected to, and whether each piece is working"*; it lists Email sending, File uploads, Spam protection and Web address, and the mirror is now exactly such a connection. System health's existing `Airtable sync` row gains the `href` its comment correctly withheld while there was nowhere to send anyone.
+
+**Agent-native, per `PHILOSOPHY.md`.** The flow is documented in `SKILL.md` and the setup guide, and is completable end to end through the API. An organizer who runs their conference through an agent must be able to connect Airtable the same way — the API is not a mirror of the screen, it is the other way round.

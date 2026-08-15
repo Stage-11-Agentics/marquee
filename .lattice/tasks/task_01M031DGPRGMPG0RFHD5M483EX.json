@@ -1,0 +1,51 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 0,
+  "complexity": "medium",
+  "created_at": "2026-08-15T15:42:30Z",
+  "created_by": {
+    "agent_type": "intake",
+    "base_name": "Airtable-Intake",
+    "framework": "claude-code",
+    "model": "claude-opus-5",
+    "name": "Airtable-Intake-1",
+    "serial": 1,
+    "session": "sess_01M01XCG6Z5TYTQTA1ND1JB7VW"
+  },
+  "custom_fields": {},
+  "description": "Make connecting Airtable something an agent can do, and something a reader of the docs finds. **Depends on MRQ-221**, which builds the connect API this documents and exercises.\n\n`PHILOSOPHY.md` says agent-native by design: agents are first-class operators, the API is real, and the CLI and skill file ship. An organizer who runs their conference through an agent must be able to connect Airtable the same way an organizer with a browser can \u2014 and today neither can, because there is no connect flow at all (see MRQ-221 for that finding).\n\n## Contract\n\n- **`SPEC.md` Amendment 25**, the Discovery section and the \u00a74.2 route table.\n- **`sequence/USER_STORIES.md` Amendment 25** \u2014 US-92, specifically **AC-312** and **AC-313**.\n- **`EVALUATION.md` \u00a72.8** for how those two are verified.\n\n## Scope\n\n1. **`SKILL.md`** gains an Airtable chapter: what the mirror is, what it is not (D1 stays the source of truth; Airtable is never read on a request path), how to connect it, how to read status, how to disconnect. `SKILL.md` is generated \u2014 follow the existing generation path rather than hand-editing the artifact, exactly as `AC-307` required for `marquee event delete`.\n2. **The setup guide** (`docs/GETTING-STARTED.md`) gains the same flow in the organizer's language, placed as an optional step \u2014 a Marquee with no Airtable is a complete Marquee, and the chapter must not read as though something is missing without it.\n3. **CLI verbs** on the `marquee` CLI covering connect, status, and disconnect, dispatching to MRQ-221's routes. **Do not implement a second code path** \u2014 the CLI calls the API, as `AC-307` established for conference deletion.\n4. **AC-313's scoping** proven from the agent side: connect and disconnect require `mirror:write`, status is readable under a read scope, and no scope returns the token. The `mirror:write` scope already exists (`src/api/grants.ts`, `src/lib/auth/scope-resolution.ts`) and already appears in the API-token picker (`src/ui/settings/ApiTokensPage.tsx:16`) \u2014 where it has been offering a scope for a feature with no other surface. This ticket is what makes that entry mean something.\n5. **AC-312's real assertion**: an agent completes connect \u2192 verify \u2192 map \u2192 confirm a change reaching the fake provider, **with no screen opened**. That is a test, not a doc claim.\n\n## Do not\n\n- Do not hand-edit generated `SKILL.md` output.\n- Do not build the settings screen, the connect endpoints, or `mirror_credentials` \u2014 all MRQ-221.\n- Do not add a second transport or import the Airtable client outside `src/jobs/mirror/*` (`scripts/checks/check-mirror-imports.mjs` will fail you).\n- Do not edit contract docs or mint AC IDs.",
+  "done_at": null,
+  "evidence_refs": [],
+  "id": "task_01M031DGPRGMPG0RFHD5M483EX",
+  "last_event_id": "ev_01M031DZNKX83TJ0EZDHB6ZW4Y",
+  "last_status_changed_at": "2026-08-15T15:42:30Z",
+  "linked_files": [],
+  "priority": "high",
+  "relationships_out": [
+    {
+      "created_at": "2026-08-15T15:42:45Z",
+      "created_by": {
+        "agent_type": "intake",
+        "base_name": "Airtable-Intake",
+        "framework": "claude-code",
+        "model": "claude-opus-5",
+        "name": "Airtable-Intake-1",
+        "serial": 1,
+        "session": "sess_01M01XCG6Z5TYTQTA1ND1JB7VW"
+      },
+      "note": "MRQ-222 documents and exercises the connect API that MRQ-221 builds.",
+      "target_task_id": "task_01M031CW2722ZRN3WAR2QAD9G3",
+      "type": "depends_on"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "MRQ-222",
+  "status": "backlog",
+  "tags": null,
+  "title": "Airtable, agent-native: SKILL.md chapter, setup guide, and CLI connect verbs",
+  "type": "task",
+  "updated_at": "2026-08-15T15:42:45Z",
+  "urgency": null
+}
