@@ -311,7 +311,12 @@ export function TaskRow({ task, renderSurface, renderPayloadExtras, ownerLabel, 
           file the conference is holding. */}
       {versions ? <div class="portal-task-file"><FileVersions list={versions} compact /></div> : null}
     </div>
-    <button class={`portal-task-action${done ? "" : " primary"}`} type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{done ? (expanded ? "Close" : "View") : (expanded ? "Close" : "Complete")}</button>
+    {/* "Finish now", not "Complete": this row already says "Complete" as a
+        status on the done rows above and below it, and a button wearing the
+        same word reads as a badge announcing the task is finished rather than
+        an instruction to go finish it. The button says what pressing it leads
+        you to do. */}
+    <button class={`portal-task-action${done ? "" : " primary"}`} type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{done ? (expanded ? "Close" : "View") : (expanded ? "Close" : "Finish now")}</button>
     {expanded ? <div class="portal-task-payload">
       {versions ? <div class="portal-task-versions"><FileVersions list={versions} /></div> : null}
       {renderSurface(task)}
