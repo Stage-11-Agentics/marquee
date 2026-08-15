@@ -98,6 +98,20 @@ export function reconcileOnboardingSelection(
   return new Set([...selected].filter((id) => !previousVisibleIds.has(id) || nextVisibleIds.has(id)));
 }
 
+export function reconcileOnboardingSelectionForView(
+  selected: ReadonlySet<string>,
+  visibleRowsByView: ReadonlyMap<string, ReadonlySet<string>>,
+  viewIdentity: string,
+  nextRows: readonly Pick<OnboardingRow, "id">[],
+): Set<string> {
+  const previousVisibleIds = visibleRowsByView.get(viewIdentity);
+  return previousVisibleIds === undefined ? new Set(selected) : reconcileOnboardingSelection(selected, previousVisibleIds, nextRows);
+}
+
+export function shouldApplyOnboardingSnapshot(disposed: boolean, activeRequest: AbortController | null, request: AbortController): boolean {
+  return !disposed && activeRequest === request && !request.signal.aborted;
+}
+
 function formatDate(value: number | null): string {
   if (value === null) return "—";
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
@@ -262,12 +276,12 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
   const matrixRef = useRef<HTMLDivElement>(null);
   const [matrixOverflows, setMatrixOverflows] = useState(false);
   const filterIdentity = JSON.stringify(filters);
-  const visibleRowIds = useRef<Set<string>>(new Set());
-  const loadedView = useRef<string | null>(null);
+  const visibleRowsByView = useRef<Map<string, Set<string>>>(new Map());
   const updateFilters = (update: typeof filters | ((current: typeof filters) => typeof filters)) => {
     setPage(1);
     setSelected(new Set());
     setKnownRows(new Map());
+    visibleRowsByView.current = new Map();
     setFilters(update);
   };
   const ready = state.kind === "ready"
@@ -285,8 +299,7 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
   useEffect(() => {
     setSelected(new Set());
     setKnownRows(new Map());
-    visibleRowIds.current = new Set();
-    loadedView.current = null;
+    visibleRowsByView.current = new Map();
   }, [eventId]);
 
   useEffect(() => {
@@ -294,35 +307,37 @@ export function OnboardingPage({ eventId, search = "", navigate }: { eventId: st
     let active: AbortController | null = null;
     const load = (showLoading: boolean) => {
       active?.abort();
-      active = new AbortController();
+      const controller = new AbortController();
+      active = controller;
       if (showLoading) setState({ kind: "loading" });
-      readBoard(eventId, filters, page, pageSize, active.signal)
+      readBoard(eventId, filters, page, pageSize, controller.signal)
         .then((snapshot) => {
-          if (disposed) return;
+          if (!shouldApplyOnboardingSnapshot(disposed, active, controller)) return;
           const viewIdentity = `${eventId}|${filterIdentity}|${page}`;
-          const sameView = loadedView.current === viewIdentity;
+          const previousVisibleIds = visibleRowsByView.current.get(viewIdentity);
           const nextVisibleIds = new Set(snapshot.data.map((row) => row.id));
           setState({ kind: "ready", snapshot });
-          if (sameView) setSelected((current) => reconcileOnboardingSelection(current, visibleRowIds.current, snapshot.data));
+          if (previousVisibleIds !== undefined) {
+            setSelected((current) => reconcileOnboardingSelection(current, previousVisibleIds, snapshot.data));
+          }
           setKnownRows((current) => {
             const next = new Map(current);
-            if (sameView) {
-              for (const id of visibleRowIds.current) {
+            if (previousVisibleIds !== undefined) {
+              for (const id of previousVisibleIds) {
                 if (!nextVisibleIds.has(id)) next.delete(id);
               }
             }
             for (const row of snapshot.data) next.set(row.id, row);
             return next;
           });
-          visibleRowIds.current = nextVisibleIds;
-          loadedView.current = viewIdentity;
+          visibleRowsByView.current.set(viewIdentity, nextVisibleIds);
           // A mutation can shrink the result set while an operator is reading a
           // later page. Ask for the last real page instead of leaving an empty
           // grid behind with no way back to the data.
           const lastPage = Math.max(1, snapshot.total_pages);
           setPage((current) => current > lastPage ? lastPage : current);
         })
-        .catch((error: unknown) => { if (!disposed && !active?.signal.aborted) setState({ kind: "error", message: errorSummary(error) }); });
+        .catch((error: unknown) => { if (shouldApplyOnboardingSnapshot(disposed, active, controller)) setState({ kind: "error", message: errorSummary(error) }); });
     };
     load(true);
     const timer = window.setInterval(() => load(false), 5_000);
