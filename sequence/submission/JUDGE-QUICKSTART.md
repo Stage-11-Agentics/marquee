@@ -1,5 +1,38 @@
 # Judge quickstart — the walkthrough loop in ten minutes
 
+## Instructions for testing — the short answer (paste this)
+
+> Marquee is live at **https://marquee.stage11.dev** — a populated instance of
+> AI Engineer NYC 2026: ~1,000 submissions, a live review round, a built
+> agenda, a published public program.
+>
+> 1. **Sign in** at https://marquee.stage11.dev/signin — three one-click demo
+>    seats, no password: **organizer**, **reviewer**, **speaker** (typing
+>    `organizer@demo.com` / `reviewer@demo.com` / `speaker@demo.com` opens the
+>    same seats).
+> 2. **As organizer:** /dashboard (pipeline) → /forms (CFP builder) →
+>    /evaluation (rounds, scorecards, reviewer pools) → /agenda-builder
+>    (drag-and-drop; list/day/week/track/room views; live conflict warnings;
+>    publish gate).
+> 3. **Logged out:** submit a real proposal at /f/cfp — it works end to end,
+>    headshot upload included — then browse the published program at /agenda
+>    and /speakers.
+> 4. **Speaker and reviewer seats** show the other sides: an accepted
+>    speaker's portal (status, schedule, tasks) and a track-scoped review
+>    queue (Approve / Maybe / Deny, keyboard scoring).
+>
+> Mail is demo-safe: every send renders in /communications and nothing is
+> delivered to real addresses, so bulk actions are safe to press. A
+> station-by-station walkthrough with expectations at each stop:
+> **https://marquee.stage11.dev/submission/**. The REST API the UI itself runs
+> on: /api/docs (235 operations).
+
+Verified against build `ad937cdd9443` on 2026-08-15: all URLs above return
+200, the three seats render on /signin, and the operation count comes from
+counting `/api/openapi.json`. Re-run those checks if a deploy lands later.
+
+---
+
 The loop below follows the briefing video's order, station by station, with the
 exact URL and seat for each step. Every step was walked end to end against the
 live site on 2026-08-12 (build `30b53f5ae78e` — `curl
