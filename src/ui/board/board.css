@@ -4,8 +4,8 @@
    height throws away the taller half of a monitor. The chrome above and below
    it is fixed by the design contract — a 52px topbar and `.page`'s 26/56
    padding — so the fill is plain CSS: no measurement that has to chase the
-   layout it is itself changing. Below 760px the rail is fixed to the bottom
-   rather than in flow, so only the topbar and the page padding count. */
+   layout it is itself changing. Below 760px the navigation is an overlay
+   drawer, so only the topbar and the page padding count. */
 /* `height`, not `min-height`: the chain of flex and grid tracks below only
    resolves against a definite height, and without one the list stops being a
    scroll box and grows to the full 1,000 cards.

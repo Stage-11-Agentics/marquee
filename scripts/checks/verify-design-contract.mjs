@@ -21,9 +21,14 @@ for (const contract of [
   [components, /grid-template-columns:\s*224px minmax\(0, ?1fr\)/, "desktop sidebar is not 224px"],
   [components, /height:\s*52px/, "topbar is not 52px"],
   [components, /max-width:\s*1000px[\s\S]*grid-template-columns:\s*68px/, "compact sidebar is not 68px at 1000px"],
-  [components, /max-width:\s*760px[\s\S]*height:\s*54px/, "mobile rail is not 54px at 760px"],
+  [components, /@media \(max-width: 760px\)[\s\S]*\.sidebar \{[^}]*height:\s*100vh;[^}]*width:\s*min\(302px, 86vw\);/, "mobile drawer is not 302px at 760px"],
+  [components, /@media \(max-width: 760px\)[\s\S]*\.page \{[^}]*padding:\s*22px 16px 56px;/, "mobile page still reserves the retired bottom rail"],
 ]) {
   if (!contract[1].test(contract[0])) findings.push(contract[2]);
+}
+const mobileContract = components.match(/@media \(max-width: 760px\) \{([\s\S]*?)\n\}/)?.[1] ?? "";
+if (/\.sidebar \{[^}]*height:\s*54px;/.test(mobileContract)) {
+  findings.push("mobile bottom rail is still present at 760px");
 }
 // The labels the signed design names. Several are shorter than they were: a row
 // under "Call for proposals" that says "CFP forms" says CFP twice, and one under
