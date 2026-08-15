@@ -114,19 +114,32 @@ function checkDirectSeedShape(rows: Awaited<ReturnType<typeof buildSeedRows>>): 
   const evaluations = new Set(seedRowsByTable(rows, "evaluations").map((row) => `${row.round_id}:${row.submission_id}:${row.reviewer_person_id}`));
   const unreviewed = assignments.filter((row) => !evaluations.has(`${row.round_id}:${row.submission_id}:${row.reviewer_person_id}`));
   const overdueTasks = seedRowsByTable(rows, "speaker_tasks").filter((row) => row.status === "open" && Number(row.due_at) < FROZEN_NOW);
-  assert.equal(submissions.length, 1_000, "seed must contain exactly 1,000 submissions");
-  assert.equal(submissions.filter((row) => row.status === "accepted").length, 60, "seed must contain 60 accepted submissions");
+  // SPEC §6 Option A' sizes the COMPETITIVE pool. Sponsor Sessions are guaranteed
+  // placements bought by a deal — they never entered that pool, carry no wave and
+  // no decision row (Amendment 23) — so they are counted apart rather than allowed
+  // to loosen the two numbers that matter. Scoped this way, neither number can be
+  // satisfied by adding one class of row while dropping another.
+  const sponsored = submissions.filter((row) => row.sponsorship_id);
+  const competitive = submissions.filter((row) => !row.sponsorship_id);
+  assert.equal(competitive.length, 1_000, "seed must contain exactly 1,000 competitive submissions");
+  assert.equal(competitive.filter((row) => row.status === "accepted").length, 60, "seed must contain 60 accepted submissions");
   assert.ok(
-    submissions.filter((row) => row.status === "accepted" && row.kind === "session" && row.bypass_evaluation === 1).length >= 25,
+    competitive.filter((row) => row.status === "accepted" && row.kind === "session" && row.bypass_evaluation === 1).length >= 25,
     "seed must contain at least 25 accepted bypass Sessions",
+  );
+  assert.ok(sponsored.length >= 3, `seed must demonstrate sponsor Sessions, found ${sponsored.length}`);
+  assert.ok(
+    sponsored.every((row) => row.status === "accepted" && row.bypass_evaluation === 1 && row.wave_id === null),
+    "a sponsor Session is a guaranteed placement: accepted, bypassing evaluation, and in no decision wave",
   );
   assert.ok(speakerMembers.size >= 150, `seed must expose >=150 accepted speaker memberships, found ${speakerMembers.size}`);
   assert.equal(unreviewed.length, ORGANIZER_UNREVIEWED_ASSIGNMENTS, "organizer round-one assignment count drifted");
   assert.ok(overdueTasks.length >= 10, `seed must contain >=10 overdue open tasks, found ${overdueTasks.length}`);
   return {
-    submissions: submissions.length,
-    accepted_submissions: submissions.filter((row) => row.status === "accepted").length,
-    accepted_sessions: submissions.filter((row) => row.status === "accepted" && row.kind === "session" && row.bypass_evaluation === 1).length,
+    submissions: competitive.length,
+    sponsor_sessions: sponsored.length,
+    accepted_submissions: competitive.filter((row) => row.status === "accepted").length,
+    accepted_sessions: competitive.filter((row) => row.status === "accepted" && row.kind === "session" && row.bypass_evaluation === 1).length,
     speaker_memberships: speakerMembers.size,
     organizer_unreviewed_assignments: unreviewed.length,
     overdue_tasks: overdueTasks.length,

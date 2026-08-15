@@ -915,3 +915,46 @@ The operation deletes children before the event row. **DIES:** submissions of bo
 **SURVIVES:** organization-level `people`, `person_events` notes/tags/stage history, and the append-only `audit_log`. Organization-level person headshots also survive. The legacy `attachments.event_id` requirement is repaired narrowly in migration `0018_event_deletion.sql`: surviving `person_headshot` rows are detached (`event_id = NULL`) during deletion, while event-owned attachments are deleted. No new attachment ownership model is introduced. The deletion audit row keeps the deleted event ID without an event foreign key and records the actor, action `event.deleted`, before snapshot, after marker, timestamp, and request ID.
 
 The UI reproduces the binding prototype at the foot of Conference settings: a Danger zone card opens a modal that first discloses the exact dies/stays consequences, then requires the organizer to type the conference name. Only an exact trimmed match enables **Delete conference**. The modal says, **“This removes the conference and everything scoped to it. It cannot be undone.”** After success, the UI selects another conference if one remains; otherwise it returns to the fresh-install landing. `marquee event delete <event-id>` and the generated `SKILL.md` command use the same route, and `POST /api/v1/admin/remove-demo` delegates to the same cascade with its explicitly broader seeded-people cleanup.
+
+## Amendment 23 — the sponsorship, and the contact who completes its work *(2026-08-14, client-directed)*
+
+Sponsorship is per-conference commerce over an organization-level company relationship — structurally parallel to Outreach over People. The company and its history survive every conference; the deal is one conference's record. Design round and rulings: `sequence/sponsors-design.md` §2 and §5, with `prototypes/sponsor-portal/index.html` as the binding visual contract.
+
+### §3.7 deltas — two columns on `speaker_tasks`
+
+**`completed_by_person_id` NULL** — *who* completed the work, beside `completed_at`'s *when*. Nullable, and null means **not recorded**, never "the assignee": back-filling `person_id` would assert that the assignee finished every task ever completed, which is the exact claim this column exists to stop making. Writer: every completion, from either portal seat. Reader: the portal task row, the organizer task view. It exists because a sponsorship's deliverables are visible to every contact and completable by any of them — a green checkmark that implies the wrong person did the work is worse than no attribution at all.
+
+**`sponsorship_id` NULL** — the grouping join. Sponsor deliverables are person-assigned tasks on the existing machinery (ruling 2 — there is no company-owned task type); this column is only how they are grouped by the deal they belong to. `owes` is unchanged, and every count and trigger still filters on `cancelled_at IS NULL` alone.
+
+### §3.11 Sponsors *(new)*
+
+**`companies`** (org-scoped) — `name`, `website`, `domain`, `blurb`, `notes`, `is_demo`. The CRM's second noun. `people.company_id` links to it and coexists with the legacy `people.company` string; the reconcile is a later band.
+**`sponsor_tiers`** (event-scoped) — `name`, `position`. Gold/Silver/Bronze seeded, renameable, extendable.
+**`sponsorships`** (event-scoped join) — `company_id`, `tier_id`, `status` ∈ `courting|committed|fulfilled`, `passes`, and the booth columns (`booth_number`, `booth_size`, `booth_hall`, `booth_building_id` → `buildings(id, event_id)`, `booth_load_in`, `booth_access_note`, `booth_leave_note`). **Booth is columns on the deal, not a second record type** (ruling 5): a boothless sponsorship is those columns being null, which is why the portal composes down rather than branching. One deal per company per conference (`uq_sponsorships_event_company`).
+**`sponsorship_contacts`** — `person_id` per sponsorship, `is_primary`. **Contacts are `people` rows** reached through this join, never a parallel contact table (`speaker-crm-scope.md` §2), and exactly one primary per sponsorship is a database fact (a partial unique index), not a read-then-write check.
+**Linked Sessions** — `submissions.sponsorship_id` NULL. A sponsor Session is `kind = session` with `bypass_evaluation` (R9); this is the honest link back to the deal that bought it. A sponsor Session carries **no wave and no decision row** — it never entered the competitive path — so SPEC §6's 1,000 submissions and 60 accepted records both mean the **competitive pool**, and sponsor Sessions are counted and asserted apart from it.
+
+**Not modelled here, deliberately:** per-tier deliverable **template sets** (the `reconcileTaskSet`-on-commit weave) belong to the tier-settings surface that authors them — half a reconciliation is worse than none — and company logo uploads land with the organizer surface that needs them. Tier-scoped portal *content* variation stays a later band: the portal renders the deliverables it is given.
+
+### §4.2 route deltas
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/v1/me/sponsor-portal` | the whole sponsorship for a signed-in contact: deal, derived deal line, every deliverable with assignee and completer, read-only Sessions, contact roster, handbook |
+| PATCH | `/api/v1/me/sponsorships/:id/company` | org-level company facts; authorized only for a contact of that sponsorship. The contact roster is **not** writable — access to a sponsorship is the organizer's to grant |
+
+`POST /api/v1/me/tasks/:taskId/complete` and `POST /api/v1/me/uploads/sign` are **widened, not duplicated**: each resolves through the speaker predicate or the sponsorship-contact predicate, from one shared function. Two near-identical predicates would give a contact a file deliverable that opens, validates, and then fails at the PUT.
+
+### §5.14 Sponsor portal `/sponsor-portal` *(new)*
+
+The speaker portal's sibling: same magic-link door, same session surface, same task machinery, same Flight Deck day treatment. The centre of gravity is the **sponsorship**. Page order, reproducing the binding prototype: head ("Welcome back" + `N of M deliverables done`) → **sponsorship hero** (tier · status eyebrow, company, conference line, and a **derived deal line** — Sessions counted from linked submissions, booth number, passes — never a per-tier blurb; organizer contact resolved from the event's own staff memberships on the right) → **Your booth**, the speaker location card's machinery reused (loc-lines, the leave-by accent box repurposed for load-in, the venue map as the receipt), rendered only when booth data exists → **Deliverables** (the shared task row, each carrying its assignee; cancelled work below a dashed divider with the reason stated once and out of the progress figure) → **Your Sessions** (read-only cards) → **Company profile** (org-level facts, contact roster with Primary/You chips) → **Sponsor handbook** (chapters; the load-in chapter only for a sponsorship with a booth).
+
+**Three rulings bind the surface** (`sponsors-design.md` §5.2):
+
+1. **Whole sponsorship, anyone completes.** Every deliverable is visible to every contact with its assignee named; any contact may complete any open one; the completer is recorded and displayed. The person holding the file is never blocked.
+2. **The hero is the sponsorship** — booth-and-session deals read as ordinary composition, and so does their absence.
+3. **Sessions are read-only; the task machinery is the single write path.** There is no edit control on a Session card. Three deliverables reach the thing they are about on completion, dispatched by template identity: *Name your speaker* creates the person, the `speaker` participation, and — through the same `reconcileTaskSet` the acceptance boundary runs — their membership and onboarding task set, so the promise on the task is literally true; *Session title & description* fills the submission under the same `speaker_talk_updated` audit action the speaker portal writes; *Confirm your company details* writes the org-level company facts, which is what replaces a public intake form (ruling 6).
+
+**Entry.** A sponsorship contact holds no `memberships` row by doctrine, so `roleHome` takes the seat beside the roles: `/sponsor-portal` is returned only when the person holds no staff, reviewer, or speaker role. Somebody who is both a speaker and a contact still lands on `/portal`.
+
+**Acknowledged divergences from the prototype.** The prototype opens tasks and handbook pages in modals; both portals expand in place, because the shipped task-row machinery is what the build reproduces and a second completion UI in one product is worse than a matched animation. The prototype's dashed switcher is prototype chrome; a real sponsorship switcher renders in its place, and only for a contact who genuinely holds more than one deal. A file deliverable states **vector PDF** rather than the prototype's "SVG or EPS": `task_upload` narrows `DOCUMENT_RULES`, which sniffs pdf/pptx/key and nothing else, so an accept list naming `.svg` presigns nothing — widening the sniffer is a security-surface change and is not done here.

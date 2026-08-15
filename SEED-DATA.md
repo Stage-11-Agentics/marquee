@@ -44,6 +44,35 @@ submission outside the accepted core — is **invented for demonstration**.
   draft pool is entirely fabricated, with synthetic names and invented companies.
   A real person is never attached to a fabricated submission, and a fabricated
   abstract is never attributed to a real person.
+- **Every sponsor.** Both seeded sponsorships are invented end to end — the
+  companies, the four contacts, the named speaker, the deliverables, the booth,
+  and the three sponsor Sessions. AI Engineer's actual sponsors are not this
+  project's to publish, and attaching a real 2025 speaker's real talk to a
+  fabricated sponsor would misrepresent that person. Nothing in the sponsors seed
+  is drawn from the source program.
+
+## Sponsorships in the demo
+
+Two sponsorships ship so the sponsor portal is demonstrable in both of its
+compositions, which is the whole reason there are two:
+
+| | Gold | Silver |
+|---|---|---|
+| Company | Ashworth–Meridian Capital Intelligence Group | Tapestry Small-Business Lending |
+| Contacts | 3 — `dana.okafor@example.com` (primary), `priya.raghunathan@example.com`, `grzegorz.wlodarczyk@example.com` | 1 — `mona.haddad@example.com` (primary) |
+| Booth | 214, Sheraton Exhibit Hall · Level 2, with load-in and a map pin | none — every booth column null |
+| Deliverables | 8, including one **overdue** (the logo, assigned to Grzegorz) and one **cancelled** with its reason | 4 |
+| Sessions | 2 — one scheduled and published, one with **no speaker named** | 1 — scheduled but **not yet public** |
+
+The Gold sponsorship is the demonstration that any contact can complete any
+deliverable: its overdue logo request is assigned to the contact least likely to
+be the one signing in, and whoever completes it is named on the row afterwards.
+Grzegorz Włodarczyk-Ó Braonáin's name is long and carries two diacritics on
+purpose — every surface it appears on has to survive it.
+
+On a demo instance the sign-in form returns the magic link on screen for any
+seeded address, so entering the portal as any of the four contacts takes about ten
+seconds and exercises the real magic-link door rather than a shortcut.
 
 ## Demo workflow coverage
 
