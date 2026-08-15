@@ -69,6 +69,9 @@ export async function dispatchPendingMirrorMessages(
 }
 
 export async function clearMirrorOutbox(db: D1Database): Promise<void> {
+  // check:api intentionally exercises meta routes with no D1 binding. A
+  // disconnected mirror is a successful no-op there as well as in production.
+  if (typeof (db as unknown as { prepare?: unknown })?.prepare !== "function") return;
   const placeholders = MIRRORED_TABLES.map(() => "?").join(",");
   await db.prepare(
     `DELETE FROM mirror_outbox
