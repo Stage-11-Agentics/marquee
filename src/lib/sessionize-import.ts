@@ -725,6 +725,9 @@ function importedPrimaryTrackStatements(db: D1Database, submissionId: string, tr
       "UPDATE submission_tracks SET is_primary = 0, updated_at = ? WHERE submission_id = ? AND is_primary = 1 AND track_id <> ?",
     ).bind(now, submissionId, trackId),
     db.prepare(
+      "DELETE FROM submission_tracks WHERE submission_id = ? AND id GLOB 'track_import_*' AND track_id <> ?",
+    ).bind(submissionId, trackId),
+    db.prepare(
       `INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at)
        VALUES (?, ?, ?, 1, ?, ?)
        ON CONFLICT(submission_id, track_id) DO UPDATE SET is_primary = 1, updated_at = excluded.updated_at`,
@@ -736,14 +739,17 @@ function importedPrimaryTrackStatements(db: D1Database, submissionId: string, tr
 async function backfillImportedPrimaryTracks(db: D1Database, eventId: string): Promise<void> {
   await db.prepare(
     `INSERT OR IGNORE INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at)
-     SELECT 'track_import_backfill_' || submission.id, submission.id, submission.primary_track_id, 1,
+     SELECT 'track_import_backfill_' || submission.id || '_' || submission.primary_track_id,
+       submission.id, submission.primary_track_id, 1,
        submission.created_at, submission.updated_at
      FROM submissions submission
      WHERE submission.event_id = ?
        AND submission.origin = 'import'
        AND submission.primary_track_id IS NOT NULL
        AND NOT EXISTS (
-         SELECT 1 FROM submission_tracks carried WHERE carried.submission_id = submission.id
+         SELECT 1 FROM submission_tracks carried
+         WHERE carried.submission_id = submission.id
+           AND carried.track_id = submission.primary_track_id
        )`,
   ).bind(eventId).run();
 }
@@ -1071,11 +1077,11 @@ async function restoreSnapshot(db: D1Database, snapshot: ImportSnapshot): Promis
     `UPDATE submissions SET event_id = ?, form_id = ?, kind = ?, bypass_evaluation = ?, title = ?, abstract = ?, status = ?, format_id = ?, primary_track_id = ?, origin = ?, vendor_affiliation = ?, wave_id = ?, submitter_person_id = ?, decided_at = ?, decided_by_person_id = ?, submitted_at = ?, last_saved_at = ?, resume_token_hash = ?, is_published = ?, external_ref = ?, applied_rule_id = ?, last_write_source = ?, created_at = ?, updated_at = ? WHERE id = ?`,
   ).bind(submission.event_id, submission.form_id, submission.kind, submission.bypass_evaluation, submission.title, submission.abstract, submission.status, submission.format_id, submission.primary_track_id, submission.origin, submission.vendor_affiliation, submission.wave_id, submission.submitter_person_id, submission.decided_at, submission.decided_by_person_id, submission.submitted_at, submission.last_saved_at, submission.resume_token_hash, submission.is_published, submission.external_ref, submission.applied_rule_id, submission.last_write_source, submission.created_at, submission.updated_at, submission.id).run();
   await db.batch([
-    ...(snapshot.tracks !== undefined ? [db.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(submission.id)] : []),
+    ...(snapshot.tracks !== undefined ? [db.prepare("DELETE FROM submission_tracks WHERE submission_id = ? AND id GLOB 'track_import_*'").bind(submission.id)] : []),
     db.prepare("DELETE FROM participations WHERE submission_id = ? AND id LIKE 'part_import_%'").bind(submission.id),
     db.prepare("DELETE FROM submission_answers WHERE submission_id = ? AND id LIKE 'answer_import_%'").bind(submission.id),
     db.prepare("DELETE FROM evaluations WHERE submission_id = ? AND id LIKE 'eval_import_%'").bind(submission.id),
-    ...(snapshot.tracks ?? []).map((row) => db.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(row.id, row.submission_id, row.track_id, row.is_primary, row.created_at, row.updated_at)),
+    ...(snapshot.tracks ?? []).filter((row) => row.id.startsWith("track_import_")).map((row) => db.prepare("INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET submission_id = excluded.submission_id, track_id = excluded.track_id, is_primary = excluded.is_primary, updated_at = excluded.updated_at").bind(row.id, row.submission_id, row.track_id, row.is_primary, row.created_at, row.updated_at)),
     ...snapshot.participations.map((row) => db.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, confirmed_at, invited_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET person_id = excluded.person_id, role = excluded.role, position = excluded.position, confirmation_status = excluded.confirmation_status, confirmed_at = excluded.confirmed_at, invited_at = excluded.invited_at, updated_at = excluded.updated_at").bind(row.id, row.submission_id, row.person_id, row.role, row.position, row.confirmation_status, row.confirmed_at, row.invited_at, row.created_at, row.updated_at)),
     ...snapshot.answers.map((row) => db.prepare("INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET field_id = excluded.field_id, value_text = excluded.value_text, value_json = excluded.value_json, updated_at = excluded.updated_at").bind(row.id, row.submission_id, row.field_id, row.value_text, row.value_json, row.created_at, row.updated_at)),
     ...snapshot.evaluations.map((row) => db.prepare("INSERT INTO evaluations (id, round_id, submission_id, reviewer_person_id, recommendation, score, criteria_scores, comment, abstained, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET round_id = excluded.round_id, reviewer_person_id = excluded.reviewer_person_id, score = excluded.score, comment = excluded.comment, updated_at = excluded.updated_at").bind(row.id, row.round_id, row.submission_id, row.reviewer_person_id, row.recommendation, row.score, row.criteria_scores, row.comment, row.abstained, row.created_at, row.updated_at)),
@@ -1087,6 +1093,8 @@ async function deleteCreatedSubmission(db: D1Database, submissionId: string): Pr
     db.prepare("DELETE FROM evaluations WHERE submission_id = ? AND id LIKE 'eval_import_%'").bind(submissionId),
     db.prepare("DELETE FROM submission_answers WHERE submission_id = ? AND id LIKE 'answer_import_%'").bind(submissionId),
     db.prepare("DELETE FROM participations WHERE submission_id = ? AND id LIKE 'part_import_%'").bind(submissionId),
+    // The submission itself is import-created and is removed as a unit. The
+    // schema has no ON DELETE CASCADE, so every join must go before its parent.
     db.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(submissionId),
     db.prepare("DELETE FROM submissions WHERE id = ? AND origin = 'import'").bind(submissionId),
   ]);
