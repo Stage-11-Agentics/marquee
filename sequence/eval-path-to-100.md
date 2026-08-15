@@ -19,9 +19,11 @@ ai-agenda (area weight 10) and a 2-point item in call-for-papers (area weight 20
 are worth materially different amounts. Grading rules and area weights:
 [`EVAL-KIT.md`](EVAL-KIT.md). How rounds are run: [`../EVAL.md`](../EVAL.md).
 
-**Last refreshed:** round 12 (`runs/2026-08-15T21-19-37`, build `7e6975de6ab3`),
-three of seven areas judged; content-management, ai-agenda and public-widgets still
-read from round 11 and are marked `*` in the table. See the update log at the bottom.
+**Last refreshed:** round 12 (`runs/2026-08-15T21-19-37`, build `7e6975de6ab3`) —
+**VOID as a headline**, three of seven areas judged before Atlas rebooted. Those
+three judgements graded one build with no drift and are used here as real
+measurements; content-management, ai-agenda and public-widgets still read from
+round 11 and are marked `*` in the table. See the update log at the bottom.
 
 ---
 
@@ -230,12 +232,33 @@ before letting a round reach it.
 
 ## Update log
 
-- **2026-08-15, round 12 (in flight).** Document created. Three of seven areas
-  judged before Atlas went unreachable. **CFP-06, CFP-10, CFP-11 converted
+- **2026-08-15, round 12 — VOID as a headline, and three areas kept.** Document
+  created. Atlas rebooted at 19:07 ET (23:07Z) after hanging from ~22:55Z, killing
+  the job at 14 of 20 scenarios with four area boundaries reached, three areas
+  judged and no `report.json`. Recorded in `state.voidRuns`; no `guard` was run and
+  the anchor is untouched.
+
+  **The three judgements are still valid measurements** and are used above: they
+  graded a single build (`7e6975de6ab3`) with `built_at` constant at every area
+  boundary, so nothing drifted underneath them. What is void is the *headline* —
+  three of six required areas is 55 of 100 area weight, below the 60% coverage
+  cliff, and blending it with round 11's other three would be comparing two builds.
+
+  Movement in those three areas: **CFP-06, CFP-10 and CFP-11 converted
   partial→pass, and CFP-15 converted `cannot_judge`→pass** — the coverage item
-  converted cleanly rather than exposing a weak capability. CFP-17/18 moved
-  pass→partial; the judge's reasoning attributes this to the run, not the product
-  (see Lane 2). ABS-14 moved `cannot_judge`→partial. SPK-03 became a new
-  `cannot_judge` on turn budget. Total recoverable: **9.72**.
+  converted cleanly rather than exposing a weak capability, which is the good
+  outcome of the trap described above. CFP-17/18 moved pass→partial, attributed by
+  the judge's own reasoning to the run rather than the product (Lane 2). ABS-14
+  moved `cannot_judge`→partial. SPK-03 became a new `cannot_judge` on turn budget.
+  Total recoverable: **9.72**.
+
+  **Harness defect this exposed:** `loop.sh watch` treats a `stopped` job as
+  RUN-COMPLETE. The README already records that *a dead watch looks exactly like a
+  quiet one*; this is the inverse — **a dead job looks exactly like a finished
+  one**, and the watch printed RUN-COMPLETE for a run that had no `report.json` and
+  had lost three of its areas. The guard against announcing completion on
+  `unreachable` worked perfectly and then handed off to a weaker test. Completion
+  should require the artifact a completed run leaves behind, not merely the absence
+  of a process.
 - **2026-08-14, round 11.** Baseline for this document: 87.5% finalized at 100%
   coverage (89.2% automated at 97.3%), 18 `partial` and 2 `cannot_judge`.
