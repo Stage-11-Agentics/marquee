@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { SubmissionsPage } from "../submissions/SubmissionsPage";
 import { apiFetch, errorSummary, onUnauthenticated } from "./api-client";
 import { Button, EmptyState, PageHeader } from "./components";
@@ -57,6 +57,8 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const route = matchRoute(location.pathname, location.search);
   const [overlay, setOverlay] = useState<OverlayState | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const navigationButtonRef = useRef<HTMLButtonElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const identity = useIdentity();
   const { eventId } = useEventContext();
@@ -78,6 +80,14 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const closeOverlay = useCallback(() => setOverlay(null), []);
   const openSearch = useCallback(() => setSearchOpen(true), []);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
+  const openNavigation = useCallback(() => {
+    navigationButtonRef.current?.focus();
+    setDrawerOpen(true);
+  }, []);
+  const closeNavigation = useCallback(() => setDrawerOpen(false), []);
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [location.pathname, location.search]);
   const resetDemo = useCallback(async () => {
     if (resetting) return;
     if (!window.confirm("Reset the demo conference? This removes demo edits, submissions, uploads, and queued work.")) return;
@@ -220,7 +230,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   </>;
   return <>
     <div class="app-shell">
-      <Sidebar activeId={activeNavId(route?.id)} eventName={eventName} navigate={navigate} resetting={resetting} onReset={() => void resetDemo()} />
+      <Sidebar activeId={activeNavId(route?.id)} eventName={eventName} navigate={navigate} resetting={resetting} onReset={() => void resetDemo()} drawerOpen={drawerOpen} onClose={closeNavigation} />
       <main class="main">
         <Topbar
           eventName={eventName}
@@ -232,6 +242,9 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
           openSearch={openSearch}
           toggleUser={() => setUserMenuOpen((open) => !open)}
           closeUser={() => setUserMenuOpen(false)}
+          drawerOpen={drawerOpen}
+          onOpenNavigation={openNavigation}
+          navigationButtonRef={navigationButtonRef}
         />
         <div class="page">
           {/* The shell's own boundary. Panels inside a screen carry their own,

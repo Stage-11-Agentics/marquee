@@ -1,11 +1,13 @@
-.sessionize-import-page { display: grid; gap: 16px; }
+.sessionize-import-page { display: grid; gap: 16px; min-width: 0; }
+.sessionize-import-page > * { min-width: 0; }
 .sessionize-import-steps { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .sessionize-import-step { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); display: grid; gap: 4px; min-height: 82px; padding: 13px 15px; }
 .sessionize-import-step.active { background: var(--accent-soft); border-color: var(--accent); }
 .sessionize-import-step span { color: var(--muted); font: 600 10px/1 var(--mono); }
 .sessionize-import-step strong { font: 600 12px/1.2 var(--mono); }
 .sessionize-import-step small { color: var(--muted); font-size: 10.5px; }
-.sessionize-import-stage { display: grid; gap: 14px; min-height: 520px; }
+.sessionize-import-stage { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); min-height: 520px; min-width: 0; }
+.sessionize-import-stage > .card, .sessionize-import-stage .card-body { min-width: 0; }
 .sessionize-upload-grid, .sessionize-mapping-grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sessionize-upload-grid { min-height: 240px; }
 .sessionize-stage-actions { align-items: center; display: flex; gap: 8px; justify-content: flex-end; margin-top: auto; }
@@ -37,3 +39,8 @@
 .sessionize-results-card { min-width: 0; }
 @media (max-width: 900px) { .sessionize-mapping-grid, .sessionize-upload-grid { grid-template-columns: 1fr; } .sessionize-count-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .sessionize-import-steps { grid-template-columns: 1fr; } .sessionize-mapping-fields { grid-template-columns: 1fr; } .sessionize-count-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .sessionize-import-stage .card-head { align-items: flex-start; flex-wrap: wrap; }
+  .sessionize-import-stage .card-head h2 { min-width: 0; }
+  .sessionize-import-stage .card-head .chip { max-width: 100%; white-space: normal; }
+}

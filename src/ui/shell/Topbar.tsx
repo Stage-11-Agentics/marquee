@@ -10,7 +10,7 @@ function submissionsCrumb(pathname: string): boolean {
   return pathname.startsWith("/submissions/");
 }
 
-export function Topbar({ eventName, routeName, pathname = "", identity, userMenuOpen, openSearch, toggleUser, closeUser, navigate = (target) => { window.location.assign(target); } }: {
+export function Topbar({ eventName, routeName, pathname = "", identity, userMenuOpen, openSearch, toggleUser, closeUser, navigate = (target) => { window.location.assign(target); }, drawerOpen = false, onOpenNavigation = () => {}, navigationButtonRef }: {
   eventName: string;
   routeName: string;
   /** Omitted by shells that carry their own chrome (e.g. Delivery health) — the
@@ -23,6 +23,9 @@ export function Topbar({ eventName, routeName, pathname = "", identity, userMenu
   toggleUser: () => void;
   closeUser: () => void;
   navigate?: (target: string) => void;
+  drawerOpen?: boolean;
+  onOpenNavigation?: () => void;
+  navigationButtonRef?: { current: HTMLButtonElement | null };
 }): JSX.Element {
   const crumbTo = (target: string) => (event: MouseEvent) => { event.preventDefault(); navigate(target); };
   // The theme is presentational and owned by the document; ThemeSwitch owns
@@ -30,6 +33,16 @@ export function Topbar({ eventName, routeName, pathname = "", identity, userMenu
   const theme = useThemeId();
   const chrome = chromeFor(theme);
   return <header class="topbar">
+    <button
+      ref={navigationButtonRef}
+      type="button"
+      class="mobile-nav-trigger"
+      aria-label="Open navigation"
+      aria-expanded={drawerOpen}
+      aria-controls="primary-navigation"
+      onClick={onOpenNavigation}
+    ><span class="mobile-nav-ink" aria-hidden="true"><i /><i /><i /></span></button>
+    <button type="button" class="mobile-event-context" onClick={onOpenNavigation}>{eventName}</button>
     <div class="breadcrumbs">
       <a href="/dashboard" onClick={crumbTo("/dashboard")}>{eventName}</a>&nbsp; / &nbsp;
       {submissionsCrumb(pathname) && <><a href="/submissions" onClick={crumbTo("/submissions")}>Submissions</a>&nbsp; / &nbsp;</>}
@@ -40,6 +53,9 @@ export function Topbar({ eventName, routeName, pathname = "", identity, userMenu
       <button type="button" data-global-search-trigger onClick={openSearch} aria-haspopup="dialog">Search abstracts, speakers, sessions…</button>
       <span class="shortcut">⌘K</span>
     </div>
+    <button type="button" class="mobile-search-trigger" aria-label="Search" onClick={openSearch} aria-haspopup="dialog">
+      <span class="search-glyph" aria-hidden="true">{chrome.searchGlyph}</span>
+    </button>
     <ThemeSwitch />
     <div class="top-identity" data-identity>
       <strong>{identity?.name ?? "—"}</strong>

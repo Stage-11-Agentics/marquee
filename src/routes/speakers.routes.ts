@@ -11,6 +11,7 @@ import { z } from "@hono/zod-openapi";
 
 import { ApiError } from "../api/errors";
 import { newUlid } from "../api/ids";
+import { LIST_DEFAULTS, createListResponseSchema } from "../api/list";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import { auditStatement } from "../lib/audit";
@@ -33,6 +34,9 @@ const rosterQuery = z.object({
   q: z.string().trim().max(200).optional(),
   status: z.enum(["all", "pending", "invited", "confirmed", "declined"]).default("all"),
   track: z.string().trim().min(1).max(100).optional(),
+  page: z.coerce.number().int().min(1).optional().catch(undefined).openapi({ type: "integer", minimum: 1 }),
+  per_page: z.coerce.number().int().min(1).max(LIST_DEFAULTS.maxPerPage).optional().catch(undefined)
+    .openapi({ type: "integer", minimum: 1, maximum: LIST_DEFAULTS.maxPerPage }),
 });
 
 const customFieldsSchema = z.record(z.string().min(1).max(80), z.string().max(2_000));
@@ -85,12 +89,10 @@ const speakerSchema = z.object({
   updated_at: z.number(),
 }).openapi("Speaker");
 
-const rosterSchema = z.object({
+const rosterSchema = createListResponseSchema(speakerSchema, "Speaker").extend({
   generated_at: z.number(),
   counts: z.record(z.string(), z.number()),
   tracks: z.array(z.object({ id: z.string(), name: z.string(), color: z.string() })),
-  rows: z.array(speakerSchema),
-  total: z.number(),
 }).openapi("SpeakerRoster");
 
 const speakerResponseSchema = z.object({ speaker: speakerSchema }).openapi("SpeakerResponse");
@@ -174,7 +176,7 @@ const listRoster = defineApiRoute(
     const query = context.req.valid("query");
     await eventFor(context.env.DB, eventId);
     return context.json(
-      await listSpeakers(context.env.DB, eventId, { search: query.q, status: query.status, track: query.track }),
+      await listSpeakers(context.env.DB, eventId, { search: query.q, status: query.status, track: query.track, page: query.page, perPage: query.per_page }),
       200,
     );
   },

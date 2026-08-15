@@ -120,3 +120,26 @@
 @media (max-width: 1000px) {
   .files-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+@media (max-width: 760px) {
+  /* The phone view keeps the fields that answer the operational question —
+     what is this file, who owns it, and is it ready — and moves history into
+     the existing row disclosure. The table itself never becomes a second
+     horizontal viewport. */
+  .files-table-wrap { overflow-x: hidden; }
+  .files-table { min-width: 0; table-layout: fixed; }
+  .files-table .files-session-column,
+  .files-table .files-session-cell,
+  .files-table .files-when-column,
+  .files-table .files-versions-column,
+  .files-table .files-size-column { display: none; }
+  .files-table th, .files-table td { padding: 9px 5px; }
+  .files-select-column { padding-left: 7px !important; width: 34px; }
+  .files-status-column { width: 94px; }
+  .files-action-column { width: 74px; }
+  .files-file-cell, .files-speaker-cell { min-width: 0; }
+  .files-file-cell strong, .files-file-cell small,
+  .files-speaker-cell strong, .files-speaker-cell small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .files-state { min-width: 0; padding-left: 4px; padding-right: 4px; width: 100%; }
+  .files-expand { min-height: 40px; min-width: 0; padding-left: 4px; padding-right: 4px; width: 100%; }
+}

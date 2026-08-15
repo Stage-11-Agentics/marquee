@@ -1,6 +1,7 @@
 .table-card { min-width: 0; overflow: hidden; }
 .submissions-page .page-head p { font-family: var(--mono); font-variant-numeric: tabular-nums lining-nums; min-height: 2.7em; }
 .export-button { min-width: 92px; }
+.columns-toggle { min-width: 100px; }
 /* Reserved whether or not an evaluation plan exists, so resolving one never shifts the header. */
 .results-export-slot { align-items: center; display: inline-flex; justify-content: flex-end; min-width: 150px; }
 /*
@@ -27,6 +28,7 @@
 .column-panel-heading { align-items: start; display: flex; justify-content: space-between; gap: 16px; margin-bottom: 9px; }
 .column-panel-heading div { display: grid; gap: 3px; }
 .column-panel-heading span, .column-panel-note { color: var(--muted); font: 400 10px/1.35 var(--mono); }
+.column-panel-counter { min-width: 4.5ch; text-align: right; white-space: nowrap; }
 .column-list { display: grid; gap: 5px; grid-template-columns: repeat(4, minmax(150px, 1fr)); }
 .column-option { align-items: center; background: var(--panel); border: 1px solid var(--line); display: flex; justify-content: space-between; min-height: 34px; padding: 3px 5px 3px 8px; }
 .column-option.hidden { opacity: .68; }
@@ -176,4 +178,41 @@
   .submissions-toolbar select { width: 100%; }
   .table-status-bar.selecting { align-items: flex-start; flex-wrap: wrap; }
   .submissions-pagination { align-items: flex-start; gap: 10px; }
+
+  /* Keep the single status strip's geometry stable. When selection or a bulk
+     receipt is active, the same strip becomes a reachable bottom sheet
+     instead of pushing the first submission down when its buttons wrap. */
+  .submissions-mobile-sheets { display: contents; }
+  .submissions-page.has-mobile-sheet { padding-bottom: 220px; }
+  .submissions-mobile-sheets.has-sheet {
+    background: var(--panel);
+    bottom: 0;
+    display: block;
+    left: 0;
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    position: fixed;
+    right: 0;
+    z-index: 400;
+  }
+  .submissions-mobile-sheets.has-sheet .table-status-bar {
+    border-bottom: 0;
+    margin: 0;
+    position: static;
+    z-index: auto;
+  }
+  .submissions-mobile-sheets.has-sheet .table-status-bar.selecting {
+    background: var(--accent-soft);
+    border-top: 1px solid var(--accent);
+    box-shadow: var(--shadow);
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+    padding-bottom: calc(7px + env(safe-area-inset-bottom, 0px));
+  }
+  .submissions-mobile-sheets.has-sheet .table-status-bar:not(.selecting) {
+    background: var(--panel);
+    border-top: 1px solid var(--line-strong);
+    min-height: 40px;
+  }
 }

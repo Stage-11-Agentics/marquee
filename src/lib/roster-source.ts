@@ -59,11 +59,16 @@ export const RETURNING_SPEAKER_PERSON_SOURCE = `
           AND candidate.id IN (${speakerRosterPersonSource("roster_event.id")})
      ) >= 2`;
 
-/** Three bindings: the event id, three times. */
-export const ONBOARDING_PERSON_SOURCE = `
-  ${SPEAKER_ROSTER_PERSON_SOURCE}
+/** Build the onboarding population with either a bound or a correlated event id. */
+export function onboardingPersonSource(eventIdExpression = "?"): string {
+  return `
+  ${speakerRosterPersonSource(eventIdExpression)}
   UNION
-  SELECT owed.person_id FROM speaker_tasks owed WHERE owed.event_id = ?`;
+  SELECT owed.person_id FROM speaker_tasks owed WHERE owed.event_id = ${eventIdExpression}`;
+}
+
+/** Three bindings: the event id, three times. */
+export const ONBOARDING_PERSON_SOURCE = onboardingPersonSource();
 
 /**
  * "Who is coming to this conference" — the attendee population, MRQ-208.

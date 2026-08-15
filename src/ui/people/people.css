@@ -842,6 +842,38 @@
   .people-filter-group { border-right: 0; border-bottom: var(--hair) solid var(--rule-soft); }
 }
 
+@media (max-width: 760px) {
+  /* KPI tiles are information, not a reason to introduce a horizontal
+     viewport above the People table. */
+  .people-instrument { overflow-x: hidden; }
+  .people-instrument-inner { min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .people-kpi { min-height: 92px; padding: 10px; }
+  .people-kpi-name { letter-spacing: .08em; }
+
+  /* Name, email, and selection are the useful resting columns on a phone.
+     Outreach and the richer CRM facets remain available in the person drawer
+     and the desktop table, rather than forcing every row through a tiny cell. */
+  .people-table-wrap { overflow-x: hidden; }
+  .people-table { min-width: 0; table-layout: fixed; }
+  .people-table .people-company-column,
+  .people-table .people-title-column,
+  .people-table .people-outreach-column,
+  .people-table .people-tags-column,
+  .people-table .people-confs-column,
+  .people-table .people-last-contact-column { display: none; }
+  .people-table th, .people-table td { padding: 9px 6px; }
+  .people-check { padding-left: 6px; padding-right: 0; width: 34px; }
+  .people-name-column { width: 43%; }
+  .people-email-column { width: auto; }
+  .people-cell-name, .people-cell-mail { max-width: 100%; min-width: 0; }
+  .people-rowlink { align-items: center; display: flex; min-height: 40px; width: 100%; }
+
+  /* The board remains an intentional horizontal workflow, but each card's
+     primary name and stage control must still be thumb-sized. */
+  .people-card .people-rowlink { min-height: 40px; }
+  .people-moveto { height: 40px; min-height: 40px; }
+}
+
 /* The feed's footer: the count and the "Load more" control keep one row, so
    reaching the end of a relationship's history does not shift the drawer. */
 .people-feed-foot { align-items: center; border-top: 1px solid var(--line); display: flex; justify-content: space-between; margin-top: 10px; min-height: 32px; padding-top: 10px; }

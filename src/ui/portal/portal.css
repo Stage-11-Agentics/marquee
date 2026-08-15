@@ -295,6 +295,7 @@
   .portal-task-row { grid-template-columns: 26px minmax(0, 1fr) 110px; }
   .portal-task-action { width: 110px; }
   .portal-task-payload { grid-column: 2 / 4; }
+  .portal-task-title { overflow: visible; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
 }
 
 /* File deliverables: the speaker sees the filename in the collapsed row and

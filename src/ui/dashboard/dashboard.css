@@ -15,6 +15,7 @@
 .dashboard-pipeline-count { font: 400 30px/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.05em; margin: 9px 0 8px; }
 .dashboard-pipeline-note { color: var(--accent-dark); font: 400 10.5px/1.4 var(--mono); min-height: 29px; }
 .dashboard-pipeline-stage:nth-last-child(-n+2) .dashboard-pipeline-note { color: var(--muted); }
+.dashboard-pipeline-scroll-note { display: none; }
 .dashboard-skeleton { color: var(--line-strong); }
 .dashboard-skeleton strong { font: 400 30px/1 var(--mono); margin: 9px 0 8px; }
 .dashboard-attention { display: grid; gap: 8px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -22,7 +23,8 @@
 .dashboard-attention-item:hover { background: var(--accent-soft); border-color: var(--accent); border-left-color: var(--accent); }
 .dashboard-attention-item strong { display: block; font: 600 13px/1.2 var(--mono); letter-spacing: -.02em; margin-bottom: 5px; }
 .dashboard-attention-item span { color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
-.dashboard-grid { align-items: start; display: grid; gap: 14px; grid-template-columns: 1.25fr .75fr; }
+.dashboard-grid { align-items: start; display: grid; gap: 14px; grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr); }
+.dashboard-grid > * { min-width: 0; }
 .dashboard-wave-list { display: grid; }
 .dashboard-wave-row { align-items: center; border-bottom: 1px solid var(--line); color: inherit; display: grid; gap: 12px; grid-template-columns: 1fr 80px 76px; padding: 12px 0; }
 .dashboard-wave-row:last-child { border-bottom: 0; }
@@ -53,16 +55,21 @@
 .dashboard-empty-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 
 @media (max-width: 980px) {
-  .dashboard-attention, .dashboard-grid { grid-template-columns: 1fr; }
+  .dashboard-attention, .dashboard-grid { grid-template-columns: minmax(0, 1fr); }
   .dashboard-task-row { grid-template-columns: 150px minmax(220px, 1fr) 150px 112px; min-width: 700px; }
   .dashboard-task-list { overflow-x: auto; }
 }
 
 @media (max-width: 640px) {
-  .dashboard-attention { grid-template-columns: 1fr; }
-  .dashboard-metric-grid { grid-template-columns: 1fr; }
+  .dashboard-attention, .dashboard-grid { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-metric-grid { grid-template-columns: minmax(0, 1fr); }
   .dashboard-metric, .dashboard-metric:nth-child(2n), .dashboard-metric:nth-last-child(-n + 2) { border-bottom: 1px solid var(--line); border-right: 0; }
   .dashboard-metric:last-child { border-bottom: 0; }
+}
+
+@media (max-width: 760px) {
+  .dashboard-pipeline-scroll-note { align-items: center; border-top: 1px solid var(--line); color: var(--muted); display: flex; font: 500 10px/1.3 var(--mono); gap: 6px; min-height: 30px; padding: 6px 12px; }
+  .dashboard-pipeline-scroll-note strong { color: var(--ink); font-weight: 600; }
 }
 
 /* Build identity, quietly: enough to make a bug report unambiguous, small

@@ -17,13 +17,53 @@ const canonical = skin.match(/TOKEN BLOCK[\s\S]*?\n  (:root \{[\s\S]*?\n  \})/)?
 const lifted = tokens.match(/^:root \{[\s\S]*?\n\}/)?.[0].trim();
 const findings = [];
 if (!canonical || canonical !== lifted) findings.push("skin-c canonical token block differs from the first tokens.css root block");
+
+function mediaBlocks(css, query) {
+  const marker = new RegExp(`@media\\s*\\(\\s*${query}\\s*\\)`, "g");
+  const blocks = [];
+  for (let match = marker.exec(css); match; match = marker.exec(css)) {
+    const open = css.indexOf("{", match.index + match[0].length);
+    if (open < 0) continue;
+    let depth = 1;
+    let cursor = open + 1;
+    while (cursor < css.length && depth > 0) {
+      if (css[cursor] === "{") depth += 1;
+      else if (css[cursor] === "}") depth -= 1;
+      cursor += 1;
+    }
+    if (depth === 0) blocks.push(css.slice(open + 1, cursor - 1));
+  }
+  return blocks;
+}
+
+function ruleBodies(css, selector) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return [...css.matchAll(new RegExp(`(?:^|\\n)\\s*${escaped}\\s*\\{([^}]*)\\}`, "g"))].map((match) => match[1]);
+}
+
+function hasRule(css, selector, declarations) {
+  return ruleBodies(css, selector).some((body) => declarations.every((declaration) => declaration.test(body)));
+}
+
+const mobileContracts = mediaBlocks(components, "max-width\\s*:\\s*760px");
+const mobileContract = mobileContracts.join("\n");
 for (const contract of [
   [components, /grid-template-columns:\s*224px minmax\(0, ?1fr\)/, "desktop sidebar is not 224px"],
   [components, /height:\s*52px/, "topbar is not 52px"],
   [components, /max-width:\s*1000px[\s\S]*grid-template-columns:\s*68px/, "compact sidebar is not 68px at 1000px"],
-  [components, /max-width:\s*760px[\s\S]*height:\s*54px/, "mobile rail is not 54px at 760px"],
+  [mobileContract, /(?:^|\n)\s*\.sidebar\s*\{[^}]*\}/, "mobile drawer rule is missing"],
+  [mobileContract, /(?:^|\n)\s*\.page\s*\{[^}]*\}/, "mobile page rule is missing"],
 ]) {
   if (!contract[1].test(contract[0])) findings.push(contract[2]);
+}
+if (!hasRule(mobileContract, ".sidebar", [/height\s*:\s*100vh/, /width\s*:\s*min\(302px,\s*86vw\)/])) {
+  findings.push("mobile drawer is not 302px at 760px");
+}
+if (!hasRule(mobileContract, ".page", [/padding\s*:\s*22px\s+16px\s+56px/])) {
+  findings.push("mobile page still reserves the retired bottom rail");
+}
+if (hasRule(mobileContract, ".sidebar", [/height\s*:\s*54px/])) {
+  findings.push("mobile bottom rail is still present at 760px");
 }
 // The labels the signed design names. Several are shorter than they were: a row
 // under "Call for proposals" that says "CFP forms" says CFP twice, and one under

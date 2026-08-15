@@ -98,3 +98,9 @@
 @media (max-width: 900px) {
   .choice-row { grid-template-columns: 1fr; }
 }
+
+@media (max-width: 760px) {
+  .setup-actions { align-items: stretch; flex-wrap: wrap; }
+  .setup-outcome { flex-basis: 100%; }
+  .setup-actions .setup-error { min-width: 0; }
+}

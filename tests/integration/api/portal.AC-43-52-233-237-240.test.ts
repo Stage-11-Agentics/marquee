@@ -259,24 +259,24 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(before.status).toBe(200);
     const beforeBody = await before.json<{ attention: { overdue_submissions: { count: number } } }>();
     const chaseBefore = await request(`/api/v1/events/${EVENT_ID}/onboarding`, {}, ownerCookie);
-    const chaseBeforeBody = await chaseBefore.json<{ rows: Array<{ cells: Record<string, { state: string; glyph: string }> }> }>();
-    expect(chaseBeforeBody.rows[0]?.cells["template-portal-ack"]).toMatchObject({ state: "overdue", glyph: "!" });
-    expect(chaseBeforeBody.rows[0]?.cells["template-portal-file"]).toMatchObject({ state: "done", glyph: "✓" });
+    const chaseBeforeBody = await chaseBefore.json<{ data: Array<{ cells: Record<string, { state: string; glyph: string }> }> }>();
+    expect(chaseBeforeBody.data[0]?.cells["template-portal-ack"]).toMatchObject({ state: "overdue", glyph: "!" });
+    expect(chaseBeforeBody.data[0]?.cells["template-portal-file"]).toMatchObject({ state: "done", glyph: "✓" });
     const completed = await request("/api/v1/me/tasks/task-portal-ack/complete", { method: "POST", body: JSON.stringify({ acknowledged: true }) });
     expect(completed.status).toBe(200);
     const after = await request(`/api/v1/events/${EVENT_ID}/dashboard`, {}, ownerCookie);
     const afterBody = await after.json<{ attention: { overdue_submissions: { count: number } } }>();
     expect(afterBody.attention.overdue_submissions.count).toBeLessThan(beforeBody.attention.overdue_submissions.count);
     const chaseAfter = await request(`/api/v1/events/${EVENT_ID}/onboarding`, {}, ownerCookie);
-    const chaseAfterBody = await chaseAfter.json<{ rows: Array<{ cells: Record<string, { state: string; glyph: string }>; person: { id: string; name: string } }> }>();
+    const chaseAfterBody = await chaseAfter.json<{ data: Array<{ cells: Record<string, { state: string; glyph: string }>; person: { id: string; name: string } }> }>();
     // MRQ-111: a speaker who has finished everything stays on the board with a
     // clear row rather than disappearing from the only screen that claims to
     // list speakers. "Still owes something" is the `incomplete` filter's job.
-    expect(chaseAfterBody.rows.find((row) => row.person.id === SPEAKER_ID)?.cells["template-portal-ack"]).toMatchObject({ state: "done", glyph: "\u2713" });
-    expect(chaseAfterBody.rows.find((row) => row.person.id === OTHER_PERSON_ID)?.cells["template-portal-ack"]).toMatchObject({ state: "risk", glyph: "\u00d7" });
+    expect(chaseAfterBody.data.find((row) => row.person.id === SPEAKER_ID)?.cells["template-portal-ack"]).toMatchObject({ state: "done", glyph: "\u2713" });
+    expect(chaseAfterBody.data.find((row) => row.person.id === OTHER_PERSON_ID)?.cells["template-portal-ack"]).toMatchObject({ state: "risk", glyph: "\u00d7" });
     const chaseIncomplete = await request(`/api/v1/events/${EVENT_ID}/onboarding?filter=incomplete`, {}, ownerCookie);
-    const chaseIncompleteBody = await chaseIncomplete.json<{ rows: Array<{ person: { id: string } }> }>();
-    expect(chaseIncompleteBody.rows.find((row) => row.person.id === SPEAKER_ID)).toBeUndefined();
+    const chaseIncompleteBody = await chaseIncomplete.json<{ data: Array<{ person: { id: string } }> }>();
+    expect(chaseIncompleteBody.data.find((row) => row.person.id === SPEAKER_ID)).toBeUndefined();
   });
 
   test("AC-49 · overdue tasks carry a textual marker and a distinct overdue data state", async () => {
@@ -346,13 +346,13 @@ describe.sequential("MRQ-16 speaker portal", () => {
     const chaseResponse = await request(`/api/v1/events/${EVENT_ID}/onboarding`, {}, ownerCookie);
     expect(chaseResponse.status).toBe(200);
     const chase = await chaseResponse.json<{
-      rows: Array<{ person: { id: string }; cells: Record<string, { task_id: string | null; owed: boolean }> }>;
+      data: Array<{ person: { id: string }; cells: Record<string, { task_id: string | null; owed: boolean }> }>;
       metrics: { accepted_speakers: number };
     }>();
-    const speakerRow = chase.rows.find((row) => row.person.id === SPEAKER_ID);
+    const speakerRow = chase.data.find((row) => row.person.id === SPEAKER_ID);
     expect(speakerRow).toBeDefined();
     expect(speakerRow?.cells["template-portal-ack"]).toMatchObject({ task_id: "task-portal-positive-open", owed: true });
-    expect(chase.rows.flatMap((row) => Object.values(row.cells)).some((cell) => cell.task_id === "task-portal-ack")).toBe(false);
+    expect(chase.data.flatMap((row) => Object.values(row.cells)).some((cell) => cell.task_id === "task-portal-ack")).toBe(false);
     expect(chase.metrics.accepted_speakers).toBeGreaterThan(0);
 
     const submissionsResponse = await request(`/api/v1/events/${EVENT_ID}/submissions?status=onboarding&per_page=100`, {}, ownerCookie);

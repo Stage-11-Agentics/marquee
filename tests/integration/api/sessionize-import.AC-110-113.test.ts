@@ -200,10 +200,10 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     for (const name of ["Kowalski", "Updated Import", "Pre-existing Import", "Skipped Membership"]) {
       const roster = await request(`/api/v1/events/${EVENT_ID}/speakers?q=${encodeURIComponent(name)}`);
       expect(roster.status).toBe(200);
-      const body = await roster.json<{ total: number; rows: Array<{ name: string; is_member: boolean }> }>();
-      expect(body.total).toBe(4);
-      expect(body.rows).toHaveLength(1);
-      expect(body.rows[0]).toMatchObject({ name: expect.stringContaining(name), is_member: true });
+      const body = await roster.json<{ total: number; data: Array<{ name: string; is_member: boolean }> }>();
+      expect(body.total).toBe(1);
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0]).toMatchObject({ name: expect.stringContaining(name), is_member: true });
     }
 
     const membershipsAfterRun = await env.DB.prepare(

@@ -470,14 +470,14 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
                 }}
               />
             </th>
-            <th scope="col">Name</th>
-            <th scope="col">Email</th>
-            <th scope="col">Company</th>
-            <th scope="col">Job title</th>
-            <th scope="col">Outreach</th>
-            <th scope="col">Tags</th>
-            <th scope="col">Confs</th>
-            <th scope="col">Last contact</th>
+            <th scope="col" class="people-name-column">Name</th>
+            <th scope="col" class="people-email-column">Email</th>
+            <th scope="col" class="people-company-column">Company</th>
+            <th scope="col" class="people-title-column">Job title</th>
+            <th scope="col" class="people-outreach-column">Outreach</th>
+            <th scope="col" class="people-tags-column">Tags</th>
+            <th scope="col" class="people-confs-column">Confs</th>
+            <th scope="col" class="people-last-contact-column">Last contact</th>
           </tr>
         </thead>
         <tbody>
@@ -490,15 +490,15 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
                 onChange={() => toggleRow({ id: row.id, name: row.name, do_not_contact: row.do_not_contact })}
               />
             </td>
-            <td>
+            <td class="people-name-column">
               <button type="button" class="people-rowlink" onClick={() => openPerson(row.id)}>
                 <span class="people-cell-name">{displayNames.get(row.id) ?? row.name}</span>
               </button>
             </td>
-            <td><span class="people-cell-mail people-cell-trunc">{row.email}</span></td>
-            <td><span class="people-cell-trunc">{row.company ?? "—"}</span></td>
-            <td><span class="people-cell-trunc">{row.title ?? "—"}</span></td>
-            <td class="people-cell-outreach">
+            <td class="people-email-column"><span class="people-cell-mail people-cell-trunc">{row.email}</span></td>
+            <td class="people-company-column"><span class="people-cell-trunc">{row.company ?? "—"}</span></td>
+            <td class="people-title-column"><span class="people-cell-trunc">{row.title ?? "—"}</span></td>
+            <td class="people-cell-outreach people-outreach-column">
               <strong title={row.outreach_target_event_name ? `→ ${row.outreach_target_event_name}` : "No conference target"}>
                 {row.stage ? row.stage.replaceAll("_", " ") : "Not enrolled"}
               </strong>
@@ -506,15 +506,15 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
                 {row.outreach_target_event_name ? `→ ${row.outreach_target_event_name}` : "→ No target"}
               </span>
             </td>
-            <td>
+            <td class="people-tags-column">
               <span class="people-tagset">
                 {row.tags.length === 0
                   ? <span class="people-tag">—</span>
                   : row.tags.map((tag) => <span class="people-tag accent" key={tag}>{tag}</span>)}
               </span>
             </td>
-            <td class="tabular">{row.conference_count}</td>
-            <td class="tabular">{formatDay(row.last_contact_at)}</td>
+            <td class="people-confs-column tabular">{row.conference_count}</td>
+            <td class="people-last-contact-column tabular">{formatDay(row.last_contact_at)}</td>
           </tr>)}
         </tbody>
       </table>

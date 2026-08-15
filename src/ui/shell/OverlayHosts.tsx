@@ -7,6 +7,19 @@ export interface OverlayState {
   copy: string;
 }
 
+function visibleDialogControls(root: HTMLElement): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')]
+    .filter((control) => {
+      if (control.hasAttribute("hidden") || control.getAttribute("aria-hidden") === "true" || control.matches(":disabled")) return false;
+      const style = window.getComputedStyle(control);
+      if (style.display === "none" || style.visibility === "hidden") return false;
+      // checkVisibility covers content hidden by an ancestor in modern browsers;
+      // the style checks above keep this usable in happy-dom and older WebViews.
+      const checkVisibility = (control as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean }) => boolean }).checkVisibility;
+      return typeof checkVisibility !== "function" || checkVisibility.call(control, { checkOpacity: false, checkVisibilityCSS: true });
+    });
+}
+
 export function useDialogLifecycle(open: boolean, onClose: () => void) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -18,7 +31,7 @@ export function useDialogLifecycle(open: boolean, onClose: () => void) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
       if (event.key !== "Tab" || !ref.current) return;
-      const controls = [...ref.current.querySelectorAll<HTMLElement>('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')];
+      const controls = visibleDialogControls(ref.current);
       if (controls.length === 0) { event.preventDefault(); return; }
       const first = controls[0];
       const last = controls[controls.length - 1];

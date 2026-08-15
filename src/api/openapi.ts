@@ -205,6 +205,17 @@ export function renderDocsShell(bundle: ApiDocumentBundle): string {
       .operation-id { color: var(--muted); }
       footer { color: var(--muted); font-size: .8rem; margin-top: 1.5rem; }
       .empty { padding: 1.2rem .9rem; color: var(--muted); }
+      @media (max-width: 600px) {
+        body { padding: 1.5rem 1rem 3rem; }
+        table, tbody, tr { display: block; }
+        thead { display: none; }
+        tr { border-bottom: 1px solid var(--rule); padding: .75rem .9rem; }
+        tr:last-child { border-bottom: 0; }
+        td { display: block; padding: .1rem 0; }
+        td.method, td.path { display: inline-block; margin-right: .65rem; }
+        td.path code, td.operation-id code, footer code { overflow-wrap: anywhere; word-break: break-word; }
+        .summary { margin: .25rem 0 .1rem; }
+      }
     </style>
   </head>
   <body>

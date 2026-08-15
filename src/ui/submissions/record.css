@@ -1,6 +1,7 @@
 .submission-record-page .page-head h1 { max-width: 840px; min-height: 1.2em; overflow-wrap: anywhere; }
 .record-layout { align-items: start; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 330px; }
 .record-main, .record-aside { min-width: 0; }
+.record-main.stack { grid-template-columns: minmax(0, 1fr); }
 .record-summary { display: flex; gap: 18px; justify-content: space-between; }
 .record-summary > div:first-child { min-width: 0; }
 .record-summary h2 { font-size: 18px; line-height: 1.35; margin: 6px 0 9px; }
@@ -214,14 +215,14 @@
 .field-error:not(.visible) { color: transparent; }
 
 @media (max-width: 1000px) {
-  .record-layout { grid-template-columns: 1fr; }
+  .record-layout { grid-template-columns: minmax(0, 1fr); }
   .record-aside { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {
   .record-summary { display: grid; }
   .record-summary-meta { align-items: flex-start; text-align: left; }
-  .record-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .record-meta-grid { grid-template-columns: minmax(0, 1fr); }
   .record-slot { grid-template-columns: 1fr; }
   .record-slot-publication { justify-items: start; min-width: 0; }
   .record-publication-action { justify-content: flex-start; min-width: 0; }
