@@ -7,21 +7,17 @@
   <!-- v1.16 (2026-08-15): the Agents page (DRAFT — prototype only, build
        unchanged until Atin's love pass). The agent-native surface stops
        hiding in the sidebar foot: an ⌘ Agents row joins the Organization
-       group — org-level, like the tokens agents authenticate with. The
-       page is the front door the differentiator deserves: connect in
-       three steps (install the skill — every instance serves /SKILL.md,
-       generated from the CLI's command registry so it cannot drift, with
-       the three install paths spelled out; mint a scoped token; say what
-       you want), a roster of four agents worth running (setup · reviewer
-       seat · chase · program builder) each carrying the CLI loop behind
-       it and a paste-ready prompt, a next-year line (event create
-       --from), and the two cards that keep the pitch honest: the
-       verification contract (explicit state back, server-side selection,
-       version-guarded agenda writes, one JSON value on stdout) and what
-       stays human (claim links, opening intake, accept/reject,
-       revocation + the Activity log). The API & CLI reference keeps its
-       sidebar-foot door; the Agents page links into it, into API tokens,
-       and into the setup replay.
+       group — org-level, like the tokens agents authenticate with. Kept
+       deliberately light (same-day client ruling: one screen of calm, no
+       runtime name-dropping, no command anatomy): a single paste-ready
+       connect prompt — it installs the skill this instance serves at
+       /SKILL.md, takes a scoped token, and proves the connection with a
+       read — then four suggested agents (setup · reviewer seat · chase ·
+       program builder), each one sentence plus one prompt, a next-year
+       line (event create --from), and two short honesty cards: built
+       for verification / what stays human. The API & CLI reference
+       keeps its sidebar-foot door; the page links into it, into API
+       tokens, and into the setup replay.
        v1.15 (2026-08-14): the Organization concept completed (fresh-eyes
        review rulings, sequence/org-settings-design.md iteration 3). The
        Organization group becomes Home · People CRM · Outreach · Settings:
@@ -604,26 +600,18 @@
     .method { font-weight:700; color:var(--accent-dark); letter-spacing:.08em; }
 
     /* ── Agents page (v1.16): the agent-native front door ─────────────────
-       Three-step connect card, the four-agent roster, and the two contract
-       cards. Everything tokened; loops scroll inside their own rail so a
-       long command never widens the card. */
-    .agents-connect { margin-bottom: 14px; }
-    .agents-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px; }
-    .agents-step { display:grid; gap:10px; align-content:start; }
-    .agents-step p { margin:0; }
-    .agents-step .code-block { padding:11px 12px; }
-    .skill-paths { border-top:1px solid var(--line); }
-    .skill-path { display:grid; grid-template-columns:132px 1fr; gap:10px; align-items:baseline; padding:7px 0; border-bottom:1px solid var(--line); }
-    .skill-path code { font:400 10.5px/1.45 var(--mono); color:var(--ink-soft); word-break:break-all; }
+       One connect prompt, the four-agent roster, two contract cards.
+       Deliberately light — prompts over command anatomy. */
+    .agents-connect { margin-bottom: 14px; max-width: 820px; }
+    .agents-connect-body { display:grid; gap:10px; }
+    .agents-connect-body .message-preview { margin:0; }
+    .agents-connect-body p { margin:0; }
     .roster-head { display:flex; align-items:baseline; gap:12px; margin:20px 2px 10px; }
     .roster-head h2 { margin:0; font:600 11px/1.3 var(--mono); letter-spacing:.14em; text-transform:uppercase; }
     .agent-roster { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
     .agent-card .card-body { display:grid; gap:12px; align-content:start; }
     .agent-card .card-body > p { margin:0; font-size:12px; line-height:1.55; color:var(--ink-soft); }
-    .agent-loop { display:grid; gap:5px; }
-    .agent-loop code { display:block; font:400 11px/1.6 var(--mono); color:var(--ink-soft); background:var(--sunk); border:1px solid var(--line); border-radius:var(--radius); padding:8px 10px; overflow-x:auto; white-space:nowrap; }
-    .agent-prompt { display:grid; gap:5px; }
-    .agent-prompt .message-preview { margin:0; }
+    .agent-card .message-preview { margin:0; }
     .agent-card-actions { display:flex; gap:8px; }
     .next-year-note { margin:14px 2px 20px; font-size:11.5px; line-height:1.6; color:var(--muted); }
     .next-year-note code { font:400 10.5px/1 var(--mono); color:var(--ink-soft); background:var(--sunk); border:1px solid var(--line); border-radius:2px; padding:2px 5px; }
@@ -1203,7 +1191,7 @@
       .page { padding: 22px 16px 88px; }
       .page-head { display: grid; }
       .head-actions { justify-content: flex-start; }
-      .grid-2, .grid-3, .dashboard-grid, .portal-grid, .review-layout, .detail-grid, .comms-layout, .review-field-grid, .agents-steps, .agent-roster { grid-template-columns: 1fr; }
+      .grid-2, .grid-3, .dashboard-grid, .portal-grid, .review-layout, .detail-grid, .comms-layout, .review-field-grid, .agent-roster { grid-template-columns: 1fr; }
       .attention-strip { grid-template-columns: 1fr; }
       .onboarding-metrics { grid-template-columns: repeat(2,1fr); }
       .hero { grid-template-columns: 1fr; padding-top: 25px; }
@@ -3476,99 +3464,71 @@
       }
 
       // ── The Agents page (v1.16): the agent-native front door ──────────────
-      // The differentiator, surfaced instead of buried: how to connect a
-      // coding agent (skill · token · intent), four agents worth running with
-      // the CLI loop behind each, and the two cards that keep the pitch
-      // honest — what the machine contract guarantees, and what deliberately
-      // stays human. All copy keys to the real CLI registry in SKILL.md.
-      const AGENTS_INSTALL_CMD = "mkdir -p ~/.claude/skills/marquee\ncurl -s https://marquee.stage11.dev/SKILL.md \\\n  -o ~/.claude/skills/marquee/SKILL.md";
+      // Deliberately light: one paste-ready prompt connects any agent — it
+      // installs the skill this instance serves, takes a scoped token, and
+      // proves the connection with a read. Four suggested agents follow,
+      // each one sentence plus one prompt, then two short honesty cards.
+      const AGENTS_CONNECT_PROMPT = "Install Marquee's skill: fetch https://marquee.stage11.dev/SKILL.md and save it where you load skills. Then I'll paste a scoped API token — set MARQUEE_URL and MARQUEE_TOKEN, verify the connection with a read-only command, and show me what you can see.";
       const AGENTS_ROSTER = [
         { num:"01", name:"The setup agent", role:"Cloned repo → claimed instance",
-          copy:"Stands up a fresh deploy on your own Cloudflare account — resources, secrets, migrations — then prints a one-time claim link and stops. Ownership lands on a person: the agent hands the link over and never opens it.",
-          loop:"setup health → setup claim-link → event create → tracks add → forms create",
-          prompt:"Set up Marquee for our conference — Great Lakes Infra Days, April 14–15 2027, Buffalo. Keep the demo data so I can poke around first.",
+          copy:"Stands up a fresh deploy on your own Cloudflare account, then hands you a one-time claim link. Ownership lands on you, never on the agent.",
+          prompt:"Set up Marquee for our conference — Great Lakes Infra Days, April 14–15 2027, Buffalo.",
           link:["setup/agent","Replay the setup"] },
         { num:"02", name:"The reviewer seat", role:"A committee member that reads everything",
-          copy:"An Agent evaluator seat on your committee works its assigned queue: reads each Abstract, scores it against your scorecard, and files a rationale the chair reads verbatim. It recommends — Approve · Maybe · Deny — and only an organizer decides.",
-          loop:"review queue → review show → review submit --score --recommendation --comment",
-          prompt:"Work through your review queue. Score each abstract against the rubric and give the chair one honest paragraph per recommendation.",
+          copy:"Takes an evaluator seat, scores its assigned queue, and files a rationale your chair reads verbatim. It recommends; an organizer decides.",
+          prompt:"Work through your review queue. Score each abstract against the rubric and explain every recommendation.",
           link:["evaluation","Open evaluation"] },
         { num:"03", name:"The chase agent", role:"The deadline work nobody wanted",
-          copy:"Reads the Task board for who still owes what, sends the reminder — a stored template or text it composes — and reports the queued count as its receipt. An empty selection is a deliberate no-op, never a blast.",
-          loop:"tasks list --overdue → remind --filter task_state=open --template task_overdue",
+          copy:"Finds who still owes what and sends the reminders. The queued count is its receipt.",
           prompt:"Find every speaker still owing a headshot, nudge each one politely, and tell me who is left.",
           link:["onboarding","Open onboarding"] },
         { num:"04", name:"The program builder", role:"Triage → agenda → published",
-          copy:"Filters submissions on the server, accepts a wave in bulk, places Sessions into rooms, and publishes what is scheduled. Agenda writes carry the item's version, so two agents cannot silently overwrite each other's moves.",
-          loop:"submissions accept --filter … → agenda place → submissions publish",
+          copy:"Accepts a wave, places Sessions into rooms, and publishes. Writes are version-guarded, so two agents cannot clobber each other.",
           prompt:"Place the accepted Platform-track talks into Lakeside A on day one — no conflicts — then publish them.",
           link:["agenda","Open the agenda"] },
       ];
       function agentsView() {
-        const triagePrompt = "Triage this week's abstracts: shortlist anything on-topic for the committee, reject the rest, and tell me exactly what you did.";
         return shell(`<div class="page">
           ${pageHead("Agents",
-            "Marquee is agent-native: the CLI and API are first-class doors to the same records as these screens. Install the skill, mint a scoped token, and hand your agent the chase work — every action explicit, every result verifiable here.",
+            "Marquee is agent-native: the CLI and API are first-class doors to the same records as these screens. Connect the agent of your choice and hand over the chase work.",
             `<a class="button" href="#api/docs">API &amp; CLI reference</a><a class="button primary" href="#org/tokens">Create API token</a>`)}
           <section class="card agents-connect">
-            <div class="card-head"><div><h2>Connect an agent</h2><span class="subtle">Three steps · works with Claude Code, Codex, and anything that reads a skill file</span></div><span class="chip published">GET /SKILL.md</span></div>
-            <div class="card-body agents-steps">
-              <div class="agents-step">
-                <span class="eyebrow">Step 1 · Install the skill</span>
-                <p class="subtle">This instance serves its own operating manual at <code>/SKILL.md</code> — generated from the CLI's command registry, so it never drifts from what this deploy can actually do.</p>
-                <div class="code-block">${esc(AGENTS_INSTALL_CMD)}</div>
-                <div class="skill-paths">
-                  <div class="skill-path"><span class="subtle">Claude Code · everywhere</span><code>~/.claude/skills/marquee/SKILL.md</code></div>
-                  <div class="skill-path"><span class="subtle">One project only</span><code>.claude/skills/marquee/SKILL.md</code></div>
-                  <div class="skill-path"><span class="subtle">Codex &amp; other runtimes</span><code>.agents/skills/marquee/SKILL.md</code></div>
-                </div>
-                <div><button class="button small" id="copy-install">Copy install command</button></div>
-              </div>
-              <div class="agents-step">
-                <span class="eyebrow">Step 2 · Mint a scoped token</span>
-                <p class="subtle">Tokens are organization-level, may be scoped to one conference, and are revoked here — independent of any browser session. The agent authenticates with the token, never with your login.</p>
-                <div class="code-block">export MARQUEE_URL=https://marquee.stage11.dev\nexport MARQUEE_TOKEN=mq_live_…</div>
-                <p class="subtle">Every command also takes <code>--url</code> and <code>--token</code> directly.</p>
-                <div><a class="button small" href="#org/tokens">Open API tokens</a></div>
-              </div>
-              <div class="agents-step">
-                <span class="eyebrow">Step 3 · Say what you want</span>
-                <p class="subtle">The skill turns intent into explicit CLI calls, and every write returns the resulting record plus queued side effects — the agent verifies instead of guessing, and you can check any of it on these screens.</p>
-                <div class="message-preview">“${esc(triagePrompt)}”</div>
-                <div><button class="button small" data-copy-prompt="${esc(triagePrompt)}">Copy prompt</button></div>
-              </div>
+            <div class="card-head"><div><h2>Connect an agent</h2><span class="subtle">One prompt, pasted into the agent of your choice</span></div><span class="chip published">GET /SKILL.md</span></div>
+            <div class="card-body agents-connect-body">
+              <div class="message-preview">“${esc(AGENTS_CONNECT_PROMPT)}”</div>
+              <p class="subtle">It installs the skill, takes the token you mint here, and proves the connection with a read before anything writes.</p>
+              <div><button class="button small" data-copy-prompt="${esc(AGENTS_CONNECT_PROMPT)}">Copy prompt</button></div>
             </div>
           </section>
-          <div class="roster-head"><h2>Four agents worth running</h2><span class="subtle">Each is a loop the CLI already carries — start from the prompt, check the receipts on these screens.</span></div>
+          <div class="roster-head"><h2>Four agents worth running</h2><span class="subtle">Start from the prompt · check the receipts on these screens</span></div>
           <div class="agent-roster">
             ${AGENTS_ROSTER.map(a=>`<section class="card agent-card">
               <div class="card-head"><div><h2>${esc(a.name)}</h2><span class="subtle">${esc(a.role)}</span></div><span class="chip">${a.num}</span></div>
               <div class="card-body">
                 <p>${esc(a.copy)}</p>
-                <div class="agent-loop"><span class="eyebrow">The loop</span><code>${esc(a.loop)}</code></div>
-                <div class="agent-prompt"><span class="eyebrow">Say to your agent</span><div class="message-preview">“${esc(a.prompt)}”</div></div>
+                <div class="message-preview">“${esc(a.prompt)}”</div>
                 <div class="agent-card-actions"><button class="button small" data-copy-prompt="${esc(a.prompt)}">Copy prompt</button><a class="button small" href="#${a.link[0]}">${esc(a.link[1])} →</a></div>
               </div>
             </section>`).join("")}
           </div>
-          <div class="next-year-note">And when the year turns: <code>event create --from</code> stands up the next conference — formats, tracks, forms, and templates carried across; the people already there, because People is organization-scoped. Nothing is re-keyed.</div>
+          <div class="next-year-note">When the year turns: <code>event create --from</code> stands up the next conference — structure carried across, people already there.</div>
           <div class="grid-2">
             <section class="card">
               <div class="card-head"><div><h2>Built for verification</h2><span class="subtle">Why agents work well here</span></div></div>
               <div class="card-body">
-                <div class="contract-line"><span class="contract-key">State back</span><span>Every write returns the resulting record plus queued side effects. Agents verify; they never infer whether work was accepted.</span></div>
-                <div class="contract-line"><span class="contract-key">Server-side selection</span><span>Filters resolve in Marquee. The CLI never turns a paginated page into a guessed set of IDs.</span></div>
-                <div class="contract-line"><span class="contract-key">Guarded writes</span><span>Agenda moves carry the item's version — a stale write fails with a conflict instead of clobbering another agent's move.</span></div>
-                <div class="contract-line"><span class="contract-key">One JSON value</span><span><code>--json</code> writes exactly one JSON value to stdout, made for pipes and other tools.</span></div>
+                <div class="contract-line"><span class="contract-key">State back</span><span>Every write returns the resulting record. Agents verify, never infer.</span></div>
+                <div class="contract-line"><span class="contract-key">Server-side selection</span><span>Filters resolve in Marquee, never guessed from a paginated page.</span></div>
+                <div class="contract-line"><span class="contract-key">Guarded writes</span><span>A stale agenda write fails with a conflict instead of clobbering.</span></div>
+                <div class="contract-line"><span class="contract-key">One JSON value</span><span><code>--json</code> writes exactly one JSON value to stdout.</span></div>
               </div>
             </section>
             <section class="card">
               <div class="card-head"><div><h2>What stays human</h2><span class="subtle">Drawn on purpose, not by omission</span></div></div>
               <div class="card-body">
-                <div class="contract-line"><span class="contract-key">Ownership</span><span>The one-time claim link is opened by a person. An agent hands it over; it never claims an instance itself.</span></div>
-                <div class="contract-line"><span class="contract-key">Going public</span><span>Opening intake and publishing the call for speakers are operator clicks, taken with the consequences on screen.</span></div>
-                <div class="contract-line"><span class="contract-key">Decisions</span><span>A reviewer seat recommends. Accepting and rejecting belong to organizers.</span></div>
-                <div class="contract-line"><span class="contract-key">Accountability</span><span>Every token action lands in the <a href="#org/activity">Activity log</a> under that token's name, and any token is <a href="#org/tokens">revocable</a> in one click.</span></div>
+                <div class="contract-line"><span class="contract-key">Ownership</span><span>The one-time claim link is opened by a person, never an agent.</span></div>
+                <div class="contract-line"><span class="contract-key">Going public</span><span>Opening intake and publishing are operator clicks.</span></div>
+                <div class="contract-line"><span class="contract-key">Decisions</span><span>A reviewer seat recommends. Organizers accept and reject.</span></div>
+                <div class="contract-line"><span class="contract-key">Accountability</span><span>Every token action lands in the <a href="#org/activity">Activity log</a>; any token is <a href="#org/tokens">revocable</a> in one click.</span></div>
               </div>
             </section>
           </div>
@@ -3576,7 +3536,6 @@
       }
 
       function bindAgents() {
-        document.getElementById("copy-install")?.addEventListener("click",()=>copyText(AGENTS_INSTALL_CMD,"Install command copied"));
         document.querySelectorAll("[data-copy-prompt]").forEach(el=>el.onclick=()=>copyText(el.dataset.copyPrompt,"Prompt copied · paste it to your agent"));
       }
 
