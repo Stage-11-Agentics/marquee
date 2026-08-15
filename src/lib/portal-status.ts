@@ -28,7 +28,7 @@ const SPEAKER_STATUS: Record<string, PortalStatusProjection> = {
 const SPONSOR_STATUS: Record<string, PortalStatusProjection> = {
   // The portal is not a sales board. This neutral label says what the sponsor
   // can rely on without exposing the organizer's pipeline stage.
-  courting: { label: "Tier selected", tone: "warning" },
+  courting: { label: "In discussion", tone: "" },
   committed: { label: "Confirmed", tone: "success" },
   fulfilled: { label: "Complete", tone: "success" },
 };

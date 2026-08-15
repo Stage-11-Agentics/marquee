@@ -19,6 +19,9 @@ test("AC-35 + AC-36 + AC-155 + AC-156 + AC-157 · the public form has a 375px fi
   assert.match(component, /scrollIntoView/);
   assert.match(component, /focusFirstInvalidField/);
   assert.ok((component.match(/focusFirstInvalidField/g) ?? []).length >= 3, "client validation and 422 handling must focus through the same first-field helper");
+  assert.match(component, /visibleFields\.find\(\(field\) => keys\.includes\(field\.key\)\)/);
+  assert.match(component, /pageErrorRef/);
+  assert.match(component, /tabIndex=\{-1\}/);
   assert.match(component, /focus\(\{ preventScroll: true \}\)/);
   assert.match(component, /visualViewport/);
   assert.match(component, /getBoundingClientRect/);

@@ -19,7 +19,7 @@ describe("MRQ-240 portal status vocabulary", () => {
   });
 
   test("CONTRACT · sponsor statuses do not expose sales-pipeline codes", () => {
-    expect(portalStatusProjection("sponsor", "courting")).toEqual({ label: "Tier selected", tone: "warning" });
+    expect(portalStatusProjection("sponsor", "courting")).toEqual({ label: "In discussion", tone: "" });
     expect(portalStatusProjection("sponsor", "committed")).toEqual({ label: "Confirmed", tone: "success" });
     expect(portalStatusProjection("sponsor", "fulfilled")).toEqual({ label: "Complete", tone: "success" });
     for (const status of ["courting", "committed", "fulfilled"]) {
