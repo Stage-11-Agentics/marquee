@@ -85,6 +85,12 @@ export const PARTICIPATION_ROLES = [
   "sponsor_contact",
 ] as const;
 export const CONFIRMATION_STATUSES = ["pending", "confirmed", "declined"] as const;
+/**
+ * The deal's own state, on the deal. A company is not "committed" — a
+ * sponsorship is, at one conference, while the same company is still being
+ * courted at the next one.
+ */
+export const SPONSORSHIP_STATUSES = ["courting", "committed", "fulfilled"] as const;
 export const EVALUATION_ROUND_MODES = ["scorecard", "comparison"] as const;
 export const AGENDA_ITEM_KINDS = ["session", "break"] as const;
 export const TASK_KINDS = ["acknowledge", "file", "form"] as const;
@@ -142,6 +148,7 @@ export type Decision = (typeof DECISIONS)[number];
 export type DecisionStatus = (typeof DECISION_STATUSES)[number];
 export type ParticipationRole = (typeof PARTICIPATION_ROLES)[number];
 export type ConfirmationStatus = (typeof CONFIRMATION_STATUSES)[number];
+export type SponsorshipStatus = (typeof SPONSORSHIP_STATUSES)[number];
 export type EvaluationRoundMode = (typeof EVALUATION_ROUND_MODES)[number];
 export type AgendaItemKind = (typeof AGENDA_ITEM_KINDS)[number];
 export type TaskKind = (typeof TASK_KINDS)[number];
@@ -283,6 +290,7 @@ export interface FileCommentRow extends ImmutableRecord {
 export interface PersonRow extends MutableRecord {
   bio: string | null;
   company: string | null;
+  company_id: Id | null;
   custom_fields: JsonText;
   do_not_contact: 0 | 1;
   email: string;
@@ -526,6 +534,7 @@ export interface SubmissionRow extends MutableRecord {
   primary_track_id: Id | null;
   resume_token_hash: string | null;
   search_blob: string;
+  sponsorship_id: Id | null;
   status: SubmissionStatus;
   submitted_at: EpochMilliseconds | null;
   submitter_person_id: Id;
@@ -694,6 +703,8 @@ export interface SpeakerTaskRow extends MutableRecord {
   attachment_id: Id | null;
   cancelled_at: EpochMilliseconds | null;
   completed_at: EpochMilliseconds | null;
+  /** Who completed it. Null means not recorded — never "the assignee". */
+  completed_by_person_id: Id | null;
   description: string;
   due_at: EpochMilliseconds;
   event_id: Id;
@@ -701,6 +712,8 @@ export interface SpeakerTaskRow extends MutableRecord {
   last_write_source: LastWriteSource;
   person_id: Id;
   response_json: JsonText | null;
+  /** The deal this deliverable belongs to; null for ordinary speaker work. */
+  sponsorship_id: Id | null;
   status: TaskStatus;
   submission_id: Id | null;
   template_id: Id;
@@ -825,6 +838,58 @@ export interface EventSettingRow extends MutableRecord {
   value_json: JsonText;
 }
 
+/**
+ * The sponsors module (MRQ-214, SPEC Amendment 23).
+ *
+ * A company is the organization-level relationship; a sponsorship is one
+ * conference's deal over it. Status belongs to the deal, which is why the same
+ * company can be committed at one conference and courted at the next.
+ */
+export interface CompanyRow extends MutableRecord {
+  blurb: string | null;
+  domain: string | null;
+  is_demo: 0 | 1;
+  last_write_source: LastWriteSource;
+  name: string;
+  notes: string | null;
+  org_id: Id;
+  website: string | null;
+}
+
+export interface SponsorTierRow extends MutableRecord {
+  event_id: Id;
+  name: string;
+  position: number;
+}
+
+/**
+ * Booth data lives here as nullable columns rather than as a second record type
+ * (sponsors-design ruling 5). A boothless sponsorship is those columns being
+ * null — not a different kind of thing, and not a branch anybody has to write.
+ */
+export interface SponsorshipRow extends MutableRecord {
+  booth_access_note: string | null;
+  booth_building_id: Id | null;
+  booth_hall: string | null;
+  booth_leave_note: string | null;
+  booth_load_in: string | null;
+  booth_number: string | null;
+  booth_size: string | null;
+  company_id: Id;
+  event_id: Id;
+  notes: string | null;
+  passes: number;
+  status: SponsorshipStatus;
+  tier_id: Id | null;
+}
+
+/** A contact is a `people` row reached through here — never a parallel table. */
+export interface SponsorshipContactRow extends MutableRecord {
+  is_primary: 0 | 1;
+  person_id: Id;
+  sponsorship_id: Id;
+}
+
 export const CORE_TABLE_NAMES = [
   "organizations",
   "events",
@@ -882,10 +947,14 @@ export const CORE_TABLE_NAMES = [
   "schedule_claims",
   "webhook_endpoints",
   "webhook_deliveries",
+  "companies",
+  "sponsor_tiers",
+  "sponsorships",
+  "sponsorship_contacts",
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 56 as const;
+export const CORE_TABLE_COUNT = 60 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -903,7 +972,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 56>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 60>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -962,6 +1031,10 @@ export const CORE_TABLES = {
   waves: "waves",
   webhook_deliveries: "webhook_deliveries",
   webhook_endpoints: "webhook_endpoints",
+  companies: "companies",
+  sponsor_tiers: "sponsor_tiers",
+  sponsorships: "sponsorships",
+  sponsorship_contacts: "sponsorship_contacts",
 } as const satisfies { [Table in CoreTableName]: Table };
 
 export interface CoreTableRows {
@@ -1021,6 +1094,10 @@ export interface CoreTableRows {
   waves: WaveRow;
   webhook_deliveries: WebhookDeliveryRow;
   webhook_endpoints: WebhookEndpointRow;
+  companies: CompanyRow;
+  sponsor_tiers: SponsorTierRow;
+  sponsorships: SponsorshipRow;
+  sponsorship_contacts: SponsorshipContactRow;
 }
 
 type _CoreRowsAreComplete = Assert<Equal<keyof CoreTableRows, CoreTableName>>;
@@ -1095,6 +1172,10 @@ interface CoreDefaultColumns {
   waves: never;
   webhook_deliveries: "attempts";
   webhook_endpoints: "enabled";
+  companies: "is_demo" | "last_write_source";
+  sponsor_tiers: never;
+  sponsorships: "passes" | "status";
+  sponsorship_contacts: "is_primary";
 }
 
 type GeneratedColumn<Row> = Extract<
@@ -1162,6 +1243,10 @@ export type ImportRowInsert = CoreInsert<"import_rows">;
 export type EmbedInsert = CoreInsert<"embeds">;
 export type AuditLogInsert = CoreInsert<"audit_log">;
 export type EventSettingInsert = CoreInsert<"event_settings">;
+export type CompanyInsert = CoreInsert<"companies">;
+export type SponsorTierInsert = CoreInsert<"sponsor_tiers">;
+export type SponsorshipInsert = CoreInsert<"sponsorships">;
+export type SponsorshipContactInsert = CoreInsert<"sponsorship_contacts">;
 export type FileCommentInsert = CoreInsert<"file_comments">;
 export type WebhookEndpointInsert = CoreInsert<"webhook_endpoints">;
 export type WebhookDeliveryInsert = CoreInsert<"webhook_deliveries">;

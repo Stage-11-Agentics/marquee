@@ -189,6 +189,7 @@ const requiredIndexes = [
   "idx_saved_views_person_event",
   "idx_speaker_tasks_event_status_due",
   "idx_speaker_tasks_person_status_due",
+  "idx_speaker_tasks_sponsorship_status",
   "idx_speaker_tasks_submission_status",
   "idx_webhook_deliveries_endpoint_created",
   "idx_submission_tracks_track_submission",
@@ -201,6 +202,9 @@ const requiredIndexes = [
   "uq_participations_person_submission_role",
   "uq_reviewer_track_scopes_event_person_track",
   "uq_saved_views_event_person_name",
+  "uq_sponsorship_contacts_sponsorship_person",
+  "uq_sponsorship_primary_contact",
+  "uq_sponsorships_event_company",
   "uq_submission_tracks_one_primary",
   "uq_submission_tracks_submission_track",
 ];
