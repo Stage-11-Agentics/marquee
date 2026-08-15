@@ -496,7 +496,11 @@ function SponsorPortalPage(): JSX.Element {
           <header class="portal-panel-head">
             <h2 id="deliverables-heading">Deliverables</h2>
             <div class="portal-panel-meta">
-              {overdue > 0 ? <span class="portal-panel-flag needs-action">{overdue} overdue</span> : null}
+              {/* Always rendered, as the prototype renders it — including "0
+                  overdue". In a flex-end row a chip that appears and disappears
+                  slides the count beside it every time the last overdue item is
+                  completed, which is precisely the jump the craft rules forbid. */}
+              <span class={`portal-panel-flag${overdue > 0 ? " needs-action" : " is-clear"} tabular`}>{overdue} overdue</span>
               <span class="tabular">{done}/{live.length} complete</span>
             </div>
           </header>

@@ -36,7 +36,10 @@ test("AC-3 · the seed has 1,000 submissions and a populated agenda", () => {
   const competitive = submissions.filter((row) => !row.sponsorship_id);
   assert.equal(competitive.length, 1_000);
   assert.equal(competitive.filter((row) => row.status === "accepted").length, 60);
-  assert.ok(sponsored.length > 0, "the seed must demonstrate sponsor Sessions");
+  // Bounded, not merely non-empty. "> 0" would pass a seeder that collapsed to a
+  // single sponsorship (losing the Gold/Silver pair ruling 5 depends on) and
+  // equally one that emitted three hundred.
+  assert.equal(sponsored.length, 3, `expected the Gold pair and the Silver Session, found ${sponsored.length}`);
   assert.ok(sponsored.every((row) => row.status === "accepted" && row.bypass_evaluation === 1));
   assert.ok(competitive.filter((row) => row.status === "accepted" && row.kind === "session" && row.bypass_evaluation === 1).length >= 25);
   assert.equal(
@@ -45,7 +48,11 @@ test("AC-3 · the seed has 1,000 submissions and a populated agenda", () => {
   );
 
   const scheduledIds = new Set(table("agenda_items").filter((row) => row.submission_id).map((row) => row.submission_id));
-  const acceptedSessions = submissions.filter((row) => row.status === "accepted" && row.kind === "session");
+  // COMPETITIVE accepted Sessions, deliberately. Left unscoped, these two
+  // reachability invariants could be satisfied entirely by the sponsor Sessions —
+  // and a seeder bug that broke scheduling or publishing for every one of the 60
+  // real records would stop being caught.
+  const acceptedSessions = competitive.filter((row) => row.status === "accepted" && row.kind === "session");
   assert.ok(acceptedSessions.some((row) => !scheduledIds.has(row.id)), "accepted Session can_schedule must remain reachable");
   assert.ok(acceptedSessions.some((row) => scheduledIds.has(row.id) && table("agenda_items").some((item) => item.submission_id === row.id && item.is_published === 0)), "scheduled Session can_publish must remain reachable");
 

@@ -136,7 +136,11 @@ function checkDirectSeedShape(rows: Awaited<ReturnType<typeof buildSeedRows>>): 
   assert.equal(unreviewed.length, ORGANIZER_UNREVIEWED_ASSIGNMENTS, "organizer round-one assignment count drifted");
   assert.ok(overdueTasks.length >= 10, `seed must contain >=10 overdue open tasks, found ${overdueTasks.length}`);
   return {
-    submissions: competitive.length,
+    // Named for what it counts. Reporting `submissions: 1000` beside a table
+    // holding 1,003 rows would hand the next reader of this evidence a number
+    // that is no longer the row count.
+    competitive_submissions: competitive.length,
+    submissions_total: submissions.length,
     sponsor_sessions: sponsored.length,
     accepted_submissions: competitive.filter((row) => row.status === "accepted").length,
     accepted_sessions: competitive.filter((row) => row.status === "accepted" && row.kind === "session" && row.bypass_evaluation === 1).length,

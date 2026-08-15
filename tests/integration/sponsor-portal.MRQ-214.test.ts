@@ -15,6 +15,7 @@ import { beforeEach, expect, test } from "vitest";
 
 import { app, type Env } from "../../src/index";
 import { createSession } from "../../src/lib/auth/auth-sessions";
+import { deleteEventCascade } from "../../src/lib/events/delete-event";
 import { SPONSOR_WRITEBACK_TEMPLATE_IDS } from "../../src/lib/sponsors/deliverable-templates";
 import { applyMigrations, env } from "./apply-migrations";
 
@@ -451,4 +452,86 @@ test("CONTRACT · the upload signer agrees with the completion route about who m
   // And a stranger, and a contact of another deal, may not.
   expect((await sign(STRANGER, "tsk_mrq214_logo")).status).toBe(403);
   expect((await sign(MONA, "tsk_mrq214_logo")).status).toBe(403);
+});
+
+/**
+ * A conference holding a sponsorship must still be deletable.
+ *
+ * `deleteEventCascade` hand-enumerates every event-owned table into one D1 batch,
+ * and a sponsorship sits in the middle of the dependency graph: referenced from
+ * above by the deliverables and Sessions, pointing down at a building, the event,
+ * and — through its contacts — people. Any of those in the wrong order and the
+ * batch aborts on a foreign key, which does not fail loudly in a unit: it makes
+ * the conference *undeletable*, and takes `POST /admin/remove-demo` with it.
+ *
+ * Nothing tested this. The existing conference-delete test is a source regex.
+ */
+test("CONTRACT · a conference holding sponsorships can still be deleted, and companies survive it", async () => {
+  const event = await env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(EVENT_ID).first();
+  const result = await deleteEventCascade(
+    env.DB,
+    [event as never],
+    { actorKind: "system", actorPersonId: null, requestId: null },
+    {},
+    undefined,
+    Date.now(),
+  );
+  expect(result.removedEvents).toBe(1);
+
+  for (const table of ["sponsorships", "sponsorship_contacts", "sponsor_tiers"]) {
+    const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>();
+    expect(Number(row?.n), `${table} survived the cascade`).toBe(0);
+  }
+  const events = await env.DB.prepare("SELECT COUNT(*) AS n FROM events WHERE id = ?").bind(EVENT_ID).first<{ n: number }>();
+  expect(Number(events?.n)).toBe(0);
+  // Companies are organization-level and outlive every conference — the same rule
+  // that keeps `people` alive. A conference delete that took them would delete the
+  // sponsor relationship along with one year's deal.
+  const companies = await env.DB.prepare("SELECT COUNT(*) AS n FROM companies").first<{ n: number }>();
+  expect(Number(companies?.n)).toBe(2);
+});
+
+test("CONTRACT · removing the demo scope takes the demo companies with it", async () => {
+  const event = await env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(EVENT_ID).first();
+  await deleteEventCascade(
+    env.DB,
+    [event as never],
+    { actorKind: "system", actorPersonId: null, requestId: null },
+    { removeDemoPeople: true, preserveOrgAttachments: false },
+    undefined,
+    Date.now(),
+  );
+  // `is_demo` symmetry: a demo removal that left seeded companies behind would
+  // leave the CRM's second noun holding rows nothing references.
+  const companies = await env.DB.prepare("SELECT COUNT(*) AS n FROM companies").first<{ n: number }>();
+  expect(Number(companies?.n)).toBe(0);
+  const people = await env.DB.prepare("SELECT COUNT(*) AS n FROM people WHERE is_demo = 1").first<{ n: number }>();
+  expect(Number(people?.n)).toBe(0);
+});
+
+/**
+ * The write-back must prove the task's two independent joins agree.
+ *
+ * `task-access.ts` proves the caller holds the sponsorship. Nothing in the schema
+ * ties `speaker_tasks.submission_id` to `speaker_tasks.sponsorship_id`, so a
+ * mismatched pair — which only a future writer can produce, but a future writer
+ * certainly can — would otherwise let a contact rewrite a Session that is not
+ * theirs by completing their own deliverable.
+ */
+test("CONTRACT · a deliverable pointed at another sponsorship's Session writes nothing to it", async () => {
+  // Mona's own session-content deliverable, repointed at GOLD's Session.
+  await env.DB.prepare("UPDATE speaker_tasks SET submission_id = ? WHERE id = 'tsk_mrq214_content'")
+    .bind(SPEAKERLESS_SESSION).run();
+  const before = await env.DB.prepare("SELECT title, abstract FROM submissions WHERE id = ?")
+    .bind(SPEAKERLESS_SESSION).first<{ title: string; abstract: string | null }>();
+
+  const response = await post("/api/v1/me/tasks/tsk_mrq214_content/complete", MONA, {
+    answers: { session_description: "Hostile rewrite of somebody else's Session." },
+  });
+  // The completion itself is hers to make; what it must not do is reach the other
+  // sponsorship's record.
+  expect(response.status).toBe(200);
+  const after = await env.DB.prepare("SELECT title, abstract FROM submissions WHERE id = ?")
+    .bind(SPEAKERLESS_SESSION).first<{ title: string; abstract: string | null }>();
+  expect(after).toEqual(before);
 });

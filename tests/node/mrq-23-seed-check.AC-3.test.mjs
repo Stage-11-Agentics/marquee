@@ -12,10 +12,13 @@ const table = (name) => rows.filter((entry) => entry.table === name).map((entry)
 
 test("AC-3 · MRQ-23 check contract keeps the full seed and reachable reviewer work", () => {
   // The competitive pool, not the row count: sponsor Sessions are guaranteed
-  // placements that never entered it (SPEC §6, Amendment 23).
-  const submissions = table("submissions").filter((submission) => !submission.sponsorship_id);
+  // placements that never entered it (SPEC §6, Amendment 23). Both partitions are
+  // asserted, so narrowing the pool's scope cannot hide a change in the other one.
+  const allSubmissions = table("submissions");
+  const submissions = allSubmissions.filter((submission) => !submission.sponsorship_id);
   assert.equal(submissions.length, 1_000);
   assert.equal(submissions.filter((submission) => submission.status === "accepted").length, 60);
+  assert.equal(allSubmissions.length - submissions.length, 3, "the sponsor Session population drifted");
 
   const memberships = table("memberships");
   assert.ok(memberships.some((membership) => membership.event_id === EVENT_ID && membership.person_id === "per_aie-program-committee" && membership.role === "reviewer"));

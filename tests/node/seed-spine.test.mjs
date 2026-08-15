@@ -128,6 +128,8 @@ test("CONTRACT · seeded sponsor Sessions are guaranteed placements, not competi
   const sponsorships = new Set(table("sponsorships").map((row) => row.id));
   assert.ok(sponsored.length >= 3, `expected the Gold/Silver demo Sessions, found ${sponsored.length}`);
 
+  const tracks = byId("tracks");
+  const primaryTracks = table("submission_tracks").filter((row) => row.is_primary === 1);
   for (const submission of sponsored) {
     assert.ok(sponsorships.has(submission.sponsorship_id), `${submission.id} names no seeded sponsorship`);
     assert.equal(submission.kind, "session");
@@ -139,6 +141,22 @@ test("CONTRACT · seeded sponsor Sessions are guaranteed placements, not competi
     assert.equal(submission.wave_id, null, `${submission.id} must not sit in a decision wave`);
     assert.ok(formats.has(submission.format_id));
     assert.ok(people.has(submission.submitter_person_id));
+    // The taxonomy and date invariants the competitive assertions above no longer
+    // cover for these rows. `decided_at` is an instant, not an ordering: a
+    // guaranteed placement is decided the moment it is sold, so `submitted_at`
+    // EQUALS it rather than preceding it — which is exactly why the competitive
+    // `submitted_at < decided_at` check cannot be reused here.
+    assert.ok(tracks.has(submission.primary_track_id), `${submission.id} has no primary track`);
+    assert.equal(
+      primaryTracks.filter((row) => row.submission_id === submission.id).length,
+      1,
+      `${submission.id} must carry exactly one primary track row`,
+    );
+    assert.ok(Number.isInteger(submission.decided_at), `${submission.id} is accepted but undecided`);
+    assert.ok(
+      submission.submitted_at <= submission.decided_at,
+      `${submission.id} was decided before it existed`,
+    );
   }
   const sponsoredIds = new Set(sponsored.map((row) => row.id));
   assert.equal(

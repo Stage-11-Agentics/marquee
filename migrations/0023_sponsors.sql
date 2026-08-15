@@ -48,7 +48,7 @@ CREATE TABLE sponsorships (
   id TEXT PRIMARY KEY,
   event_id TEXT NOT NULL REFERENCES events(id),
   company_id TEXT NOT NULL REFERENCES companies(id),
-  tier_id TEXT REFERENCES sponsor_tiers(id),
+  tier_id TEXT,
   status TEXT NOT NULL DEFAULT 'courting'
     CHECK (status IN ('courting', 'committed', 'fulfilled')),
   passes INTEGER NOT NULL DEFAULT 0 CHECK (passes >= 0),
@@ -62,7 +62,13 @@ CREATE TABLE sponsorships (
   notes TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  FOREIGN KEY (booth_building_id, event_id) REFERENCES buildings(id, event_id)
+  FOREIGN KEY (booth_building_id, event_id) REFERENCES buildings(id, event_id),
+  -- Composite, like the building above it. A single-column FK to
+  -- `sponsor_tiers(id)` would let a sponsorship in one conference point at
+  -- another conference's tier, and the failure would be SILENT: the portal joins
+  -- on `tier.event_id = sponsorship.event_id`, so a mis-scoped tier renders as no
+  -- tier at all rather than as an error.
+  FOREIGN KEY (tier_id, event_id) REFERENCES sponsor_tiers(id, event_id)
 );
 
 CREATE TABLE sponsorship_contacts (

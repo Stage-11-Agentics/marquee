@@ -76,9 +76,15 @@ async function nameSpeakerStatements(input: SponsorWritebackInput): Promise<D1Pr
   const email = text(answers, "speaker_email");
   if (!name || !email) return [];
 
+  // The submission must belong to THIS deal, not merely to this conference.
+  // `task-access.ts` proves the caller holds the sponsorship; nothing proves the
+  // task's two nullable joins agree, and they are independent columns. Today only
+  // the seed writes both, and it pairs them correctly — but the day anything else
+  // can set them (organizer-side sponsor task authoring, a bulk edit) a mismatched
+  // pair would let a contact rewrite a stranger's Session or add a speaker to it.
   const submission = await db
-    .prepare("SELECT id FROM submissions WHERE id = ? AND event_id = ?")
-    .bind(task.submission_id, task.event_id)
+    .prepare("SELECT id FROM submissions WHERE id = ? AND event_id = ? AND sponsorship_id = ?")
+    .bind(task.submission_id, task.event_id, task.sponsorship_id)
     .first<{ id: string }>();
   if (!submission) return [];
 
@@ -147,9 +153,10 @@ async function nameSpeakerStatements(input: SponsorWritebackInput): Promise<D1Pr
 async function sessionContentStatements(input: SponsorWritebackInput): Promise<D1PreparedStatement[]> {
   const { db, task, answers, now } = input;
   if (!task.submission_id) return [];
+  // Same scoping as the speaker write-back above, for the same reason.
   const current = await db
-    .prepare("SELECT id, title, abstract FROM submissions WHERE id = ? AND event_id = ?")
-    .bind(task.submission_id, task.event_id)
+    .prepare("SELECT id, title, abstract FROM submissions WHERE id = ? AND event_id = ? AND sponsorship_id = ?")
+    .bind(task.submission_id, task.event_id, task.sponsorship_id)
     .first<{ id: string; title: string; abstract: string | null }>();
   if (!current) return [];
   const title = text(answers, "session_title") ?? current.title;

@@ -195,6 +195,22 @@ export async function deleteEventCascade(
     prepared(db, `DELETE FROM import_rows WHERE import_id IN ${importsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM imports WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM submissions WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
+    // MRQ-214, and its position is the whole content of the rule. A sponsorship
+    // is referenced from ABOVE by `speaker_tasks.sponsorship_id` and
+    // `submissions.sponsorship_id` (both already gone by here) and points DOWN at
+    // `buildings(id, event_id)`, `events`, and — through its contacts — `people`.
+    // Deleted anywhere else in this list, the batch aborts on a foreign key and
+    // the conference cannot be deleted at all once one sponsor exists.
+    // `companies` is deliberately absent: it is organization-level and outlives
+    // every conference, exactly like `people`.
+    prepared(
+      db,
+      `DELETE FROM sponsorship_contacts
+       WHERE sponsorship_id IN (SELECT id FROM sponsorships WHERE event_id IN ${eventIdsSql})`,
+      ...eventBindings,
+    ),
+    prepared(db, `DELETE FROM sponsorships WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
+    prepared(db, `DELETE FROM sponsor_tiers WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM form_admins WHERE form_id IN ${formsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM form_fields WHERE form_id IN ${formsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM forms WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
@@ -290,6 +306,17 @@ export async function deleteEventCascade(
       // referential link without rewriting the fact's authorship or its copy.
       prepared(db, `UPDATE audit_log SET actor_person_id = NULL WHERE actor_person_id IN ${demoPeopleSql}`, ...eventBindings),
       prepared(db, `DELETE FROM people WHERE id IN ${demoPeopleSql}`, ...eventBindings),
+      // Demo companies go with the demo people, and only after them:
+      // `people.company_id` points here, so the other order aborts the batch.
+      // This is the `is_demo` symmetry the cascade contract asks for — a demo
+      // removal that left seeded companies behind would leave the CRM's second
+      // noun holding rows nothing references.
+      prepared(
+        db,
+        `DELETE FROM companies
+         WHERE is_demo = 1 AND org_id IN (SELECT org_id FROM events WHERE id IN ${eventIdsSql})`,
+        ...eventBindings,
+      ),
     );
   }
 

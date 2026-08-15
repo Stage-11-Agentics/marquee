@@ -206,20 +206,29 @@ async function contactsFor(db: D1Database, sponsorshipId: string, viewerPersonId
  * second copy of "who to email" is a copy that goes stale the week the
  * sponsorship lead changes, and every sponsor then writes to someone who left.
  */
-async function organizerContactFor(db: D1Database, eventId: string) {
+async function organizerContactFor(db: D1Database, eventId: string, orgId: string) {
   const row = await db
     .prepare(
+      // Organization-scoped, and event-scoped seats sort ahead of org-wide ones.
+      // Without the `org_id` predicate an org-wide `owner` in ANY organization is
+      // an eligible candidate, and this name and address are printed on the page
+      // and in the handbook — a cross-tenant leak of a stranger's contact details
+      // dressed as "your organizer". The ordering matters for the same reason it
+      // does everywhere else here: this conference's own staff answer for this
+      // conference before the organization's general staff do.
       `SELECT person.id, person.name, person.email, membership.role
        FROM memberships membership
-       JOIN people person ON person.id = membership.person_id
-       WHERE (membership.event_id = ? OR membership.event_id IS NULL)
+       JOIN people person ON person.id = membership.person_id AND person.org_id = ?
+       WHERE membership.org_id = ?
+         AND (membership.event_id = ? OR membership.event_id IS NULL)
          AND membership.role IN ('program_lead', 'owner', 'ops')
-       ORDER BY CASE membership.role
+       ORDER BY CASE WHEN membership.event_id = ? THEN 0 ELSE 1 END,
+         CASE membership.role
            WHEN 'program_lead' THEN 0 WHEN 'owner' THEN 1 ELSE 2 END,
          person.name COLLATE NOCASE ASC, person.id ASC
        LIMIT 1`,
     )
-    .bind(eventId)
+    .bind(orgId, orgId, eventId, eventId)
     .first<{ id: string; name: string; email: string; role: string }>();
   if (!row) return null;
   const roleLabel = row.role === "program_lead" ? "Program lead" : row.role === "owner" ? "Conference owner" : "Conference operations";
@@ -321,7 +330,7 @@ async function sponsorPortalSnapshot(
     db.prepare("SELECT id, name, email, title FROM people WHERE id = ?").bind(auth.personId)
       .first<{ id: string; name: string; email: string; title: string | null }>(),
     contactsFor(db, sponsorship.sponsorship_id, auth.personId),
-    organizerContactFor(db, sponsorship.event_id),
+    organizerContactFor(db, sponsorship.event_id, auth.orgId),
     listPortalTasks(
       db,
       { id: sponsorship.event_id, timezone: sponsorship.event_timezone },

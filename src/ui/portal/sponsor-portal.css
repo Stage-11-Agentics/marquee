@@ -99,6 +99,13 @@
   margin-top: 6px;
   min-height: 15px;
 }
+/* A cleared "0 overdue" is metadata, not an alarm: it holds the chip's slot
+   without claiming attention it has not earned. */
+.portal-panel-flag.is-clear {
+  background: var(--surface-sunk);
+  border-color: var(--rule);
+  color: var(--muted);
+}
 .sponsor-anyone-note { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
 
 /* ── Sessions: read-only cards ─────────────────────────────────────────────── */
@@ -134,17 +141,17 @@
    replaces it occupy the same space. */
 .sponsor-session-actions { align-items: center; display: flex; gap: 7px; margin-top: 10px; min-height: 30px; }
 .sponsor-session-actions .portal-empty { padding: 0; }
+/* Sentence case, as the prototype sets them: "Session", "Primary", "You". The
+   judge's vocabulary is the word, and shouting it is not part of the word. */
 .sponsor-chip {
   align-items: center;
   background: var(--surface-sunk);
   border: 1px solid var(--rule);
   color: var(--ink-soft);
   display: inline-flex;
-  font: 500 9.5px/1.2 var(--mono);
-  letter-spacing: .08em;
+  font: 400 10px/1.2 var(--mono);
   min-height: 20px;
   padding: 4px 7px;
-  text-transform: uppercase;
 }
 .sponsor-chip.session { background: var(--accent-wash); border-color: var(--accent); color: var(--accent-ink); }
 .sponsor-chip.you { background: var(--success-soft); border-color: var(--success-line); color: var(--success-ink); }
