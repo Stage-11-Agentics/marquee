@@ -17,6 +17,8 @@ import {
 import { ORG_HOME_PEOPLE_HREF } from "../../src/api/org-home";
 import { mapPersonHeaders, planPersonImport } from "../../src/lib/people-import";
 import { buildPeopleQuery, parseTags } from "../../src/routes/people.queries";
+import { buildSpeakerRosterQueries } from "../../src/routes/speakers.queries";
+import { parsePagination } from "../../src/api/pagination";
 import { activeCriteria, EMPTY_FILTERS, hasFilters, saveControl } from "../../src/ui/people/people-api";
 import { activeNavId, matchRoute, routesFor } from "../../src/ui/shell/route-table";
 import { PIPELINE_STAGES as CLIENT_STAGES } from "../../src/ui/people/pipeline-stages";
@@ -113,16 +115,19 @@ test("CONTRACT · MRQ-131 · the six stages include both terminal ones, and clie
 test("CONTRACT · MRQ-131 · one list query: event_id is the only difference between the two entrances", () => {
   const org = buildPeopleQuery({ orgId: "org_1" });
   const roster = buildPeopleQuery({ orgId: "org_1", eventId: "evt_1" });
+  const rosterPage = buildSpeakerRosterQueries("evt_1", {}, parsePagination({ page: 1, per_page: 50 }));
   expect(org.dataSql).toMatch(/FROM people person/);
   expect(org.dataSql).not.toMatch(/FROM memberships/);
   // The roster narrows to the ONE definition of who speaks at a conference.
   expect(roster.dataSql).toMatch(/SELECT person_id FROM memberships/);
   expect(roster.dataSql).toMatch(/part\.role IN \('speaker', 'co_speaker'\)/);
   expectDeep(roster.countBindings, ["org_1", "evt_1", "evt_1"]);
-  // And the roster's own module reaches for that same builder rather than
-  // carrying a second list implementation.
-  const rosterQueries = readFileSync(new URL("../../src/routes/speakers.queries.ts", import.meta.url), "utf8");
-  expect(rosterQueries).toMatch(/buildPeopleQuery/);
+  // The paged roster, its count, and its status facets use the same builder;
+  // the roster module contributes only its event projection and predicates.
+  expect(rosterPage.dataSql).toMatch(/FROM people person/);
+  expect(rosterPage.dataSql).toMatch(/SELECT person_id FROM memberships/);
+  expect(rosterPage.dataSql).not.toMatch(/SPEAKER_ROSTER_CTE|roster_people/);
+  expect(rosterPage.countSql).toMatch(/FROM people person/);
 });
 
 test("CONTRACT · MRQ-131 · search, filters, and paging bind their values and never interpolate them", () => {
