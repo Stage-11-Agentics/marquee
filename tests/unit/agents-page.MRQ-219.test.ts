@@ -31,7 +31,7 @@ const read = (path: string): string => readFileSync(resolve(root, path), "utf8")
 const markup = renderToString(h(AgentsPage, { navigate: () => {}, origin: ORIGIN }));
 
 describe("MRQ-219 · the Agents page is reachable", () => {
-  it("AC1 · /agents is an organization row with its own active state", () => {
+  it("CONTRACT · MRQ-219 AC1 — /agents is an organization row with its own active state", () => {
     const route = matchRoute("/agents");
     expect(route).toMatchObject({ id: "agents", label: "Agents", icon: "⌘", group: "organization", sidebar: true });
     // Its own row, not borrowed from another surface.
@@ -44,7 +44,7 @@ describe("MRQ-219 · the Agents page is reachable", () => {
     expect(organization.at(-1)).toBe("org-settings");
   });
 
-  it("AC1 · the shell answers /agents before the conference guard", () => {
+  it("CONTRACT · MRQ-219 AC1 — the shell answers /agents before the conference guard", () => {
     // An instance with no conference yet still has an agent to connect, so the
     // page must be rendered above `eventId === null ? <NoConference…`.
     const shell = read("src/ui/shell/AppShell.tsx");
@@ -57,7 +57,7 @@ describe("MRQ-219 · the Agents page is reachable", () => {
 });
 
 describe("MRQ-219 · the connect prompt names this instance", () => {
-  it("AC2 · the origin is substituted, and no deployment's domain is baked in", () => {
+  it("CONTRACT · MRQ-219 AC2 — the origin is substituted, and no deployment's domain is baked in", () => {
     const prompt = agentsConnectPrompt(ORIGIN);
     expect(prompt).toContain(`${ORIGIN}/SKILL.md`);
     expect(markup).toContain(`${ORIGIN}/SKILL.md`);
@@ -68,7 +68,7 @@ describe("MRQ-219 · the connect prompt names this instance", () => {
     }
   });
 
-  it("AC2 · the prompt is the prototype's, word for word", () => {
+  it("CONTRACT · MRQ-219 AC2 — the prompt is the prototype's, word for word", () => {
     expect(agentsConnectPrompt(ORIGIN)).toBe(
       `Install Marquee's skill: fetch ${ORIGIN}/SKILL.md and save it where you load skills. Then I'll paste a scoped API token — set MARQUEE_URL and MARQUEE_TOKEN, verify the connection with a read-only command, and show me what you can see.`,
     );
@@ -77,7 +77,7 @@ describe("MRQ-219 · the connect prompt names this instance", () => {
     expect(markup).toContain("GET /SKILL.md");
   });
 
-  it("AC2 · the origin falls back to the running deployment, never to a constant", () => {
+  it("CONTRACT · MRQ-219 AC2 — the origin falls back to the running deployment, never to a constant", () => {
     expect(resolveOrigin(ORIGIN)).toBe(ORIGIN);
     // No window in the test environment: an empty string is the honest answer,
     // and it is what a server-side render gets.
@@ -87,7 +87,7 @@ describe("MRQ-219 · the connect prompt names this instance", () => {
 });
 
 describe("MRQ-219 · the machine doors", () => {
-  it("AC3 · three doors: the token screen, the reference, and the skill URL", () => {
+  it("CONTRACT · MRQ-219 AC3 — three doors: the token screen, the reference, and the skill URL", () => {
     const doors = markup.match(/class="agents-door"/g) ?? [];
     expect(doors).toHaveLength(3);
     expect(markup).toContain("Create API token");
@@ -100,7 +100,7 @@ describe("MRQ-219 · the machine doors", () => {
     expect(matchRoute("/api/docs")?.id).toBe("api-docs");
   });
 
-  it("AC3 · the doors are painted from tokens in both palettes", () => {
+  it("CONTRACT · MRQ-219 AC3 — the doors are painted from tokens in both palettes", () => {
     const tokens = read("src/styles/tokens.css");
     const night = tokens.match(/html\[data-theme="night"\] \{([\s\S]*?)\n\}/)?.[1] ?? "";
     for (const token of ["--canvas-btn", "--canvas-tile-line", "--canvas-tile-ink", "--canvas-link"]) {
@@ -117,7 +117,7 @@ describe("MRQ-219 · the machine doors", () => {
 });
 
 describe("MRQ-219 · the roster and the contract cards", () => {
-  it("AC4 · four cards, verbatim, each with exactly one action", () => {
+  it("CONTRACT · MRQ-219 AC4 — four cards, verbatim, each with exactly one action", () => {
     expect(AGENTS_ROSTER).toHaveLength(4);
     expect(AGENTS_ROSTER.map((agent) => agent.name)).toEqual([
       "The setup agent",
@@ -143,7 +143,7 @@ describe("MRQ-219 · the roster and the contract cards", () => {
     }
   });
 
-  it("AC5 · the next-year line and both contract cards are the prototype's", () => {
+  it("CONTRACT · MRQ-219 AC5 — the next-year line and both contract cards are the prototype's", () => {
     expect(markup).toContain("event create --from");
     expect(markup).toContain("structure carried across, people already there");
     for (const line of [
@@ -164,7 +164,7 @@ describe("MRQ-219 · the roster and the contract cards", () => {
 });
 
 describe("MRQ-219 · copying is the page's only write", () => {
-  it("AC2/AC3 · both receipts are announced through the shell's toast host", () => {
+  it("CONTRACT · MRQ-219 AC2/AC3 — both receipts are announced through the shell's toast host", () => {
     const page = read("src/ui/agents/AgentsPage.tsx");
     expect(PROMPT_COPIED_TOAST).toBe("Prompt copied · paste it to your agent");
     expect(URL_COPIED_TOAST).toBe("URL copied · your agent can fetch it");
@@ -176,7 +176,7 @@ describe("MRQ-219 · copying is the page's only write", () => {
     expect(page).not.toMatch(/setState\(["']copied["']\)/);
   });
 
-  it("AC8 · the instance still serves the skill the prompt tells an agent to fetch", () => {
+  it("CONTRACT · MRQ-219 AC8 — the instance still serves the skill the prompt tells an agent to fetch", () => {
     const index = read("src/index.ts");
     expect(index).toContain('app.get("/SKILL.md"');
     expect(index).toContain("text/markdown");
