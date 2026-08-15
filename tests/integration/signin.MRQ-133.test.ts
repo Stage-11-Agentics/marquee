@@ -275,8 +275,10 @@ test("CONTRACT · MRQ-133 · a signed-in visitor is not shown a login form", asy
   expect(page).not.toContain('id="signin-form"');
   expect(page).toContain("Demo Organizer");
   expect(page).toContain("organizer@demo.marquee.example");
-  // An org-wide owner continues into the organizer shell.
-  expect(page).toContain('href="/dashboard"');
+  // An org-wide owner continues into the organizer shell at its organization
+  // home — the same destination the magic-link exchange and the landing's demo
+  // door use, because all three read `ROLE_HOME`.
+  expect(page).toContain('href="/org/home"');
 });
 
 test("CONTRACT · MRQ-133 · the reason banner states why the visitor is here", async () => {

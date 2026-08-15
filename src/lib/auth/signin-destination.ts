@@ -10,9 +10,14 @@ export { ROLE_HOME } from "./role-home";
  * they are. Each one is a place where getting it wrong is silent: a magic link
  * that lands a reviewer on an organizer dashboard, an open redirect wearing a
  * `?next=`, or an outbox row filed against the wrong conference.
+ *
+ * `roleHome` is the only answer to "where does this seat land", and every door
+ * reads it — the magic-link exchange, the demo seat, and the landing page's own
+ * demo buttons. A door with its own opinion is how the organizer ended up in two
+ * different places depending on which one they used.
  */
 
-/** SPEC §4.1's program-staff roles — the seats whose home is the organizer dashboard. */
+/** SPEC §4.1's program-staff roles — the seats whose home is the organization. */
 const PROGRAM_STAFF_ROLES: readonly string[] = ["owner", "program_lead", "ops"];
 
 /**
