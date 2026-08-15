@@ -215,3 +215,92 @@ test("CONTRACT · loop.sh's own guards keep unreachable apart from stopped", asy
   assert.match(source, /unreachable\) stopped=0; say "atlas unreachable/, "watch must not complete on silence");
   assert.match(source, /\(\( stopped >= 2 \)\)/, "watch must require two consecutive stopped readings");
 });
+
+/**
+ * A sandbox where `watch` reaches its completion branch immediately. Atlas
+ * answers "stopped"; whether the run left a report.json behind is the variable
+ * under test. WATCH_INTERVAL=0 collapses the two-tick requirement from ninety
+ * real seconds to nothing, so the contract is pinned inside the suite budget
+ * rather than excused from it.
+ */
+function stoppedSandbox({ reportExists }) {
+  const dir = mkdtempSync(join(tmpdir(), "auto-eval-watch-"));
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  const state = join(dir, "state");
+  mkdirSync(state);
+
+  writeFileSync(
+    join(bin, "ssh"),
+    `#!/bin/sh
+case "$*" in
+  *atlas-job\\ status*)
+    echo "sbek-round12             stopped  pid -        2026-08-15T21:19:13Z" ;;
+  *report.json*)
+    exit ${reportExists ? 0 : 1} ;;
+  *judgements*)
+    echo "call-for-papers.json" ;;
+  *) : ;;
+esac
+exit 0
+`,
+    { mode: 0o755 },
+  );
+  writeFileSync(join(bin, "scp"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  writeFileSync(join(bin, "rsync"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+  for (const f of ["ssh", "scp", "rsync"]) chmodSync(join(bin, f), 0o755);
+  writeFileSync(
+    join(state, "state.json"),
+    JSON.stringify({ round: 12, anchor: null, anchorPct: null, runStamp: null, sha: null, halted: false, voidRuns: [] }),
+  );
+  return {
+    env: {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH}`,
+      MARQUEE_ROOT: dir,
+      KIT_LOCAL: join(dir, "kit"),
+      STATE_DIR: state,
+      FREEZE_FILE: join(dir, ".deploy-freeze"),
+      WATCH_INTERVAL: "0",
+    },
+  };
+}
+
+test("CONTRACT · watch reports a killed run as DIED, not COMPLETE", () => {
+  // Round 12: Atlas hung mid-round and rebooted. The job was gone, so two
+  // consecutive `stopped` readings arrived and the watch announced
+  // RUN-COMPLETE for a run that had browsed 14 of 20 scenarios, judged three of
+  // seven areas and written no report. RUN-COMPLETE is the signal the
+  // coordinator acts on, and its protocol runs sync → score → guard → barrier,
+  // so the false completion walks into scoring a partial run, anchoring on it,
+  // and deploying. "No process" is not "finished".
+  const box = stoppedSandbox({ reportExists: false });
+  let stdout = "";
+  let stderr = "";
+  try {
+    execFileSync("bash", [LOOP, "watch", "2026-08-15T21-19-37"], { env: box.env, encoding: "utf8" });
+    assert.fail("watch must not exit 0 for a run that left no report.json");
+  } catch (error) {
+    stdout = `${error.stdout ?? ""}`;
+    stderr = `${error.stderr ?? ""}`;
+  }
+
+  assert.doesNotMatch(stdout, /RUN-COMPLETE/, "a killed run must never be announced as complete");
+  assert.match(stdout, /RUN-DIED 20\d\d-\d\d-\d\dT[\d:]+Z 2026-08-15T21-19-37/, "it must say so, with the stamp");
+  assert.match(stderr, /KILLED, not finished/, "and the diagnostic must name what happened");
+  assert.match(stderr, /voidRuns/, "and tell the operator how to record it");
+});
+
+test("CONTRACT · watch still completes normally when the run left a report", () => {
+  // The guard above must not cost us the ordinary path: a genuinely finished
+  // round writes report.json in its scoring phase, and that is what separates
+  // it from a corpse.
+  const box = stoppedSandbox({ reportExists: true });
+  const stdout = execFileSync("bash", [LOOP, "watch", "2026-08-15T21-19-37"], {
+    env: box.env,
+    encoding: "utf8",
+  });
+
+  assert.match(stdout, /RUN-COMPLETE 20\d\d-\d\d-\d\dT[\d:]+Z 2026-08-15T21-19-37/);
+  assert.doesNotMatch(stdout, /RUN-DIED/);
+});

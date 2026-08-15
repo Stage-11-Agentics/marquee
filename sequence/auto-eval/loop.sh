@@ -34,6 +34,10 @@ DEMO_HEADER=${DEMO_HEADER:-AI Engineer New York 2026}
 FREEZE_FILE=${FREEZE_FILE:-$MARQUEE_ROOT/.deploy-freeze}
 # Score-floor: a round may lose this many points before the loop stops deploying.
 FLOOR_DROP=${FLOOR_DROP:-2.0}
+# Seconds between watch ticks. Injectable so the completion contract can be
+# tested: proving it takes two consecutive `stopped` readings, and at 45s real
+# seconds that is a 45-second test inside a 45-second suite budget.
+WATCH_INTERVAL=${WATCH_INTERVAL:-45}
 
 mkdir -p "$STATE_DIR"
 [[ -f $STATE ]] || echo '{"round":0,"anchor":null,"anchorPct":null,"runStamp":null,"sha":null,"halted":false}' > "$STATE"
@@ -166,11 +170,38 @@ cmd_watch() {
         stopped=$(( stopped + 1 ))
         if (( stopped >= 2 )); then
           cmd_sync "$stamp" >/dev/null 2>&1 || true
-          printf 'RUN-COMPLETE %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$stamp"
-          return 0
+          # "No process" is not "finished". A completed run leaves report.json
+          # behind; a killed one leaves the run directory it was halfway through.
+          # Two consecutive `stopped` readings prove only that nothing is running
+          # now — and `job_state` answers `stopped` for a job that never existed,
+          # a job that crashed, and a job that finished, identically.
+          #
+          # The README hardened this loop against the mirror image: a dead watch
+          # looks exactly like a quiet one, which is why we never complete on
+          # `unreachable`. This is the other half — a dead job looks exactly like
+          # a finished one. Observed on round 12: Atlas hung mid-round and
+          # rebooted, the job died at 14 of 20 scenarios with three of seven areas
+          # judged, and the watch announced RUN-COMPLETE. That announcement is the
+          # signal the coordinator acts on, and its protocol is
+          # RUN-COMPLETE → sync → score → guard → barrier, so a false completion
+          # walks straight into scoring a partial run, setting an anchor from it,
+          # and deploying on the result.
+          if atlas "test -f ~/$KIT_ATLAS/runs/$stamp/report.json"; then
+            printf 'RUN-COMPLETE %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$stamp"
+            return 0
+          fi
+          printf 'RUN-DIED %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$stamp"
+          die "the job is gone and runs/$stamp has no report.json — it was KILLED, not finished.
+Do not score, guard or barrier on this run. Record it as void first:
+  python3 - <<'PY'
+import json; p='$STATE'; d=json.load(open(p))
+d['voidRuns'].append('$stamp'); d['runStamp']=None
+json.dump(d, open(p,'w'), indent=2)
+PY
+Judgements already on disk graded one build and stay valid per-area; the HEADLINE is void."
         fi;;
     esac
-    sleep 45
+    sleep "$WATCH_INTERVAL"
   done
 }
 

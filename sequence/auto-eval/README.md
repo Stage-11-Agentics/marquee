@@ -84,6 +84,17 @@ A blocking wait costs one tool call and no context, so Triage arrives at each
 judgement with a nearly empty window. That is not a saving; it is the mechanism
 by which the classification is any good.
 
+**And death must stay distinguishable from completion.** The same confusion has a
+second face: `watch` learns a round is over by asking whether the job is still
+running, and a job that crashed answers exactly like a job that finished. Atlas
+rebooted mid-round on 2026-08-15 and the watch announced `RUN-COMPLETE` for a run
+that had browsed 14 of 20 scenarios and written no report — and `RUN-COMPLETE` is
+the signal whose protocol is *sync → score → guard → barrier*, so the false
+completion leads to scoring a partial run, anchoring on it, and deploying. So
+completion requires the artifact a finished round leaves behind (`report.json`),
+never merely the absence of a process; anything else prints `RUN-DIED` and exits
+non-zero. **No process is not finished.**
+
 **Silence must stay distinguishable from death.** Under a push design, no message
 means nothing happened. Under a watch design, no file means nothing happened *or*
 the round died, and from Triage's seat those are identical. This is observed, not
