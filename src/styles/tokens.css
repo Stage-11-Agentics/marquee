@@ -66,6 +66,16 @@
   --warning-line: #e3cda2;
   --warning-ink: #6b4700;
   --on-ink: #dff2f3;              /* text on inverse (--ink) chrome */
+  /* The dark-instrument sub-language. `--canvas` alone is a ground; a status hero
+     drawn on it also needs secondary text, a micro-label, and a chip that reads
+     as recessed rather than as a second card. These were literals inside
+     portal.css, which is one of the two files `check:design` cannot see — so the
+     sponsor hero puts them where a theme can re-light them. */
+  --canvas-ink-soft: #c2d5de;     /* secondary text on canvas   9.1:1 on canvas */
+  --canvas-muted: #8aa6b5;        /* micro-labels on canvas     5.4:1 on canvas */
+  --canvas-eyebrow: #7fb3b8;      /* the canvas eyebrow         5.6:1 on canvas */
+  --canvas-chip-bg: rgba(255, 255, 255, .07);
+  --canvas-chip-line: #3a4d59;
   --backdrop: rgba(16, 24, 32, .46);
   --break-tint: #64748b;          /* neutral: breaks are not a track */
   /* The pipeline stage face: a translucent veil over the card ground rather
@@ -119,6 +129,11 @@ html[data-theme="night"] {
   --canvas: #0d0f11;
   --canvas-line: #262b30;
   --canvas-ink: #dbe3e8;
+  --canvas-ink-soft: #b3bfc7;     /* 8.4:1 on canvas */
+  --canvas-muted: #8b979f;        /* 5.3:1 on canvas */
+  --canvas-eyebrow: #7cc0c6;      /* 7.1:1 on canvas */
+  --canvas-chip-bg: rgba(255, 255, 255, .06);
+  --canvas-chip-line: #333c43;
 
   --accent-hover: #5cc9d0;
   --on-accent: #062629;           /* 6.8:1 — dark ink on a lit key          */

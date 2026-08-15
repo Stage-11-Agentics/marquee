@@ -28,6 +28,7 @@ import { AgendaPage } from "../agenda/AgendaPage";
 import { ReviewerPage } from "../review/ReviewerPage";
 import { PortalPage } from "../portal/PortalPage";
 import { CoSpeakerPage } from "../portal/CoSpeakerPage";
+import { SponsorPortalPage } from "../portal/SponsorPortalPage";
 import { ProgramBoardPage } from "../board/ProgramBoardPage";
 import { CreateSubmissionPage } from "../submissions/CreateSubmissionPage";
 import { SubmissionRecordPage } from "../submissions/SubmissionRecordPage";
@@ -65,7 +66,9 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   // The portal and the co-speaker page already answer their own 401 in their own
   // chrome; raising a second wall over theirs would be two answers to one
   // question. Public pages and the claim pages never mount this shell at all.
-  const wallAllowed = location.pathname !== "/portal" && location.pathname !== "/co-speaker";
+  const wallAllowed = location.pathname !== "/portal"
+    && location.pathname !== "/sponsor-portal"
+    && location.pathname !== "/co-speaker";
   const [sessionEnded, setSessionEnded] = useState(false);
   useEffect(() => onUnauthenticated(() => { if (wallAllowed) setSessionEnded(true); }), [wallAllowed]);
   // Sticky for the session: six failing panels raise one wall, not six.
@@ -126,7 +129,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   }, []);
 
   useEffect(() => {
-    const isNonAdminShell = location.pathname === "/portal" || location.pathname === "/reviewer" || location.pathname === "/reviewer/queue" || location.pathname === "/co-speaker";
+    const isNonAdminShell = location.pathname === "/portal" || location.pathname === "/sponsor-portal" || location.pathname === "/reviewer" || location.pathname === "/reviewer/queue" || location.pathname === "/co-speaker";
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const isTextControl = target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
@@ -186,6 +189,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
     {wall}
   </>;
   if (location.pathname === "/portal") return <PortalPage />;
+  if (location.pathname === "/sponsor-portal") return <SponsorPortalPage />;
   if (location.pathname === "/co-speaker") return <CoSpeakerPage />;
   // The review queue is answered before the layout is drawn, which is exactly
   // why the conference context is mounted above this component rather than

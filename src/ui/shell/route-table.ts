@@ -134,6 +134,12 @@ export const routeTable: readonly RouteDefinition[] = [
   // leaves the admin shell, and it belongs before the label rather than after it.
   { id: "event-site", path: "/agenda", label: "Conference site", icon: "↗", group: "public-links", sidebar: true, external: true },
   { id: "portal", path: "/portal", label: "Speaker portal", icon: "↗", group: "public-links", sidebar: true, external: true },
+  // The sponsor portal is a real route with no sidebar row. An organizer holds no
+  // sponsorship, so a permanent row would be a permanent door onto an honest
+  // "you have no sponsorship here" — a dead end in the nav rather than a
+  // capability. Sponsor contacts arrive by magic link, which is the only door
+  // that means anything for them.
+  { id: "sponsor-portal", path: "/sponsor-portal", label: "Sponsor portal", icon: "↗", group: "utility" },
   // Server-rendered outside the admin shell (`embed.route.tsx`), and `app.tsx`
   // treats every `/embed/` path as a public page — so this must navigate for
   // real. A client-side push would land the shell on a route it does not render

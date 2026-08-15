@@ -267,10 +267,25 @@ export interface TaskRowProps {
    * and the line does not render.
    */
   ownerLabel?: string | null;
+  /**
+   * Expansion, when a second surface needs to open this row.
+   *
+   * Uncontrolled by default — the speaker portal opens rows by clicking them and
+   * passes neither prop. The sponsor portal passes both, because a Session card's
+   * "Name your speaker" has to open the deliverable that fills it: two controls
+   * for one act, and only one place holding whether it is open.
+   */
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
-export function TaskRow({ task, renderSurface, renderPayloadExtras, ownerLabel }: TaskRowProps): JSX.Element {
-  const [expanded, setExpanded] = useState(false);
+export function TaskRow({ task, renderSurface, renderPayloadExtras, ownerLabel, expanded: controlledExpanded, onExpandedChange }: TaskRowProps): JSX.Element {
+  const [uncontrolledExpanded, setUncontrolledExpanded] = useState(false);
+  const expanded = controlledExpanded ?? uncontrolledExpanded;
+  const setExpanded = (next: boolean) => {
+    if (controlledExpanded === undefined) setUncontrolledExpanded(next);
+    onExpandedChange?.(next);
+  };
   const versions = versionListFor(task);
   // Whether this row is waiting on somebody is said three ways at once — the
   // mark, a named flag in the meta line, and the weight of the button — because
@@ -282,7 +297,7 @@ export function TaskRow({ task, renderSurface, renderPayloadExtras, ownerLabel }
   // owner label rather than sitting beside it: the useful fact about a finished
   // deliverable is who finished it, not who it was handed to.
   const attribution = done && task.completed_by ? `completed by ${task.completed_by.name}` : null;
-  return <article class={`portal-task-row is-${state} ${expanded ? "is-expanded" : ""}`}>
+  return <article class={`portal-task-row is-${state} ${expanded ? "is-expanded" : ""}`} id={`deliverable-${task.id}`}>
     <span class={`portal-task-mark ${state}`} aria-label={flagCopy}>{done ? "✓" : task.overdue ? "!" : "●"}</span>
     <div>
       <h3 class="portal-task-title" title={task.title}>{task.title}</h3>
@@ -296,7 +311,7 @@ export function TaskRow({ task, renderSurface, renderPayloadExtras, ownerLabel }
           file the conference is holding. */}
       {versions ? <div class="portal-task-file"><FileVersions list={versions} compact /></div> : null}
     </div>
-    <button class={`portal-task-action${done ? "" : " primary"}`} type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>{done ? (expanded ? "Close" : "View") : (expanded ? "Close" : "Complete")}</button>
+    <button class={`portal-task-action${done ? "" : " primary"}`} type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{done ? (expanded ? "Close" : "View") : (expanded ? "Close" : "Complete")}</button>
     {expanded ? <div class="portal-task-payload">
       {versions ? <div class="portal-task-versions"><FileVersions list={versions} /></div> : null}
       {renderSurface(task)}
