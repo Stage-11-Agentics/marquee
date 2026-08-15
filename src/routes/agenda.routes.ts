@@ -9,6 +9,7 @@ import {
 } from "../api/agenda";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { auditStatementFromSelect } from "../lib/audit";
+import { purgePublicEmbedCache } from "../lib/public-site";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
@@ -312,6 +313,7 @@ const batchPublishRoute = defineApiRoute(
     if (publishedCount !== submissionIds.length || submissionChanges !== submissionIds.length) {
       throw ApiError.conflict("the selected Sessions changed while publishing; refresh the agenda before trying again");
     }
+    await purgePublicEmbedCache(context.env.CACHE, { eventId });
     const publication = await readAgendaPublication(database, eventId, current.event.slug);
     return context.json({
       published_count: publishedCount,

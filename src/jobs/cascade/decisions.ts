@@ -6,6 +6,7 @@ import { auditStatement, writeAudit as writeAuditRow, type AuditEntry } from "..
 import type { Decision, Id } from "../../db/schema";
 import { sha256Hex } from "../../lib/auth/random-token";
 import { acceptedSpeakerMembershipStatements } from "../../lib/speaker-membership";
+import { purgePublicEmbedCache, type PublicEmbedCache } from "../../lib/public-site";
 import { cancelCalendarInvites } from "../calendar/invites";
 import { enqueueMailMessage } from "../mail/consumer";
 import { enqueueTrigger } from "../mail/triggers";
@@ -73,6 +74,7 @@ export type AcceptanceReversalChoice = "cancel" | "retain";
 
 export interface AcceptanceReversalInput {
   calendar: AcceptanceReversalChoice;
+  cache: PublicEmbedCache | undefined;
   db: D1Database;
   emails: AcceptanceReversalChoice;
   eventId: Id;
@@ -970,6 +972,7 @@ export async function writeAcceptanceReversal(
     .prepare("DELETE FROM agenda_items WHERE event_id = ? AND submission_id = ?")
     .bind(input.eventId, submission.id)
     .run();
+  await purgePublicEmbedCache(input.cache, { eventId: input.eventId });
 
   if (input.outcome === "rejected") {
     await insertDecisions(input.db, input.eventId, [{
