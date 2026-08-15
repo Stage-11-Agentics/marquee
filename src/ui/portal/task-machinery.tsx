@@ -293,6 +293,7 @@ export function TaskRow({ task, renderSurface, renderPayloadExtras, ownerLabel, 
   const done = task.status === "done";
   const state = done ? "done" : task.overdue ? "overdue" : "open";
   const flagCopy = done ? "Complete" : task.overdue ? "Overdue · action needed" : "Action needed";
+  const actionLabel = expanded ? "Close" : done ? "View" : "Finish now";
   // Attribution, once the work is done and we know who did it. It replaces the
   // owner label rather than sitting beside it: the useful fact about a finished
   // deliverable is who finished it, not who it was handed to.
@@ -311,7 +312,15 @@ export function TaskRow({ task, renderSurface, renderPayloadExtras, ownerLabel, 
           file the conference is holding. */}
       {versions ? <div class="portal-task-file"><FileVersions list={versions} compact /></div> : null}
     </div>
-    <button class={`portal-task-action${done ? "" : " primary"}`} type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{done ? (expanded ? "Close" : "View") : (expanded ? "Close" : "Complete")}</button>
+    {/* "Finish now", not "Complete": this row already says "Complete" as a
+        status on the done rows above and below it, and a button wearing the
+        same word reads as a badge announcing the task is finished rather than
+        an instruction to go finish it. The button says what pressing it leads
+        you to do.
+        The label repeats down the list, so the accessible name carries the task
+        title: a speaker tabbing four open deliverables hears four buttons, and
+        the visible word alone cannot tell them apart. */}
+    <button class={`portal-task-action${done ? "" : " primary"}`} type="button" aria-expanded={expanded} aria-label={`${actionLabel} — ${task.title}`} onClick={() => setExpanded(!expanded)}>{actionLabel}</button>
     {expanded ? <div class="portal-task-payload">
       {versions ? <div class="portal-task-versions"><FileVersions list={versions} /></div> : null}
       {renderSurface(task)}
