@@ -506,6 +506,42 @@ test("CONTRACT · MRQ-131 · CRM-11 · a bulk send from People is logged per rec
   expect(preview.text).toContain("Priya");
 });
 
+test("CONTRACT · MRQ-226 · an org nudge retries by compose id but a new nudge sends again", async () => {
+  const body = {
+    person_ids: [SPEAKER],
+    subject: "MRQ-226 nudge",
+    body: "A fresh note for {{speaker.first_name}}",
+  };
+  const first = await request("/api/v1/org/comms/send", {
+    method: "POST",
+    headers: { "content-type": "application/json", "Idempotency-Key": "mrq226-org-compose-1" },
+    body: JSON.stringify(body),
+  });
+  expect(first.status).toBe(202);
+  expect(await first.json()).toMatchObject({ selected: 1, queued: 1, duplicate: 0 });
+
+  const retry = await request("/api/v1/org/comms/send", {
+    method: "POST",
+    headers: { "content-type": "application/json", "Idempotency-Key": "mrq226-org-compose-1" },
+    body: JSON.stringify(body),
+  });
+  expect(retry.status).toBe(202);
+  expect(await retry.json()).toMatchObject({ selected: 1, queued: 0, duplicate: 1 });
+
+  const newNudge = await request("/api/v1/org/comms/send", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  expect(newNudge.status).toBe(202);
+  expect(await newNudge.json()).toMatchObject({ selected: 1, queued: 1, duplicate: 0 });
+
+  const rows = await env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE subject = 'MRQ-226 nudge' AND person_id = ?")
+    .bind(SPEAKER)
+    .first<{ total: number }>();
+  expect(rows?.total).toBe(2);
+});
+
 test("CONTRACT · MRQ-131 · CRM-05 · a CSV import creates, updates, and reports what it could not map", async () => {
   const csv = [
     "Full Name,Email Address,Company,Job Title,Twitter",

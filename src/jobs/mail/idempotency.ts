@@ -76,4 +76,11 @@ export const IDEMPOTENCY_REGISTRY = Object.freeze({
 
   /** Ad-hoc send: preserve the recipient business entity for timeline joins. */
   customRecipient: (recipientId: Id): EntityId => entityId(recipientId),
+
+  /**
+   * Ad-hoc send idempotency seed: one durable compose id per recipient. The
+   * outbox row still stores customRecipient so consumer audit joins retain the
+   * recipient's business entity; this seed is used only for the hash.
+   */
+  customSend: (sendId: Id, recipientId: Id): EntityId => entityId(`custom:${sendId}:${recipientId}`),
 });

@@ -48,4 +48,12 @@ describe("outbox idempotency registry", () => {
     expect(second).toBe("submission-1:request-2");
     expect(second).not.toBe(first);
   });
+
+  test("Bug B · a custom send seed separates new composes without changing the row entity", () => {
+    expect(IDEMPOTENCY_REGISTRY.customSend("compose-1", "submission-1")).toBe("custom:compose-1:submission-1");
+    expect(IDEMPOTENCY_REGISTRY.customSend("compose-2", "submission-1")).not.toBe(
+      IDEMPOTENCY_REGISTRY.customSend("compose-1", "submission-1"),
+    );
+    expect(IDEMPOTENCY_REGISTRY.customRecipient("submission-1")).toBe("submission-1");
+  });
 });

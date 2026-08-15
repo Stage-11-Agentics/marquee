@@ -326,7 +326,11 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
       subject: "Hello {{speaker.first_name}}",
       body: "Hi {{speaker.first_name}},\n\n{{submission.title}}",
     };
-    const first = await request(`/api/v1/events/${EVENT_ID}/comms/send`, { method: "POST", body: JSON.stringify(body) }, ownerCookie);
+    const first = await request(`/api/v1/events/${EVENT_ID}/comms/send`, {
+      method: "POST",
+      headers: { "Idempotency-Key": "mrq226-compose-1" },
+      body: JSON.stringify(body),
+    }, ownerCookie);
     expect(first.status).toBe(202);
     expect(await first.json()).toMatchObject({ selected: 1, queued: 1, duplicate: 0, outbox_rows: [expect.objectContaining({ entity_id: SUB_SINGLE, person_id: SPEAKER_ID, inserted: true })] });
     const message = await env.DB.prepare(
@@ -346,13 +350,26 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
     expect(auditRequestId).toBeTruthy();
     expect(audit?.request_id).toBe(auditRequestId);
 
-    const repeated = await request(`/api/v1/events/${EVENT_ID}/comms/send`, { method: "POST", body: JSON.stringify(body) }, ownerCookie);
+    const repeated = await request(`/api/v1/events/${EVENT_ID}/comms/send`, {
+      method: "POST",
+      headers: { "Idempotency-Key": "mrq226-compose-1" },
+      body: JSON.stringify(body),
+    }, ownerCookie);
     expect(repeated.status).toBe(202);
     expect(await repeated.json()).toMatchObject({ selected: 1, queued: 0, duplicate: 1 });
+
+    // The same compose can be retried with its durable key, while a new
+    // nudge with no key is a new send even when the recipient and copy match.
+    const newNudge = await request(`/api/v1/events/${EVENT_ID}/comms/send`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }, ownerCookie);
+    expect(newNudge.status).toBe(202);
+    expect(await newNudge.json()).toMatchObject({ selected: 1, queued: 1, duplicate: 0 });
     const messageCount = await env.DB.prepare(
       "SELECT COUNT(*) AS total FROM outbox WHERE event_id = ? AND template_key = 'custom' AND entity_id = ? AND person_id = ?",
     ).bind(EVENT_ID, SUB_SINGLE, SPEAKER_ID).first<{ total: number }>();
-    expect(messageCount?.total).toBe(1);
+    expect(messageCount?.total).toBe(2);
 
     const empty = await request(`/api/v1/events/${EVENT_ID}/comms/send`, {
       method: "POST",
@@ -363,7 +380,7 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
     const afterEmpty = await env.DB.prepare(
       "SELECT COUNT(*) AS total FROM outbox WHERE event_id = ? AND template_key = 'custom' AND entity_id = ?",
     ).bind(EVENT_ID, SUB_SINGLE).first<{ total: number }>();
-    expect(afterEmpty?.total).toBe(1);
+    expect(afterEmpty?.total).toBe(2);
   });
 
   test("AC-261 · place merge fields render through preview, while unknown fields block delivery", async () => {

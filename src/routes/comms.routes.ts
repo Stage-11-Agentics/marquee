@@ -867,6 +867,7 @@ const sendComms = defineApiRoute(
     path: "/api/v1/events/{eventId}/comms/send",
     operationId: "sendCommunication",
     summary: "Queue a templated or ad-hoc communication",
+    description: "Ad-hoc sends accept Idempotency-Key for retries of one compose; omitting it makes each request a new nudge.",
     tags: ["Comms"],
     request: {
       params: eventParams,
@@ -900,6 +901,7 @@ const sendComms = defineApiRoute(
       db: context.env.DB,
       eventId,
       templateKey: (body.template_key ?? "custom") as MailTemplateKey,
+      sendId: hasAdHoc ? (context.req.header("Idempotency-Key")?.trim() || crypto.randomUUID()) : undefined,
       recipients: recipients.map((recipient) => ({ entityId: IDEMPOTENCY_REGISTRY.customRecipient(recipient.submission_id ?? recipient.person_id), personId: recipient.person_id, toEmail: recipient.email, data: mergeDataFor(recipient) })),
       subject: body.subject,
       body: body.body,

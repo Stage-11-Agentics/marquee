@@ -2,7 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import type { Id } from "../../db/schema";
 import { IDEMPOTENCY_REGISTRY, type EntityId } from "./idempotency";
-import { enqueueOutbox, type EnqueuedOutbox } from "./outbox";
+import { buildIdempotencyKey, enqueueOutbox, type EnqueuedOutbox } from "./outbox";
 import { selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "./schedule";
 import { findTemplate, TRIGGER_TEMPLATE_KEYS, type MailTemplateKey } from "./templates";
 import type { MergeData } from "./render";
@@ -44,6 +44,8 @@ export async function enqueueBulkReminder(input: {
   }>;
   subject?: string;
   body?: string;
+  /** Stable across retries of one compose; absent means this is a new send. */
+  sendId?: Id;
   now?: number;
 }): Promise<EnqueuedOutbox[]> {
   const templateKey = input.templateKey ?? "reminder_generic";
@@ -62,6 +64,13 @@ export async function enqueueBulkReminder(input: {
         data: recipient.data,
         subject: input.subject,
         body: input.body,
+        idempotencyKey: input.sendId === undefined
+          ? undefined
+          : await buildIdempotencyKey(
+            templateKey,
+            IDEMPOTENCY_REGISTRY.customSend(input.sendId, recipient.entityId),
+            recipient.personId,
+          ),
         now: input.now,
       }),
     );

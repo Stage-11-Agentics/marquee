@@ -209,6 +209,7 @@ const sendOrgMail = defineApiRoute(
       eventId,
       // Same ad-hoc key the conference-scoped send uses for a typed message.
       templateKey: "custom" as MailTemplateKey,
+      sendId: context.req.header("Idempotency-Key")?.trim() || crypto.randomUUID(),
       recipients: audience.people.map((person) => ({
         entityId: IDEMPOTENCY_REGISTRY.customRecipient(person.id),
         personId: person.id,
