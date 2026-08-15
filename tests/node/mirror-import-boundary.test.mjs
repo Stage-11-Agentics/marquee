@@ -23,7 +23,7 @@ async function runChecker() {
   }
 }
 
-test("the mirror transport import boundary has teeth", async () => {
+test("CONTRACT · the mirror transport import boundary has teeth", async () => {
   await writeFile(
     badImport,
     'import { createFetchAirtableTransport } from "./jobs/mirror/transport";\nvoid createFetchAirtableTransport;\n',

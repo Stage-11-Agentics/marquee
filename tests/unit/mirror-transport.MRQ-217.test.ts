@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 
 import { createFetchAirtableTransport } from "../../src/jobs/mirror/transport";
 
-test("MRQ-217 · fetch transport sends the documented upsert contract", async () => {
+test("CONTRACT · fetch transport sends the documented upsert contract", async () => {
   const requests: Array<{ url: string; init: RequestInit }> = [];
   const transport = createFetchAirtableTransport({
     apiKey: "pat_mrq217",
@@ -33,7 +33,7 @@ test("MRQ-217 · fetch transport sends the documented upsert contract", async ()
   });
 });
 
-test("MRQ-217 · fetch transport resolves Airtable ids before deleting mirrored rows", async () => {
+test("CONTRACT · fetch transport resolves Airtable ids before deleting mirrored rows", async () => {
   const requests: Array<{ url: string; init: RequestInit }> = [];
   const transport = createFetchAirtableTransport({
     apiKey: "pat_mrq217",

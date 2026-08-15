@@ -145,7 +145,6 @@ async function sendBatch(
   env: MirrorConsumerEnvironment,
   rows: readonly ClaimedMirrorRow[],
   transport: AirtableTransport,
-  limiter: MirrorTokenBucket,
   now: number,
 ): Promise<void> {
   const tableGroups = new Map<MirroredTable, ClaimedMirrorRow[]>();
@@ -214,7 +213,7 @@ export async function drainMirrorOutbox(
     ? rateLimitedTransport(options.transport, limiter)
     : createFetchAirtableTransport({ apiKey: config.apiKey, baseId: config.baseId, beforeRequest: () => limiter.take() });
   try {
-    await sendBatch(db, env, claimed, transport, limiter, now);
+    await sendBatch(db, env, claimed, transport, now);
   } catch (error) {
     await markFailed(db, claimed, error, clock.now());
     throw error;
@@ -249,7 +248,6 @@ export async function reconcileMirror(
       const current = await Promise.all(idsChunk.map((id) => currentAirtableRecord({ DB: db, mirror: config }, tableName, id)));
       const recordsChunk = current.filter((record): record is NonNullable<typeof record> => record !== null);
       if (recordsChunk.length === 0) continue;
-      await limiter.take();
       await transport.patchRecords({ tableId: airtableTableId, records: recordsChunk });
       requests += 1;
       records += recordsChunk.length;
@@ -268,20 +266,25 @@ export async function processMirrorQueue(
 ): Promise<{ outbox: number; reconcile: number }> {
   const messages = batch.messages.filter((message): message is typeof message & { body: MirrorQueueMessage } => isMirrorMessage(message.body));
   if (messages.length === 0) return { outbox: 0, reconcile: 0 };
-  if (!mirrorConfig(env)) return { outbox: 0, reconcile: 0 };
+  if (!mirrorConfig(env)) {
+    await clearMirrorOutbox(env.DB);
+    return { outbox: 0, reconcile: 0 };
+  }
   const outboxIds = messages
     .map((message) => message.body)
     .filter((body): body is Extract<MirrorQueueMessage, { type: typeof MIRROR_OUTBOX_MESSAGE_TYPE }> => body.type === MIRROR_OUTBOX_MESSAGE_TYPE)
     .map((body) => body.outbox_id);
   const reconcileCount = messages.filter((message) => message.body.type === MIRROR_RECONCILE_MESSAGE_TYPE).length;
+  const sharedLimiter = options.limiter ?? new MirrorTokenBucket(clockFor(options));
+  const sharedOptions = { ...options, limiter: sharedLimiter };
   const transport = options.transport;
   let outbox = 0;
   if (outboxIds.length > 0) {
-    outbox = (await drainMirrorOutbox(env.DB, env, outboxIds, { ...options, transport })).drained;
+    outbox = (await drainMirrorOutbox(env.DB, env, outboxIds, { ...sharedOptions, transport })).drained;
   }
   let reconcile = 0;
   if (reconcileCount > 0) {
-    reconcile = (await reconcileMirror(env.DB, env, { ...options, transport })).records;
+    reconcile = (await reconcileMirror(env.DB, env, { ...sharedOptions, transport })).records;
   }
   return { outbox, reconcile };
 }

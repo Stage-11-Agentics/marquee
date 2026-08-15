@@ -355,7 +355,7 @@ test("AC-230 · reset-demo restores the full seeded baseline from dirty state, s
   await assertBothDemoLogins();
 });
 
-test("MRQ-217 · reset-demo suppresses row feed and emits one reconcile with a configured mirror", async () => {
+test("CONTRACT · reset-demo suppresses row feed and emits one reconcile with a configured mirror", async () => {
   await reseedDemo(env.DB, NOW, env.MEDIA);
   await env.DB.batch([
     env.DB.prepare(

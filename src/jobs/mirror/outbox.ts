@@ -3,6 +3,7 @@ import type { D1Database, D1PreparedStatement, Queue } from "@cloudflare/workers
 import type { MirrorOutboxRow } from "../../db/schema";
 import { mirrorConfig, type MirrorEnvironment } from "./config";
 import { MIRROR_OUTBOX_MESSAGE_TYPE, type MirrorOutboxMessage } from "./messages";
+import { MIRRORED_TABLES } from "./records";
 
 export const MIRROR_SUPPRESSION_TABLE = "__mirror_suppressed__";
 const SUPPRESSION_ROW_ID = "__mirror_suppression__";
@@ -68,7 +69,12 @@ export async function dispatchPendingMirrorMessages(
 }
 
 export async function clearMirrorOutbox(db: D1Database): Promise<void> {
-  await db.prepare("DELETE FROM mirror_outbox WHERE drained_at IS NULL").run();
+  const placeholders = MIRRORED_TABLES.map(() => "?").join(",");
+  await db.prepare(
+    `DELETE FROM mirror_outbox
+      WHERE drained_at IS NULL
+        AND table_name IN (${placeholders})`,
+  ).bind(...MIRRORED_TABLES).run();
 }
 
 export function parseMirrorOutboxPayload(row: MirrorOutboxRow): { marquee_id?: string } {

@@ -114,7 +114,8 @@ app.use("*", async (context, next) => {
   // The D1 trigger is the after-write hook. Queue dispatch is deliberately
   // post-response and non-fatal: a committed local write remains committed if
   // Queue is temporarily unavailable, and the outbox is still the recovery
-  // record. With no key/base this path returns before touching D1 or Queue.
+  // record. With no key/base this path clears any stale local feed work and
+  // returns without touching the provider or Queue.
   const dispatch = dispatchPendingMirrorMessages(
     context.env,
     resolveRequestId(context.req.raw),

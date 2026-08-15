@@ -115,7 +115,7 @@ beforeEach(async () => {
   await clearMirrorFixture();
 });
 
-test("MRQ-217 · local writes feed exactly submissions, speaker_tasks, and people, with echo suppression", async () => {
+test("AC-227 · local writes feed exactly submissions, speaker_tasks, and people, with echo suppression", async () => {
   await configureMirror(["people", "submissions", "speaker_tasks"]);
   await seedCore();
 
@@ -151,7 +151,7 @@ test("MRQ-217 · local writes feed exactly submissions, speaker_tasks, and peopl
   });
 });
 
-test("MRQ-217 · fake call log proves 10-record upsert batches, merge key, and <=4 requests/sec", async () => {
+test("AC-225 · fake call log proves 10-record upsert batches, merge key, and <=4 requests/sec", async () => {
   await configureMirror(["submissions"]);
   await seedCore(25, false);
 
@@ -195,7 +195,7 @@ test("MRQ-217 · fake call log proves 10-record upsert batches, merge key, and <
   expect(Number(drained?.count)).toBe(25);
 });
 
-test("MRQ-217 · missing credentials discard stale feed work and the consumer stays a no-op", async () => {
+test("CONTRACT · missing credentials discard stale feed work and the consumer stays a no-op", async () => {
   await configureMirror(["submissions"]);
   await seedCore(1, false);
   expect(await outboxRows()).toHaveLength(1);
