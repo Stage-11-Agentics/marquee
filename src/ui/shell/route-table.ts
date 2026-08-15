@@ -84,10 +84,9 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "people-crm", path: "/crm", label: "People CRM", icon: "", group: "utility" },
   { id: "people-directory", path: "/directory", label: "People CRM", icon: "", group: "utility" },
   { id: "people-contacts", path: "/contacts", label: "People CRM", icon: "", group: "utility" },
-  // Sibling-owned organization destinations: route contracts only, with no
-  // local shell mount until their owning tickets deliver the screens.
+  // Organization destinations without their own sidebar rows: the shell mounts
+  // them from the shared organization surface or the canonical activity page.
   { id: "org-organizers", path: ORG_HOME_ORGANIZERS_HREF, label: "Organizers", icon: "", group: "utility" },
-  { id: "org-activity", path: ORG_HOME_ACTIVITY_HREF, label: "Organization activity", icon: "", group: "utility" },
   // "Program pipeline" agrees with the page's own title. The brand mark is
   // still the way home.
   { id: "dashboard", path: "/dashboard", label: "Program pipeline", icon: "", group: "conference", sidebar: true },
