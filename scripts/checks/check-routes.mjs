@@ -42,6 +42,9 @@ import { REPOSITORY_ROOT, emit, parseArguments } from "./lib/command.mjs";
  * `.tsx` for a relative specifier that has no extension and does not resolve. It
  * changes nothing about how the bundler reads the same files.
  */
+// Durable fix: emit the route table as a build artifact and have Node tooling
+// consume that JSON. The Vite/build seam is outside this narrow tooling change,
+// so it remains deferred while this check uses the smallest local resolver.
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (!specifier.startsWith(".") || /\.[cm]?[jt]sx?$/.test(specifier)) return nextResolve(specifier, context);
