@@ -2,7 +2,7 @@
   "agent_type": "intake",
   "base_name": "Airtable-Intake",
   "framework": "claude-code",
-  "last_active": "2026-08-15T05:14:28Z",
+  "last_active": "2026-08-15T08:31:57Z",
   "model": "claude-opus-5",
   "name": "Airtable-Intake-1",
   "parent": "human:atin",

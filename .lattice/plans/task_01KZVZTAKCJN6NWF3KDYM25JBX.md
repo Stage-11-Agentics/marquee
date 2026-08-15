@@ -32,3 +32,5 @@ VERIFY. Place a session at :15 and at :45; both persist across reload and render
    buttons, and the visual board. Preserve exact `starts_at` rendering for sessions at odd
    minutes independent of the selected snap setting, then run the local gate and the required
    real-browser 15/30/5 placement/reload screenshots before opening the MRQ-157 PR.
+
+## Reset 2026-08-15 by {'name': 'Airtable-Intake-1', 'base_name': 'Airtable-Intake', 'serial': 1, 'session': 'sess_01M01XCG6Z5TYTQTA1ND1JB7VW', 'model': 'claude-opus-5', 'framework': 'claude-code', 'agent_type': 'intake'}

@@ -1,7 +1,7 @@
 {
   "assigned_to": "agent:codex-v2-8",
   "branch_links": [],
-  "comment_count": 5,
+  "comment_count": 6,
   "complexity": null,
   "created_at": "2026-08-12T21:59:51Z",
   "created_by": "agent:findings-triage",
@@ -16,18 +16,18 @@
     }
   ],
   "id": "task_01KZVZTAKCJN6NWF3KDYM25JBX",
-  "last_event_id": "ev_01KZW16MZDPQ7TD7ZMV4P8C0EH",
-  "last_status_changed_at": "2026-08-12T22:03:42Z",
+  "last_event_id": "ev_01M028P5TZRSSZTJ4D6MRBKZDD",
+  "last_status_changed_at": "2026-08-15T08:30:19Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
-  "reopened_count": 0,
+  "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-157",
-  "status": "in_progress",
+  "status": "backlog",
   "tags": null,
   "title": "V2-8: agenda grid placement at 15-minute increments",
   "type": "task",
-  "updated_at": "2026-08-12T22:24:04Z",
+  "updated_at": "2026-08-15T08:30:19Z",
   "urgency": null
 }

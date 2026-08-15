@@ -15,7 +15,7 @@
   },
   "custom_fields": {},
   "description": "Fold the Organization settings design (prototype v1.15 iteration 3, rulings O1-O8) into the build, per sequence/org-settings-design.md \u2014 especially its 'Build implications' section, which is this ticket's scope list: organizations gains profile/default columns (default timezone, default theme, comms defaults, branding assets); POST /api/v1/org/invites gains role and event_id scope, exchange creates the membership with both, plus a short-code form of the one-time link; organizer removal extends the Amendment-19 in-transaction revocation to consume unexpired login links and revoke the member's created_by tokens in the same transaction; readTheme() falls back to the org default (per-user choice still wins); new person-record routes for remove-from-conference cascade (participations ended, reconcileTaskSet, event access revoked; published sessions untouched per O5a) and portal-access revocation; token move to /org/tokens is UI-only. Invite-only stands \u2014 no join-request queue. Contract fold (SPEC/USER_STORIES/AC mint) is part of this ticket, cold-start MRQ-105 style. Design contract: prototypes/pipeline-v1.1 org tabs (v1.15) + sequence/org-settings-design.md.",
-  "done_at": null,
+  "done_at": "2026-08-15T08:30:09Z",
   "evidence_refs": [
     {
       "id": "art_01M00ZSETK39GZFRQ125Z8JJ2Q",
@@ -34,15 +34,15 @@
     }
   ],
   "id": "task_01M00Y3WPXYJ5Z5X9HKSQRNP3V",
-  "last_event_id": "ev_01M01DVY9AK50C7ESZF4F7M0WM",
-  "last_status_changed_at": "2026-08-14T23:50:26Z",
+  "last_event_id": "ev_01M028NW7B3TKS8EX9MK75RRE2",
+  "last_status_changed_at": "2026-08-15T08:30:09Z",
   "linked_files": [],
   "priority": "high",
   "relationships_out": [],
   "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-207",
-  "status": "in_progress",
+  "status": "done",
   "tags": [
     "org-settings",
     "design-fold",
@@ -50,6 +50,6 @@
   ],
   "title": "Organization settings fold: org surface, scoped invites, removal cascade, org defaults",
   "type": "task",
-  "updated_at": "2026-08-15T00:41:36Z",
+  "updated_at": "2026-08-15T08:30:09Z",
   "urgency": null
 }

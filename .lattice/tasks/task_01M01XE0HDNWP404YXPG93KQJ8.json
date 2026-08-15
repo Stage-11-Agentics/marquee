@@ -1,5 +1,5 @@
 {
-  "assigned_to": null,
+  "assigned_to": "agent:delegator-mrq-217",
   "branch_links": [],
   "comment_count": 0,
   "complexity": "high",
@@ -18,7 +18,7 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01M01XE0HDNWP404YXPG93KQJ8",
-  "last_event_id": "ev_01M01XE0HEX6E3M8Y1T31DPX6V",
+  "last_event_id": "ev_01M028S5VTM7E888QKH40778BS",
   "last_status_changed_at": "2026-08-15T05:13:37Z",
   "linked_files": [],
   "priority": "high",
@@ -30,6 +30,6 @@
   "tags": null,
   "title": "Airtable mirror \u2014 outbound: change feed, batched upserts, and the import boundary",
   "type": "task",
-  "updated_at": "2026-08-15T05:13:37Z",
+  "updated_at": "2026-08-15T08:31:57Z",
   "urgency": null
 }
