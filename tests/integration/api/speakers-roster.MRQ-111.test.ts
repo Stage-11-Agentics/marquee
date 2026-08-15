@@ -30,6 +30,8 @@ const ACCEPTED_SPEAKER = "per_mrq111_accepted";
 const DONE_SPEAKER = "per_mrq111_done";
 const REJECTED_PERSON = "per_mrq111_rejected";
 const MODERATOR_PERSON = "per_mrq111_moderator";
+const INVITED_PARTICIPATION_SPEAKER = "per_mrq215_invited_participation";
+const MEMBERSHIP_DECLINED_SPEAKER = "per_mrq215_membership_declined";
 const READD_SPEAKER = "per_mrq176_readd";
 const SUBMITTED_ID = "sub_mrq111_pending";
 const SHELL = `<!doctype html><html><head><title>Marquee</title></head><body><div id="app"></div></body></html>`;
@@ -220,8 +222,21 @@ test("CONTRACT · MRQ-111 · SPK-04 · a status override persists, writes throug
 test("CONTRACT · MRQ-215 · speaker badges, status tabs, and counts cannot disagree", async () => {
   // Exercise every precedence branch through the real API projection: a
   // participation decline outranks a membership override, all sessions being
-  // confirmed is Confirmed, an invitation makes pending work Invited, and a
-  // session-less membership still supplies its organizer status.
+  // confirmed is Confirmed, a participation invitation makes pending work
+  // Invited, and session-less memberships supply their own organizer status.
+  await env.DB.batch([
+    person(INVITED_PARTICIPATION_SPEAKER, "Invited Participation", "invited-participation@example.com"),
+    person(MEMBERSHIP_DECLINED_SPEAKER, "Membership Declined", "membership-declined@example.com"),
+  ]);
+  await env.DB.batch([
+    participation("par_mrq215_invited", "sub_mrq111_accepted", INVITED_PARTICIPATION_SPEAKER, "speaker"),
+    env.DB.prepare(
+      `INSERT INTO memberships
+         (id, org_id, event_id, person_id, role, confirmation_status, confirmed_at, invited_at, created_at, updated_at)
+       VALUES ('mem_mrq215_membership_declined', ?, ?, ?, 'speaker', 'declined', NULL, NULL, ?, ?)`,
+    ).bind(ORG_ID, EVENT_ID, MEMBERSHIP_DECLINED_SPEAKER, NOW, NOW),
+  ]);
+  await env.DB.prepare("UPDATE participations SET invited_at = ? WHERE id = 'par_mrq215_invited'").bind(NOW).run();
   await env.DB.batch([
     env.DB.prepare("UPDATE participations SET confirmation_status = 'confirmed', invited_at = ? WHERE id = 'par_mrq111_accepted'").bind(NOW),
     env.DB.prepare(
@@ -257,12 +272,14 @@ test("CONTRACT · MRQ-215 · speaker badges, status tabs, and counts cannot disa
     { id: ACCEPTED_SPEAKER, status: "confirmed" },
     { id: DONE_SPEAKER, status: "pending" },
     { id: MODERATOR_PERSON, status: "declined" },
+    { id: INVITED_PARTICIPATION_SPEAKER, status: "invited" },
+    { id: MEMBERSHIP_DECLINED_SPEAKER, status: "declined" },
     { id: invitedSpeaker.id, status: "invited" },
     { id: confirmedSpeaker.id, status: "confirmed" },
   ];
-  expect(all.data).toHaveLength(5);
+  expect(all.data).toHaveLength(7);
   expect(all.data).toEqual(expect.arrayContaining(expectedRows.map((row) => expect.objectContaining(row))));
-  expect(all.counts).toEqual({ all: 5, pending: 1, invited: 1, confirmed: 2, declined: 1 });
+  expect(all.counts).toEqual({ all: 7, pending: 1, invited: 2, confirmed: 2, declined: 2 });
   for (const expected of expectedRows) {
     const detail = await request(`/api/v1/events/${EVENT_ID}/speakers/${expected.id}`);
     expect(detail.status).toBe(200);
