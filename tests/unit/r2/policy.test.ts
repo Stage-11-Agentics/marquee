@@ -112,6 +112,20 @@ test("AC-92 · chase ordering puts the most overdue owed work first and ignores 
   expect(compareOnboardingRows(row("per-clear", "Clear", 0, 0), row("per-clear-done", "Clear Done", 0, 0))).toBeLessThan(0);
 });
 
+test("CONTRACT · MRQ-215 · onboarding in-page order matches SQLite NOCASE for diacritics", () => {
+  const row = (id: string, name: string): Pick<OnboardingRow, "severity" | "risk_task_count" | "person"> => ({
+    severity: 0,
+    risk_task_count: 0,
+    person: { id, name, email: `${id}@example.com`, title: null, company: null, bio: null, headshot_attachment_id: null },
+  });
+
+  // SQLite's ASCII-only NOCASE puts the plain ASCII prefix before the
+  // non-ASCII name. localeCompare does the opposite on the Node/browser
+  // runtimes, which can split page membership from the displayed order.
+  expect(compareOnboardingRows(row("per-ascii", "Ana-with-accent"), row("per-diacritic", "Ána"))).toBeLessThan(0);
+  expect(compareOnboardingRows(row("per-diacritic", "Ána"), row("per-ascii", "Ana-with-accent"))).toBeGreaterThan(0);
+});
+
 test("CONTRACT · CNT-07 · the newest authored task column is visible first", () => {
   const templates: OnboardingTaskTemplate[] = [
     { id: "task-seeded", name: "Presentation upload", kind: "file", description: "", position: 0 },
