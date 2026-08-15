@@ -324,11 +324,12 @@ export interface PublicScheduleRow {
   code: string;
   created_at: EpochMilliseconds;
   /**
-   * The device that owns this code, when the site's own module created it.
-   * Null for an agent-built schedule — which is why the demand aggregate can
-   * count a code as one voice without double-counting the browser beside it.
+   * 1 when a browser created this code, so the demand aggregate counts that
+   * browser once through its beacons rather than twice. Deliberately a flag and
+   * not the device: sharing that value with `session_star_beacons` would join a
+   * verified claim to every anonymous star its owner ever placed.
    */
-  device_hash: string | null;
+  from_device: 0 | 1;
   event_id: Id;
   session_ids: JsonText<Id[]>;
   updated_at: EpochMilliseconds;

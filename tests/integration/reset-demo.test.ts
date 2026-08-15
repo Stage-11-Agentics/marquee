@@ -218,8 +218,8 @@ async function dirtyDemoState(): Promise<void> {
     // never be reset again, with a real email address in it. Asserting zero
     // afterwards proves nothing unless something is here to remove.
     env.DB.prepare(
-      "INSERT INTO public_schedules (code, event_id, session_ids, write_key_hash, device_hash, created_at, updated_at) VALUES (?, ?, ?, 'dirty-hash', ?, ?, ?)",
-    ).bind("MQ-DIRTYSCHEDULE", DEMO_EVENT_ID, JSON.stringify([unplaced!.id]), "d".repeat(32), NOW, NOW),
+      "INSERT INTO public_schedules (code, event_id, session_ids, write_key_hash, from_device, created_at, updated_at) VALUES (?, ?, ?, 'dirty-hash', 1, ?, ?)",
+    ).bind("MQ-DIRTYSCHEDULE", DEMO_EVENT_ID, JSON.stringify([unplaced!.id]), NOW, NOW),
     env.DB.prepare(
       "INSERT INTO session_star_beacons (event_id, session_id, device_hash, created_at) VALUES (?, ?, ?, ?)",
     ).bind(DEMO_EVENT_ID, unplaced!.id, "d".repeat(32), NOW),

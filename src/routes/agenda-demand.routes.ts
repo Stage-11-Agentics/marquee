@@ -18,6 +18,7 @@ import { z } from "@hono/zod-openapi";
 
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
+import { getAuth } from "../lib/auth/auth-middleware";
 import {
   demandStats,
   normalizeThreshold,
@@ -63,8 +64,31 @@ const settingsBody = z.object({
 
 const errors = errorResponses([400, 401, 403, 404, 422, 429, 500]);
 
-async function eventOrNotFound(database: D1Database, eventId: string): Promise<void> {
-  const row = await database.prepare("SELECT id FROM events WHERE id = ? LIMIT 1").bind(eventId).first<{ id: string }>();
+/**
+ * The organization comes from the credential and is bound into every statement
+ * below, not merely checked once in front of them.
+ *
+ * A session credential carries an org-wide role, so "is this caller an owner?"
+ * and "is this conference theirs?" are two different questions and only the
+ * second one keeps a neighbouring organization's demand private. Answering it
+ * with a precheck and then reading by id alone is the check-then-read shape
+ * that leaks under any race — so the id is narrowed here and the org is bound
+ * into the queries as well.
+ */
+function callerOrg(context: Parameters<typeof getAuth>[0]): string {
+  const auth = getAuth(context);
+  if (!auth) throw ApiError.unauthenticated();
+  if (!auth.orgId) throw ApiError.forbidden("this credential is not scoped to an organization");
+  return auth.orgId;
+}
+
+async function eventOfOrgOrNotFound(database: D1Database, eventId: string, orgId: string): Promise<void> {
+  const row = await database
+    .prepare("SELECT id FROM events WHERE id = ? AND org_id = ? LIMIT 1")
+    .bind(eventId, orgId)
+    .first<{ id: string }>();
+  // Not "forbidden": a conference belonging to somebody else should not be
+  // distinguishable from one that does not exist.
   if (!row) throw ApiError.notFound("conference not found");
 }
 
@@ -92,7 +116,8 @@ const readAgendaDemand = defineApiRoute(
   },
   async (context) => {
     const { eventId } = context.req.valid("param");
-    await eventOrNotFound(context.env.DB, eventId);
+    const orgId = callerOrg(context);
+    await eventOfOrgOrNotFound(context.env.DB, eventId, orgId);
 
     const published = await context.env.DB
       .prepare(
@@ -110,12 +135,14 @@ const readAgendaDemand = defineApiRoute(
            JOIN submissions submission
              ON submission.id = item.submission_id AND submission.event_id = item.event_id
            JOIN rooms room ON room.id = item.room_id AND room.event_id = item.event_id
+           JOIN events conference ON conference.id = item.event_id
           WHERE item.event_id = ?
+            AND conference.org_id = ?
             AND item.kind = 'session'
             AND item.is_published = 1
             AND submission.status NOT IN ('rejected', 'withdrawn')`,
       )
-      .bind(eventId)
+      .bind(eventId, orgId)
       .all<PublishedSessionRow>();
 
     const counts = await sessionDemandCounts(context.env.DB, eventId);
@@ -171,14 +198,18 @@ const updatePublicStarCounts = defineApiRoute(
   },
   async (context) => {
     const { eventId } = context.req.valid("param");
-    await eventOrNotFound(context.env.DB, eventId);
+    const orgId = callerOrg(context);
     const body = context.req.valid("json");
     const stored = await writePublicStarCountSetting(
       context.env.DB,
       eventId,
       { enabled: body.enabled, threshold: normalizeThreshold(body.threshold) },
       Date.now(),
+      // The write itself refuses a conference this organization does not own —
+      // the guard is inside the statement, not in front of it.
+      orgId,
     );
+    if (!stored) throw ApiError.notFound("conference not found");
     return context.json({ data: stored }, 200);
   },
 );

@@ -25,7 +25,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
 
   /* ── State ─────────────────────────────────────────────────────────── */
 
-  const emptyState = () => ({ v: 1, sessionIds: [], code: null, writeKey: null, feedToken: null });
+  const emptyState = () => ({ v: 1, sessionIds: [], code: null, writeKey: null, feedToken: null, adoptPending: false });
 
   function readState() {
     try {
@@ -38,6 +38,8 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         writeKey: typeof raw.writeKey === 'string' ? raw.writeKey : null,
         // The read-only handle that puts the owner's own talks in their feed.
         feedToken: typeof raw.feedToken === 'string' ? raw.feedToken : null,
+        // An adoption that has taken the code but not yet merged its sessions.
+        adoptPending: raw.adoptPending === true,
       };
     } catch { return emptyState(); }
   }
@@ -936,6 +938,10 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   let unpushed = false;
   function pushUpdate(delay = 700) {
     if (!state.code || !state.writeKey) return;
+    // The adopted code's own sessions are not in the starred set yet. Pushing
+    // now would replace them with this device's old set — the precise way a
+    // recovered schedule gets destroyed by the act of recovering it.
+    if (adoptPending()) return;
     clearTimeout(pushTimer);
     pushTimer = setTimeout(() => {
       fetch(SCHEDULES + '/' + encodeURIComponent(state.code), {
@@ -1108,11 +1114,17 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
    * nothing about who owns it, which is exactly what a shared link should see.
    */
   /**
-   * Set when a claim arrival adopted a code this device did not have. The
-   * owner read is the authoritative list and always follows the verify, so the
-   * union happens here rather than racing the shared-link fetch.
+   * Persisted, not just held in memory.
+   *
+   * The adoption is two writes — take the code, then union its sessions — and
+   * only the first is local. If the owner read that carries the second fails,
+   * an in-memory flag died with the tab and the NEXT star pushed this device's
+   * old set over the adopted code, destroying the picks the attendee had just
+   * recovered while the banner said both were kept. The intent lives in
+   * localStorage until it is actually carried out, so a reload finishes it and
+   * nothing is pushed before it does.
    */
-  let adoptOnOwnerRead = false;
+  const adoptPending = () => state.adoptPending === true;
 
   function loadOwnerState() {
     if (!state.code || !state.writeKey) return Promise.resolve();
@@ -1126,14 +1138,14 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
           state.feedToken = payload.feedToken;
           writeState();
         }
-        if (adoptOnOwnerRead) {
+        if (adoptPending()) {
           // Union, never replace: recovering a schedule must not delete a star
-          // this device already had. Only ever on the arrival that adopted it —
+          // this device already had. Only ever while the adoption is pending —
           // doing this on every read would resurrect a star just removed.
-          adoptOnOwnerRead = false;
           const before = starred.size;
           for (const session of payload.sessions ?? []) starred.add(session.id);
           state.sessionIds = [...starred];
+          state.adoptPending = false;
           writeState();
           if (starred.size !== before) pushUpdate(0);
         }
@@ -1150,21 +1162,27 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
    * conferences (demo mode) send no site key and mount nothing.
    */
   let turnstileToken = '';
-  let turnstileMounted = false;
+  /**
+   * The widget id, so a spent token can be reset rather than re-sent. A
+   * Turnstile token is single-use server-side, and every non-demo claim — send
+   * AND resend — is verified, so reusing one turns Resend into a 403 the
+   * attendee cannot get past. Demo conferences are exempt from the challenge,
+   * which is exactly why driving the demo could never show this.
+   */
+  let turnstileWidget = null;
   function mountTurnstile() {
     const siteKey = config.turnstileSiteKey;
     const holder = document.querySelector('[data-schedule-turnstile]');
-    if (!siteKey || !holder || turnstileMounted) return;
-    turnstileMounted = true;
+    if (!siteKey || !holder || holder.childElementCount > 0) return;
     const render = () => {
       if (!window.turnstile || typeof window.turnstile.render !== 'function') return;
       try {
-        window.turnstile.render(holder, {
+        turnstileWidget = window.turnstile.render(holder, {
           sitekey: siteKey,
           callback: (token) => { turnstileToken = token; },
           'expired-callback': () => { turnstileToken = ''; },
           'error-callback': () => { turnstileToken = ''; },
-        });
+        }) ?? null;
       } catch { /* the send still tries; the server is the gate */ }
     };
     if (window.turnstile) { render(); return; }
@@ -1240,6 +1258,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       actions.append(quietButton('Resend', 'scheduleClaimResend'), quietButton('Unlink', 'scheduleClaimUnlink'));
       line.append(actions);
       controls.append(line);
+      addChallenge(controls);
       return;
     }
 
@@ -1253,6 +1272,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       actions.append(quietButton('Resend', 'scheduleClaimResend'), quietButton('Cancel', 'scheduleClaimUnlink'));
       line.append(actions);
       controls.append(line);
+      addChallenge(controls);
       return;
     }
 
@@ -1278,18 +1298,29 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     send.textContent = 'Send link';
     send.dataset.scheduleClaimSend = 'true';
     controls.append(input, send);
-    if (config.turnstileSiteKey) {
-      // The row is told it carries a challenge so it reserves that height in
-      // EVERY state — the widget arriving late is not the only way this moves;
-      // pressing Send swaps a 101px input row for a 36px sentence, and the
-      // sheet's Done button would slide up under the finger.
-      controls.classList.add('has-challenge');
-      const holder = document.createElement('div');
-      holder.dataset.scheduleTurnstile = 'true';
-      holder.className = 'claim-turnstile';
-      controls.append(holder);
-      mountTurnstile();
-    }
+    addChallenge(controls);
+  }
+
+  /**
+   * Mounted in every state that can send, which is all three: the input, the
+   * pending line with Resend, and the linked line with Resend. Leaving it out
+   * of the last two left those buttons holding a token the server had already
+   * spent.
+   */
+  function addChallenge(controls) {
+    if (!config.turnstileSiteKey) return;
+    // The row reserves the challenge's height in EVERY state — the widget
+    // arriving late is not the only way this moves; pressing Send swaps a
+    // 101px input row for a 36px sentence and the Done button below would
+    // slide up under the finger.
+    controls.classList.add('has-challenge');
+    const holder = document.createElement('div');
+    holder.dataset.scheduleTurnstile = 'true';
+    holder.className = 'claim-turnstile';
+    controls.append(holder);
+    turnstileToken = '';
+    turnstileWidget = null;
+    mountTurnstile();
   }
 
   function claimError(message) {
@@ -1315,6 +1346,8 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
           return;
         }
         claim = result.payload.claim ?? null;
+        // Single-use server-side: whatever happens next needs a fresh one.
+        turnstileToken = '';
         clearErrors();
         renderClaimRow();
         paint();
@@ -1340,9 +1373,10 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   }
 
   /**
-   * The verification. The mail's link carries the code and a one-use token, and
-   * never the write key; the token is read once and taken out of the address
-   * bar so a screenshot or a forwarded URL cannot carry it.
+   * The verification. The mail's link carries the code and a token that stays
+   * valid until a resend replaces it — the same mail has to keep working —
+   * and never the write key. The token is taken out of the address bar on
+   * arrival so a screenshot or a forwarded URL cannot carry it.
    *
    * The code is passed in rather than read from state, because the whole point
    * of a recovery mail is that it may arrive on a device that already has a
@@ -1383,7 +1417,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         if (result.payload.writeKey) state.writeKey = result.payload.writeKey;
         else if (switching) state.writeKey = null;
         if (result.payload.feedToken) state.feedToken = result.payload.feedToken;
-        if (switching) adoptOnOwnerRead = true;
+        if (switching) state.adoptPending = true;
         writeState();
         if (switching) {
           // The more consequential of the two arrivals, so it is the one that
@@ -1575,6 +1609,8 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   if (claimToken) {
     verifyClaimToken(sharedCode || state.code, claimToken).then(loadOwnerState);
   } else {
+    // Also the retry: an adoption whose owner read failed last time is still
+    // marked pending, and this is what finishes it.
     loadOwnerState();
   }
 })();

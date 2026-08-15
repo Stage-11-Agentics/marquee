@@ -23,11 +23,11 @@ export interface PublicScheduleRow {
   session_ids: string;
   write_key_hash: string;
   /**
-   * The browser that owns this code, when one created it. Null for a schedule
-   * an agent built — and that null is what the demand aggregate reads to count
-   * an agent-built code as one voice instead of none.
+   * 1 when a browser created this code. It is a flag rather than the device
+   * itself, so nothing here can be joined back to that browser's anonymous
+   * stars — see the migration.
    */
-  device_hash: string | null;
+  from_device: 0 | 1;
   created_at: number;
   updated_at: number;
 }
@@ -203,7 +203,7 @@ export async function checkScheduleCreateLimit(
 
 export async function readSchedule(database: D1Database, code: string): Promise<PublicScheduleRow | null> {
   return database
-    .prepare("SELECT code, event_id, session_ids, write_key_hash, device_hash, created_at, updated_at FROM public_schedules WHERE code = ? LIMIT 1")
+    .prepare("SELECT code, event_id, session_ids, write_key_hash, from_device, created_at, updated_at FROM public_schedules WHERE code = ? LIMIT 1")
     .bind(code)
     .first<PublicScheduleRow>();
 }

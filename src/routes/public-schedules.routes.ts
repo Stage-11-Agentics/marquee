@@ -51,10 +51,11 @@ function unknownSessions(eventSlug: string, unknown: readonly string[]): ApiErro
 
 const sessionIdList = z.array(z.string().min(1).max(240)).max(MAX_SESSIONS);
 /**
- * `deviceHash` is how the site's own module says "this code and my stars are
- * the same person". Without it the demand aggregate would count a synced
- * browser twice — once as a device, once as a code. An agent has no device and
- * simply omits it, which is the ruled semantics rather than a missing field.
+ * `deviceHash` is how the site's own module says "a browser made this". The
+ * value is read and thrown away — only the fact is stored — because the demand
+ * aggregate needs to know that this code's owner is already counted through
+ * their beacons, and nothing more. An agent omits it, which is the ruled
+ * semantics rather than a missing field.
  */
 const deviceHash = z.string().regex(DEVICE_HASH_PATTERN).optional();
 const createBody = z.object({
@@ -149,10 +150,13 @@ const createPublicSchedule = defineApiRoute(
     const now = Date.now();
     await context.env.DB
       .prepare(
-        `INSERT INTO public_schedules (code, event_id, session_ids, write_key_hash, device_hash, created_at, updated_at)
+        `INSERT INTO public_schedules (code, event_id, session_ids, write_key_hash, from_device, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(code, agenda.event.id, JSON.stringify(resolved), await hashWriteKey(writeKey), body.deviceHash ?? null, now, now)
+      // The hash is READ and discarded: all the aggregate needs is that a
+      // browser was here. Storing it would join this code — and through a
+      // claim, its owner's name — to that browser's anonymous stars.
+      .bind(code, agenda.event.id, JSON.stringify(resolved), await hashWriteKey(writeKey), body.deviceHash ? 1 : 0, now, now)
       .run();
 
     const sessions = agenda.sessions
@@ -251,11 +255,11 @@ const updatePublicSchedule = defineApiRoute(
     if (unknown.length > 0) throw unknownSessions(scoped.event.slug, unknown);
 
     await context.env.DB
-      // COALESCE, not overwrite: a client that knows its device says so, and a
+      // MAX, not overwrite: a client that knows it is a browser says so, and a
       // caller that does not (an agent driving someone else's code) must not
-      // erase the pairing that keeps the demand aggregate honest.
-      .prepare("UPDATE public_schedules SET session_ids = ?, device_hash = COALESCE(?, device_hash), updated_at = ? WHERE code = ?")
-      .bind(JSON.stringify(resolved), context.req.valid("json").deviceHash ?? null, Date.now(), code)
+      // clear the flag that keeps the demand aggregate honest.
+      .prepare("UPDATE public_schedules SET session_ids = ?, from_device = MAX(from_device, ?), updated_at = ? WHERE code = ?")
+      .bind(JSON.stringify(resolved), context.req.valid("json").deviceHash ? 1 : 0, Date.now(), code)
       .run();
 
     const payload = await scheduleResponse(context.env.DB, code, new URL(context.req.url).origin);

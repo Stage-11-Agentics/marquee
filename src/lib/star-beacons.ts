@@ -9,9 +9,10 @@
  *
  * The aggregate has two halves, ruled in the round-2 review: distinct beacon
  * devices, plus distinct API-created schedule codes containing the session. A
- * code created by this site's own module carries its device hash, so it de-dups
- * against that device's beacons and the pair counts once; a code created by an
- * agent has no device and counts as one. Every schedule an agent builds for its
+ * code created by this site's own module is FLAGGED as browser-made, so the
+ * browser counts once through its beacons and the code does not count again; a
+ * code created by an agent carries no flag and counts as one. The flag is
+ * deliberately not the device — see migration 0021. Every schedule an agent builds for its
  * human therefore reaches the same signal the browser does, which is the point
  * of an agent-native product having a demand board at all.
  *
@@ -134,7 +135,7 @@ export async function sessionDemandCounts(
     .prepare(
       `SELECT entry.value AS session_id, COUNT(*) AS n
        FROM public_schedules AS schedule, json_each(schedule.session_ids) AS entry
-       WHERE schedule.event_id = ? AND schedule.device_hash IS NULL
+       WHERE schedule.event_id = ? AND schedule.from_device = 0
        GROUP BY entry.value`,
     )
     .bind(eventId)
@@ -168,7 +169,7 @@ export async function demandStats(database: D1Database, eventId: string): Promis
     .prepare(
       `SELECT
          COUNT(*) AS synced,
-         SUM(CASE WHEN device_hash IS NULL THEN 1 ELSE 0 END) AS via_agents
+         SUM(CASE WHEN from_device = 0 THEN 1 ELSE 0 END) AS via_agents
        FROM public_schedules WHERE event_id = ?`,
     )
     .bind(eventId)
@@ -238,24 +239,36 @@ export async function publicStarCountSetting(
   return readPublicStarCountSetting(row?.value_json ?? null);
 }
 
+/**
+ * Returns null when `orgId` is given and does not own the conference: the
+ * ownership test lives inside the INSERT rather than in a caller's precheck, so
+ * there is no window between deciding and writing.
+ */
 export async function writePublicStarCountSetting(
   database: D1Database,
   eventId: string,
   setting: PublicStarCountSetting,
   now: number,
-): Promise<PublicStarCountSetting> {
+  orgId?: string,
+): Promise<PublicStarCountSetting | null> {
   const stored: PublicStarCountSetting = {
     enabled: setting.enabled === true,
     threshold: normalizeThreshold(setting.threshold),
   };
-  await database
+  const guard = orgId ? "AND events.org_id = ?" : "";
+  const bindings: Array<string | number> = [
+    `public-star-counts-${eventId}`, eventId, PUBLIC_STAR_COUNTS_SETTING_KEY, JSON.stringify(stored), now, now, eventId,
+  ];
+  if (orgId) bindings.push(orgId);
+  const result = await database
     .prepare(
       `INSERT INTO event_settings (id, event_id, key, value_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)
+       SELECT ?, ?, ?, ?, ?, ? FROM events WHERE events.id = ? ${guard}
        ON CONFLICT(event_id, key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
     )
-    .bind(`public-star-counts-${eventId}`, eventId, PUBLIC_STAR_COUNTS_SETTING_KEY, JSON.stringify(stored), now, now)
+    .bind(...bindings)
     .run();
+  if ((result.meta?.changes ?? 0) === 0) return null;
   return stored;
 }
 

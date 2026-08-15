@@ -25,6 +25,7 @@ import {
   claimMailEnabled,
   renderClaimMail,
 } from "../lib/attendee-claim-mail";
+import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { enqueueOutbox } from "../jobs/mail/outbox";
 import {
   CODE_PATTERN,
@@ -94,20 +95,16 @@ function verifyFailureKey(code: string, now: number): string {
   return `schedule-claim-verify-fail:${code}:${windowStart}`;
 }
 
-async function readClaimFailures(store: KVNamespace | undefined, code: string, now: number): Promise<number> {
+/** Records a wrong token and returns how many there have now been this window. */
+async function recordClaimFailure(store: KVNamespace | undefined, code: string, now: number): Promise<number> {
   if (!store) return 0;
-  const seen = await store.get(verifyFailureKey(code, now), "json").catch(() => null);
-  return typeof seen === "number" ? seen : 0;
-}
-
-async function recordClaimFailure(store: KVNamespace | undefined, code: string, now: number): Promise<void> {
-  if (!store) return;
   const key = verifyFailureKey(code, now);
   const seen = await store.get(key, "json").catch(() => null);
-  const count = typeof seen === "number" ? seen : 0;
+  const count = (typeof seen === "number" ? seen : 0) + 1;
   await store
-    .put(key, JSON.stringify(count + 1), { expirationTtl: CLAIM_WINDOW_SECONDS * 2 })
+    .put(key, JSON.stringify(count), { expirationTtl: CLAIM_WINDOW_SECONDS * 2 })
     .catch(() => { /* an uncounted miss beats a refused open */ });
+  return count;
 }
 
 /** The write key is the proof that this caller owns the code. */
@@ -228,7 +225,7 @@ const requestScheduleClaim = defineApiRoute(
       }),
       sessionCount: view.sessions.length,
     });
-    await enqueueOutbox({
+    const queued = await enqueueOutbox({
       db: context.env.DB,
       eventId: row.event_id,
       templateKey: ATTENDEE_CLAIM_TEMPLATE_KEY,
@@ -243,6 +240,12 @@ const requestScheduleClaim = defineApiRoute(
       text: mail.text,
       now,
     });
+    // Writing the outbox row is not sending. The consumer only ever acts on an
+    // explicit queue message, so without this the recovery mail sat in D1
+    // forever and the endpoint answered 200 — a trap armed for whoever turns
+    // the flag on, and invisible until a real attendee waited for a link that
+    // was never going to arrive.
+    if (queued.inserted) await enqueueMailMessage(context.env.MAIL_QUEUE, queued.id);
 
     context.header("Cache-Control", "no-store");
     return context.json({ claim: claimState(requested.row) }, 200);
@@ -256,7 +259,7 @@ const verifyScheduleClaim = defineApiRoute(
     operationId: "verifyScheduleClaim",
     summary: "Complete a claim by presenting the token from its mail",
     description:
-      "The step that creates identity: the person is upserted by email into the organization's people record — matched, never duplicated — and an attendance row records that they are coming to this conference. Also returns the schedule's write key once, which is how the device reading the mail gains the ability to edit — the mail itself never carries it. Opening the same link twice answers with the same state.",
+      "The step that creates identity: the person is upserted by email into the organization's people record — matched, never duplicated — and an attendance row records that they are coming to this conference. Also returns the schedule's write key, which is how a device reading the mail gains the ability to edit; the mail itself never carries it. The token stays valid until a resend replaces it, so opening the same link again answers with the same state and the same key.",
     tags: ["Public"],
     request: {
       params: codeParams,
@@ -280,15 +283,21 @@ const verifyScheduleClaim = defineApiRoute(
     // the budget and lock the real owner out of completing their own claim.
     // Counting only wrong tokens leaves a guesser bounded and an owner
     // untouched, however many times they open their mail.
-    const spent = await readClaimFailures(context.env.CACHE, code, Date.now());
-    if (spent >= VERIFY_LIMIT) throw ApiError.rateLimited(CLAIM_WINDOW_SECONDS);
+    // The token is checked BEFORE the ceiling is consulted, and that ordering is
+    // the whole point. Counting only failures was not enough on its own: the
+    // guard still stood in front of the valid token, so twenty wrong guesses
+    // from anyone holding the share code — which is a semi-public thing by
+    // design — locked the real owner out of their own claim for the hour. A
+    // correct token now always passes, however much noise preceded it, while a
+    // guesser stops getting answers after twenty misses.
     const outcome = await verifyClaim(context.env.DB, {
       code,
       token: context.req.valid("json").token,
       now: Date.now(),
     });
     if (!outcome.ok) {
-      await recordClaimFailure(context.env.CACHE, code, Date.now());
+      const spent = await recordClaimFailure(context.env.CACHE, code, Date.now());
+      if (spent >= VERIFY_LIMIT) throw ApiError.rateLimited(CLAIM_WINDOW_SECONDS);
       if (outcome.reason === "unknown") throw ApiError.notFound("schedule not found");
       throw ApiError.forbidden("that link has been replaced by a newer one — ask for it again from your schedule");
     }

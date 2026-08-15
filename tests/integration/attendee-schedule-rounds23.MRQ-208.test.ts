@@ -639,3 +639,115 @@ test("CONTRACT · MRQ-208 undoing a re-run import leaves the first run's attenda
   });
   expect(await firstUndone.json<{ attendances_removed: number }>()).toMatchObject({ attendances_removed: 1 });
 });
+
+/* ── The third review: tenancy, dispatch, and the two orders of undo ── */
+
+test("CONTRACT · MRQ-208 the demand board is another organization's business, not yours", async () => {
+  // A second organization with its own conference, and a token that is an
+  // owner of the FIRST one. A session credential carries an org-wide role, so
+  // "is this caller an owner" and "is this conference theirs" are different
+  // questions and only the second keeps a neighbour's demand private.
+  const NOW_B = NOW + 1;
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES ('org_other', 'Other', 'other', ?, ?)").bind(NOW_B, NOW_B),
+    env.DB.prepare(`INSERT INTO events (id, org_id, name, slug, starts_on, ends_on, timezone, status, demo_mode, created_at, updated_at)
+      VALUES ('evt_other', 'org_other', 'Other Conference', 'other-conf', '2026-11-01', '2026-11-02', 'America/New_York', 'live', 0, ?, ?)`).bind(NOW_B, NOW_B),
+  ]);
+  const token = await orgToken();
+
+  const read = await request("/api/v1/events/evt_other/agenda/demand", { headers: { authorization: `Bearer ${token}` } });
+  expect([403, 404]).toContain(read.status);
+
+  const write = await request("/api/v1/events/evt_other/agenda/demand/settings", {
+    method: "PUT",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ enabled: true, threshold: 5 }),
+  });
+  expect([403, 404]).toContain(write.status);
+  // And the refusal left nothing behind on the other organization's conference.
+  const leaked = await env.DB.prepare("SELECT COUNT(*) AS n FROM event_settings WHERE event_id = 'evt_other'").first<{ n: number }>();
+  expect(Number(leaked?.n)).toBe(0);
+
+  // The caller's own conference still answers.
+  const own = await request(`/api/v1/events/${EVENT_ID}/agenda/demand`, { headers: { authorization: `Bearer ${token}` } });
+  expect(own.status).toBe(200);
+});
+
+test("CONTRACT · MRQ-208 requesting a claim actually dispatches the mail, not just a row in D1", async () => {
+  const sent: unknown[] = [];
+  const schedule = await createSchedule(["sub-keynote"]);
+  const response = await app.request(
+    `/api/v1/public/schedules/${schedule.code}/claim`,
+    { ...json({ email: "maya@copperline.dev" }), headers: { "content-type": "application/json", "x-schedule-write-key": schedule.writeKey } },
+    // The consumer only ever acts on an explicit queue message. Writing the
+    // outbox row and answering 200 left the mail in the database forever — a
+    // trap armed for whoever turned the flag on.
+    { ...runtimeEnv(), MAIL_QUEUE: { send: async (message: unknown) => { sent.push(message); } } } as unknown as Env,
+  );
+  expect(response.status).toBe(200);
+  const queued = await env.DB.prepare("SELECT id FROM outbox WHERE template_key = 'attendee_schedule_claim'").first<{ id: string }>();
+  expect(queued?.id).toBeTruthy();
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatchObject({ type: "mail_outbox", outbox_id: queued?.id });
+});
+
+test("CONTRACT · MRQ-208 a beacon cannot be joined to a claimed person: the schedule stores a flag, not the device", async () => {
+  const device = "7".repeat(32);
+  await star("sub-keynote", device);
+  const schedule = await createSchedule(["sub-keynote"], device);
+  const keyed = { "content-type": "application/json", "x-schedule-write-key": schedule.writeKey };
+  await request(`/api/v1/public/schedules/${schedule.code}/claim`, { ...json({ email: "maya@copperline.dev" }), headers: keyed });
+  await request(`/api/v1/public/schedules/${schedule.code}/claim/verify`, json({ token: await tokenFromMail() }));
+
+  // The join the design forbids: anonymous star → schedule → claim → a name.
+  // It has to be impossible in the SCHEMA, because no filter on a read path can
+  // close it for anything holding the rows.
+  const joined = await env.DB
+    .prepare(
+      `SELECT claim.email FROM session_star_beacons beacon
+         JOIN public_schedules schedule ON schedule.from_device = 1 AND schedule.event_id = beacon.event_id
+         JOIN schedule_claims claim ON claim.code = schedule.code
+        WHERE beacon.device_hash = ?`,
+    )
+    .bind(device)
+    .all<{ email: string }>();
+  // The join still runs — it just cannot be keyed on the device any more, so it
+  // relates a name to every browser-made code at the conference rather than to
+  // THIS browser's stars. What must not exist is a column pairing them.
+  const columns = await env.DB.prepare("PRAGMA table_info(public_schedules)").all<{ name: string }>();
+  expect((columns.results ?? []).map((column) => column.name)).not.toContain("device_hash");
+  expect(joined.results.length).toBeGreaterThanOrEqual(0);
+
+  // And the aggregate still counts that browser exactly once.
+  expect(await demandFor("sub-keynote")).toBe(1);
+});
+
+test("CONTRACT · MRQ-208 undoing the FIRST import while a later one is live keeps the row that later one asserts", async () => {
+  const token = await orgToken();
+  const csv = "name,email,company\nTom Brandt,tom@meridian.cap,Meridian\n";
+  const post = () => request("/api/v1/org/imports", {
+    ...json({ csv, filename: "attendees.csv", event: EVENT_SLUG }),
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+  });
+  const first = await (await post()).json<{ import_id: string }>();
+  const second = await (await post()).json<{ import_id: string }>();
+
+  // The other order. A created the row; B then asserted the same person and
+  // changed nothing, because the upsert is idempotent. Undoing A matched on
+  // created_at and deleted the only row — silently discarding B's assertion,
+  // which no test caught because the shipped one only tried B-then-A.
+  const undoneFirst = await request(`/api/v1/org/imports/${first.import_id}/undo`, {
+    method: "POST", headers: { authorization: `Bearer ${token}` },
+  });
+  expect(await undoneFirst.json<{ attendances_removed: number }>()).toMatchObject({ attendances_removed: 0 });
+  const kept = await env.DB.prepare("SELECT COUNT(*) AS n FROM event_attendances WHERE source = 'import'").first<{ n: number }>();
+  expect(Number(kept?.n)).toBe(1);
+
+  // Once nothing live asserts it any more, it goes.
+  const undoneSecond = await request(`/api/v1/org/imports/${second.import_id}/undo`, {
+    method: "POST", headers: { authorization: `Bearer ${token}` },
+  });
+  expect(await undoneSecond.json<{ attendances_removed: number }>()).toMatchObject({ attendances_removed: 1 });
+  const gone = await env.DB.prepare("SELECT COUNT(*) AS n FROM event_attendances WHERE source = 'import'").first<{ n: number }>();
+  expect(Number(gone?.n)).toBe(0);
+});

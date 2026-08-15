@@ -339,20 +339,35 @@ const undoPeopleImport = defineApiRoute(
       // would otherwise queue three thousand extra deletes into a batch that
       // already carries a receipt per row.
       //
-      // `created_at = imports.created_at` is what keeps this honest. The
-      // attendance upsert only stamps `created_at` on insert, so this matches
-      // exactly the rows THIS import brought into being — re-running an updated
-      // export (the loop SKILL.md teaches) touches nothing new, and undoing the
-      // re-run must not withdraw the attendance the first run created.
+      // ONE test, and it is the right one: does any import that has not been
+      // undone still assert this person is coming?
+      //
+      // Matching on which import inserted the row instead — the attendance
+      // upsert stamps created_at only on insert, so it is knowable — looks
+      // equivalent and is wrong in both directions. Undoing the re-run would
+      // withdraw nothing (right) but undoing the FIRST run would delete the
+      // only row while the re-run still asserted it (wrong), and then the
+      // re-run's own undo could never reach it because the row it was looking
+      // for no longer matched. A row survives exactly as long as something
+      // still claims it, whoever inserted it.
       statements.push(context.env.DB.prepare(
         `DELETE FROM event_attendances
           WHERE event_id = ? AND source = 'import'
-            AND created_at = (SELECT created_at FROM imports WHERE id = ?)
             AND person_id IN (
               SELECT target_id FROM import_rows
                WHERE import_id = ? AND entity = 'person' AND target_id IS NOT NULL
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM import_rows other
+                JOIN imports live ON live.id = other.import_id
+               WHERE other.target_id = event_attendances.person_id
+                 AND other.entity = 'person'
+                 AND live.id <> ?
+                 AND live.status <> 'undone'
+                 AND live.undone_at IS NULL
+                 AND json_extract(live.mapping, '$.attendance_event_id') = ?
             )`,
-      ).bind(attendanceEventId, importId, importId));
+      ).bind(attendanceEventId, importId, importId, attendanceEventId));
     }
 
     for (const row of rows.results) {

@@ -1,7 +1,7 @@
 /**
  * The one mail this feature sends.
  *
- * It carries the code and a one-use verification token — and deliberately not
+ * It carries the code and a verification token — and deliberately not
  * the write key, which the verification hands back instead (see below). The
  * address it reaches can therefore open the schedule on any device and keep
  * editing it, which is the recovery gap R2-2 exists to close and the reason
@@ -30,7 +30,7 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * The link carries the code and a one-use verification token, and deliberately
+ * The link carries the code and a verification token, and deliberately
  * NOT the write key.
  *
  * The key would have to travel inside the composed mail body, and that body is

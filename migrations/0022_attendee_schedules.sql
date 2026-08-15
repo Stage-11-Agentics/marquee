@@ -97,8 +97,22 @@ CREATE TABLE schedule_claims (
 CREATE INDEX idx_schedule_claims_token ON schedule_claims (token_hash);
 CREATE INDEX idx_schedule_claims_event ON schedule_claims (event_id);
 
--- A schedule created by this site's own module carries the device that owns
--- it, so the code and that device's beacon rows are one voice in the aggregate
--- rather than two. A schedule created by an agent has no device and counts as
--- one — which is the ruled semantics, not an accident of nullability.
-ALTER TABLE public_schedules ADD COLUMN device_hash TEXT;
+-- A FLAG, not the device.
+--
+-- The aggregate needs to know one thing about a code: whether a browser made
+-- it, in which case that browser is already counted through its beacon rows and
+-- this code must not count again. It never compares the code's device to a
+-- beacon's — only asks whether there was one.
+--
+-- Storing the actual hash here would have answered the same question and
+-- quietly destroyed the feature's central promise. `schedule_claims` maps a
+-- code to a verified person, so a shared device value would have let anyone
+-- holding the database join a named attendee to every anonymous star they had
+-- ever placed: SELECT beacon.session_id FROM session_star_beacons beacon JOIN
+-- public_schedules ON … JOIN schedule_claims ON …. "Anonymous stars stay
+-- anonymous forever" cannot be true of a schema that makes that join possible,
+-- and no filter on a read path can make it true again — the join is available
+-- to anything with the rows. A boolean answers the counting question and leaves
+-- nothing to join on.
+ALTER TABLE public_schedules ADD COLUMN from_device INTEGER NOT NULL DEFAULT 0
+  CHECK (from_device IN (0, 1));
