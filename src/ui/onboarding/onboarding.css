@@ -1,4 +1,5 @@
 .onboarding-page { display: grid; gap: 16px; }
+.onboarding-selection-clear { flex: 0 0 136px; width: 136px; }
 .onboarding-header-action, .onboarding-compose-drawer .onboarding-fixed-action { flex: 0 0 172px; width: 172px; }
 .onboarding-invite-result-slot { min-height: 38px; }
 .onboarding-invite-result { background: var(--accent-wash); border: 1px solid var(--accent); display: grid; gap: 6px; padding: 10px 12px; }
