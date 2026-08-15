@@ -21,6 +21,7 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 import { mergeDataForRecipient } from "../jobs/mail/merge-data";
 import { renderAdHocMail } from "../jobs/mail/render";
 import type { MailTemplateKey } from "../jobs/mail/templates";
@@ -209,7 +210,7 @@ const sendOrgMail = defineApiRoute(
       // Same ad-hoc key the conference-scoped send uses for a typed message.
       templateKey: "custom" as MailTemplateKey,
       recipients: audience.people.map((person) => ({
-        entityId: person.id,
+        entityId: IDEMPOTENCY_REGISTRY.customRecipient(person.id),
         personId: person.id,
         toEmail: person.email,
         data: mergeDataFor(person),

@@ -8,6 +8,7 @@ import { authHasRole, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { listCommsAudience, type CommsRecipientRow } from "../jobs/mail/audience";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
 import {
   COMMUNICATION_TEMPLATE_KEYS,
@@ -899,7 +900,7 @@ const sendComms = defineApiRoute(
       db: context.env.DB,
       eventId,
       templateKey: (body.template_key ?? "custom") as MailTemplateKey,
-      recipients: recipients.map((recipient) => ({ entityId: recipient.submission_id ?? recipient.person_id, personId: recipient.person_id, toEmail: recipient.email, data: mergeDataFor(recipient) })),
+      recipients: recipients.map((recipient) => ({ entityId: IDEMPOTENCY_REGISTRY.customRecipient(recipient.submission_id ?? recipient.person_id), personId: recipient.person_id, toEmail: recipient.email, data: mergeDataFor(recipient) })),
       subject: body.subject,
       body: body.body,
     });

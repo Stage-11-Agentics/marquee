@@ -13,6 +13,7 @@ import { authHasRole, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
 import { comparisonWinCounts, validateComparisonRanking } from "../lib/evaluation-comparisons";
 import { enqueueOutbox } from "../jobs/mail/outbox";
+import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 import { mergeDataForReviewerReminder } from "../jobs/mail/merge-data";
 import { allocateAssignments, type AllocationSubmission } from "../lib/assignment-allocation";
 import { errorFields } from "../lib/observability/log";
@@ -965,7 +966,7 @@ const inviteCommitteeReviewer = defineApiRoute(
       const outboxId = await enqueueAuthMail(context.env.DB, {
         eventId,
         personId,
-        entityId: link.id,
+        entityId: IDEMPOTENCY_REGISTRY.authLink(link.id),
         toEmail: email,
         templateKey: "magic_link_login",
         now,
@@ -1605,7 +1606,7 @@ const remindRoundReviewer = defineApiRoute(
     const reminderDay = localDayKey(Date.now(), round.timezone);
     const outbox = await enqueueOutbox({
       db: context.env.DB,
-      entityId: `${roundId}:${personId}:${reminderDay}`,
+      entityId: IDEMPOTENCY_REGISTRY.reviewerReminder(roundId, personId, reminderDay),
       eventId,
       personId: reviewer.id,
       templateKey: "reviewer_reminder",
