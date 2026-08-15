@@ -93,10 +93,10 @@ export function Sidebar({ activeId, eventName, navigate, resetting, onReset, dra
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!drawerOpen) return;
-    const resetOnDesktop = () => {
-      if (window.innerWidth > 760) onClose?.();
-    };
     const media = window.matchMedia?.("(max-width: 760px)");
+    const resetOnDesktop = () => {
+      if (media && !media.matches) onClose?.();
+    };
     window.addEventListener("resize", resetOnDesktop);
     media?.addEventListener?.("change", resetOnDesktop);
     resetOnDesktop();
