@@ -183,12 +183,18 @@ const SPONSOR_TEMPLATES: readonly TemplateSpec[] = [
     formId: SPONSOR_FORM_IDS.companyDetails,
   },
   {
+    // Vector PDF, not SVG or EPS. `task_upload` narrows DOCUMENT_RULES, which has
+    // sniffers for pdf/pptx/key and nothing else — so an accept list naming .svg
+    // presigns nothing and the sponsor meets "that file type is not accepted"
+    // after being told to send one. Stating what the product can actually take is
+    // the honest version; widening the sniffer is a security-surface change and
+    // wants its own ticket.
     id: SPONSOR_TEMPLATE_IDS.logo,
-    name: "Company logo — vector (SVG or EPS)",
+    name: "Company logo — vector PDF",
     kind: "file",
-    description: "Used on the event site, the sponsor wall, and printed signage. Vector required; a 600px+ PNG is accepted as a fallback only.",
+    description: "Used on the event site, the sponsor wall, and printed signage. Export your primary mark as a vector PDF — signage prints larger than any raster file survives.",
     dueOffsetDays: 15,
-    fileConfig: { accept: [".svg", ".eps", ".ai", ".pdf"], maxBytes: 26_214_400 },
+    fileConfig: { accept: [".pdf"], maxBytes: 26_214_400 },
   },
   {
     id: SPONSOR_TEMPLATE_IDS.nameYourSpeaker,
@@ -228,7 +234,7 @@ const SPONSOR_TEMPLATES: readonly TemplateSpec[] = [
     kind: "file",
     description: "Large-format artwork for the escalator wall placement.",
     dueOffsetDays: 29,
-    fileConfig: { accept: [".pdf", ".ai", ".eps"], maxBytes: 52_428_800 },
+    fileConfig: { accept: [".pdf"], maxBytes: 52_428_800 },
   },
   {
     id: SPONSOR_TEMPLATE_IDS.sessionContent,
@@ -335,9 +341,9 @@ const GOLD_DELIVERABLES: readonly DeliverableSpec[] = [
     key: "gold-logo",
     sponsorshipId: SPONSORSHIP_IDS.gold,
     templateId: SPONSOR_TEMPLATE_IDS.logo,
-    title: "Company logo — vector (SVG or EPS)",
+    title: "Company logo — vector PDF",
     kind: "file",
-    description: "Used on the event site, the sponsor wall, and printed signage. Vector required; a 600px+ PNG is accepted as a fallback only.",
+    description: "Used on the event site, the sponsor wall, and printed signage. Export your primary mark as a vector PDF — signage prints larger than any raster file survives.",
     assignee: SPONSOR_CONTACT_IDS.grzegorz,
     dueInDays: -5,
   },
@@ -426,9 +432,9 @@ const SILVER_DELIVERABLES: readonly DeliverableSpec[] = [
     key: "silver-logo",
     sponsorshipId: SPONSORSHIP_IDS.silver,
     templateId: SPONSOR_TEMPLATE_IDS.logo,
-    title: "Company logo — vector (SVG or EPS)",
+    title: "Company logo — vector PDF",
     kind: "file",
-    description: "Used on the event site and the sponsor wall. Vector required; a 600px+ PNG is accepted as a fallback only.",
+    description: "Used on the event site and the sponsor wall. Export your primary mark as a vector PDF — signage prints larger than any raster file survives.",
     assignee: SPONSOR_CONTACT_IDS.mona,
     dueInDays: 22,
   },

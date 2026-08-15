@@ -1,0 +1,11 @@
+{
+  "ticket": "MRQ-214",
+  "owns": [],
+  "exercises": ["AC-46", "AC-47", "AC-48", "AC-146", "AC-264", "AC-265", "AC-266"],
+  "notes": [
+    "MRQ-214 builds the sponsor portal and the minimal sponsors data layer it needs. Its nine acceptance criteria are ticket-local — they live in the ticket description and in sequence/sponsors-design.md §5, not in EVALUATION.md — so this ticket mints no criterion and claims ownership of none. Acceptance is demonstrated by tests/integration/sponsor-portal.MRQ-214.test.ts, tests/unit/sponsor-portal.MRQ-214.test.ts, the sponsor-Session invariants in tests/node/seed-spine.test.mjs, and the browser evidence attached to the Lattice ticket.",
+    "It deepens the existing task-machinery criteria rather than adding to them: AC-46 (the portal task list ordered by due date), AC-47 (the three task kinds), AC-48 (completion through the task machinery), AC-146 (file_config accept/maxBytes on a file request), and AC-264 through AC-266 (cancellation as a nullable tombstone, excluded from progress, with completed work never restyled). All seven now hold for two portals through one shared projection and one shared completion route instead of one.",
+    "SPEC Amendment 23 records the contract additions: speaker_tasks.completed_by_person_id and .sponsorship_id, the four sponsors tables, and §5.14 for the portal surface. The completed-by field is the amendment the ticket anticipated.",
+    "Out of scope by parent ruling, recorded so the later ticket inherits it cleanly: every organizer-side sponsor surface (Sponsors list, sponsorship record, tier settings with per-tier deliverable template sets, chase-board grouping, the People-CRM companies facet), tier-scoped portal content variation, and company logo uploads."
+  ]
+}

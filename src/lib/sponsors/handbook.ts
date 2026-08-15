@@ -51,7 +51,7 @@ const BRAND_CHAPTER: SponsorHandbookChapter = {
   label: "Brand usage & logo specs",
   markdown: `## What we need
 
-A vector mark — SVG or EPS. It renders on the event site, the sponsor wall, and printed signage, and signage prints at a size raster files cannot survive.
+A vector mark, exported as **PDF**. It renders on the event site, the sponsor wall, and printed signage, and signage prints at a size raster files cannot survive. Every design tool exports vector PDF; if yours is asking, that is the answer.
 
 ## What we do with it
 
