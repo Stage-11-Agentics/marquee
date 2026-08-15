@@ -88,6 +88,30 @@ CREATE UNIQUE INDEX uq_magic_links_token_hash ON magic_links(token_hash);
 CREATE INDEX idx_magic_links_expires ON magic_links(expires_at);
 CREATE INDEX idx_magic_links_event_created ON magic_links(event_id, created_at);
 
+-- The rebuild below drops `attachments` while `people.headshot_attachment_id`,
+-- `speaker_tasks.attachment_id` and `file_comments.attachment_id` still point
+-- into it.  `defer_foreign_keys` postpones those checks to COMMIT, but SQLite
+-- settles them from a violation *counter*, not a rescan: `DROP TABLE` counts
+-- one violation per referencing row and the later `RENAME` never discounts
+-- them, so COMMIT fails even though `PRAGMA foreign_key_check` is clean.  The
+-- counter only leaves zero when no child row references the table at the
+-- moment it is dropped -- which is why an empty database migrates and a
+-- populated one does not.  Park the references, rebuild, then put them back.
+-- The `_new` suffix is this repo's marker for a table that exists only inside
+-- a rebuild; it keeps the parking table out of the product table registry.
+CREATE TABLE attachments_fk_parked_new (
+  child_table TEXT NOT NULL,
+  child_id TEXT NOT NULL,
+  attachment_id TEXT NOT NULL
+);
+INSERT INTO attachments_fk_parked_new SELECT 'people', id, headshot_attachment_id FROM people WHERE headshot_attachment_id IS NOT NULL;
+INSERT INTO attachments_fk_parked_new SELECT 'speaker_tasks', id, attachment_id FROM speaker_tasks WHERE attachment_id IS NOT NULL;
+INSERT INTO attachments_fk_parked_new SELECT 'file_comments', id, attachment_id FROM file_comments WHERE attachment_id IS NOT NULL;
+
+UPDATE people SET headshot_attachment_id = NULL WHERE headshot_attachment_id IS NOT NULL;
+UPDATE speaker_tasks SET attachment_id = NULL WHERE attachment_id IS NOT NULL;
+UPDATE file_comments SET attachment_id = NULL WHERE attachment_id IS NOT NULL;
+
 -- `person_headshot` attachments are organization-level subjects in the
 -- product model even though the original table required an event_id.  Make
 -- that existing wart survivable without introducing a second attachment
@@ -134,3 +158,20 @@ CREATE INDEX idx_attachments_draft_files ON attachments(owner_id, created_at)
 CREATE INDEX idx_attachments_submission_files ON attachments(owner_id, created_at)
   WHERE owner_type = 'submission_file';
 CREATE INDEX idx_attachments_event_status_created ON attachments(event_id, status, created_at);
+
+UPDATE people SET headshot_attachment_id = (
+  SELECT parked.attachment_id FROM attachments_fk_parked_new parked
+  WHERE parked.child_table = 'people' AND parked.child_id = people.id
+) WHERE id IN (SELECT child_id FROM attachments_fk_parked_new WHERE child_table = 'people');
+
+UPDATE speaker_tasks SET attachment_id = (
+  SELECT parked.attachment_id FROM attachments_fk_parked_new parked
+  WHERE parked.child_table = 'speaker_tasks' AND parked.child_id = speaker_tasks.id
+) WHERE id IN (SELECT child_id FROM attachments_fk_parked_new WHERE child_table = 'speaker_tasks');
+
+UPDATE file_comments SET attachment_id = (
+  SELECT parked.attachment_id FROM attachments_fk_parked_new parked
+  WHERE parked.child_table = 'file_comments' AND parked.child_id = file_comments.id
+) WHERE id IN (SELECT child_id FROM attachments_fk_parked_new WHERE child_table = 'file_comments');
+
+DROP TABLE attachments_fk_parked_new;
