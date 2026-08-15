@@ -894,7 +894,7 @@ Delivery is unchanged: `HMAC-SHA256` over `id.timestamp.body`, retried with back
 |---|---|---|
 | GET/PATCH | `/api/v1/org/settings` | org profile and defaults; organization-wide organizers only (AC-294) |
 | POST | `/api/v1/org/invites` | **gains** `role` and `event_id`; returns the short code once beside the URL (AC-296, AC-297) |
-| DELETE | `/api/v1/org/members/{personId}` | **gains** `revoke_token_ids`; four-arm transaction (AC-298) |
+| DELETE | `/api/v1/org/members/{personId}` | **gains** `keep_token_ids`; revocation is the default, so a bodyless request revokes rather than preserves; four-arm transaction (AC-298) |
 | GET | `/api/v1/events/{eventId}/people/{personId}/removal-preview` | everything removal would touch, published sessions and sole-speaker cases named (AC-299) |
 | POST | `/api/v1/events/{eventId}/people/{personId}/remove` | remove from this conference (AC-299) |
 | POST | `/api/v1/org/people/{personId}/revoke-access` | credentials only; participation and history untouched (AC-300) |
