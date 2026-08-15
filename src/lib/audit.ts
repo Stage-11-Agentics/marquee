@@ -17,7 +17,20 @@ import { newUlid } from "../api/ids";
 import type { AuditActorKind } from "../db/schema";
 
 export interface AuditEntry {
-  eventId: string;
+  /**
+   * Null only for an action that belongs to the organization rather than to a
+   * conference — see `src/lib/org-activity.ts`, which is where such writes go.
+   * The schema refuses a row scoped to neither.
+   */
+  eventId: string | null;
+  /**
+   * The organization, when the action is an organization-level fact. Every
+   * org-level writer sets it; an event-scoped writer may set it too when the
+   * action also belongs in the org admin lens (an invite scoped to one
+   * conference is both). Leaving it null keeps a row out of that lens, which
+   * is the right answer for the ordinary content edit.
+   */
+  orgId?: string | null;
   actorKind: AuditActorKind;
   /** Null for `system` and `airtable` actors, which are not people. */
   actorPersonId: string | null;
@@ -39,8 +52,8 @@ export interface AuditEntry {
 }
 
 const COLUMNS =
-  "(id, event_id, actor_person_id, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at, request_id)";
-const PLACEHOLDERS = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+  "(id, event_id, org_id, actor_person_id, actor_name, actor_kind, action, entity_type, entity_id, before_json, after_json, created_at, request_id)";
+const PLACEHOLDERS = "(?, ?, ?, ?, (SELECT name FROM people WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?)";
 
 /**
  * Build the row as a prepared statement, for composition into a `batch()`.
@@ -54,6 +67,8 @@ export function auditStatement(db: D1Database, entry: AuditEntry): D1PreparedSta
     .bind(
       newUlid(entry.now),
       entry.eventId,
+      entry.orgId ?? null,
+      entry.actorPersonId,
       entry.actorPersonId,
       entry.actorKind,
       entry.action,
@@ -67,22 +82,29 @@ export function auditStatement(db: D1Database, entry: AuditEntry): D1PreparedSta
 }
 
 /**
- * Compose a conditional audit row into a larger D1 batch. The SELECT must
- * return the eleven audit columns in the same order as `COLUMNS`; callers can
- * add source predicates so an audit row is emitted only when the write it
+ * Compose a conditional audit row into a larger D1 batch: the caller supplies
+ * only the `FROM … WHERE …` tail, so the row is emitted only when the write it
  * describes actually landed.
+ *
+ * The projected column list is built here rather than typed by the caller. It
+ * used to be a literal row of eleven question marks at each call site, which
+ * made the column count a fact three files had to agree on — and adding the
+ * twelfth column would have silently misaligned every one of them.
  */
 export function auditStatementFromSelect(
   db: D1Database,
   entry: AuditEntry,
-  selectSql: string,
+  sourceSql: string,
   ...selectBindings: readonly unknown[]
 ): D1PreparedStatement {
+  const projection = PLACEHOLDERS.slice(1, -1);
   return db
-    .prepare(`INSERT INTO audit_log\n  ${COLUMNS}\n${selectSql}`)
+    .prepare(`INSERT INTO audit_log\n  ${COLUMNS}\nSELECT ${projection}\n${sourceSql}`)
     .bind(
       newUlid(entry.now),
       entry.eventId,
+      entry.orgId ?? null,
+      entry.actorPersonId,
       entry.actorPersonId,
       entry.actorKind,
       entry.action,

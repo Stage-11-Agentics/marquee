@@ -32,3 +32,11 @@
 /* Shares the preview's full-width row so the warning cannot squeeze the
    action column and move the buttons mid-confirm. */
 .history-warning { color: var(--warning, var(--muted)); font-size: 10px; grid-column: 1 / -1; padding-top: 2px; }
+
+/* Detail rides the fact line as muted text, so a row with one gains no height
+   and the rows around it do not move when the timeline pages in. */
+.history-detail { color: var(--muted); font-weight: 400; }
+
+/* Count on the left, control on the right, one fixed row: "Complete" holds the
+   space "Load more" leaves behind at the end of a long record. */
+.history-foot { align-items: center; border-top: 1px solid var(--line); display: flex; font-size: 10.5px; justify-content: space-between; min-height: 32px; padding-top: 10px; }

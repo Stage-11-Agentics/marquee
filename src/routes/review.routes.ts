@@ -3,6 +3,7 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { Principal } from "../api/runtime";
+import { writeAudit } from "../lib/audit";
 import { csvRow } from "../lib/csv";
 import { validateComparisonRanking } from "../lib/evaluation-comparisons";
 import { participantListSql } from "../lib/participants";
@@ -984,6 +985,23 @@ const writeEvaluationRoute = defineApiRoute(
     await context.env.DB.prepare(
       "UPDATE round_assignments SET status = 'complete', updated_at = ? WHERE round_id = ? AND submission_id = ? AND reviewer_person_id = ?",
     ).bind(now, roundId, submissionId, authorization.personId).run();
+    // The "reviewed" moment of the submission timeline (MRQ-211). Evaluations
+    // already carry the score; what the timeline needs is WHEN a review landed
+    // against everything else that happened to this record, so a chair reading
+    // it can see a decision that preceded its own reviews. The row is on the
+    // submission, and the submission timeline is organizer-only authority —
+    // reviewer anonymity is a reviewer-facing rule and is untouched by it.
+    await writeAudit(context.env.DB, {
+      eventId,
+      actorKind: "user",
+      actorPersonId: authorization.personId,
+      action: abstained ? "submission.conflict_declared" : "submission.reviewed",
+      entityType: "submission",
+      entityId: submissionId,
+      after: { round_id: roundId, recommendation: recommendationValue },
+      now,
+      requestId: context.get("requestId") ?? null,
+    });
     const proposal = recommendationValue ? proposalFor(recommendationValue) : null;
     return context.json({
       abstained,

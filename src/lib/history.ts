@@ -12,6 +12,8 @@
  * restore is a forward edit that adds a row (see `content/restore` in
  * `submission-record.routes.ts`), never an update or a delete of an old one.
  */
+import { describeActivity, type ActivityLine } from "./activity-copy";
+import { encodeKeysetCursor, type KeysetCursor } from "../api/pagination";
 
 /**
  * The actions that describe a content change and can therefore be restored.
@@ -80,7 +82,7 @@ function project(row: HistoryRow): HistoryEntry {
 }
 
 const SELECT = `SELECT audit.id, audit.action, audit.actor_kind, audit.actor_person_id,
-    person.name AS actor_name, audit.created_at, audit.before_json, audit.after_json
+    COALESCE(audit.actor_name, person.name) AS actor_name, audit.created_at, audit.before_json, audit.after_json
   FROM audit_log audit
   LEFT JOIN people person ON person.id = audit.actor_person_id`;
 
@@ -129,6 +131,62 @@ export async function recordHistoryFor(
     .bind(eventId, entityId)
     .all<HistoryRow>();
   return rows.results.map(project);
+}
+
+/** A history row that has been read into a sentence — MRQ-211's third lens. */
+export interface TimelineEntry extends HistoryEntry, ActivityLine {
+  restorable: boolean;
+}
+
+/**
+ * Lens three: the submission's timeline — "why is this talk in this state".
+ *
+ * Submitted, routed, reviewed, decided, reversed, re-accepted, mailed: every one
+ * of those already writes an `audit_log` row, so this is the same rows
+ * `recordHistoryFor` returns, read in the organizer's language and one page at
+ * a time. Nothing is synthesised and nothing is stored twice; a moment missing
+ * from the timeline is a writer that does not record, and is fixed at the
+ * writer.
+ *
+ * Paged in SQL for the record most worth reading late in a conference — the one
+ * that has been edited, re-decided, and re-mailed for six months (R7).
+ */
+export async function recordTimelinePage(
+  db: D1Database,
+  eventId: string,
+  entityId: string,
+  page: { limit: number; cursor: KeysetCursor | null },
+): Promise<{ entries: TimelineEntry[]; total: number; nextCursor: string | null; hasMore: boolean }> {
+  const cursorWhere = page.cursor
+    ? " AND (audit.created_at < ? OR (audit.created_at = ? AND audit.id < ?))"
+    : "";
+  const cursorBindings = page.cursor
+    ? [page.cursor.createdAt, page.cursor.createdAt, page.cursor.id]
+    : [];
+  const [count, rows] = await Promise.all([
+    db
+      .prepare("SELECT COUNT(*) AS total FROM audit_log WHERE event_id = ? AND entity_id = ?")
+      .bind(eventId, entityId)
+      .first<{ total: number }>(),
+    db
+      .prepare(`${SELECT} WHERE audit.event_id = ? AND audit.entity_id = ?${cursorWhere} ${ORDER} LIMIT ?`)
+      .bind(eventId, entityId, ...cursorBindings, page.limit)
+      .all<HistoryRow>(),
+  ]);
+  const last = rows.results.at(-1);
+  return {
+    entries: rows.results.map((row) => {
+      const entry = project(row);
+      return {
+        ...entry,
+        ...describeActivity({ action: entry.action, before: entry.before, after: entry.after }),
+        restorable: isRestorable(entry),
+      };
+    }),
+    total: Number(count?.total ?? 0),
+    nextCursor: rows.results.length >= page.limit && last ? encodeKeysetCursor(last) : null,
+    hasMore: rows.results.length >= page.limit,
+  };
 }
 
 export function isContentAction(action: string): action is ContentAction {

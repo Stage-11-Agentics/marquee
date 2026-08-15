@@ -265,6 +265,9 @@ export async function deleteEventCascade(
         ...eventBindings,
       ),
       prepared(db, `UPDATE person_lists SET created_by = NULL WHERE created_by IN ${demoPeopleSql}`, ...eventBindings),
+      // Demo people can be deleted only after their FK is severed. Migration
+      // 0021 snapshots actor_name when the fact is written, so this removes a
+      // referential link without rewriting the fact's authorship or its copy.
       prepared(db, `UPDATE audit_log SET actor_person_id = NULL WHERE actor_person_id IN ${demoPeopleSql}`, ...eventBindings),
       prepared(db, `DELETE FROM people WHERE id IN ${demoPeopleSql}`, ...eventBindings),
     );

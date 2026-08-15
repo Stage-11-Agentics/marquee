@@ -24,6 +24,7 @@ import peopleImportUndoReceiptsMigrationSql from "../../migrations/0016_people_i
 import eventDeletionMigrationSql from "../../migrations/0018_event_deletion.sql?raw";
 import outreachTargetingMigrationSql from "../../migrations/0019_outreach_targeting.sql?raw";
 import portalInvitesMigrationSql from "../../migrations/0020_portal_invites.sql?raw";
+import auditOrgScopeMigrationSql from "../../migrations/0021_audit_log_org_scope.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -106,6 +107,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(eventDeletionMigrationSql),
     ...splitStatements(outreachTargetingMigrationSql),
     ...splitStatements(portalInvitesMigrationSql),
+    ...splitStatements(auditOrgScopeMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

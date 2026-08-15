@@ -133,7 +133,7 @@ describe.sequential("MRQ-80 deliberate decision resend", () => {
     expect(retry?.idempotency_key).not.toBe("original-mrq80-key");
 
     const audit = await env.DB.prepare(
-      "SELECT action, entity_id, after_json FROM audit_log WHERE event_id = ? AND action = 'submission.decision_resent'",
+      "SELECT action, entity_id, after_json FROM audit_log WHERE event_id = ? AND action = 'submission.decision_mail_queued'",
     ).bind(EVENT_ID).first<{ action: string; entity_id: string; after_json: string }>();
     expect(audit?.entity_id).toBe(SUBMISSION_ID);
     expect(JSON.parse(audit?.after_json ?? "{}" )).toMatchObject({ outbox_id: resendBody.outbox_id, to_email: "new-address@mrq80.test" });

@@ -21,6 +21,7 @@ import { EvaluationPage } from "../evaluation/EvaluationPage";
 import { EventSettings } from "../settings/EventSettings";
 import { TaskTemplatesPage } from "../settings/TaskTemplatesPage";
 import { ApiTokensPage } from "../settings/ApiTokensPage";
+import { OrgActivityPage } from "../settings/OrgActivityPage";
 import { WebhooksPage } from "../settings/WebhooksPage";
 import { VenuesPage } from "../venues/VenuesPage";
 import { FormsPage } from "../forms/FormsPage";
@@ -242,6 +243,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             : route?.id === "lists" ? <PeoplePage search={location.search} navigate={navigate} tab="lists" />
             : route?.id === "sourcing" ? <SourcingPipelinePage search={location.search} navigate={navigate} />
             : isServer ? <ServerPage />
+            : route?.id === "org-activity" ? <OrgActivityPage />
             : eventId === null ? <NoConference navigate={navigate} />
             : isSubmissionsList
             ? <SubmissionsPage eventId={eventId} search={location.search} navigate={navigate} />

@@ -841,3 +841,7 @@
   .people-filter-panel { grid-template-columns: 1fr; }
   .people-filter-group { border-right: 0; border-bottom: var(--hair) solid var(--rule-soft); }
 }
+
+/* The feed's footer: the count and the "Load more" control keep one row, so
+   reaching the end of a relationship's history does not shift the drawer. */
+.people-feed-foot { align-items: center; border-top: 1px solid var(--line); display: flex; justify-content: space-between; margin-top: 10px; min-height: 32px; padding-top: 10px; }

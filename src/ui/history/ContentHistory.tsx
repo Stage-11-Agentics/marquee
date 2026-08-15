@@ -1,4 +1,4 @@
-import type { JSX } from "preact";
+import type { ComponentChildren, JSX } from "preact";
 import { useState } from "preact/hooks";
 
 import { Button } from "../shell/components";
@@ -16,6 +16,10 @@ import "./history.css";
 export interface HistoryEntryView {
   id: string;
   action: string;
+  /** The server-composed sentence. Every lens over the log shares it. */
+  summary?: string;
+  /** What the payload adds — a title, a subject, which roles ended. */
+  detail?: string | null;
   actor_name: string | null;
   created_at: number;
   before: unknown;
@@ -24,6 +28,8 @@ export interface HistoryEntryView {
 
 interface Props {
   entries: HistoryEntryView[];
+  /** Rendered under the list — the count and, where there is one, "Load more". */
+  footer?: ComponentChildren;
   /** Omit to render the timeline read-only — no restore controls appear. */
   onRestore?: (entryId: string) => void | Promise<void>;
   busy?: boolean;
@@ -45,7 +51,7 @@ function preview(value: string): string {
   return value.length > 52 ? `${value.slice(0, 51)}…` : value;
 }
 
-export function ContentHistory({ entries, onRestore, busy = false, livePublicly = false, label, moment, emptyCopy }: Props): JSX.Element {
+export function ContentHistory({ entries, footer, onRestore, busy = false, livePublicly = false, label, moment, emptyCopy }: Props): JSX.Element {
   const [confirming, setConfirming] = useState<string | null>(null);
 
   if (entries.length === 0) return <span class="subtle">{emptyCopy ?? "No history recorded."}</span>;
@@ -56,7 +62,10 @@ export function ContentHistory({ entries, onRestore, busy = false, livePublicly 
       const previousTitle = titleBefore(entry.before);
       return <div class="history-row" key={entry.id}>
         <div class="history-fact">
-          <strong>{label(entry.action)}</strong>
+          {/* `summary` when the server wrote one — which is every row now that
+              the timeline reads through the shared projection. `label` remains
+              the fallback for a caller that has not adopted it. */}
+          <strong>{entry.summary ?? label(entry.action)}{entry.detail ? <span class="history-detail"> — {entry.detail}</span> : null}</strong>
           {/* An audit row with no person behind it is a system write, and saying
               so is more honest than borrowing a name that did not do it. */}
           <span>{entry.actor_name || "Conference team"}</span>
@@ -85,5 +94,6 @@ export function ContentHistory({ entries, onRestore, busy = false, livePublicly 
         {restorable && previousTitle && <small class="history-preview">Restores: “{preview(previousTitle)}”</small>}
       </div>;
     })}
+    {footer}
   </div>;
 }

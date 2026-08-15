@@ -15,7 +15,7 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { newUlid } from "../api/ids";
 import { LIST_DEFAULTS } from "../api/list";
-import { executeListPage, parsePagination } from "../api/pagination";
+import { executeListPage, parseKeysetPagination, parsePagination, totalPages } from "../api/pagination";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { requireOrgAccess } from "../lib/auth/org-access";
 import {
@@ -28,6 +28,8 @@ import {
   pipelineStageName,
   type PersonEventRow,
 } from "../lib/person-annotations";
+import { personFeedPage } from "../lib/org-activity";
+import type { ActivityLine } from "../lib/activity-copy";
 import { normalizeEmail } from "../lib/sessionize-import";
 import {
   buildPeopleQuery,
@@ -39,6 +41,14 @@ import {
 } from "./people.queries";
 
 const personParams = z.object({ personId: z.string().min(1) });
+const personActivityQuery = z.object({
+  page: z.coerce.number().int().min(1).optional().catch(undefined)
+    .openapi({ type: "integer", minimum: 1 }),
+  per_page: z.coerce.number().int().min(1).max(LIST_DEFAULTS.maxPerPage).optional().catch(undefined)
+    .openapi({ type: "integer", minimum: 1, maximum: LIST_DEFAULTS.maxPerPage }),
+  cursor: z.string().min(1).optional().catch(undefined)
+    .openapi({ type: "string" }),
+});
 
 export const peopleListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
@@ -128,14 +138,29 @@ const activitySchema = z.object({
   id: z.string(),
   kind: z.string(),
   summary: z.string(),
+  /** What the underlying row adds — which roles ended, which tag, which subject. */
+  detail: z.string().nullable(),
   actor_name: z.string().nullable(),
   created_at: z.number().int(),
 });
+const activityListResponse = z.object({
+  data: z.array(activitySchema),
+  page: z.number().int(),
+  per_page: z.number().int(),
+  total: z.number().int(),
+  total_pages: z.number().int(),
+  next_cursor: z.string().nullable(),
+  has_more: z.boolean(),
+}).openapi("PersonActivityList");
 const personRecordResponse = z.object({
   person: personSummary,
   notes: z.array(noteSchema),
   connections: z.array(connectionSchema),
   activity: z.array(activitySchema),
+  /** Everything the feed has, so the drawer knows whether page two exists. */
+  activity_total: z.number().int(),
+  activity_next_cursor: z.string().nullable(),
+  activity_has_more: z.boolean(),
   stage_history: z.array(stageEntrySchema),
   card: stageEntrySchema.nullable(),
   target_events: z.array(targetEventSchema),
@@ -171,6 +196,42 @@ function rowResponse(row: PersonListRow) {
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
+}
+
+/**
+ * How many rows the drawer opens with. Deliberately larger than a screenful and
+ * far smaller than a relationship: the rest is one "Load more" away, served by
+ * `GET /api/v1/org/people/{personId}/activity`.
+ */
+const PERSON_FEED_PAGE_SIZE = 40;
+
+/**
+ * The copy for the feed rows the audit log does not own — annotations and mail.
+ *
+ * Audit rows are described by `src/lib/activity-copy.ts`, which every lens
+ * shares; these two kinds are the CRM's own vocabulary and belong here, beside
+ * the writers that append them.
+ */
+function describePersonFeedEntry(kind: string, payload: unknown): ActivityLine {
+  const value = (payload ?? {}) as Record<string, unknown>;
+  if (kind === "note") return { summary: "Note added", detail: null };
+  if (kind === "tag") {
+    return {
+      summary: value.op === "remove" ? "Tag removed" : "Tag added",
+      detail: typeof value.tag === "string" ? value.tag : null,
+    };
+  }
+  if (kind === "stage") {
+    return { summary: `Moved to ${pipelineStageName(String(value.stage ?? ""))}`, detail: null };
+  }
+  if (kind === "email") {
+    return {
+      summary: `Email ${String(value.status ?? "queued")}`,
+      detail: typeof value.subject === "string" ? value.subject : null,
+    };
+  }
+  // An annotation kind added later reads as itself rather than as nothing.
+  return { summary: kind.replace(/[._]/g, " "), detail: null };
 }
 
 /** Every annotation on one person, newest first, with the actor's name resolved. */
@@ -408,7 +469,7 @@ const getPerson = defineApiRoute(
     const access = requireOrgAccess(context);
     const { personId } = context.req.valid("param");
     const person = await requirePerson(context.env.DB, access.orgId, personId);
-    const [annotations, connections, audit, messages, targetEvents] = await Promise.all([
+    const [annotations, connections, feed, targetEvents] = await Promise.all([
       readPersonEvents(context.env.DB, personId),
       context.env.DB.prepare(
         `SELECT participation.submission_id, participation.role, submission.title, submission.status,
@@ -420,50 +481,18 @@ const getPerson = defineApiRoute(
          ORDER BY conference.starts_on DESC, submission.title COLLATE NOCASE ASC
          LIMIT 100`,
       ).bind(personId).all<{ submission_id: string; role: string; title: string; status: string; event_id: string; event_name: string }>(),
-      context.env.DB.prepare(
-        `SELECT entry.id, entry.action, entry.created_at, actor.name AS actor_name
-         FROM audit_log entry
-         LEFT JOIN people actor ON actor.id = entry.actor_person_id
-         WHERE entry.entity_type = 'person' AND entry.entity_id = ?
-         ORDER BY entry.created_at DESC LIMIT 40`,
-      ).bind(personId).all<{ id: string; action: string; created_at: number; actor_name: string | null }>(),
-      context.env.DB.prepare(
-        `SELECT id, subject, status, created_at FROM outbox
-         WHERE person_id = ? ORDER BY created_at DESC LIMIT 40`,
-      ).bind(personId).all<{ id: string; subject: string; status: string; created_at: number }>(),
+      // Lens two of MRQ-211. The feed is still assembled rather than stored —
+      // annotations, the audit log, and what was mailed — but it is assembled in
+      // SQL now, so the drawer reads one page instead of three unbounded lists
+      // it then sorts and throws most of away.
+      personFeedPage(context.env.DB, access.orgId, personId, parseKeysetPagination({ per_page: PERSON_FEED_PAGE_SIZE }), describePersonFeedEntry),
       context.env.DB.prepare(
         "SELECT id, name FROM events WHERE org_id = ? ORDER BY starts_on ASC, id ASC",
       ).bind(access.orgId).all<{ id: string; name: string }>(),
     ]);
-    // The activity feed is the annotations log plus what the rest of the product
-    // already records about this person. It is assembled, never stored.
-    const activity = [
-      ...annotations.map((row) => ({
-        id: row.id,
-        kind: row.kind,
-        summary: row.kind === "note"
-          ? "Note added"
-          : row.kind === "tag"
-          ? `Tag ${JSON.parse(row.value_json).op === "remove" ? "removed" : "added"} — ${JSON.parse(row.value_json).tag}`
-          : `Moved to ${pipelineStageName(String(JSON.parse(row.value_json).stage))}`,
-        actor_name: row.actor_name ?? null,
-        created_at: row.created_at,
-      })),
-      ...audit.results.map((row) => ({
-        id: row.id,
-        kind: "audit",
-        summary: row.action,
-        actor_name: row.actor_name,
-        created_at: row.created_at,
-      })),
-      ...messages.results.map((row) => ({
-        id: row.id,
-        kind: "email",
-        summary: `Email ${row.status} — “${row.subject}”`,
-        actor_name: null,
-        created_at: row.created_at,
-      })),
-    ].sort((left, right) => right.created_at - left.created_at).slice(0, 60);
+    // Outreach (MRQ-205) resolves a stage move's target conference by name; the
+    // feed above no longer carries the stage rows, but `annotations` still does,
+    // which is what both of these read.
     const targetNames = new Map(targetEvents.results.map((event) => [event.id, event.name]));
     const stageHistory = foldStageHistory(annotations).map((entry) => ({
       ...entry,
@@ -481,7 +510,10 @@ const getPerson = defineApiRoute(
         event_id: row.event_id,
         event_name: row.event_name,
       })),
-      activity,
+      activity: feed.rows,
+      activity_total: feed.total,
+      activity_next_cursor: feed.nextCursor,
+      activity_has_more: feed.hasMore,
       stage_history: stageHistory,
       card: card
         ? { ...card, target_event_name: card.target_event_id ? targetNames.get(card.target_event_id) ?? null : null }
@@ -843,6 +875,52 @@ const getSummary = defineApiRoute(
   },
 );
 
+/**
+ * Lens two, paginated: the same feed the drawer opens with, page by page.
+ *
+ * A separate endpoint rather than a parameter on the record read, because the
+ * record is one drawer-worth of everything and the feed is the only part of it
+ * that grows without bound. Paging the record would make every consumer of it
+ * pay for a parameter only one section uses.
+ */
+const getPersonActivity = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/org/people/{personId}/activity",
+    operationId: "getOrgPersonActivity",
+    summary: "One person's activity feed, paginated",
+    description:
+      "Annotations, audited actions whose subject is this person, and mail sent to them — merged newest-first and paged in SQL. The second of MRQ-211's three lenses over one append-only log.",
+    tags: ["People"],
+    request: { params: personParams, query: personActivityQuery },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: {
+      200: jsonResponse(activityListResponse, "Person activity"),
+      ...errorResponses([400, 401, 403, 404, 429, 500]),
+    },
+  },
+  async (context) => {
+    const access = requireOrgAccess(context);
+    const { personId } = context.req.valid("param");
+    await requirePerson(context.env.DB, access.orgId, personId);
+    const query = context.req.valid("query");
+    const page = parseKeysetPagination({ ...query, per_page: query.per_page ?? PERSON_FEED_PAGE_SIZE });
+    const feed = await personFeedPage(context.env.DB, access.orgId, personId, page, describePersonFeedEntry);
+    return context.json(
+      {
+        data: feed.rows,
+        page: page.page,
+        per_page: page.perPage,
+        total: feed.total,
+        total_pages: totalPages(feed.total, page.perPage),
+        next_cursor: feed.nextCursor,
+        has_more: feed.hasMore,
+      },
+      200,
+    );
+  },
+);
+
 export const apiRoutes = [
   listPeople,
   createPerson,
@@ -854,4 +932,5 @@ export const apiRoutes = [
   moveStage,
   getPipeline,
   getSummary,
+  getPersonActivity,
 ];

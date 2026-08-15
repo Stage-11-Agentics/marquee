@@ -299,7 +299,6 @@ const batchPublishRoute = defineApiRoute(
         now,
         requestId: actor.requestId,
       }, `
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         FROM agenda_items item
         JOIN submissions submission ON submission.id = item.submission_id AND submission.event_id = item.event_id
         WHERE item.event_id = ? AND item.submission_id = ? AND item.kind = 'session'

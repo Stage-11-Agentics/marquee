@@ -17,11 +17,13 @@ import {
   addNote,
   addTag,
   fetchPerson,
+  fetchPersonActivity,
   formatDay,
   formatMoment,
   removeTag,
   setStage,
   updatePerson,
+  type PersonActivity,
   type PersonRecord,
 } from "./people-api";
 import { PIPELINE_STAGES } from "./pipeline-stages";
@@ -42,13 +44,29 @@ export function PersonDrawer({
   const [noteDraft, setNoteDraft] = useState("");
   const [tagDraft, setTagDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  // Lens two is paged on the server, so the drawer holds the pages it has asked
+  // for rather than the whole relationship. A write re-reads the record, which
+  // resets this to page one — the newest rows, which is what a write produced.
+  const [olderActivity, setOlderActivity] = useState<PersonActivity[]>([]);
+  const [activityPage, setActivityPage] = useState(1);
+  const [activityNextCursor, setActivityNextCursor] = useState<string | null>(null);
+  const [activityHasMore, setActivityHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
     setRecord(null);
     setError("");
+    setOlderActivity([]);
+    setActivityPage(1);
+    setActivityNextCursor(null);
+    setActivityHasMore(false);
     fetchPerson(personId, controller.signal)
-      .then(setRecord)
+      .then((next) => {
+        setRecord(next);
+        setActivityNextCursor(next.activity_next_cursor);
+        setActivityHasMore(next.activity_has_more);
+      })
       .catch((caught: unknown) => { if (!controller.signal.aborted) setError(errorSummary(caught)); });
     return () => controller.abort();
   }, [personId]);
@@ -67,8 +85,33 @@ export function PersonDrawer({
   // Re-read rather than patch: the note that comes back is the one on the
   // server, which is the only one worth showing.
   const reread = async () => {
-    setRecord(await fetchPerson(personId));
+    setOlderActivity([]);
+    setActivityPage(1);
+    setActivityNextCursor(null);
+    setActivityHasMore(false);
+    const next = await fetchPerson(personId);
+    setRecord(next);
+    setActivityNextCursor(next.activity_next_cursor);
+    setActivityHasMore(next.activity_has_more);
     onChanged?.();
+  };
+
+  const loadMoreActivity = async () => {
+    if (loadingMore || !activityHasMore || !activityNextCursor) return;
+    setLoadingMore(true);
+    try {
+      const next = await fetchPersonActivity(personId, activityPage + 1, activityNextCursor);
+      // The cursor is the server's stable boundary. A row written now belongs
+      // to a newer window; concatenation cannot repeat or skip it.
+      setOlderActivity((rows) => [...rows, ...next.data]);
+      setActivityPage(next.page);
+      setActivityNextCursor(next.next_cursor);
+      setActivityHasMore(next.has_more);
+    } catch (caught) {
+      setError(errorSummary(caught));
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const run = async (action: () => Promise<unknown>) => {
@@ -103,6 +146,10 @@ export function PersonDrawer({
   const boardHref = `/pipeline?person=${encodeURIComponent(personId)}`;
 
   const person = record?.person;
+  // Page one comes with the record; later pages accumulate beside it. The two
+  // are concatenated rather than merged, because the server already ordered
+  // them and re-sorting here is how a client starts disagreeing with the log.
+  const shownActivity = record ? [...record.activity, ...olderActivity] : [];
 
   return <>
     <button type="button" class="people-scrim" aria-label="Close this person" onClick={onClose} />
@@ -292,17 +339,30 @@ export function PersonDrawer({
 
           <section class="people-section">
             <h3>Activity</h3>
-            {record.activity.length === 0
+            {shownActivity.length === 0
               ? <p class="people-hint">No recorded activity.</p>
-              : <div class="people-feed">
-                {record.activity.map((entry) => <div class="people-feed-row" key={entry.id}>
-                  <span class={`people-feed-dot ${entry.kind === "audit" ? "" : "accent"}`} />
-                  <div>
-                    <div class="people-feed-text">{entry.summary}</div>
-                    <div class="people-feed-when">{formatMoment(entry.created_at)}{entry.actor_name ? ` · ${entry.actor_name}` : ""}</div>
-                  </div>
-                </div>)}
-              </div>}
+              : <>
+                <div class="people-feed">
+                  {shownActivity.map((entry) => <div class="people-feed-row" key={entry.id}>
+                    <span class={`people-feed-dot ${entry.kind === "audit" ? "" : "accent"}`} />
+                    <div>
+                      {/* Summary and detail are composed on the server, so this
+                          row reads exactly as the same row does in the
+                          organization log and on a submission's timeline. */}
+                      <div class="people-feed-text">{entry.summary}{entry.detail ? ` — ${entry.detail}` : ""}</div>
+                      <div class="people-feed-when">{formatMoment(entry.created_at)}{entry.actor_name ? ` · ${entry.actor_name}` : ""}</div>
+                    </div>
+                  </div>)}
+                </div>
+                {/* The count holds this row whether or not more can be loaded,
+                    so the control's disappearance never moves the feed. */}
+                <div class="people-feed-foot">
+                  <span class="people-hint tabular">{shownActivity.length} of {record.activity_total}</span>
+                  {activityHasMore
+                    ? <Button small disabled={loadingMore} onClick={() => void loadMoreActivity()}>{loadingMore ? "Loading…" : "Load more"}</Button>
+                    : <span class="people-hint">Complete</span>}
+                </div>
+              </>}
           </section>
         </> : null}
       </div>

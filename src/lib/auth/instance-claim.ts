@@ -22,6 +22,8 @@ import type {
   OrganizationRow,
   PersonRow,
 } from "../../db/schema";
+import { ORG_ACTIVITY_ACTIONS } from "../activity-copy";
+import { recordOrgActivity } from "../org-activity";
 import { createSession } from "./auth-sessions";
 import { consumeMagicLink, mintMagicLink, readMagicLink } from "./magic-links";
 
@@ -198,6 +200,8 @@ export async function exchangeInstanceLink(
     email: string;
     userAgent: string;
     now?: number;
+    /** The originating request, so the log line joins the operational log. */
+    requestId?: string | null;
   },
 ): Promise<ExchangeResult | null> {
   const now = input.now ?? Date.now();
@@ -220,6 +224,24 @@ export async function exchangeInstanceLink(
   const person = existingPerson ?? (await insertPerson(db, organization.id, name, email, now));
 
   const membership = await upsertOrganizerMembership(db, organization.id, person.id, now);
+  // Who got in, and through which door. The claim is the first fact this
+  // instance has about itself, and an invite exchange is the only admin action
+  // whose actor is the person it is about — so both are recorded against the
+  // person's own record, where lens two will find them.
+  await recordOrgActivity(db, {
+    orgId: organization.id,
+    actorKind: "user",
+    actorPersonId: person.id,
+    action:
+      input.purpose === "claim"
+        ? ORG_ACTIVITY_ACTIONS.instanceClaimed
+        : ORG_ACTIVITY_ACTIONS.inviteClaimed,
+    entityType: "person",
+    entityId: person.id,
+    after: { role: membership.role, email: person.email, name: person.name },
+    now,
+    requestId: input.requestId ?? null,
+  });
   const session = await createSession(db, {
     personId: person.id,
     roleHint: INSTANCE_ORGANIZER_ROLE,

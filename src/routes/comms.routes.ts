@@ -893,7 +893,7 @@ const sendComms = defineApiRoute(
         eventId,
         actorKind: actor.kind,
         actorPersonId: actor.personId,
-        action: "submission.message_sent",
+        action: "submission.message_queued",
         entityType: "submission",
         entityId: recipient.submission_id,
         after: {

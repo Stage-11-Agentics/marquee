@@ -274,3 +274,24 @@
 .settings-social-row input { accent-color: var(--accent); height: 16px; width: 16px; }
 .settings-social-row .social-mark { fill: var(--ink-soft); flex: 0 0 16px; height: 16px; width: 16px; }
 .settings-social-name { font-size: 13px; font-weight: 600; }
+
+/* The organization activity log (MRQ-211, lens one). Two columns: the fact, and
+   the account of it — who, where, when. The meta column has a fixed minimum so
+   a row with a long summary cannot pull the timestamps out of their column and
+   make the list read as ragged. */
+.org-activity-list { display: grid; gap: 2px; }
+.org-activity-row { align-items: baseline; border-bottom: 1px solid var(--line); column-gap: 14px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, auto); padding: 9px 0; }
+.org-activity-row:last-child { border-bottom: 0; }
+.org-activity-fact { display: grid; gap: 3px; min-width: 0; }
+.org-activity-fact strong { color: var(--ink); font-size: 11.5px; font-weight: 600; }
+.org-activity-fact .subtle { font-size: 10.5px; }
+/* Three fixed columns, not a flex row: with flex, "All conferences" and a long
+   conference name pushed the actor column to a different place on every row,
+   and a log is read down a column. */
+.org-activity-meta { align-items: baseline; color: var(--muted); display: grid; font-size: 10.5px; gap: 12px; grid-template-columns: minmax(0, 1fr) 190px 170px; }
+.org-activity-meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-activity-meta time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The count and the control keep their row whether or not there is more to
+   load: "Complete" holds the space "Load more" leaves. */
+.org-activity-foot { align-items: center; border-top: 1px solid var(--line); display: flex; justify-content: space-between; margin-top: 12px; min-height: 34px; padding-top: 12px; }
+@media (max-width: 720px) { .org-activity-row { grid-template-columns: 1fr; row-gap: 4px; } .org-activity-meta { grid-template-columns: 1fr; row-gap: 2px; } }

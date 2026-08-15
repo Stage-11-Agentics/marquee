@@ -111,6 +111,7 @@ const claimInstance = defineApiRoute(
       name: body.name,
       email: body.email,
       userAgent: context.req.header("user-agent") ?? "",
+      requestId: context.get("requestId") ?? null,
     });
     if (!result) return inertResponse(context);
     setSessionCookie(context, result.session.id, SESSION_TTL_MS / 1000);

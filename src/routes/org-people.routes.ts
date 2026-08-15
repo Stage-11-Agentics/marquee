@@ -5,6 +5,8 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { MagicLinkRow, MembershipRow, PersonRow } from "../db/schema";
 import { INSTANCE_ORGANIZER_ROLE, mintOrganizerInvite } from "../lib/auth/instance-claim";
 import { requireOrgAdmin, requireOrgOwner } from "../lib/auth/org-admin";
+import { ORG_ACTIVITY_ACTIONS } from "../lib/activity-copy";
+import { orgActivityStatement, orgActor, recordOrgActivity } from "../lib/org-activity";
 
 /**
  * Who can run this instance, and how the next one gets in.
@@ -83,7 +85,7 @@ const createOrganizerInvite = defineApiRoute(
     responses: { 201: jsonResponse(inviteCreateResponse, "The invite URL, returned once."), ...orgErrors },
   },
   async (context) => {
-    requireOrgAdmin(context);
+    const auth = requireOrgAdmin(context);
     const origin = new URL(context.req.url).origin;
     const invite = await mintOrganizerInvite(context.env.DB, { origin });
     const row = await context.env.DB.prepare(
@@ -92,6 +94,19 @@ const createOrganizerInvite = defineApiRoute(
       .bind(invite.id)
       .first<Pick<MagicLinkRow, "id" | "created_at" | "expires_at" | "used_at">>();
     if (!row) throw new Error("minted_invite_disappeared");
+    // The link itself is never recorded — the log says an invite exists and who
+    // made it, which is what an owner reviewing access needs. A credential in an
+    // append-only table would outlive every reason it was minted for.
+    await recordOrgActivity(context.env.DB, {
+      orgId: auth.orgId,
+      ...orgActor(auth),
+      action: ORG_ACTIVITY_ACTIONS.inviteMinted,
+      entityType: "invite",
+      entityId: invite.id,
+      after: { role: INSTANCE_ORGANIZER_ROLE, expires_at: row.expires_at },
+      now: row.created_at,
+      requestId: context.get("requestId") ?? null,
+    });
     context.header("Cache-Control", "no-store");
     const resendKey = (context.env as { RESEND_API_KEY?: string }).RESEND_API_KEY;
     return context.json(
@@ -118,7 +133,7 @@ const revokeOrganizerInvite = defineApiRoute(
     responses: { 200: jsonResponse(z.object({ data: inviteSummary }), "The revoked invite"), ...orgErrors },
   },
   async (context) => {
-    requireOrgAdmin(context);
+    const auth = requireOrgAdmin(context);
     const { inviteId } = context.req.valid("param");
     const now = Date.now();
     const revoked = await context.env.DB.prepare(
@@ -134,6 +149,19 @@ const revokeOrganizerInvite = defineApiRoute(
       .bind(inviteId)
       .first<Pick<MagicLinkRow, "id" | "created_at" | "expires_at" | "used_at">>();
     if (!row) throw ApiError.notFound("invite not found");
+    // Recorded after the guarded UPDATE, so the row exists only for a revocation
+    // that actually spent a live invite — a second DELETE on the same id 404s
+    // and writes nothing.
+    await recordOrgActivity(context.env.DB, {
+      orgId: auth.orgId,
+      ...orgActor(auth),
+      action: ORG_ACTIVITY_ACTIONS.inviteRevoked,
+      entityType: "invite",
+      entityId: inviteId,
+      before: { role: INSTANCE_ORGANIZER_ROLE, expires_at: row.expires_at },
+      now,
+      requestId: context.get("requestId") ?? null,
+    });
     return context.json({ data: row }, 200);
   },
 );
@@ -211,8 +239,26 @@ const removeOrganizer = defineApiRoute(
     }
 
     const now = Date.now();
+    // Counted before the batch revokes them, because afterwards the number is
+    // zero and the log would report "no active sign-ins" for the removal that
+    // just ended four of them. What a removal actually revoked is the reason
+    // this row exists at all.
+    //
+    // The count is therefore descriptive, not authoritative: a session minted in
+    // the milliseconds between this read and the batch is revoked by the batch
+    // and not counted here. That is the right trade — the alternative is
+    // counting inside the same transaction that zeroes the number, or splitting
+    // the audit row out of the batch, and a row that can disagree with the
+    // removal it describes is a worse defect than a count that can be one low.
+    const liveSessions = await context.env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM auth_sessions WHERE person_id = ? AND revoked_at IS NULL",
+    )
+      .bind(personId)
+      .first<{ total: number }>();
     // One batch: access cannot end in the membership table and survive in the
-    // session table, however the request fails after the first statement.
+    // session table, however the request fails after the first statement — and
+    // the audit row rides along, because a removal recorded in a different
+    // transaction from the removal itself is free to disagree with it.
     await context.env.DB.batch([
       context.env.DB.prepare(
         "DELETE FROM memberships WHERE org_id = ? AND person_id = ? AND event_id IS NULL",
@@ -220,6 +266,20 @@ const removeOrganizer = defineApiRoute(
       context.env.DB.prepare(
         "UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, ?), updated_at = ? WHERE person_id = ? AND revoked_at IS NULL",
       ).bind(now, now, personId),
+      orgActivityStatement(context.env.DB, {
+        orgId: auth.orgId,
+        ...orgActor(auth),
+        action: ORG_ACTIVITY_ACTIONS.memberRemoved,
+        // The subject is the person, not the membership row that no longer
+        // exists: this is how the removal reaches their own record's feed
+        // (lens two) without that lens having to scan payloads for an id.
+        entityType: "person",
+        entityId: personId,
+        before: { removed_roles: memberships.results.map((membership) => membership.role) },
+        after: { revoked_sessions: Number(liveSessions?.total ?? 0) },
+        now,
+        requestId: context.get("requestId") ?? null,
+      }),
     ]);
     const person = await context.env.DB.prepare("SELECT id FROM people WHERE id = ?")
       .bind(personId)
