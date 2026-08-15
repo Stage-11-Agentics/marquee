@@ -10,9 +10,17 @@ function submissionsCrumb(pathname: string): boolean {
   return pathname.startsWith("/submissions/");
 }
 
-export function Topbar({ eventName, routeName, pathname = "", identity, userMenuOpen, openSearch, toggleUser, closeUser, navigate = (target) => { window.location.assign(target); }, drawerOpen = false, onOpenNavigation = () => {}, navigationButtonRef }: {
+export function Topbar({ eventName, routeName, scopeName, scopeHref = "/dashboard", pathname = "", identity, userMenuOpen, openSearch, toggleUser, closeUser, navigate = (target) => { window.location.assign(target); }, drawerOpen = false, onOpenNavigation = () => {}, navigationButtonRef }: {
   eventName: string;
   routeName: string;
+  /**
+   * What the leading crumb names, when it is not the conference. An
+   * organization-level screen outlives every conference in it, so crumbing to
+   * one would misdescribe where the operator is standing.
+   */
+  scopeName?: string;
+  /** Where that leading crumb goes. Defaults to the conference dashboard. */
+  scopeHref?: string;
   /** Omitted by shells that carry their own chrome (e.g. Delivery health) — the
    * breadcrumb then degrades to a real browser navigation and skips the
    * Submissions crumb, rather than requiring every host to wire client routing. */
@@ -44,7 +52,7 @@ export function Topbar({ eventName, routeName, pathname = "", identity, userMenu
     ><span class="mobile-nav-ink" aria-hidden="true"><i /><i /><i /></span></button>
     <button type="button" class="mobile-event-context" onClick={onOpenNavigation}>{eventName}</button>
     <div class="breadcrumbs">
-      <a href="/dashboard" onClick={crumbTo("/dashboard")}>{eventName}</a>&nbsp; / &nbsp;
+      <a href={scopeHref} onClick={crumbTo(scopeHref)}>{scopeName ?? eventName}</a>&nbsp; / &nbsp;
       {submissionsCrumb(pathname) && <><a href="/submissions" onClick={crumbTo("/submissions")}>Submissions</a>&nbsp; / &nbsp;</>}
       <strong>{routeName}</strong>
     </div>

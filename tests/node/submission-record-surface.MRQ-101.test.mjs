@@ -8,7 +8,12 @@ const source = async (path) => readFile(new URL(path, root), "utf8");
 test("CONTRACT · MRQ-101 the topbar breadcrumb is real links with a Submissions middle crumb", async () => {
   const topbar = await source("src/ui/shell/Topbar.tsx");
 
-  assert.match(topbar, /<a href="\/dashboard" onClick=\{crumbTo\("\/dashboard"\)\}>\{eventName\}<\/a>/);
+  // The leading crumb is a real link, and by default it is the conference and
+  // its dashboard. MRQ-219 made the pair overridable so an organization-level
+  // screen can crumb to the organization instead of to a conference it does not
+  // belong to; the defaults are what keep this contract true everywhere else.
+  assert.match(topbar, /<a href=\{scopeHref\} onClick=\{crumbTo\(scopeHref\)\}>\{scopeName \?\? eventName\}<\/a>/);
+  assert.match(topbar, /scopeHref\s*=\s*"\/dashboard"/);
   assert.match(topbar, /<a href="\/submissions" onClick=\{crumbTo\("\/submissions"\)\}>Submissions<\/a>/);
   // The trailing crumb names the current route but is never itself a link.
   assert.match(topbar, /<strong>\{routeName\}<\/strong>/);

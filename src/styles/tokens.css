@@ -76,6 +76,14 @@
   --canvas-eyebrow: #7fb3b8;      /* the canvas eyebrow         5.6:1 on canvas */
   --canvas-chip-bg: rgba(255, 255, 255, .07);
   --canvas-chip-line: #3a4d59;
+  /* A control standing ON canvas. The shell's `.button` is a panel-ground
+     control, so a door on the dark band needs its own face, hairline, ink and
+     hover accent — otherwise the Agents doors carry three literals apiece in a
+     stylesheet `check:design` cannot read. */
+  --canvas-btn: #1d2f3a;          /* control face on canvas                  */
+  --canvas-tile-line: #2f424e;    /* its hairline — no contrast duty         */
+  --canvas-tile-ink: #eaf3f6;     /* label on that face        12.3:1 on face */
+  --canvas-link: #6fd3da;         /* its hover accent           7.9:1 on face */
   --backdrop: rgba(16, 24, 32, .46);
   --break-tint: #64748b;          /* neutral: breaks are not a track */
   /* The pipeline stage face: a translucent veil over the card ground rather
@@ -134,6 +142,10 @@ html[data-theme="night"] {
   --canvas-eyebrow: #7cc0c6;      /* 7.1:1 on canvas */
   --canvas-chip-bg: rgba(255, 255, 255, .06);
   --canvas-chip-line: #333c43;
+  --canvas-btn: #1c2226;          /* control face on canvas                  */
+  --canvas-tile-line: #2c3338;
+  --canvas-tile-ink: #e6edf1;     /* 13.6:1 on face */
+  --canvas-link: #5cc9d0;         /*  8.2:1 on face */
 
   --accent-hover: #5cc9d0;
   --on-accent: #062629;           /* 6.8:1 — dark ink on a lit key          */

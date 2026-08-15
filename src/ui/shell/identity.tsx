@@ -33,6 +33,7 @@ export interface AuthMeResponse {
   demo_event_name?: string | null;
   person_name?: string | null;
   person_email?: string | null;
+  org_name?: string | null;
 }
 
 let authMeRequest: Promise<AuthMeResponse> | null = null;
@@ -116,6 +117,30 @@ export function useEventName(): string | null {
     };
   }, []);
   return eventName;
+}
+
+/**
+ * The organization's name, from the same boot payload. An organization-level
+ * screen crumbs to the organization, not to whichever conference happens to be
+ * selected — a page that outlives every conference should not name one.
+ *
+ * Null while the payload is in flight (and if it never arrives); the caller
+ * shows a neutral word rather than a blank crumb.
+ */
+export function useOrgName(): string | null {
+  const [orgName, setOrgName] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void loadAuthMe()
+      .then((body) => {
+        if (!cancelled) setOrgName(body.org_name?.trim() || null);
+      })
+      .catch(() => {
+        // Same contract as the conference name above: the shell stays usable.
+      });
+    return () => { cancelled = true; };
+  }, []);
+  return orgName;
 }
 
 export async function signOut(): Promise<void> {

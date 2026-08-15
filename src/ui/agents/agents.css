@@ -1,0 +1,62 @@
+/* ── Agents page: the agent-native front door ─────────────────────────────
+   Lifted from the binding prototype (prototypes/pipeline-v1.1/index.html, CSS
+   block "Agents page (v1.16)"). Deliberately light — prompts over command
+   anatomy — with the three machine doors as the one loud register.
+
+   Class names are page-scoped rather than the prototype's generic ones: the
+   prototype is a single file where `.message-preview` and `.contract-line` can
+   only mean one thing, while here every stylesheet the app imports is global,
+   and `.message-preview` already exists in evaluation.css with different
+   values. Same design, names that cannot collide.
+
+   Every color here is a token. `check:design` cannot read per-feature
+   stylesheets, so this file's colors are the kind that go wrong silently in
+   Night — they are tokens by hand, and the four `--canvas-*` ones the doors
+   need are defined in BOTH palettes in tokens.css. ──────────────────────── */
+
+.agents-lead { display: grid; gap: 14px; margin-bottom: 14px; }
+.agents-connect-body { align-items: start; display: grid; gap: 10px 26px; grid-template-columns: minmax(0, 1fr) 300px; }
+.agents-connect-side { display: grid; gap: 10px; }
+.agents-connect-body p { margin: 0; }
+
+/* The paste-ready prompt, quoted. The prototype's `.message-preview`. */
+.agents-quote { background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: 12px; line-height: 1.55; margin: 0; padding: 14px; }
+
+/* The three machine doors: dark instrument blocks, the strongest visual
+   register on the page — deliberately louder than header buttons. */
+.agents-doors { display: grid; gap: 14px; grid-auto-rows: 1fr; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.agents-door { background: var(--canvas); border: 1px solid var(--canvas-line); border-radius: var(--radius); color: var(--canvas-ink); display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; }
+.agents-door strong { font: 600 13px/1.3 var(--mono); }
+.agents-door > span { color: var(--canvas-muted); font-size: 11px; line-height: 1.5; }
+/* `margin-top: auto` pins every door's button to the same baseline whatever
+   its sentence wraps to, so the band reads as one instrument. */
+.agents-door .button { align-self: flex-start; background: var(--canvas-btn); border-color: var(--canvas-tile-line); color: var(--canvas-tile-ink); margin-top: auto; }
+.agents-door .button:hover { background: var(--canvas-btn); border-color: var(--canvas-link); color: var(--canvas-link); }
+
+.agents-roster-head { align-items: baseline; display: flex; gap: 12px; margin: 20px 2px 10px; }
+.agents-roster-head h2 { font: 600 11px/1.3 var(--mono); letter-spacing: .14em; margin: 0; text-transform: uppercase; }
+.agents-roster { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.agents-card .card-body { align-content: start; display: grid; gap: 12px; }
+.agents-card .card-body > p { color: var(--ink-soft); font-size: 12px; line-height: 1.55; margin: 0; }
+.agents-card-actions { display: flex; gap: 8px; }
+
+.agents-next-year { color: var(--muted); font-size: 11.5px; line-height: 1.6; margin: 14px 2px 20px; }
+.agents-next-year code { background: var(--sunk); border: 1px solid var(--line); border-radius: 2px; color: var(--ink-soft); font: 400 10.5px/1 var(--mono); padding: 2px 5px; }
+
+.agents-contract-line { align-items: baseline; border-bottom: 1px solid var(--line); display: grid; font-size: 12px; gap: 12px; grid-template-columns: 118px 1fr; line-height: 1.5; padding: 9px 0; }
+.agents-contract-line:first-child { padding-top: 0; }
+.agents-contract-line:last-child { border-bottom: 0; padding-bottom: 0; }
+.agents-contract-key { color: var(--muted); font: 600 10px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.agents-contract-line span:last-child { color: var(--ink-soft); }
+.agents-contract-line code { color: var(--ink-soft); font: 400 11px/1 var(--mono); }
+
+@media (max-width: 980px) {
+  .agents-connect-body { grid-template-columns: minmax(0, 1fr); }
+  .agents-doors { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .agents-doors, .agents-roster { grid-template-columns: minmax(0, 1fr); }
+  .agents-contract-line { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .agents-roster-head { flex-direction: column; gap: 4px; }
+}

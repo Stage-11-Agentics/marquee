@@ -419,9 +419,25 @@ async function readMe(cookie: string) {
     demo_event_name?: string | null;
     person_name?: string | null;
     person_email?: string | null;
+    org_name?: string | null;
     memberships?: { role: string }[];
   }>() };
 }
+
+// MRQ-219. An organization-level screen crumbs to the organization, and the
+// boot payload is where the shell learns its name — the organization-settings
+// read is administrator-only, so a reviewer or ops seat standing on /agents
+// would otherwise see the literal word "Organization" above them. It is one
+// column on a SELECT this handler already makes, and nothing else in the app
+// asks for it, so without this the column can be dropped with every other test
+// staying green.
+test("CONTRACT · /auth/me names the organization, for the crumb above an org-level screen", async () => {
+  await seedDemoFixture();
+  const { status, body } = await readMe(await demoSessionCookie("organizer"));
+
+  expect(status).toBe(200);
+  expect(body.org_name).toBe("Marquee Demo");
+});
 
 test("CONTRACT · /auth/me names the person behind a session, not just their id", async () => {
   await seedDemoFixture();

@@ -14,7 +14,9 @@ test("CONTRACT · MRQ-203 · the sidebar reproduces the ruled group structure", 
   expect(SIDEBAR_GROUPS.map((group) => [group, routesFor(group).map((route) => route.label)])).toEqual([
     // Home is MRQ-209's organization-level row; every row points at a route
     // that exists, so a click never becomes a dead end.
-    ["organization", ["Home", "People CRM", "Outreach", "Settings"]],
+    // Agents (MRQ-219) is org-level like the tokens agents authenticate with,
+    // and sits above Settings for the same reason every other row does.
+    ["organization", ["Home", "People CRM", "Outreach", "Agents", "Settings"]],
     ["conference", ["Program pipeline", "Program board", "Abstracts & sessions", "Agenda", "Speakers"]],
     ["speaker-ops", ["Onboarding", "Tasks", "Communications", "Files", "Follow-ups"]],
     ["cfp", ["Forms", "Evaluation", "Reviewer"]],
