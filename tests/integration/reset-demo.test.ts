@@ -31,8 +31,8 @@ const SEEDED_COUNTS: Record<string, number> = {
   webhook_endpoints: 0,
   submission_decisions: 680,
   submission_answers: 4091,
-  submission_tracks: 1153,
-  participations: 1025,
+  submission_tracks: 1156,
+  participations: 1027,
   evaluations: 62,
   comparisons: 0,
   // 102 organizer/agent rows plus the committee's 100 abstracts materialized at
@@ -46,12 +46,15 @@ const SEEDED_COUNTS: Record<string, number> = {
   committees: 1,
   reviewer_track_scopes: 40,
   saved_views: 0,
-  audit_log: 0,
+  // One row, and it earns its place: the reason the Gold sponsorship's banner
+  // deliverable was cancelled, written through the same audit shape the
+  // withdrawal cascade uses, which is where the portal reads "why" from.
+  audit_log: 1,
   file_comments: 0,
   calendar_invites: 0,
-  speaker_tasks: 342,
-  task_templates: 6,
-  agenda_items: 25,
+  speaker_tasks: 358,
+  task_templates: 15,
+  agenda_items: 27,
   embeds: 0,
   // Attendee-created, never seeded: a fresh demo has nobody's schedule in it,
   // nobody's stars, and nobody's email attached to either.
@@ -61,10 +64,16 @@ const SEEDED_COUNTS: Record<string, number> = {
   event_attendances: 0,
   import_rows: 0,
   imports: 0,
-  submissions: 1000,
+  submissions: 1003,
+  // Sponsor Sessions are guaranteed placements outside the 1,000-row competitive
+  // pool (SPEC Amendment 23), which is why `submissions` is 1,003 rather than
+  // 1,000 while every competitive count is unchanged.
+  sponsorship_contacts: 4,
+  sponsorships: 2,
+  sponsor_tiers: 3,
   form_admins: 0,
-  form_fields: 19,
-  forms: 2,
+  form_fields: 31,
+  forms: 7,
   email_templates: 0,
   outbox: 0,
   routing_rules: 0,
@@ -76,7 +85,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   magic_links: 0,
   auth_sessions: 0,
   api_tokens: 1,
-  memberships: 161,
+  memberships: 163,
   // Lists remain organizer-authored, but the demo includes two org-level
   // Outreach cards so the board demonstrates one funnel aimed at two events.
   // A reset must still sweep the append-only log, or a note/card would outlive
@@ -84,7 +93,9 @@ const SEEDED_COUNTS: Record<string, number> = {
   person_list_members: 0,
   person_lists: 0,
   person_events: 2,
-  people: 1103,
+  people: 1109,
+  // Org-scoped like people, and swept after them: `people.company_id` points here.
+  companies: 2,
   attachments: 40,
   event_settings: 0,
   mirror_outbox: 0,

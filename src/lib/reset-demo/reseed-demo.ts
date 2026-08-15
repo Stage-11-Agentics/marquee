@@ -46,6 +46,9 @@ export const WIPE_ORDER = [
   "import_rows",
   "imports",
   "submissions",
+  "sponsorship_contacts",
+  "sponsorships",
+  "sponsor_tiers",
   "form_admins",
   "form_fields",
   "forms",
@@ -65,6 +68,7 @@ export const WIPE_ORDER = [
   "person_lists",
   "person_events",
   "people",
+  "companies",
   "attachments",
   "event_settings",
   "mirror_outbox",
@@ -248,6 +252,21 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
     sql: `DELETE FROM submissions WHERE event_id IN (${ORG_EVENTS})`,
     bindings: ORG,
   },
+  // Sponsorships die before their tiers and before the people they name. The
+  // deliverables and Sessions that point at a sponsorship are deleted higher up
+  // (`speaker_tasks`, `submissions`), so by here nothing references these rows.
+  sponsorship_contacts: {
+    sql: `DELETE FROM sponsorship_contacts WHERE sponsorship_id IN (SELECT id FROM sponsorships WHERE event_id IN (${ORG_EVENTS}))`,
+    bindings: ORG,
+  },
+  sponsorships: {
+    sql: `DELETE FROM sponsorships WHERE event_id IN (${ORG_EVENTS})`,
+    bindings: ORG,
+  },
+  sponsor_tiers: {
+    sql: `DELETE FROM sponsor_tiers WHERE event_id IN (${ORG_EVENTS})`,
+    bindings: ORG,
+  },
   form_admins: {
     sql: `DELETE FROM form_admins WHERE form_id IN (SELECT id FROM forms WHERE event_id IN (${ORG_EVENTS}))`,
     bindings: ORG,
@@ -329,6 +348,13 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   },
   people: {
     sql: "DELETE FROM people WHERE org_id = ?",
+    bindings: ORG,
+  },
+  // Org-scoped like people, and deleted AFTER them: `people.company_id` points
+  // here, so wiping companies first would leave the person rows referencing a
+  // company that no longer exists.
+  companies: {
+    sql: "DELETE FROM companies WHERE org_id = ?",
     bindings: ORG,
   },
   attachments: {

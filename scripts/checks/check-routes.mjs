@@ -22,10 +22,40 @@
  * on drift. `--write` regenerates it.
  */
 import { readdir, readFile, writeFile } from "node:fs/promises";
+import { registerHooks } from "node:module";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { REPOSITORY_ROOT, emit, parseArguments } from "./lib/command.mjs";
+
+/**
+ * `route-table.ts` is a browser module and it imports its siblings the way a
+ * bundler expects — without file extensions. Node's type stripping resolves
+ * relative specifiers literally, so importing it here died with
+ * ERR_MODULE_NOT_FOUND the moment that file grew its first relative import, and
+ * this whole gate went dark with it.
+ *
+ * Adding extensions to the source is not available: `tsconfig.client.json` has
+ * `allowImportingTsExtensions` off, so the browser build rejects them. So the
+ * resolution gap is closed HERE, where it exists — a hook that appends `.ts` or
+ * `.tsx` for a relative specifier that has no extension and does not resolve. It
+ * changes nothing about how the bundler reads the same files.
+ */
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (!specifier.startsWith(".") || /\.[cm]?[jt]sx?$/.test(specifier)) return nextResolve(specifier, context);
+    const parent = context.parentURL ? fileURLToPath(context.parentURL) : null;
+    if (!parent) return nextResolve(specifier, context);
+    for (const extension of [".ts", ".tsx"]) {
+      const candidate = resolve(parent, "..", specifier + extension);
+      if (existsSync(candidate)) {
+        return { url: pathToFileURL(candidate).href, shortCircuit: true };
+      }
+    }
+    return nextResolve(specifier, context);
+  },
+});
 
 const ROUTE_TABLE = resolve(REPOSITORY_ROOT, "src/ui/shell/route-table.ts");
 const APP_ENTRY = resolve(REPOSITORY_ROOT, "src/ui/app.tsx");

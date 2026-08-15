@@ -6,6 +6,7 @@ import { seed as evaluations } from "../../../scripts/seed/evaluations.ts";
 import { seed as event } from "../../../scripts/seed/event.ts";
 import { FROZEN_NOW } from "../../../scripts/seed/event.ts";
 import { seed as pool } from "../../../scripts/seed/pool.ts";
+import { seed as sponsors } from "../../../scripts/seed/sponsors.ts";
 import { seed as submissionContent } from "../../../scripts/seed/submission-content.ts";
 import { makeContext, type SeedModule, type SeedRow } from "../../../scripts/seed/_sql.ts";
 
@@ -23,6 +24,7 @@ export const DEMO_SEED_MODULES: readonly SeedModule[] = [
   agenda,
   ugliness,
   outreach,
+  sponsors,
 ].sort((left, right) =>
   left.order === right.order ? left.name.localeCompare(right.name) : left.order - right.order,
 );

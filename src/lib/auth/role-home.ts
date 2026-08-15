@@ -3,4 +3,5 @@ export const ROLE_HOME = {
   staff: "/dashboard",
   reviewer: "/reviewer",
   speaker: "/portal",
+  sponsor: "/sponsor-portal",
 } as const;
