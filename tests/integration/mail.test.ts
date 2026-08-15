@@ -5,6 +5,7 @@ import { app } from "../../src/index";
 import { createSession } from "../../src/lib/auth/auth-sessions";
 import { listCommsAudience, listCommsRecipientsForSubmissionIds } from "../../src/jobs/mail/audience";
 import { processMailOutbox, runMailSchedule, type MailProvider } from "../../src/jobs/mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../../src/jobs/mail/idempotency";
 import { enqueueOutbox, enqueuePublicFormConfirmation, enqueueSmokeHarnessMail, buildIdempotencyKey } from "../../src/jobs/mail/outbox";
 import { isMailScheduleCron, selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "../../src/jobs/mail/schedule";
 import { mergeDataForRecipient } from "../../src/jobs/mail/merge-data";
@@ -74,7 +75,7 @@ test("AC-33 · auth-shaped and form-shaped messages render into the outbox with 
     db: env.DB,
     eventId: "evt_mail",
     templateKey: "submission_confirmation",
-    entityId: "sub_mail",
+    entityId: IDEMPOTENCY_REGISTRY.formConfirmation("sub_mail"),
     personId: "per_mail",
     toEmail: "speaker@example.com",
     data: { "speaker.first_name": "Ada", "submission.title": "Reliable email" },
@@ -122,7 +123,7 @@ test("AC-117, AC-93 · the same bulk action twice relies on the UNIQUE idempoten
     db: env.DB,
     eventId: "evt_mail",
     templateKey: "rejection" as const,
-    recipients: [{ entityId: "sub_mail", personId: "per_mail", toEmail: "speaker@example.com", data: { "submission.title": "Reliable email" } }],
+    recipients: [{ entityId: IDEMPOTENCY_REGISTRY.customRecipient("sub_mail"), personId: "per_mail", toEmail: "speaker@example.com", data: { "submission.title": "Reliable email" } }],
   };
   const first = await enqueueBulkReminder(input);
   const second = await enqueueBulkReminder(input);
@@ -324,7 +325,7 @@ test("AC-125 · G3 · all seven automated triggers plus bulk are suppressed befo
       db: env.DB,
       eventId: "evt_mail",
       templateKey,
-      entityId: `entity_${index}`,
+      entityId: IDEMPOTENCY_REGISTRY.trigger(`entity_${index}`),
       personId: "per_mail",
       toEmail: "speaker@example.com",
     });
@@ -336,7 +337,7 @@ test("AC-125 · G3 · all seven automated triggers plus bulk are suppressed befo
     eventId: "evt_mail",
     templateKey: "reminder_generic",
     recipients: [{
-      entityId: "bulk_entity",
+      entityId: IDEMPOTENCY_REGISTRY.customRecipient("bulk_entity"),
       personId: "per_mail",
       toEmail: "bulk-not-allowlisted@example.com",
       data: { "speaker.first_name": "Ada" },
@@ -366,7 +367,7 @@ test("AC-126 · a disabled trigger emits no row and an edited template round-tri
     `INSERT INTO email_templates (id, event_id, key, name, subject, body_md, enabled, created_at, updated_at)
      VALUES ('tpl_mail', 'evt_mail', 'acceptance', 'Acceptance', 'Old {{speaker.first_name}}', 'Old body', 0, ?, ?)`,
   ).bind(NOW, NOW).run();
-  expect(await enqueueTrigger({ db: env.DB, eventId: "evt_mail", templateKey: "acceptance", entityId: "sub_mail", personId: "per_mail", toEmail: "speaker@example.com" })).toBeNull();
+  expect(await enqueueTrigger({ db: env.DB, eventId: "evt_mail", templateKey: "acceptance", entityId: IDEMPOTENCY_REGISTRY.trigger("sub_mail"), personId: "per_mail", toEmail: "speaker@example.com" })).toBeNull();
   await env.DB.prepare("UPDATE email_templates SET enabled = 1, subject = ?, body_md = ? WHERE id = 'tpl_mail'").bind("Welcome {{speaker.first_name}}", "Hello {{submission.title}}").run();
   const rendered = await renderStoredTemplate(env.DB, "evt_mail", "acceptance", { "speaker.first_name": "Ada", "submission.title": "Reliable email" });
   expect(rendered.rendered.subject).toBe("Welcome Ada");
@@ -487,7 +488,7 @@ test("AC-127 · the cron handoff queues only rows created by its scan", async ()
     db: env.DB,
     eventId: "evt_mail",
     templateKey: "custom",
-    entityId: "same-cron-unrelated",
+    entityId: IDEMPOTENCY_REGISTRY.customRecipient("same-cron-unrelated"),
     personId: "per_mail",
     toEmail: "speaker@example.com",
     now: cronNow,
@@ -592,8 +593,8 @@ test("AC-129 · AC-131 · every selected recipient gets its own rendered, inspec
     db: env.DB,
     eventId: "evt_mail",
     recipients: [
-      { entityId: "sub_mail", personId: "per_mail", toEmail: "speaker@example.com", data: { "speaker.first_name": "Ada" } },
-      { entityId: "sub_mail_2", personId: "per_mail_2", toEmail: "second@example.com", data: { "speaker.first_name": "Grace" } },
+      { entityId: IDEMPOTENCY_REGISTRY.customRecipient("sub_mail"), personId: "per_mail", toEmail: "speaker@example.com", data: { "speaker.first_name": "Ada" } },
+      { entityId: IDEMPOTENCY_REGISTRY.customRecipient("sub_mail_2"), personId: "per_mail_2", toEmail: "second@example.com", data: { "speaker.first_name": "Grace" } },
     ],
   });
   expect(result).toHaveLength(2);
@@ -605,9 +606,9 @@ test("AC-129 · AC-131 · every selected recipient gets its own rendered, inspec
 });
 
 test("CONTRACT · G3 · demo mode suppresses non-allowlisted mail, while the two named live sites bypass suppression", async () => {
-  const suppressed = await enqueueOutbox({ db: env.DB, eventId: "evt_mail", templateKey: "reminder_generic", entityId: "sub_mail", personId: "per_mail", toEmail: "not-allowed@example.com" });
-  const publicLive = await enqueuePublicFormConfirmation({ db: env.DB, eventId: "evt_mail", templateKey: "submission_confirmation", entityId: "public_sub", personId: "per_mail", toEmail: "typed@example.com", typedAddress: "typed@example.com" });
-  const smokeLive = await enqueueSmokeHarnessMail({ db: env.DB, eventId: "evt_mail", templateKey: "custom", entityId: "smoke_ics", personId: "per_mail", toEmail: "smoke@example.com" });
+  const suppressed = await enqueueOutbox({ db: env.DB, eventId: "evt_mail", templateKey: "reminder_generic", entityId: IDEMPOTENCY_REGISTRY.customRecipient("sub_mail"), personId: "per_mail", toEmail: "not-allowed@example.com" });
+  const publicLive = await enqueuePublicFormConfirmation({ db: env.DB, eventId: "evt_mail", templateKey: "submission_confirmation", entityId: IDEMPOTENCY_REGISTRY.formConfirmation("public_sub"), personId: "per_mail", toEmail: "typed@example.com", typedAddress: "typed@example.com" });
+  const smokeLive = await enqueueSmokeHarnessMail({ db: env.DB, eventId: "evt_mail", templateKey: "custom", entityId: IDEMPOTENCY_REGISTRY.customRecipient("smoke_ics"), personId: "per_mail", toEmail: "smoke@example.com" });
   const fake = provider();
   const outcome = await processMailOutbox(env.DB, env, [suppressed.id, publicLive.id, smokeLive.id], { provider: fake, now: NOW, sleep: async () => undefined });
   expect(outcome).toEqual({ sent: 2, suppressed: 1, failed: 0 });
@@ -619,9 +620,9 @@ test("CONTRACT · G3 · demo mode suppresses non-allowlisted mail, while the two
 test("AC-131 · plain messages use one batch provider call and ICS messages use sequential single sends at no more than ten per second", async () => {
   await env.DB.prepare("UPDATE events SET demo_mode = 0 WHERE id = 'evt_mail'").run();
   const rows = await Promise.all([
-    enqueueOutbox({ db: env.DB, eventId: "evt_mail", templateKey: "custom", entityId: "plain_1", personId: "per_mail", toEmail: "one@example.com" }),
-    enqueueOutbox({ db: env.DB, eventId: "evt_mail", templateKey: "custom", entityId: "ics_1", personId: "per_mail", toEmail: "one@example.com", icsUid: "uid-1", icsBody: "BEGIN:VCALENDAR\nEND:VCALENDAR" }),
-    enqueueOutbox({ db: env.DB, eventId: "evt_mail", templateKey: "custom", entityId: "ics_2", personId: "per_mail", toEmail: "one@example.com", icsUid: "uid-2", icsBody: "BEGIN:VCALENDAR\nEND:VCALENDAR" }),
+    enqueueOutbox({ db: env.DB, eventId: "evt_mail", templateKey: "custom", entityId: IDEMPOTENCY_REGISTRY.customRecipient("plain_1"), personId: "per_mail", toEmail: "one@example.com" }),
+    enqueueOutbox({ db: env.DB, eventId: "evt_mail", templateKey: "custom", entityId: IDEMPOTENCY_REGISTRY.customRecipient("ics_1"), personId: "per_mail", toEmail: "one@example.com", icsUid: "uid-1", icsBody: "BEGIN:VCALENDAR\nEND:VCALENDAR" }),
+    enqueueOutbox({ db: env.DB, eventId: "evt_mail", templateKey: "custom", entityId: IDEMPOTENCY_REGISTRY.customRecipient("ics_2"), personId: "per_mail", toEmail: "one@example.com", icsUid: "uid-2", icsBody: "BEGIN:VCALENDAR\nEND:VCALENDAR" }),
   ]);
   const fake = provider();
   const waits: number[] = [];
@@ -643,7 +644,7 @@ test("AC-117 · idempotency key is stable for the same template, entity, and per
 
 test("AC-117 · the provider request carries the outbox idempotency key", async () => {
   await env.DB.prepare("UPDATE events SET demo_mode = 0 WHERE id = 'evt_mail'").run();
-  const queued = await enqueueOutbox({ db: env.DB, eventId: "evt_mail", templateKey: "custom", entityId: "provider_header", personId: "per_mail", toEmail: "speaker@example.com" });
+  const queued = await enqueueOutbox({ db: env.DB, eventId: "evt_mail", templateKey: "custom", entityId: IDEMPOTENCY_REGISTRY.customRecipient("provider_header"), personId: "per_mail", toEmail: "speaker@example.com" });
   const row = await env.DB.prepare("SELECT * FROM outbox WHERE id = ?").bind(queued.id).first<OutboxRow>();
   const request = vi.fn(async (..._args: unknown[]) => new Response(JSON.stringify({ data: [{ id: "resend-message-1" }] }), { status: 200, headers: { "content-type": "application/json" } }));
   vi.stubGlobal("fetch", request);
@@ -688,7 +689,7 @@ test("AC-126 · the manifest route exposes authenticated template storage throug
   expect(disabled.status).toBe(200);
   const persisted = await env.DB.prepare("SELECT enabled FROM email_templates WHERE event_id = 'evt_mail' AND key = 'rejection'").first<{ enabled: number }>();
   expect(persisted?.enabled).toBe(0);
-  expect(await enqueueTrigger({ db: env.DB, eventId: "evt_mail", templateKey: "rejection", entityId: "sub_mail", personId: "per_mail", toEmail: "speaker@example.com" })).toBeNull();
+  expect(await enqueueTrigger({ db: env.DB, eventId: "evt_mail", templateKey: "rejection", entityId: IDEMPOTENCY_REGISTRY.trigger("sub_mail"), personId: "per_mail", toEmail: "speaker@example.com" })).toBeNull();
 });
 
 test("CONTRACT · MRQ-175 · preview preserves an unknown token but the bulk queue refuses it by name", async () => {
@@ -776,7 +777,7 @@ test("CONTRACT · MRQ-175 · known merge fields queue and known missing values r
     db: env.DB,
     eventId: "evt_mail",
     templateKey: "custom",
-    recipients: [{ entityId: "missing-field", personId: "per_mail", toEmail: "speaker@example.com", data: { "decision.feedback": null } }],
+    recipients: [{ entityId: IDEMPOTENCY_REGISTRY.customRecipient("missing-field"), personId: "per_mail", toEmail: "speaker@example.com", data: { "decision.feedback": null } }],
     subject: "A known field is absent",
     body: "Feedback: {{decision.feedback}}",
   });
