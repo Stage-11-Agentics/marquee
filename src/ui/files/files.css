@@ -129,6 +129,7 @@
   .files-table-wrap { overflow-x: hidden; }
   .files-table { min-width: 0; table-layout: fixed; }
   .files-table .files-session-column,
+  .files-table .files-session-cell,
   .files-table .files-when-column,
   .files-table .files-versions-column,
   .files-table .files-size-column { display: none; }

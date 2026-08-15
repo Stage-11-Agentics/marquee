@@ -93,6 +93,20 @@ export function Sidebar({ activeId, eventName, navigate, resetting, onReset, dra
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!drawerOpen) return;
+    const resetOnDesktop = () => {
+      if (window.innerWidth > 760) onClose?.();
+    };
+    const media = window.matchMedia?.("(max-width: 760px)");
+    window.addEventListener("resize", resetOnDesktop);
+    media?.addEventListener?.("change", resetOnDesktop);
+    resetOnDesktop();
+    return () => {
+      window.removeEventListener("resize", resetOnDesktop);
+      media?.removeEventListener?.("change", resetOnDesktop);
+    };
+  }, [drawerOpen, onClose]);
+  useEffect(() => {
+    if (!drawerOpen) return;
     const frame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     return () => window.cancelAnimationFrame(frame);
   }, [drawerOpen]);

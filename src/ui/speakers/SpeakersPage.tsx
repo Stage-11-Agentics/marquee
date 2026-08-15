@@ -128,7 +128,11 @@ export function SpeakersPage({
         `/api/v1/events/${encodeURIComponent(eventId)}/speakers?${params.toString()}`,
         { route: "/api/v1/events/{eventId}/speakers", signal: controller.signal },
       )
-        .then((snapshot) => setState({ kind: "ready", snapshot }))
+        .then((snapshot) => {
+          setState({ kind: "ready", snapshot });
+          const lastPage = Math.max(1, snapshot.total_pages);
+          setPage((current) => current > lastPage ? lastPage : current);
+        })
         .catch((caught: unknown) => {
           if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(caught) });
         });
@@ -250,10 +254,10 @@ export function SpeakersPage({
             </tr>)}
           </tbody>
         </table>
-        <div class="speaker-tablefoot">
-          <span class="tabular">Showing {rows.length} of {matchingTotal} speakers</span>
-          <span class="speaker-pager"><Button small disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</Button><span class="tabular">Page {ready?.page ?? page} of {totalPages}</span><Button small disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>Next</Button></span>
-        </div>
+      </div> : null}
+      {state.kind === "ready" && (rows.length > 0 || page > 1) ? <div class="speaker-tablefoot">
+        <span class="tabular">Showing {rows.length} of {matchingTotal} speakers</span>
+        <span class="speaker-pager"><Button small disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</Button><span class="tabular">Page {ready?.page ?? page} of {totalPages}</span><Button small disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>Next</Button></span>
       </div> : null}
     </section>
 

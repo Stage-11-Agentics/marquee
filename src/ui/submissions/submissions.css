@@ -179,44 +179,40 @@
   .table-status-bar.selecting { align-items: flex-start; flex-wrap: wrap; }
   .submissions-pagination { align-items: flex-start; gap: 10px; }
 
-  /* Keep the three status bands' geometry stable without spending a full
-     phone viewport on transparent copy. Empty bands overlay the next control
-     row; active selection actions become a reachable bottom sheet instead of
-     pushing the first submission down when their buttons wrap. */
-  .saved-view-message, .selection-bar, .bulk-message {
-    position: relative;
-    z-index: 2;
-  }
-  .saved-view-message { margin-bottom: -24px; }
-  .selection-bar { margin-bottom: -42px; }
-  .bulk-message { margin-bottom: -24px; }
-  .saved-view-message:not(.visible), .selection-bar:not(.visible), .bulk-message:not(.visible) { pointer-events: none; }
-  .selection-bar.visible {
-    background: var(--accent-soft);
-    border-bottom: 0;
-    border-top: 1px solid var(--accent);
+  /* Keep the single status strip's geometry stable. When selection or a bulk
+     receipt is active, the same strip becomes a reachable bottom sheet
+     instead of pushing the first submission down when its buttons wrap. */
+  .submissions-mobile-sheets { display: contents; }
+  .submissions-page.has-mobile-sheet { padding-bottom: 220px; }
+  .submissions-mobile-sheets.has-sheet {
+    background: var(--panel);
     bottom: 0;
-    box-shadow: 0 -5px 18px rgb(18 32 43 / 16%);
+    display: block;
     left: 0;
-    margin-bottom: 0;
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    position: fixed;
+    right: 0;
+    z-index: 400;
+  }
+  .submissions-mobile-sheets.has-sheet .table-status-bar {
+    border-bottom: 0;
+    margin: 0;
+    position: static;
+    z-index: auto;
+  }
+  .submissions-mobile-sheets.has-sheet .table-status-bar.selecting {
+    background: var(--accent-soft);
+    border-top: 1px solid var(--accent);
+    box-shadow: var(--shadow);
     max-height: calc(100vh - 80px);
     overflow: auto;
     padding-bottom: calc(7px + env(safe-area-inset-bottom, 0px));
-    position: fixed;
-    right: 0;
-    z-index: 400;
   }
-  .bulk-message.visible {
+  .submissions-mobile-sheets.has-sheet .table-status-bar:not(.selecting) {
     background: var(--panel);
-    border-bottom: 0;
     border-top: 1px solid var(--line-strong);
-    bottom: 0;
-    margin-bottom: 0;
     min-height: 40px;
-    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-    padding-top: 10px;
-    position: fixed;
-    right: 0;
-    z-index: 400;
   }
 }

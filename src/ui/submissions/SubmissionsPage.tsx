@@ -792,7 +792,8 @@ export function SubmissionsPage({
   const statusTone = statusError ? "error" : statusNotice ? "success" : "";
   const statusText = statusError || statusNotice
     || (refreshing ? "Refreshing submissions…" : "Select rows to accept, waitlist, or reject them together.");
-  return <div class="submissions-page">
+  const mobileSheetOpen = Boolean(selectedCount || bulkError || bulkMessage);
+  return <div class={`submissions-page${mobileSheetOpen ? " has-mobile-sheet" : ""}`}>
     <PageHeader
       title={notifiedQueue ? "Decided · not notified" : draftQueue ? "Drafts needing attention" : "Abstracts & sessions"}
       copy={envelope ? notifiedQueue
@@ -867,8 +868,10 @@ export function SubmissionsPage({
         height between its four states, or checking a row would push the row
         out from under the pointer that checked it.
       */}
-      <div class={`table-status-bar ${selectedCount ? "selecting" : statusTone}`} aria-live="polite">
-        {selectedCount ? <><strong class="tabular">{selectedCount.toLocaleString()} selected</strong>{!allMatching && envelope && selectedCount < envelope.total ? <Button small onClick={() => setAllMatching(true)}>Select all {envelope.total.toLocaleString()} matching</Button> : <span>All matching records selected</span>}<span class="toolbar-spacer" /><span class="selection-actions">{BULK_ACTIONS.map((option) => <Button key={option.action} small variant={option.variant} disabled={bulkBusy} onClick={() => { setBulkRequest(option.action); setBulkFeedback(""); setBulkError(""); }}>{option.label}</Button>)}</span></> : <><span class="table-status-text">{statusText}</span>{refreshError && <Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}</>}
+      <div class={`submissions-mobile-sheets${mobileSheetOpen ? " has-sheet" : ""}`}>
+        <div class={`table-status-bar ${selectedCount ? "selecting" : statusTone}`} aria-live="polite">
+          {selectedCount ? <><strong class="tabular">{selectedCount.toLocaleString()} selected</strong>{!allMatching && envelope && selectedCount < envelope.total ? <Button small onClick={() => setAllMatching(true)}>Select all {envelope.total.toLocaleString()} matching</Button> : <span>All matching records selected</span>}<span class="toolbar-spacer" /><span class="selection-actions">{BULK_ACTIONS.map((option) => <Button key={option.action} small variant={option.variant} disabled={bulkBusy} onClick={() => { setBulkRequest(option.action); setBulkFeedback(""); setBulkError(""); }}>{option.label}</Button>)}</span></> : <><span class="table-status-text">{statusText}</span>{refreshError && <Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}</>}
+        </div>
       </div>
       {bulkRequest && (() => {
         const option = BULK_ACTIONS.find((entry) => entry.action === bulkRequest)!;
