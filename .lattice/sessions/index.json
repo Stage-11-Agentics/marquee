@@ -1,6 +1,7 @@
 {
   "active_sessions": {
     "AgentEvaluator-1": "sess_01KZVFR1QPQ9PMT7PY3B0RRWP0",
+    "Airtable-Intake-1": "sess_01M01XCG6Z5TYTQTA1ND1JB7VW",
     "DiffAnalyst-1": "sess_01KZVRC5WKV4ACDY7V0JQE0YS3",
     "EvalFixOrchestrator-1": "sess_01KZW4PSFBWA0T8GP141KZ3RA3",
     "EvalIntake-1": "sess_01KZVFJPQ119CRD98KZJZNMD8E",
@@ -21,6 +22,7 @@
   },
   "serial_counters": {
     "AgentEvaluator": 1,
+    "Airtable-Intake": 1,
     "DiffAnalyst": 1,
     "EvalFixOrchestrator": 1,
     "EvalIntake": 1,

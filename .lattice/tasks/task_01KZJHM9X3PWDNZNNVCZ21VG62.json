@@ -1,7 +1,7 @@
 {
   "assigned_to": null,
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-08-09T05:58:44Z",
   "created_by": "agent:orchestrator-intake",
@@ -10,7 +10,7 @@
   "done_at": null,
   "evidence_refs": [],
   "id": "task_01KZJHM9X3PWDNZNNVCZ21VG62",
-  "last_event_id": "ev_01KZR5YVR5VZFKPZGMV4N52RDX",
+  "last_event_id": "ev_01M01XFJJ7P7YY7REZJM5W5P8H",
   "last_status_changed_at": "2026-08-11T10:30:14Z",
   "linked_files": [],
   "priority": "medium",
@@ -37,6 +37,6 @@
   "tags": null,
   "title": "Airtable mirror \u2014 inbound",
   "type": "task",
-  "updated_at": "2026-08-11T10:30:14Z",
+  "updated_at": "2026-08-15T05:14:28Z",
   "urgency": null
 }
