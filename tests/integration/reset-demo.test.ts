@@ -32,7 +32,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   submission_decisions: 680,
   submission_answers: 4091,
   submission_tracks: 1156,
-  participations: 1026,
+  participations: 1027,
   evaluations: 62,
   comparisons: 0,
   // 102 organizer/agent rows plus the committee's 100 abstracts materialized at
@@ -52,7 +52,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   audit_log: 1,
   file_comments: 0,
   calendar_invites: 0,
-  speaker_tasks: 356,
+  speaker_tasks: 358,
   task_templates: 15,
   agenda_items: 27,
   embeds: 0,
@@ -85,7 +85,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   magic_links: 0,
   auth_sessions: 0,
   api_tokens: 1,
-  memberships: 162,
+  memberships: 163,
   // Lists remain organizer-authored, but the demo includes two org-level
   // Outreach cards so the board demonstrates one funnel aimed at two events.
   // A reset must still sweep the append-only log, or a note/card would outlive
@@ -93,7 +93,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   person_list_members: 0,
   person_lists: 0,
   person_events: 2,
-  people: 1108,
+  people: 1109,
   // Org-scoped like people, and swept after them: `people.company_id` points here.
   companies: 2,
   attachments: 40,

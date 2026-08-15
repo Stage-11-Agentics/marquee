@@ -57,6 +57,7 @@ export const SPONSOR_CONTACT_IDS = {
  */
 export const SPONSOR_SPEAKER_IDS = {
   nadia: seedId("per", "nadia-el-amin"),
+  yusuf: seedId("per", "yusuf-demirtas"),
 } as const;
 
 export const SPONSOR_FORM_IDS = {
@@ -345,7 +346,12 @@ const GOLD_DELIVERABLES: readonly DeliverableSpec[] = [
     kind: "file",
     description: "Used on the event site, the sponsor wall, and printed signage. Export your primary mark as a vector PDF — signage prints larger than any raster file survives.",
     assignee: SPONSOR_CONTACT_IDS.grzegorz,
-    dueInDays: -5,
+    // Twelve days back, not five. The seed is anchored to SPEC §6's frozen clock
+    // (~Aug 20 2026) while `overdue` is derived against the REAL clock, so a
+    // deliverable only five days behind the frozen date is still in the future
+    // for anyone demoing before it — and the one state this row exists to show
+    // would not be on screen. Twelve days is past both.
+    dueInDays: -12,
   },
   {
     key: "gold-name-your-speaker",
@@ -640,25 +646,43 @@ export function run(ctx: SeedContext): void {
     updated_at: now,
   });
 
-  // The named speaker on Gold's scheduled Session. A `people` row and a speaker
-  // membership, no sponsorship-contact link: she speaks, she does not hold the
-  // deal, and the portal must not offer her its deliverables.
-  ctx.add("people", {
-    id: SPONSOR_SPEAKER_IDS.nadia,
-    org_id: ORG_ID,
-    email: "nadia.el-amin@example.com",
-    name: "Nadia El-Amin",
-    title: "Principal Risk Engineer",
-    company: "Ashworth–Meridian Capital Intelligence Group",
-    company_id: COMPANY_IDS.gold,
-    bio: "Builds the model-risk controls behind Ashworth–Meridian's agentic underwriting desk.",
-    headshot_attachment_id: null,
-    social_links: "[]",
-    is_demo: 1,
-    last_write_source: "marquee",
-    created_at: now,
-    updated_at: now,
-  });
+  // The named speakers on the two scheduled sponsor Sessions. Each is a `people`
+  // row and a speaker membership with NO sponsorship-contact link: they speak,
+  // they do not hold the deal, and the portal must not offer them its
+  // deliverables. Keeping the two roles in different humans is the point — a
+  // marketing lead's name must never be published as the person on stage.
+  const speakers: ReadonlyArray<readonly [string, string, string, string, string, string]> = [
+    [
+      SPONSOR_SPEAKER_IDS.nadia, "Nadia El-Amin", "nadia.el-amin@example.com",
+      "Principal Risk Engineer", COMPANY_IDS.gold,
+      "Builds the model-risk controls behind Ashworth–Meridian's agentic underwriting desk.",
+    ],
+    [
+      SPONSOR_SPEAKER_IDS.yusuf, "Yusuf Demirtaş", "yusuf.demirtas@example.com",
+      "Head of Credit Risk", COMPANY_IDS.silver,
+      "Took Tapestry's decisioning copilots through their first external audit.",
+    ],
+  ];
+  for (const [id, name, email, title, companyId, bio] of speakers) {
+    ctx.add("people", {
+      id,
+      org_id: ORG_ID,
+      email,
+      name,
+      title,
+      company: companyId === COMPANY_IDS.gold
+        ? "Ashworth–Meridian Capital Intelligence Group"
+        : "Tapestry Small-Business Lending",
+      company_id: companyId,
+      bio,
+      headshot_attachment_id: null,
+      social_links: "[]",
+      is_demo: 1,
+      last_write_source: "marquee",
+      created_at: now,
+      updated_at: now,
+    });
+  }
 
   for (const contact of CONTACTS) {
     ctx.add("people", {
@@ -781,7 +805,7 @@ export function run(ctx: SeedContext): void {
     abstract: null,
     formatKey: "lightning",
     submitterPersonId: SPONSOR_CONTACT_IDS.mona,
-    speakerPersonId: null,
+    speakerPersonId: SPONSOR_SPEAKER_IDS.yusuf,
     slot: {
       startsAt: SILVER_SLOT_STARTS_AT,
       roomId: seedId("rm", "marquis-room-a"),
