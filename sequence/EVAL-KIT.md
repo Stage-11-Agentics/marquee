@@ -4,8 +4,11 @@
 **Local checkout:** `.eval-kit/` at the repo root — a live git clone with `origin` intact, so
 `git -C .eval-kit pull` picks up changes. **Gitignored**, deliberately: it is a third-party
 repo with its own history and must never enter `main` or the public `mrq-42-assembly` orphan.
-**Pinned at:** `2b0f795`, 2026-08-10. One commit; the kit is young and swyx is still editing
-it. **Re-pull before any run** — a rubric change between now and the deadline changes our score.
+**Pinned at:** `8109958`, 2026-08-12. **Re-pull before any run** — swyx is still editing
+the kit, and a rubric change changes our score. `.eval-kit-agent/` — the fork the rounds
+actually run — is resynced from it: its graded content (rubric ids, weights, criteria,
+pass criteria, scenarios) is identical to upstream, and it adds only `survey_terms` and
+the in-session harness. Verify that parity rather than assuming it.
 
 This closes the "rubric ingestion deferred by Atin" item in the decisions log.
 
@@ -25,7 +28,7 @@ hurts. What is graded is whether the loop *works*.
 
 | | |
 |---|---|
-| **Rubric items** | 98 — 86 required (182 weighted pts), 12 extra credit (speaker-crm, 19 pts) |
+| **Rubric items** | 98 — 86 required (183 weighted pts), 12 extra credit (speaker-crm, 19 pts) |
 | **Item weight** | 1/2/3 = polish/important/core. Ranks items **within their own area only** |
 | **Area weight** | Each area's share of the overall score. Required areas sum to 100 |
 | **Verdicts** | `pass` 1.0 · `partial` 0.5 · `fail`/`not_found` 0 · `cannot_judge` **excluded from the denominator**, routed to manual |
@@ -47,7 +50,7 @@ because it drags the report toward the cliff.
 | Content Management (files/versions/approvals) | `04-content-management.yaml` | 15 | 3 | 14 | 31 |
 | AI Agenda Builder | `05-ai-agenda.yaml` | 10 | 2 | 8 | 18 |
 | Public Widgets (5 surfaces) | `06-public-widgets.yaml` | 20 | 3 | 16 | 35 |
-| **Required** | | **100** | **18** | **86** | **182** |
+| **Required** | | **100** | **18** | **86** | **183** |
 | Speaker CRM (*extra credit*) | `07-speaker-crm.yaml` | 10 | 2 | 12 | 19 |
 
 ### The type cut — the kit's own stated reading order
@@ -70,7 +73,7 @@ Every item carries a `type`: what kind of problem it probes, orthogonal to area.
 > are the strongest signal in the whole rubric — but also the items scenarios reach last, so
 > they're the first thing a turn-limit cutoff eats."*
 
-**`rule` + `scoping` + `roundtrip` + `handoff` = 81 of 182 required points (45%)** — exactly
+**`rule` + `scoping` + `roundtrip` + `handoff` = 81 of 183 required points (44%)** — exactly
 what Marquee was built to do. This rubric rewards our thesis, and puts it last in every
 scenario, which makes turn budget a scoring variable rather than an operational detail.
 
@@ -169,7 +172,7 @@ upstream commits, live matches `github/main`, and `.env` holds the key.
 Before any run, verify optional scoring still has both exclusion sites:
 
 ```sh
-grep -n "filter((a) => !a.optional)" .eval-kit/src/report.ts   # 2 hits at pin 2b0f795
+grep -n "filter((a) => !a.optional)" .eval-kit/src/report.ts   # 2 hits at pin 8109958
 ```
 
 Two hits mean optional areas are excluded from `overallPct`, `overallCoveragePct`, and `byType`, so extra credit is currently worth 0.0. If they disappear, the Speaker CRM verdict in `sequence/research/speaker-crm-scope.md` §5 reopens; re-read it before deciding.
