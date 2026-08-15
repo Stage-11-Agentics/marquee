@@ -148,6 +148,14 @@ export interface PeopleQueryInput extends PeopleFilters {
   orgId?: string;
   sort?: string;
   page?: PageParams;
+  /** Internal CTE prefix shared by the count, data, and id projections. */
+  withSql?: string;
+  withBindings?: (string | number)[];
+  /**
+   * Replace the default CRM list projection for a lean caller-specific read.
+   * The population, filters, and count/id shapes remain this builder's.
+   */
+  baseColumns?: string;
   /**
    * Extra projection for a caller that needs more of the person row than the
    * list shows. The conference roster uses this to add its membership columns
@@ -158,6 +166,13 @@ export interface PeopleQueryInput extends PeopleFilters {
   /** Extra JOIN clause for those columns; its bindings bind BEFORE the filters. */
   joins?: string;
   joinBindings?: (string | number)[];
+  /** Internal predicate appended to both the count and data halves. */
+  extraWhere?: { sql: string; bindings: (string | number)[] };
+  /** Joins required by `extraWhere` in count and id projections. */
+  countJoins?: string;
+  countJoinBindings?: (string | number)[];
+  /** Omit the default list order for aggregate callers that wrap `dataSql`. */
+  orderResults?: boolean;
 }
 
 export interface PersonListRow {
@@ -387,6 +402,10 @@ function filterClauses(input: PeopleQueryInput): Clauses {
     where.push("person.id = ?");
     bindings.push(input.personId);
   }
+  if (input.extraWhere?.sql) {
+    where.push(`(${input.extraWhere.sql})`);
+    bindings.push(...input.extraWhere.bindings);
+  }
   return { where, bindings };
 }
 
@@ -424,7 +443,7 @@ export function buildPeopleQuery(input: PeopleQueryInput): BuiltQuery {
     ? `${sort.column} IS NULL ASC, ${sort.column} ${direction}`
     : `${sort.column} ${direction}`;
   const order = `${primary}, person.id ASC`;
-  const columns = `person.id, person.name, person.email, person.title, person.company, person.bio,
+  const defaultColumns = `person.id, person.name, person.email, person.title, person.company, person.bio,
        person.headshot_attachment_id, person.created_at, person.updated_at,
        person.do_not_contact,
        ${CONFERENCE_COUNT} AS conference_count,
@@ -433,30 +452,34 @@ export function buildPeopleQuery(input: PeopleQueryInput): BuiltQuery {
        ${CURRENT_STAGE} AS stage,
        ${CURRENT_TARGET_EVENT} AS outreach_target_event_id,
        ${CURRENT_TARGET_EVENT_NAME} AS outreach_target_event_name,
-       ${CURRENT_NEXT_TOUCH} AS outreach_next_touch_on${input.columns ? `,\n       ${input.columns}` : ""}`;
+       ${CURRENT_NEXT_TOUCH} AS outreach_next_touch_on`;
+  const columns = `${input.baseColumns ?? defaultColumns}${input.columns ? `,\n       ${input.columns}` : ""}`;
   const joins = input.joins ? ` ${input.joins}` : "";
   const joinBindings = input.joinBindings ?? [];
+  const withSql = input.withSql ? `${input.withSql.trimEnd()}\n` : "";
+  const withBindings = input.withBindings ?? [];
+  const countJoins = input.countJoins ? ` ${input.countJoins}` : "";
+  const countJoinBindings = input.countJoinBindings ?? [];
   const limit = input.page ? " LIMIT ? OFFSET ?" : "";
   const pageBindings = input.page ? [input.page.limit, input.page.offset] : [];
+  const orderSql = input.orderResults === false ? "" : ` ORDER BY ${order}`;
   return {
-    // The count never needs the projection's joins — it counts people, and a
-    // LEFT JOIN that only widens columns cannot change how many there are.
-    countSql: `SELECT COUNT(*) AS total FROM people person ${whereSql}`,
-    countBindings: [...bindings],
-    dataSql: `SELECT ${columns} FROM people person${joins} ${whereSql} ORDER BY ${order}${limit}`,
-    dataBindings: [...joinBindings, ...bindings, ...pageBindings],
+    // A projection-only join is data-only. A caller-specific predicate can
+    // opt into a one-row-per-person count join when its SQL references that
+    // projection; the caller owns that cardinality contract.
+    countSql: `${withSql}SELECT COUNT(*) AS total FROM people person${countJoins} ${whereSql}`,
+    countBindings: [...withBindings, ...countJoinBindings, ...bindings],
+    dataSql: `${withSql}SELECT ${columns} FROM people person${joins} ${whereSql}${orderSql}${limit}`,
+    dataBindings: [...withBindings, ...joinBindings, ...bindings, ...pageBindings],
     // The same population as `countSql`, projected to ids so another query can
-    // intersect with it. No joins, no order, no limit: it is only ever a
+    // intersect with it. No data-only joins, no order, no limit: it is only ever a
     // subquery, and it is the one shape that lets a saved filter compose with a
     // caller's filters instead of competing with them for a key.
     //
-    // It deliberately drops `joins` while reusing `whereSql`, so it is valid
-    // ONLY while every filter clause references `person` alone (or a
-    // self-contained subquery). A filter that reaches for a joined alias would
-    // still build here and be wrong — silently, for whoever consumed it as a
-    // subquery. Add such a filter and this projection has to grow the join too.
-    idsSql: `SELECT person.id FROM people person ${whereSql}`,
-    idsBindings: [...bindings],
+    // It carries the count join rather than the data-only projection join, so
+    // a caller-specific predicate that references its aliases stays valid.
+    idsSql: `${withSql}SELECT person.id FROM people person${countJoins} ${whereSql}`,
+    idsBindings: [...withBindings, ...countJoinBindings, ...bindings],
   };
 }
 

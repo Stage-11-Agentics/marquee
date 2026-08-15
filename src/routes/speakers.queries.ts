@@ -23,8 +23,8 @@ import type { D1Database } from "@cloudflare/workers-types";
 import type { ListEnvelope } from "../api/list";
 import { executeListPage, parsePagination } from "../api/pagination";
 import { parseCustomFields, parseSocialLinks } from "../lib/person-profile";
-import { ONBOARDING_PERSON_SOURCE, ROSTER_SUBMISSION_STATUSES, SPEAKER_ROSTER_PERSON_SOURCE, speakerRosterPersonSource } from "../lib/roster-source";
-import { buildPeopleQuery } from "./people.queries";
+import { ONBOARDING_PERSON_SOURCE, ROSTER_SUBMISSION_STATUSES, SPEAKER_ROSTER_PERSON_SOURCE } from "../lib/roster-source";
+import { buildPeopleQuery, type BuiltQuery } from "./people.queries";
 
 export const SPEAKER_STATUSES = ["pending", "invited", "confirmed", "declined"] as const;
 export type SpeakerStatus = (typeof SPEAKER_STATUSES)[number];
@@ -180,27 +180,46 @@ interface TaskCountRow {
  * applied, plus the three membership columns only a conference has. The
  * projection extension is what keeps it one query instead of two.
  */
-const ROSTER_COLUMNS = `person.social_links, person.custom_fields,
-       membership.confirmation_status AS membership_status,
+const ROSTER_BASE_COLUMNS = `person.id, person.name, person.email, person.title, person.company, person.bio,
+       person.headshot_attachment_id, person.social_links, person.custom_fields,
+       person.created_at, person.updated_at`;
+
+const ROSTER_COLUMNS = `membership.confirmation_status AS membership_status,
        membership.confirmed_at AS membership_confirmed_at,
        membership.invited_at AS membership_invited_at`;
 
-const ROSTER_JOIN = `LEFT JOIN memberships membership
-       ON membership.person_id = person.id AND membership.event_id = ? AND membership.role = 'speaker'`;
+const ROSTER_WITH = `WITH event_scope AS (SELECT ? AS event_id),
+participation_rollup AS (
+  SELECT part.person_id,
+         COUNT(*) AS participation_count,
+         SUM(CASE WHEN part.confirmation_status = 'declined' THEN 1 ELSE 0 END) AS declined_count,
+         SUM(CASE WHEN part.confirmation_status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed_count,
+         MAX(CASE WHEN part.invited_at IS NOT NULL THEN 1 ELSE 0 END) AS invited
+    FROM participations part
+    JOIN submissions submission ON submission.id = part.submission_id
+    CROSS JOIN event_scope
+   WHERE submission.event_id = event_scope.event_id
+     AND part.role IN ('speaker', 'co_speaker')
+     AND submission.status IN (${ROSTER_STATUS_LIST})
+   GROUP BY part.person_id
+)`;
 
-async function rosterRows(db: D1Database, eventId: string): Promise<PersonQueryRow[]> {
-  const built = rosterQuery(eventId);
-  const result = await db.prepare(built.sql).bind(...built.bindings).all<PersonQueryRow>();
-  return result.results;
-}
+const ROSTER_JOIN = `CROSS JOIN event_scope
+       LEFT JOIN memberships membership
+         ON membership.person_id = person.id
+        AND membership.event_id = event_scope.event_id
+        AND membership.role = 'speaker'
+       LEFT JOIN participation_rollup rollup ON rollup.person_id = person.id`;
 
 function rosterQuery(eventId: string, personId?: string): { sql: string; bindings: (string | number)[] } {
   const built = buildPeopleQuery({
     eventId,
     ...(personId === undefined ? {} : { personId }),
+    baseColumns: ROSTER_BASE_COLUMNS,
     columns: ROSTER_COLUMNS,
+    withSql: ROSTER_WITH,
+    withBindings: [eventId],
     joins: ROSTER_JOIN,
-    joinBindings: [eventId],
   });
   return { sql: built.dataSql, bindings: built.dataBindings };
 }
@@ -331,56 +350,27 @@ export function speakerMatchesFilters(row: SpeakerRow, filters: SpeakerFilters):
   return true;
 }
 
-const SPEAKER_ROSTER_CTE = `
-WITH event_scope AS (SELECT ? AS event_id),
-participation_rollup AS (
-  SELECT part.person_id,
-         COUNT(*) AS participation_count,
-         SUM(CASE WHEN part.confirmation_status = 'declined' THEN 1 ELSE 0 END) AS declined_count,
-         SUM(CASE WHEN part.confirmation_status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed_count,
-         MAX(CASE WHEN part.invited_at IS NOT NULL THEN 1 ELSE 0 END) AS invited
-    FROM participations part
-    JOIN submissions submission ON submission.id = part.submission_id
-    CROSS JOIN event_scope
-   WHERE submission.event_id = event_scope.event_id
-     AND part.role IN ('speaker', 'co_speaker')
-     AND submission.status IN (${ROSTER_STATUS_LIST})
-   GROUP BY part.person_id
-),
-roster_people AS (
-  SELECT person.id, person.name, person.email, person.title, person.company, person.bio,
-         person.headshot_attachment_id, person.social_links, person.custom_fields,
-         person.created_at, person.updated_at,
-         membership.confirmation_status AS membership_status,
-         membership.confirmed_at AS membership_confirmed_at,
-         membership.invited_at AS membership_invited_at,
-         event_scope.event_id,
-         CASE
-           WHEN COALESCE(rollup.participation_count, 0) > 0 AND rollup.declined_count > 0 THEN 'declined'
-           WHEN COALESCE(rollup.participation_count, 0) > 0
-             AND rollup.confirmed_count = rollup.participation_count THEN 'confirmed'
-           WHEN COALESCE(rollup.participation_count, 0) > 0 AND rollup.invited = 1 THEN 'invited'
-           WHEN COALESCE(rollup.participation_count, 0) = 0 AND membership.confirmation_status = 'declined' THEN 'declined'
-           WHEN COALESCE(rollup.participation_count, 0) = 0 AND membership.confirmation_status = 'confirmed' THEN 'confirmed'
-           WHEN COALESCE(rollup.participation_count, 0) = 0 AND membership.invited_at IS NOT NULL THEN 'invited'
-           ELSE 'pending'
-         END AS status
-    FROM people person
-    CROSS JOIN event_scope
-    LEFT JOIN memberships membership
-      ON membership.person_id = person.id
-     AND membership.event_id = event_scope.event_id
-     AND membership.role = 'speaker'
-    LEFT JOIN participation_rollup rollup ON rollup.person_id = person.id
-   WHERE person.id IN (${speakerRosterPersonSource("event_scope.event_id")})
-)
-`;
+/**
+ * The SQL status filter is evaluated against the same person projection as
+ * the page. It remains named until C gives it one shared implementation with
+ * `rollupSpeakerStatus`.
+ */
+const ROSTER_STATUS_SQL = `CASE
+  WHEN COALESCE(rollup.participation_count, 0) > 0 AND rollup.declined_count > 0 THEN 'declined'
+  WHEN COALESCE(rollup.participation_count, 0) > 0
+    AND rollup.confirmed_count = rollup.participation_count THEN 'confirmed'
+  WHEN COALESCE(rollup.participation_count, 0) > 0 AND rollup.invited = 1 THEN 'invited'
+  WHEN COALESCE(rollup.participation_count, 0) = 0 AND membership.confirmation_status = 'declined' THEN 'declined'
+  WHEN COALESCE(rollup.participation_count, 0) = 0 AND membership.confirmation_status = 'confirmed' THEN 'confirmed'
+  WHEN COALESCE(rollup.participation_count, 0) = 0 AND membership.invited_at IS NOT NULL THEN 'invited'
+  ELSE 'pending'
+END`;
 
 function speakerFilterWhere(filters: SpeakerFilters): { sql: string; bindings: (string | number)[] } {
   const where: string[] = [];
   const bindings: (string | number)[] = [];
   if (filters.status && filters.status !== "all") {
-    where.push("roster.status = ?");
+    where.push(`${ROSTER_STATUS_SQL} = ?`);
     bindings.push(filters.status);
   }
   if (filters.track && filters.track !== "all") {
@@ -389,8 +379,8 @@ function speakerFilterWhere(filters: SpeakerFilters): { sql: string; bindings: (
         FROM participations track_part
         JOIN submissions track_submission ON track_submission.id = track_part.submission_id
         JOIN submission_tracks track_link ON track_link.submission_id = track_submission.id
-       WHERE track_part.person_id = roster.id
-         AND track_submission.event_id = roster.event_id
+       WHERE track_part.person_id = person.id
+         AND track_submission.event_id = event_scope.event_id
          AND track_part.role IN ('speaker', 'co_speaker')
          AND track_submission.status IN (${ROSTER_STATUS_LIST})
          AND track_link.track_id = ?
@@ -401,17 +391,17 @@ function speakerFilterWhere(filters: SpeakerFilters): { sql: string; bindings: (
   if (search) {
     const pattern = `%${search}%`;
     where.push(`(
-      roster.name LIKE ? COLLATE NOCASE
-      OR roster.email LIKE ? COLLATE NOCASE
-      OR IFNULL(roster.title, '') LIKE ? COLLATE NOCASE
-      OR IFNULL(roster.company, '') LIKE ? COLLATE NOCASE
-      OR roster.id LIKE ? COLLATE NOCASE
+      person.name LIKE ? COLLATE NOCASE
+      OR person.email LIKE ? COLLATE NOCASE
+      OR IFNULL(person.title, '') LIKE ? COLLATE NOCASE
+      OR IFNULL(person.company, '') LIKE ? COLLATE NOCASE
+      OR person.id LIKE ? COLLATE NOCASE
       OR EXISTS (
         SELECT 1
           FROM participations search_part
           JOIN submissions search_submission ON search_submission.id = search_part.submission_id
-         WHERE search_part.person_id = roster.id
-           AND search_submission.event_id = roster.event_id
+         WHERE search_part.person_id = person.id
+           AND search_submission.event_id = event_scope.event_id
            AND search_part.role IN ('speaker', 'co_speaker')
            AND search_submission.status IN (${ROSTER_STATUS_LIST})
            AND search_submission.title LIKE ? COLLATE NOCASE
@@ -419,31 +409,46 @@ function speakerFilterWhere(filters: SpeakerFilters): { sql: string; bindings: (
     )`);
     bindings.push(pattern, pattern, pattern, pattern, pattern, pattern);
   }
-  return { sql: where.length > 0 ? `WHERE ${where.join(" AND ")}` : "", bindings };
+  return { sql: where.join(" AND "), bindings };
 }
 
-function speakerPageQueries(eventId: string, filters: SpeakerFilters, page: ReturnType<typeof parsePagination>) {
+export function buildSpeakerRosterQueries(eventId: string, filters: SpeakerFilters, page: ReturnType<typeof parsePagination>): BuiltQuery {
   const scope = speakerFilterWhere(filters);
-  const where = scope.sql;
+  return buildPeopleQuery({
+    eventId,
+    baseColumns: ROSTER_BASE_COLUMNS,
+    columns: ROSTER_COLUMNS,
+    withSql: ROSTER_WITH,
+    withBindings: [eventId],
+    joins: ROSTER_JOIN,
+    countJoins: ROSTER_JOIN,
+    countJoinBindings: [],
+    extraWhere: scope.sql ? scope : undefined,
+    page,
+  });
+}
+
+export function buildSpeakerStatusCountsQuery(eventId: string): { sql: string; bindings: (string | number)[] } {
+  const built = buildPeopleQuery({
+    eventId,
+    baseColumns: "person.id",
+    columns: `${ROSTER_STATUS_SQL} AS roster_status`,
+    withSql: ROSTER_WITH,
+    withBindings: [eventId],
+    joins: ROSTER_JOIN,
+    orderResults: false,
+  });
   return {
-    countSql: `${SPEAKER_ROSTER_CTE}SELECT COUNT(*) AS total FROM roster_people roster ${where}`,
-    countBindings: [eventId, ...scope.bindings],
-    dataSql: `${SPEAKER_ROSTER_CTE}SELECT roster.id, roster.name, roster.email, roster.title, roster.company, roster.bio,
-         roster.headshot_attachment_id, roster.social_links, roster.custom_fields,
-         roster.created_at, roster.updated_at,
-         roster.membership_status, roster.membership_confirmed_at, roster.membership_invited_at
-    FROM roster_people roster ${where}
-    ORDER BY roster.name COLLATE NOCASE ASC, roster.id ASC
-    LIMIT ? OFFSET ?`,
-    dataBindings: [eventId, ...scope.bindings, page.limit, page.offset],
+    sql: `SELECT roster_status AS status, COUNT(*) AS count
+       FROM (${built.dataSql}) roster_status_rows
+      GROUP BY roster_status`,
+    bindings: built.dataBindings,
   };
 }
 
 async function speakerStatusCounts(db: D1Database, eventId: string): Promise<Record<SpeakerStatus | "all", number>> {
-  const result = await db.prepare(
-    `${SPEAKER_ROSTER_CTE}
-     SELECT status, COUNT(*) AS count FROM roster_people GROUP BY status`,
-  ).bind(eventId).all<{ status: SpeakerStatus; count: number }>();
+  const query = buildSpeakerStatusCountsQuery(eventId);
+  const result = await db.prepare(query.sql).bind(...query.bindings).all<{ status: SpeakerStatus; count: number }>();
   const counts: Record<SpeakerStatus | "all", number> = { all: 0, pending: 0, invited: 0, confirmed: 0, declined: 0 };
   for (const row of result.results) {
     counts[row.status] = Number(row.count);
@@ -509,7 +514,7 @@ export async function listSpeakers(
   now = Date.now(),
 ): Promise<SpeakerRosterSnapshot> {
   const page = parsePagination({ page: filters.page, per_page: filters.perPage });
-  const queries = speakerPageQueries(eventId, filters, page);
+  const queries = buildSpeakerRosterQueries(eventId, filters, page);
   const [envelope, counts, allTracks] = await Promise.all([
     executeListPage<PersonQueryRow>({
       count: db.prepare(queries.countSql).bind(...queries.countBindings),
