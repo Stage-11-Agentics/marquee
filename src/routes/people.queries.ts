@@ -152,6 +152,11 @@ export interface PeopleQueryInput extends PeopleFilters {
   withSql?: string;
   withBindings?: (string | number)[];
   /**
+   * Replace the default CRM list projection for a lean caller-specific read.
+   * The population, filters, and count/id shapes remain this builder's.
+   */
+  baseColumns?: string;
+  /**
    * Extra projection for a caller that needs more of the person row than the
    * list shows. The conference roster uses this to add its membership columns
    * without forking the query — it is the same query, extended, which is the
@@ -166,6 +171,8 @@ export interface PeopleQueryInput extends PeopleFilters {
   /** Joins required by `extraWhere` in count and id projections. */
   countJoins?: string;
   countJoinBindings?: (string | number)[];
+  /** Omit the default list order for aggregate callers that wrap `dataSql`. */
+  orderResults?: boolean;
 }
 
 export interface PersonListRow {
@@ -436,7 +443,7 @@ export function buildPeopleQuery(input: PeopleQueryInput): BuiltQuery {
     ? `${sort.column} IS NULL ASC, ${sort.column} ${direction}`
     : `${sort.column} ${direction}`;
   const order = `${primary}, person.id ASC`;
-  const columns = `person.id, person.name, person.email, person.title, person.company, person.bio,
+  const defaultColumns = `person.id, person.name, person.email, person.title, person.company, person.bio,
        person.headshot_attachment_id, person.created_at, person.updated_at,
        person.do_not_contact,
        ${CONFERENCE_COUNT} AS conference_count,
@@ -445,7 +452,8 @@ export function buildPeopleQuery(input: PeopleQueryInput): BuiltQuery {
        ${CURRENT_STAGE} AS stage,
        ${CURRENT_TARGET_EVENT} AS outreach_target_event_id,
        ${CURRENT_TARGET_EVENT_NAME} AS outreach_target_event_name,
-       ${CURRENT_NEXT_TOUCH} AS outreach_next_touch_on${input.columns ? `,\n       ${input.columns}` : ""}`;
+       ${CURRENT_NEXT_TOUCH} AS outreach_next_touch_on`;
+  const columns = `${input.baseColumns ?? defaultColumns}${input.columns ? `,\n       ${input.columns}` : ""}`;
   const joins = input.joins ? ` ${input.joins}` : "";
   const joinBindings = input.joinBindings ?? [];
   const withSql = input.withSql ? `${input.withSql.trimEnd()}\n` : "";
@@ -454,13 +462,14 @@ export function buildPeopleQuery(input: PeopleQueryInput): BuiltQuery {
   const countJoinBindings = input.countJoinBindings ?? [];
   const limit = input.page ? " LIMIT ? OFFSET ?" : "";
   const pageBindings = input.page ? [input.page.limit, input.page.offset] : [];
+  const orderSql = input.orderResults === false ? "" : ` ORDER BY ${order}`;
   return {
     // A projection-only join is data-only. A caller-specific predicate can
     // opt into a one-row-per-person count join when its SQL references that
     // projection; the caller owns that cardinality contract.
     countSql: `${withSql}SELECT COUNT(*) AS total FROM people person${countJoins} ${whereSql}`,
     countBindings: [...withBindings, ...countJoinBindings, ...bindings],
-    dataSql: `${withSql}SELECT ${columns} FROM people person${joins} ${whereSql} ORDER BY ${order}${limit}`,
+    dataSql: `${withSql}SELECT ${columns} FROM people person${joins} ${whereSql}${orderSql}${limit}`,
     dataBindings: [...withBindings, ...joinBindings, ...bindings, ...pageBindings],
     // The same population as `countSql`, projected to ids so another query can
     // intersect with it. No data-only joins, no order, no limit: it is only ever a

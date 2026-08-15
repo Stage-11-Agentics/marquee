@@ -17,7 +17,7 @@ import {
 import { ORG_HOME_PEOPLE_HREF } from "../../src/api/org-home";
 import { mapPersonHeaders, planPersonImport } from "../../src/lib/people-import";
 import { buildPeopleQuery, parseTags } from "../../src/routes/people.queries";
-import { buildSpeakerRosterQueries } from "../../src/routes/speakers.queries";
+import { buildSpeakerRosterQueries, buildSpeakerStatusCountsQuery } from "../../src/routes/speakers.queries";
 import { parsePagination } from "../../src/api/pagination";
 import { activeCriteria, EMPTY_FILTERS, hasFilters, saveControl } from "../../src/ui/people/people-api";
 import { activeNavId, matchRoute, routesFor } from "../../src/ui/shell/route-table";
@@ -27,6 +27,7 @@ import { peopleImportBrief } from "../../src/ui/people/people-brief";
 const routeTable = readFileSync(new URL("../../src/ui/shell/route-table.ts", import.meta.url), "utf8");
 const sidebar = readFileSync(new URL("../../src/ui/shell/Sidebar.tsx", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../../migrations/0012_people_annotations.sql", import.meta.url), "utf8");
+const speakerQueries = readFileSync(new URL("../../src/routes/speakers.queries.ts", import.meta.url), "utf8");
 const peopleSources = [
   readFileSync(new URL("../../src/routes/people.routes.ts", import.meta.url), "utf8"),
   readFileSync(new URL("../../src/routes/person-lists.routes.ts", import.meta.url), "utf8"),
@@ -127,7 +128,17 @@ test("CONTRACT · MRQ-131 · one list query: event_id is the only difference bet
   expect(rosterPage.dataSql).toMatch(/FROM people person/);
   expect(rosterPage.dataSql).toMatch(/SELECT person_id FROM memberships/);
   expect(rosterPage.dataSql).not.toMatch(/SPEAKER_ROSTER_CTE|roster_people/);
+  // The roster uses the canonical population/filter builder without paying for
+  // CRM-only correlated folds that buildRow never reads.
+  expect(rosterPage.dataSql).not.toMatch(/conference_count|person_events|outreach_next_touch_on/);
   expect(rosterPage.countSql).toMatch(/FROM people person/);
+  expect(speakerQueries).toMatch(/export async function listSpeakers[\s\S]*buildSpeakerRosterQueries/);
+  expect(speakerQueries).toMatch(/export async function getSpeaker[\s\S]*rosterQuery/);
+
+  const statusCounts = buildSpeakerStatusCountsQuery("evt_1");
+  expect(statusCounts.sql).not.toMatch(/ORDER BY/);
+  expect(statusCounts.sql).not.toMatch(/conference_count|person_events|outreach_next_touch_on/);
+  expect(statusCounts.bindings).toEqual(["evt_1", "evt_1", "evt_1"]);
 });
 
 test("CONTRACT · MRQ-131 · search, filters, and paging bind their values and never interpolate them", () => {

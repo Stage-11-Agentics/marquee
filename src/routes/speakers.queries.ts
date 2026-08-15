@@ -180,8 +180,11 @@ interface TaskCountRow {
  * applied, plus the three membership columns only a conference has. The
  * projection extension is what keeps it one query instead of two.
  */
-const ROSTER_COLUMNS = `person.social_links, person.custom_fields,
-       membership.confirmation_status AS membership_status,
+const ROSTER_BASE_COLUMNS = `person.id, person.name, person.email, person.title, person.company, person.bio,
+       person.headshot_attachment_id, person.social_links, person.custom_fields,
+       person.created_at, person.updated_at`;
+
+const ROSTER_COLUMNS = `membership.confirmation_status AS membership_status,
        membership.confirmed_at AS membership_confirmed_at,
        membership.invited_at AS membership_invited_at`;
 
@@ -212,6 +215,7 @@ function rosterQuery(eventId: string, personId?: string): { sql: string; binding
   const built = buildPeopleQuery({
     eventId,
     ...(personId === undefined ? {} : { personId }),
+    baseColumns: ROSTER_BASE_COLUMNS,
     columns: ROSTER_COLUMNS,
     withSql: ROSTER_WITH,
     withBindings: [eventId],
@@ -412,6 +416,7 @@ export function buildSpeakerRosterQueries(eventId: string, filters: SpeakerFilte
   const scope = speakerFilterWhere(filters);
   return buildPeopleQuery({
     eventId,
+    baseColumns: ROSTER_BASE_COLUMNS,
     columns: ROSTER_COLUMNS,
     withSql: ROSTER_WITH,
     withBindings: [eventId],
@@ -423,19 +428,27 @@ export function buildSpeakerRosterQueries(eventId: string, filters: SpeakerFilte
   });
 }
 
-async function speakerStatusCounts(db: D1Database, eventId: string): Promise<Record<SpeakerStatus | "all", number>> {
+export function buildSpeakerStatusCountsQuery(eventId: string): { sql: string; bindings: (string | number)[] } {
   const built = buildPeopleQuery({
     eventId,
+    baseColumns: "person.id",
     columns: `${ROSTER_STATUS_SQL} AS roster_status`,
     withSql: ROSTER_WITH,
     withBindings: [eventId],
     joins: ROSTER_JOIN,
+    orderResults: false,
   });
-  const result = await db.prepare(
-    `SELECT roster_status AS status, COUNT(*) AS count
+  return {
+    sql: `SELECT roster_status AS status, COUNT(*) AS count
        FROM (${built.dataSql}) roster_status_rows
       GROUP BY roster_status`,
-  ).bind(...built.dataBindings).all<{ status: SpeakerStatus; count: number }>();
+    bindings: built.dataBindings,
+  };
+}
+
+async function speakerStatusCounts(db: D1Database, eventId: string): Promise<Record<SpeakerStatus | "all", number>> {
+  const query = buildSpeakerStatusCountsQuery(eventId);
+  const result = await db.prepare(query.sql).bind(...query.bindings).all<{ status: SpeakerStatus; count: number }>();
   const counts: Record<SpeakerStatus | "all", number> = { all: 0, pending: 0, invited: 0, confirmed: 0, declined: 0 };
   for (const row of result.results) {
     counts[row.status] = Number(row.count);
