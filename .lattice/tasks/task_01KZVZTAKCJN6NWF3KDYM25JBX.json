@@ -1,33 +1,48 @@
 {
   "assigned_to": "agent:codex-v2-8",
   "branch_links": [],
-  "comment_count": 6,
+  "comment_count": 7,
   "complexity": null,
   "created_at": "2026-08-12T21:59:51Z",
   "created_by": "agent:findings-triage",
   "custom_fields": {},
   "description": "Source: .briefs/eval-gap-v2-human-lens.md section 4, authored by Fable (Eval V2 Audit, surface:55). Operator-approved 2026-08-12. Read that section for the full human-problem framing before starting. (V2-8, ~45 min.) OPERATOR DIRECTIVE, 2026-08-12 \u2014 not an eval item.\n\nPROBLEM. Sessions can currently start only on the hour (TIME_SLOTS, track-board.tsx:7). Real conferences start sessions at :15, :30 and :45.\n\nGOOD LOOKS LIKE. Placement targets at 15-minute resolution by default, with a builder setting for 30 or 5. Hour labels keep the gauge-like axis, with micro-ticks for sub-hour rows \u2014 Flight Deck, not clutter (DESIGN.md is binding). The API already stores arbitrary starts_at, so THIS IS GRID UI ONLY \u2014 no schema or API work.\n\nCLOSES NO EVAL ITEM. It is product quality by operator ruling. Weigh that honestly against the deadline: if the eval-scoring tickets are still open when you would start this, say so rather than taking it first.\n\nSEQUENCING \u2014 IMPORTANT. This is the third link in a chain on the same file: MRQ-148 (in flight) -> MRQ-141 (click-to-place) -> this. Do not run blind alongside either. It composes with MRQ-141's 'Place at {time}' buttons, which simply exist at finer resolution once this lands.\n\nVERIFY. Place a session at :15 and at :45; both persist across reload and render in the correct row; the axis stays legible at the finer resolution.",
-  "done_at": null,
+  "done_at": "2026-08-15T08:35:30Z",
   "evidence_refs": [
     {
       "id": "art_01KZW07QZGDX27F1E22AC5JKYE",
       "role": "plan-review",
       "source_type": "artifact"
+    },
+    {
+      "id": "ev_01M028ZNT8BHCK1CHJEPR41JS4",
+      "role": "review",
+      "source_type": "comment"
+    },
+    {
+      "id": "art_01M028ZNT8BHCK1CHJEPR41JS3",
+      "role": "review",
+      "source_type": "artifact"
+    },
+    {
+      "id": "art_01M02953ZA70B5G45SMJ77GSY3",
+      "role": "plan-review",
+      "source_type": "artifact"
     }
   ],
   "id": "task_01KZVZTAKCJN6NWF3KDYM25JBX",
-  "last_event_id": "ev_01M028P5TZRSSZTJ4D6MRBKZDD",
-  "last_status_changed_at": "2026-08-15T08:30:19Z",
+  "last_event_id": "ev_01M02953ZCDRGQJPXEGJYBB94K",
+  "last_status_changed_at": "2026-08-15T08:35:30Z",
   "linked_files": [],
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 1,
   "schema_version": 1,
   "short_id": "MRQ-157",
-  "status": "backlog",
+  "status": "done",
   "tags": null,
   "title": "V2-8: agenda grid placement at 15-minute increments",
   "type": "task",
-  "updated_at": "2026-08-15T08:30:19Z",
+  "updated_at": "2026-08-15T08:38:29Z",
   "urgency": null
 }
