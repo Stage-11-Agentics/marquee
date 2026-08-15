@@ -26,7 +26,7 @@
  *
  *   - `migrations/` — the statements themselves
  *   - `src/db/schema.ts` — the type mirror the verifier compares against
- *   - `scripts/schema-verify.mjs` — the expectations
+ *   - `scripts/schema-verify.mjs` and `scripts/schema-deltas/` — the expectations
  *
  * Touch none of them and this exits immediately. Touch any of them and the full
  * verification runs. `--force` runs it regardless, which is what CI does on a
@@ -37,7 +37,13 @@ import { resolve } from "node:path";
 
 import { REPOSITORY_ROOT, emit, parseArguments } from "./lib/command.mjs";
 
-const WATCHED = ["migrations/", "src/db/schema.ts", "scripts/schema-verify.mjs"];
+const WATCHED = [
+  "migrations/",
+  "src/db/schema.ts",
+  "scripts/schema-verify.mjs",
+  "scripts/schema-deltas.mjs",
+  "scripts/schema-deltas/",
+];
 const args = parseArguments();
 const force = process.argv.includes("--force") || args.force === true;
 
