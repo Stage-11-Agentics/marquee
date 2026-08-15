@@ -63,6 +63,7 @@ async function seedFixture(): Promise<void> {
     person(SPEAKER_ID, "Priya Raman", "priya@mrq167.test", "Latticework Systems", "Principal Engineer"),
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('mem_mrq167_owner', ?, ?, ?, 'owner', ?, ?)")
       .bind(ORG_ID, OWNER_ID, EVENT_ID, NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)")
       .bind(AUTH_SESSION, OWNER_ID, SESSION_EXPIRES_AT, NOW, NOW),
   ]);

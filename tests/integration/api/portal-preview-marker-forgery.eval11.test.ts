@@ -149,6 +149,7 @@ describe.sequential("SPK-07 preview marker forgery", () => {
     const token = "forge_direct_token_value";
     const tokenHash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)))]
       .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    // clock-check: allow — this magic-link expiry is a short capability TTL compared as an exact instant
     await env.DB.prepare(
       `INSERT INTO magic_links (id, token_hash, person_id, purpose, redirect_to, expires_at, used_at, created_at, updated_at)
        VALUES (?, ?, ?, 'login', ?, ?, NULL, ?, ?)`,

@@ -104,6 +104,7 @@ beforeAll(async () => {
   await applyMigrations();
   const now = Date.now();
   for (const row of demoFixtureRows(now)) await env.DB.prepare(row.statement).bind(...row.bindings).run();
+  // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
   await env.DB.prepare(
     `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
      VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)`,
@@ -125,6 +126,7 @@ beforeAll(async () => {
     `INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
      VALUES ('membership-mrq-118-ops', (SELECT org_id FROM events WHERE id = ?), ?, ?, 'ops', ?, ?)`,
   ).bind(EVENT_ID, EVENT_ID, OPS_PERSON_ID, now, now).run();
+  // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
   await env.DB.prepare(
     `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
      VALUES (?, ?, 'ops', ?, 'fixture', NULL, ?, ?)`,
@@ -241,6 +243,7 @@ test("CONTRACT · a live Session refuses a silent edit and accepts a confirmed o
   await insertSubmission("sub-118-live", "accepted");
   const now = Date.now();
   await env.DB.prepare("DELETE FROM agenda_items WHERE submission_id = ?").bind("sub-118-live").run();
+  // clock-check: allow — agenda starts_at is an exact schedule instant, not an event-local calendar deadline
   await env.DB.prepare(
     `INSERT INTO agenda_items (id, event_id, submission_id, kind, title, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
      VALUES (?, ?, ?, 'session', NULL, ?, 30, ?, NULL, 1, ?, ?)`,

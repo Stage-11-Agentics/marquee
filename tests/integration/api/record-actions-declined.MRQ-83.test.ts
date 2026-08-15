@@ -48,6 +48,7 @@ beforeAll(async () => {
   await applyMigrations();
   const now = Date.now();
   for (const row of demoFixtureRows(now)) await env.DB.prepare(row.statement).bind(...row.bindings).run();
+  // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
   await env.DB.prepare(
     `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
      VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)`,
@@ -68,6 +69,7 @@ beforeAll(async () => {
   // acceptance does not remove the agenda row, so this is the real post-
   // reversal shape rather than a contrived one.
   await insertSubmission("sub-mrq83-withdrawn-scheduled", "withdrawn");
+  // clock-check: allow — agenda starts_at is an exact schedule instant, not an event-local calendar deadline
   await env.DB.prepare(
     `INSERT INTO agenda_items (id, event_id, submission_id, kind, room_id, track_id, starts_at, duration_min, is_published, created_at, updated_at)
      VALUES ('agenda-mrq83', ?, 'sub-mrq83-withdrawn-scheduled', 'session', ?, NULL, ?, 30, 0, ?, ?)`,

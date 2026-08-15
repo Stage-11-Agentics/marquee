@@ -2,7 +2,7 @@
  * check:clocks — a test may not pin a deadline to a calendar date, and may not
  * spend a rate limit to prove it exists.
  *
- * Both rules exist because of failures that had no commit behind them.
+ * These rules exist because of failures that had no commit behind them.
  *
  * RULE 1 — absolute anchors feeding real-clock comparisons.
  *
@@ -20,6 +20,15 @@
  * meaning what it says. Where a suite genuinely needs a fixed calendar date —
  * `files-export` asserts ZIP entry names built from a session's weekday — keep
  * the anchor and derive only the time-compared column from the real clock.
+ *
+ * RULE 4 — a live-clock offset feeding a calendar-date comparison.
+ *
+ * A fixed calendar-day deadline is compared in the conference's local calendar,
+ * not as an instant. A live `NOW - 86_400_000` can therefore still name today's
+ * event-local date near UTC midnight. Keep every live-clock offset that reaches a
+ * time-compared column at least two days from now; a one-day margin is true for
+ * only part of each day. The rule is deliberately conservative when it cannot
+ * evaluate the offset: the escape hatch is for a proven safe exception.
  *
  * The rule reads PREPARED STATEMENTS, not lines. The column name lives in the
  * SQL string and the offset lives over in `.bind(...)`, and nothing obliges an
@@ -49,7 +58,8 @@
  *
  * Seed the counter to its limit and send one request instead.
  *
- * Both rules take an escape hatch on the offending line or the one above it:
+ * Rules that inspect fixture statements take an escape hatch on the offending
+ * line or the one above it:
  *
  *   // clock-check: allow — <why this one is actually safe>
  *
@@ -74,6 +84,9 @@ const TIME_COMPARED_BINDINGS = [
  * the wall clock eventually passes; only `Date.now()` does not.
  */
 const LITERAL_DATE = /Date\.UTC\(\s*\d{4}\s*,|Date\.parse\(\s*["'`]\d{4}-|new Date\(\s*["'`]\d{4}-/;
+
+const LIVE_CLOCK_CALL = /(?:Date\.now\(\s*\)|new Date\(\s*\)\.getTime\(\s*\))/;
+const CALENDAR_MARGIN_MS = 2 * 86_400_000;
 
 const ABSOLUTE_ANCHOR = new RegExp(`\\bconst\\s+(\\w+)\\s*=\\s*(?:${LITERAL_DATE.source})`);
 
@@ -149,6 +162,236 @@ function preparedStatements(source) {
     opener.lastIndex = end;
   }
   return found;
+}
+
+/**
+ * Evaluate the small numeric expressions used for fixture durations without
+ * executing source from the test suite. Unknown identifiers and calls remain
+ * unknown, which makes the margin rule conservative.
+ */
+function numericValue(expression, constants) {
+  const compact = expression.replace(/\s+/g, "");
+  if (!compact) return null;
+  let index = 0;
+
+  const peek = () => compact[index] ?? "";
+  const consume = (character) => {
+    if (peek() !== character) return false;
+    index += 1;
+    return true;
+  };
+  const parseIdentifier = () => {
+    const start = index;
+    if (!/[A-Za-z_$]/.test(peek())) return null;
+    index += 1;
+    while (/[A-Za-z0-9_$]/.test(peek())) index += 1;
+    return compact.slice(start, index);
+  };
+  const parseNumber = () => {
+    const start = index;
+    if (!/[0-9]/.test(peek())) return null;
+    index += 1;
+    while (/[0-9_]/.test(peek())) index += 1;
+    const value = Number(compact.slice(start, index).replaceAll("_", ""));
+    return Number.isFinite(value) ? value : null;
+  };
+  const parseExpression = () => {
+    let value = parseTerm();
+    if (value === null) return null;
+    for (;;) {
+      if (consume("+")) {
+        const right = parseTerm();
+        if (right === null) return null;
+        value += right;
+      } else if (consume("-")) {
+        const right = parseTerm();
+        if (right === null) return null;
+        value -= right;
+      } else {
+        return value;
+      }
+    }
+  };
+  const parseTerm = () => {
+    let value = parseFactor();
+    if (value === null) return null;
+    for (;;) {
+      if (consume("*")) {
+        const right = parseFactor();
+        if (right === null) return null;
+        value *= right;
+      } else if (consume("/")) {
+        const right = parseFactor();
+        if (right === null || right === 0) return null;
+        value /= right;
+      } else if (consume("%")) {
+        const right = parseFactor();
+        if (right === null || right === 0) return null;
+        value %= right;
+      } else {
+        return value;
+      }
+    }
+  };
+  const parseFactor = () => {
+    if (consume("+")) return parseFactor();
+    if (consume("-")) {
+      const value = parseFactor();
+      return value === null ? null : -value;
+    }
+    if (consume("(")) {
+      const value = parseExpression();
+      return value !== null && consume(")") ? value : null;
+    }
+    const number = parseNumber();
+    if (number !== null) return number;
+    const identifier = parseIdentifier();
+    return identifier !== null && constants.has(identifier) ? constants.get(identifier) : null;
+  };
+
+  const value = parseExpression();
+  return value !== null && index === compact.length && Number.isFinite(value) ? value : null;
+}
+
+/** Test declarations are intentionally simple; keep only one-line initializers. */
+function declarations(lines) {
+  const found = [];
+  lines.forEach((line, index) => {
+    const match = /^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(.*?)\s*;?\s*$/.exec(stripComments(line));
+    if (match) found.push({ name: match[1], expression: match[2], line: index + 1 });
+  });
+  return found;
+}
+
+/**
+ * Resolve live-clock aliases and their offsets. `derived` distinguishes a real
+ * offset from a plain `NOW` timestamp used for created_at/updated_at bindings.
+ */
+function liveClockValues(lines) {
+  const values = new Map();
+  const constants = new Map();
+  const rows = declarations(lines);
+
+  for (let pass = 0; pass < rows.length; pass += 1) {
+    let changed = false;
+    const setValue = (name, next) => {
+      const previous = values.get(name);
+      if (previous?.offsetMs === next.offsetMs
+        && previous?.derived === next.derived
+        && previous?.line === next.line) return;
+      values.set(name, next);
+      changed = true;
+    };
+    const setConstant = (name, next) => {
+      if (constants.get(name) === next) return;
+      constants.set(name, next);
+      changed = true;
+    };
+    for (const row of rows) {
+      const expression = row.expression;
+      const trimmed = expression.trim();
+      const directClock = trimmed.match(LIVE_CLOCK_CALL)?.[0] === trimmed;
+      const alias = values.get(trimmed);
+      if (alias || directClock) {
+        setValue(row.name, alias
+          ? { ...alias, line: row.line }
+          : { offsetMs: 0, derived: false, line: row.line });
+        continue;
+      }
+      const liveNames = [...values.keys()].filter((name) => new RegExp(`\\b${name}\\b`).test(expression));
+      if (liveNames.length === 0 && !LIVE_CLOCK_CALL.test(expression)) {
+        const value = numericValue(expression, constants);
+        if (value !== null) setConstant(row.name, value);
+        continue;
+      }
+
+      let replaced = expression.replace(LIVE_CLOCK_CALL, "0");
+      let unknownLive = false;
+      for (const name of liveNames.sort((left, right) => right.length - left.length)) {
+        const value = values.get(name);
+        if (value?.offsetMs === null) unknownLive = true;
+        replaced = replaced.replace(new RegExp(`\\b${name}\\b`, "g"), String(value?.offsetMs ?? 0));
+      }
+      const offsetMs = unknownLive ? null : numericValue(replaced, constants);
+      setValue(row.name, {
+        offsetMs,
+        derived: true,
+        line: row.line,
+      });
+    }
+    if (!changed) break;
+  }
+
+  return { constants, values };
+}
+
+function marginUnsafe(offsetMs) {
+  return offsetMs === null || Math.abs(offsetMs) < CALENDAR_MARGIN_MS;
+}
+
+/** Whether source contains a live offset too close to the local-day boundary. */
+function liveOffsetUnsafe(code, clockValues) {
+  const { constants, values } = clockValues;
+  for (const [name, value] of values) {
+    if (!value.derived || !marginUnsafe(value.offsetMs)) continue;
+    if (new RegExp(`\\b${name}\\b`).test(code)) return true;
+  }
+
+  const roots = [...values.entries()]
+    .filter(([, value]) => value.offsetMs !== null)
+    .sort(([left], [right]) => right.length - left.length);
+  const rootPattern = roots.map(([name]) => `\\b${name}\\b`).join("|");
+  const expressionPattern = rootPattern
+    ? new RegExp(`(?:${rootPattern})\\s*([+-])\\s*([^,;\\]})]+)`, "g")
+    : null;
+  if (expressionPattern) {
+    for (const match of code.matchAll(expressionPattern)) {
+      const root = roots.find(([name]) => new RegExp(`\\b${name}\\b`).test(match[0]));
+      const base = root?.[1].offsetMs ?? null;
+      const right = numericValue(match[2], constants);
+      const offsetMs = base === null || right === null ? null : base + (match[1] === "+" ? right : -right);
+      if (marginUnsafe(offsetMs)) return true;
+    }
+  }
+
+  const directPattern = new RegExp(`${LIVE_CLOCK_CALL.source}\\s*([+-])\\s*([^,;\\]})]+)`, "g");
+  for (const match of code.matchAll(directPattern)) {
+    const right = numericValue(match[2], constants);
+    const offsetMs = right === null ? null : (match[1] === "+" ? right : -right);
+    if (marginUnsafe(offsetMs)) return true;
+  }
+  return false;
+}
+
+/** Find live-clock margin violations in one source file. */
+export function liveClockFindings(relative, source) {
+  const lines = source.split("\n");
+  if (!/env\.DB\.(prepare|batch)/.test(source)) return [];
+  const statements = preparedStatements(source);
+  const clockValues = liveClockValues(lines);
+  const column = new RegExp(`\\b(${TIME_COMPARED_BINDINGS.join("|")})\\b`);
+  const findings = [];
+  const statementAllowed = (statement) => {
+    for (let index = statement.startLine - 2; index < statement.endLine; index += 1) {
+      if (ALLOW.test(lines[index] ?? "")) return true;
+    }
+    return false;
+  };
+  for (const statement of statements) {
+    if (statementAllowed(statement)) continue;
+    const code = stripComments(statement.text);
+    if (!column.test(code) || !liveOffsetUnsafe(code, clockValues)) continue;
+    findings.push({
+      rule: "live-clock-calendar-margin",
+      file: relative,
+      line: statement.startLine,
+      detail:
+        "a live-clock offset under two days feeds a calendar-date comparison; " +
+        "near UTC midnight it can resolve to the wrong event-local day",
+      fix: "use an offset of at least two days, or add a reasoned clock-check: allow",
+    });
+  }
+  return findings;
 }
 
 /**
@@ -266,6 +509,10 @@ export function clockFindings(relative, source) {
       fix: "let createSession default its own now, or pass Date.now()",
     });
   }
+
+  // Rule 4: live-clock offsets need two full calendar days of margin before
+  // they feed a field whose value is interpreted against an event-local date.
+  findings.push(...liveClockFindings(relative, source));
 
   // Rule 2: a loop that both ISSUES requests and inspects them for 429 inside
   // its own body. Either half alone is innocent — a loop that seeds a counter

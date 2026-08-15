@@ -156,6 +156,7 @@ describe.sequential("MRQ-170 submitter editing", () => {
     });
     expect(wrongTokenResponse.status).toBe(403);
 
+    // clock-check: allow — this close boundary is compared as an exact instant to exercise the just-closed form path
     await env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = ?").bind(Date.now() - 1, FORM_ID).run();
     const closedPortal = await request("/api/v1/me/portal", {}, cookie);
     const closedBody = await closedPortal.json<{ submissions: Array<{ id: string; edit: { enabled: boolean; reason: string | null } }> }>();

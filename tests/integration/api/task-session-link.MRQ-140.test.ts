@@ -111,6 +111,7 @@ beforeEach(async () => {
     // Dana is on the roster without a session of her own — the case that stays
     // unattached however hard the resolver tries.
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES ('membership_mrq140_dana', ?, ?, ?, 'speaker', ?, ?)").bind(ORG_ID, EVENT_ID, DANA_ID, NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'mrq140', NULL, ?, ?)").bind(AUTH_SESSION, ORGANIZER_ID, SESSION_EXPIRES_AT, NOW, NOW),
     submission(MARCUS_SESSION, EVENT_ID, "Agents in Production", "accepted", MARCUS_ID),
     // A rejected session is gone, not ambiguous: Marcus still has exactly one.

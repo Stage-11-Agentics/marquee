@@ -104,6 +104,7 @@ function trackStatement(id: string, eventId: string, name: string) {
 
 function submissionStatement(id: string, eventId: string, title: string, trackId: string) {
   return [
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare(`
       INSERT INTO submissions (id, event_id, kind, title, abstract, status, origin, submitter_person_id, created_at, updated_at)
       VALUES (?, ?, 'abstract', ?, ?, 'in_review', 'public', ?, ?, ?)
@@ -161,6 +162,7 @@ async function seedFixture(): Promise<void> {
         ('membership-reviewer-b', ?, ?, ?, 'reviewer', ?, ?),
         ('membership-reviewer-a-wrong-org', ?, ?, ?, 'reviewer', ?, ?)
     `).bind(ORG_ID, OWNER_ID, NOW, NOW, ORG_ID, EVENT_A, REVIEWER_A, NOW, NOW, ORG_ID, EVENT_B, REVIEWER_B, NOW, NOW, OTHER_ORG_ID, EVENT_C, REVIEWER_A, NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare(`
       INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
       VALUES (?, ?, 'reviewer', ?, 'boundary', NULL, ?, ?), (?, ?, 'owner', ?, 'boundary', NULL, ?, ?)

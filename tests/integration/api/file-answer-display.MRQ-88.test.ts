@@ -128,7 +128,9 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'speaker@example.com', 'Robin Alvarez', '[]', 0, ?, ?)").bind(SPEAKER, ORG_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('mem_mrq88_owner', ?, ?, ?, 'owner', ?, ?)").bind(ORG_ID, ORGANIZER, EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('mem_mrq88_speaker', ?, ?, ?, 'speaker', ?, ?)").bind(ORG_ID, OUTSIDER, EVENT_ID, NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)").bind(ORGANIZER_SESSION, ORGANIZER, NOW + 86_400_000, NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'speaker', ?, 'fixture', NULL, ?, ?)").bind(OUTSIDER_SESSION, OUTSIDER, NOW + 86_400_000, NOW, NOW),
     env.DB.prepare("INSERT INTO forms (id, event_id, name, slug, kind, status, closes_at, created_at, updated_at) VALUES (?, ?, 'Call for Proposals', 'cfp', 'session', 'open', NULL, ?, ?)").bind(FORM_ID, EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO form_fields (id, form_id, key, label, type, required, position, config, condition, help_text, created_at, updated_at) VALUES (?, ?, 'headshot', 'Headshot', 'file', 1, 0, '{}', NULL, NULL, ?, ?)").bind(HEADSHOT_FIELD, FORM_ID, NOW, NOW),

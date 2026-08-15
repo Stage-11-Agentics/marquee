@@ -92,6 +92,7 @@ beforeEach(async () => {
     person(ACCEPTED_SPEAKER, "Marcus Okafor", "marcus@example.com"),
     person(DONE_SPEAKER, "Dana Kowalski", "dana@example.com"),
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('mem_mrq111', ?, ?, ?, 'owner', ?, ?)").bind(ORG_ID, ORGANIZER, EVENT_ID, NOW, NOW),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at) VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)").bind(AUTH_SESSION, ORGANIZER, NOW + 86_400_000, NOW, NOW),
   ]);
   await env.DB.batch([

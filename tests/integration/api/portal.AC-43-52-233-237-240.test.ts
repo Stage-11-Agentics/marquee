@@ -59,6 +59,7 @@ async function seedFixture(): Promise<void> {
       `INSERT INTO waves (id, event_id, name, decision_on, target_count, sent_at, position, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
     ).bind("wave-portal-next", EVENT_ID, "Wave 2", "2026-09-01", 20, 1, NOW, NOW),
+    // clock-check: allow — this form opens_at/closes_at window is compared as exact instants, not event-local calendar days
     env.DB.prepare(
       `INSERT INTO forms
         (id, event_id, name, slug, kind, status, opens_at, closes_at, welcome_md, per_submitter_limit,
@@ -111,6 +112,7 @@ async function seedFixture(): Promise<void> {
       `INSERT INTO rooms (id, event_id, building_id, name, capacity, position, av_capabilities, notes, created_at, updated_at)
        VALUES ('room-portal', ?, 'building-portal', 'Room 101', 120, 0, '[]', NULL, ?, ?)`,
     ).bind(EVENT_ID, NOW, NOW),
+    // clock-check: allow — agenda starts_at is an exact schedule instant, not an event-local calendar deadline
     env.DB.prepare(
       `INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
        VALUES ('agenda-portal-talk', ?, ?, 'session', ?, 30, 'room-portal', NULL, 0, ?, ?),
@@ -123,7 +125,7 @@ async function seedFixture(): Promise<void> {
     ).bind(EVENT_ID, SUBMISSION_ID, OWNER_ID, NOW, NOW, NOW),
     ...[
       ["template-portal-ack", "acknowledge", "Read the speaker agreement", null, OVERDUE_AT],
-      ["template-portal-file", "file", "Upload your deck", null, NOW + 86_400_000],
+      ["template-portal-file", "file", "Upload your deck", null, NOW + 2 * DAY_MS],
       ["template-portal-form", "form", "Complete speaker details", FORM_ID, NOW + 172_800_000],
       ["template-portal-finalize-talk", "acknowledge", "Finalize talk description", null, NOW + 259_200_000],
       ["template-portal-finalize-bio", "acknowledge", "Finalize bio & photos", null, NOW + 345_600_000],
@@ -141,11 +143,11 @@ async function seedFixture(): Promise<void> {
               ('task-portal-other', ?, ?, ?, 'template-portal-ack', 'Other speaker private task', 'acknowledge', 'This belongs only to another speaker.', ?, 'open', NULL, NULL, NULL, 'marquee', ?, ?)`,
     ).bind(
       EVENT_ID, SPEAKER_ID, SUBMISSION_ID, OVERDUE_AT, NOW, NOW,
-      EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 86_400_000, NOW, NOW,
+      EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 2 * DAY_MS, NOW, NOW,
       EVENT_ID, SPEAKER_ID, REVIEW_SUBMISSION_ID, NOW + 172_800_000, NOW, NOW,
       EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 259_200_000, NOW, NOW, NOW,
       EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 345_600_000, NOW, NOW, NOW,
-      EVENT_ID, OTHER_PERSON_ID, "sub-portal-other", NOW + 86_400_000, NOW, NOW,
+      EVENT_ID, OTHER_PERSON_ID, "sub-portal-other", NOW + 2 * DAY_MS, NOW, NOW,
     ),
     env.DB.prepare(
       `INSERT INTO attachments (id, event_id, owner_type, owner_id, r2_key, filename, content_type, size_bytes, status, r2_etag, created_at, updated_at)
@@ -288,6 +290,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
 
   test("AC-264, AC-265 · cancelled tasks leave the portal visible but leave active chase readers", async () => {
     await env.DB.batch([
+      // clock-check: allow — these task rows override a fixed template with relative instant probes, so due_at is compared exactly
       env.DB.prepare(
         `INSERT INTO speaker_tasks
           (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status,
@@ -443,6 +446,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
     const firstBody = await first.json<{ history: Array<{ actor_person_id: string; created_at: number }> }>();
     expect(firstBody.history[0]).toMatchObject({ actor_person_id: SPEAKER_ID });
     expect(firstBody.history[0]?.created_at).toBeTypeOf("number");
+    // clock-check: allow — this is an intentional millisecond boundary transition for an exact-instant form close
     await env.DB.prepare("UPDATE forms SET status = 'closed', closes_at = ? WHERE id = ?").bind(NOW - 1, FORM_ID).run();
     const closed = await request(`/api/v1/me/submissions/${SUBMISSION_ID}/talk`, { method: "PATCH", body: JSON.stringify({ title: "Should be blocked" }) });
     expect(closed.status).toBe(403);

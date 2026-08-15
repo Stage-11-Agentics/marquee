@@ -341,6 +341,7 @@ async function seedAuditFixture(): Promise<void> {
     INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
     VALUES ('membership_blind_audit_reviewer', ?, ?, ?, 'reviewer', ?, ?)
   `).bind(ORGANIZATION_ID, EVENT_ID, REVIEWER_ID, NOW, NOW);
+  // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
   const session = env.DB.prepare(`
     INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
     VALUES (?, ?, 'reviewer', ?, 'blind-audit', NULL, ?, ?)

@@ -22,6 +22,7 @@ async function seedFixture(): Promise<void> {
   await env.DB.prepare(
     "INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'program_lead', ?, ?)",
   ).bind("membership_venue_api", "org_venue_api", EVENT_ID, "person_venue_api", now, now).run();
+  // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
   await env.DB.prepare(
     `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
      VALUES (?, ?, 'program_lead', ?, 'venue-api-test', NULL, ?, ?)`,

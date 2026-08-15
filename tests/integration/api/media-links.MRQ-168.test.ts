@@ -65,11 +65,11 @@ beforeEach(async () => {
     env.DB.prepare(`
       INSERT INTO task_templates (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
       VALUES (?, ?, 'Upload deck', 'file', 'Final deck.', ?, NULL, NULL, NULL, 0, 1, ?, ?)
-    `).bind(TEMPLATE_ID, EVENT_ID, NOW + DAY, NOW, NOW),
+    `).bind(TEMPLATE_ID, EVENT_ID, NOW + 2 * DAY, NOW, NOW),
     env.DB.prepare(`
       INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, completed_at, response_json, attachment_id, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, 'Upload deck', 'file', '', ?, 'done', ?, NULL, NULL, ?, ?)
-    `).bind(TASK_ID, EVENT_ID, PERSON_ID, SUBMISSION_ID, TEMPLATE_ID, NOW + DAY, NOW, NOW, NOW),
+    `).bind(TASK_ID, EVENT_ID, PERSON_ID, SUBMISSION_ID, TEMPLATE_ID, NOW + 2 * DAY, NOW, NOW, NOW),
     env.DB.prepare(`
       INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at)
       VALUES (?, ?, ?, 'speaker', 0, 'confirmed', ?, ?)

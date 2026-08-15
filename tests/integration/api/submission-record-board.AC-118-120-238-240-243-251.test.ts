@@ -42,6 +42,7 @@ async function seedFixture(): Promise<void> {
   const now = Date.now();
   for (const row of demoFixtureRows(now)) await env.DB.prepare(row.statement).bind(...row.bindings).run();
   await env.DB.batch([
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare(`
       INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
       VALUES (?, ?, 'owner', ?, 'fixture', NULL, ?, ?)
@@ -54,6 +55,7 @@ async function seedFixture(): Promise<void> {
       INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
       VALUES ('membership-mrq-33-reviewer', ?, ?, ?, 'reviewer', ?, ?)
     `).bind(DEMO_ORGANIZATION_ID, EVENT_ID, REVIEWER_ID, now, now),
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare(`
       INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
       VALUES (?, ?, 'reviewer', ?, 'fixture', NULL, ?, ?)

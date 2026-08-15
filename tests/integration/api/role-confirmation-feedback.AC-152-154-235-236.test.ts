@@ -85,6 +85,7 @@ async function seedFixture(): Promise<void> {
       `INSERT INTO rooms (id, event_id, building_id, name, capacity, position, av_capabilities, notes, created_at, updated_at)
        VALUES ('room-mrq38', ?, 'building-mrq38', 'Room 101', 100, 0, '[]', NULL, ?, ?)`,
     ).bind(EVENT_ID, NOW, NOW),
+    // clock-check: allow — agenda starts_at is an exact schedule instant, not an event-local calendar deadline
     env.DB.prepare(
       `INSERT INTO agenda_items
         (id, event_id, submission_id, kind, title, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
@@ -98,6 +99,7 @@ async function seedFixture(): Promise<void> {
       `INSERT INTO rooms (id, event_id, building_id, name, capacity, position, av_capabilities, notes, created_at, updated_at)
        VALUES ('room-mrq64-current', ?, 'building-mrq64-current', 'Room 201', 100, 0, '[]', NULL, ?, ?)`,
     ).bind(EVENT_ID, NOW, NOW),
+    // clock-check: allow — agenda starts_at is an exact schedule instant, not an event-local calendar deadline
     env.DB.prepare(
       `INSERT INTO agenda_items
         (id, event_id, submission_id, kind, title, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)

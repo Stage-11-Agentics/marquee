@@ -323,6 +323,7 @@ test("CONTRACT · EMB-15 · basic HTML, XML, and selected fields resolve through
 });
 
 test("AC-217 · the cfp embed renders the open deadline, formats, and a link to the public form; track/layout disable rather than disappear", async () => {
+  // clock-check: allow — the CFP opens_at/closes_at window is compared as exact instants, not event-local calendar days
   await env.DB.prepare(
     `INSERT INTO forms (id, event_id, name, slug, kind, status, opens_at, closes_at, created_at, updated_at)
      VALUES ('form-cfp', ?, 'Call for speakers', 'widget-cfp', 'abstract', 'open', ?, ?, ?, ?)`,
@@ -352,6 +353,7 @@ test("AC-217 · the cfp embed renders the open deadline, formats, and a link to 
 });
 
 test("AC-218 · the cfp embed flips to its closed state automatically from the form's close date, with no republish action", async () => {
+  // clock-check: allow — the CFP opens_at/closes_at window is compared as exact instants, not event-local calendar days
   await env.DB.prepare(
     `INSERT INTO forms (id, event_id, name, slug, kind, status, opens_at, closes_at, created_at, updated_at)
      VALUES ('form-cfp', ?, 'Call for speakers', 'widget-cfp', 'abstract', 'open', ?, ?, ?, ?)`,
@@ -361,6 +363,7 @@ test("AC-218 · the cfp embed flips to its closed state automatically from the f
   expect(await open.text()).toContain("Call for speakers is open");
 
   // Move the deadline into the past — nothing else changes, no admin action, no redeploy.
+  // clock-check: allow — this is an intentional millisecond boundary transition for an exact-instant form close
   await env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = 'form-cfp'").bind(Date.now() - 1_000).run();
   await purgePublicEmbedCache(env.CACHE, { eventId: EVENT_ID });
 
@@ -373,6 +376,7 @@ test("AC-218 · the cfp embed flips to its closed state automatically from the f
 });
 
 test("CONTRACT · sessions and cfp embeds remain anonymous with an invalid session cookie", async () => {
+  // clock-check: allow — the CFP opens_at/closes_at window is compared as exact instants, not event-local calendar days
   await env.DB.prepare(
     `INSERT INTO forms (id, event_id, name, slug, kind, status, opens_at, closes_at, created_at, updated_at)
      VALUES ('form-cfp', ?, 'Call for speakers', 'widget-cfp', 'abstract', 'open', ?, ?, ?, ?)`,
