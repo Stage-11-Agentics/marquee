@@ -287,7 +287,7 @@ describe("MRQ-74 · capability verdicts", () => {
     );
     for (const snapshot of [unconnected, draining]) {
       const mirror = snapshot.capabilities.find((row) => row.id === "mirror");
-      expect(mirror?.href).toBeNull();
+      expect(mirror?.href).toBe("/settings/airtable");
     }
     // The old copy sent the organizer to a settings screen that was never built.
     expect(unconnected.capabilities.find((row) => row.id === "mirror")?.detail).not.toContain("settings");

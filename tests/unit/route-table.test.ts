@@ -121,10 +121,8 @@ test("CONTRACT · EMB-15 · organizer embeds are discoverable at the mandated bu
   expect(matchRoute("/embed/config")).toMatchObject({ id: "embeds", label: "Embeds", external: true });
 });
 
-test("CONTRACT · the table installs no route for a module this product does not have", () => {
-  // The Airtable mirror was cancelled and the AI first pass was never built.
-  // An installed route claims a module exists; these two claimed one and had none.
-  expect(matchRoute("/settings/airtable")).toBeUndefined();
+test("CONTRACT · installed settings doors resolve only to real modules", () => {
+  expect(matchRoute("/settings/airtable")).toMatchObject({ id: "airtable-settings", label: "Airtable" });
   expect(matchRoute("/evaluation/ai")).toBeUndefined();
   // Task templates stays: the onboarding tasks behind it are real and shipped,
   // so its empty state describes an unbuilt screen rather than an absent feature.

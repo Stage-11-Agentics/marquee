@@ -13,7 +13,7 @@ const AUTH_ME_ROUTE = "/api/v1/auth/me";
 
 export const SERVER_LEAD_COPY = "What this Marquee is connected to, and whether each piece is working.";
 
-type StatusKey = "mail" | "uploads" | "spam" | "domain";
+type StatusKey = "mail" | "uploads" | "spam" | "domain" | "airtable";
 
 interface StatusRow {
   key: StatusKey;
@@ -29,18 +29,20 @@ interface StatusBody {
   data: { host: string; rows: StatusRow[] };
 }
 
-/** The four rows never disappear or reorder while the status request resolves. */
+/** The five rows never disappear or reorder while the status request resolves. */
 const PLACEHOLDER_ROWS: StatusRow[] = [
   { key: "mail", label: "Email sending", configured: false, note: "Reading…", fix: [], sender: null, account: null },
   { key: "uploads", label: "File uploads", configured: false, note: "Reading…", fix: [] },
   { key: "spam", label: "Spam protection", configured: false, note: "Reading…", fix: [] },
   { key: "domain", label: "Web address", configured: false, note: "Reading…", fix: [] },
+  { key: "airtable", label: "Airtable mirror", configured: false, note: "Reading…", fix: [] },
 ];
 
 const PROVIDERS: Partial<Record<StatusKey, string>> = {
   mail: "Resend",
   uploads: "Cloudflare R2",
   spam: "Cloudflare Turnstile",
+  airtable: "Airtable",
 };
 
 function mailNote(row: StatusRow): string {
@@ -122,7 +124,9 @@ export function ServerPanel({ showDemoControls = false }: ServerPanelProps): JSX
             <span>{rowDetail(row)}</span>
           </span>
           <span class="instance-fix">
-            {row.key === "mail" && row.configured
+            {row.key === "airtable"
+              ? <a class="button small" href="/settings/airtable">{row.configured ? "Manage Airtable" : "Connect Airtable"}</a>
+              : row.key === "mail" && row.configured
               ? <a class="button small" href={RESEND_DASHBOARD_URL} target="_blank" rel="noopener">Open Resend ↗</a>
               : row.configured || row.fix.length === 0
                 ? <span class="instance-fix-blank">—</span>

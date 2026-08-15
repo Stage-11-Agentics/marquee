@@ -700,6 +700,84 @@ export async function notifyExistingDecisions(input: {
   return { selected, queued, skippedNoAddress, remaining, nextCursor, outboxIds };
 }
 
+export interface OnboardingCascadeResult {
+  id: Id;
+  outcome: "succeeded" | "failed";
+  tasksAssigned: number;
+  notificationsQueued: number;
+  skippedNoAddress: number;
+  error?: string;
+}
+
+/**
+ * Explicitly resume the organizer-owned acceptance cascade after an Airtable
+ * edit. Inbound mirror writes deliberately stop at the record boundary; this
+ * action is the recovery door that lets a program lead opt into the derived
+ * task and notification work once they have reviewed the changed record.
+ */
+export async function runOnboardingCascade(input: {
+  db: D1Database;
+  queue: Queue<unknown>;
+  eventId: Id;
+  submissionId: Id;
+  actor: DecisionActor;
+  now?: number;
+}): Promise<OnboardingCascadeResult> {
+  const submission = await loadSubmission(input.db, input.eventId, input.submissionId);
+  if (!submission) {
+    return {
+      id: input.submissionId,
+      outcome: "failed",
+      tasksAssigned: 0,
+      notificationsQueued: 0,
+      skippedNoAddress: 0,
+      error: "submission was not found in this conference",
+    };
+  }
+  if (submission.status !== "accepted") {
+    return {
+      id: submission.id,
+      outcome: "failed",
+      tasksAssigned: 0,
+      notificationsQueued: 0,
+      skippedNoAddress: 0,
+      error: "the onboarding cascade is available only for accepted submissions",
+    };
+  }
+
+  const now = input.now ?? Date.now();
+  const taskCounts = await reconcileTaskSet(input.db, input.eventId, [submission.id], now, input.actor);
+  const tasksAssigned = taskCounts.get(submission.id) ?? 0;
+  const notification = await notifyExistingDecisions({
+    db: input.db,
+    queue: input.queue,
+    eventId: input.eventId,
+    submissionIds: [submission.id],
+    now,
+  });
+  await writeAudit(input.db, {
+    eventId: input.eventId,
+    actor: input.actor,
+    action: "submission.onboarding_cascade_run",
+    entityType: "submission",
+    entityId: submission.id,
+    before: { status: submission.status, last_write_source: "airtable" },
+    after: {
+      tasks_assigned: tasksAssigned,
+      notifications_queued: notification.queued,
+      skipped_no_address: notification.skippedNoAddress,
+    },
+    now,
+  });
+  return {
+    id: submission.id,
+    outcome: "succeeded",
+    tasksAssigned,
+    notificationsQueued: notification.queued,
+    skippedNoAddress: notification.skippedNoAddress,
+  };
+}
+
 async function updateSubmissionStatus(
   db: D1Database,
   input: {

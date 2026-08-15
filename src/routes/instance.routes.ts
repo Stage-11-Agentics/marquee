@@ -2,6 +2,7 @@ import { z } from "@hono/zod-openapi";
 
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { requireOrgAdmin } from "../lib/auth/org-admin";
+import { readMirrorStatus, type MirrorActionEnvironment } from "../jobs/mirror/actions";
 import {
   instanceHostname,
   readInstanceStatus,
@@ -17,7 +18,7 @@ import {
  */
 
 const statusRow = z.object({
-  key: z.enum(["mail", "uploads", "spam", "domain"]),
+  key: z.enum(["mail", "uploads", "spam", "domain", "airtable"]),
   label: z.string(),
   configured: z.boolean(),
   note: z.string(),
@@ -49,14 +50,44 @@ const getInstanceStatus = defineApiRoute(
     },
   },
   async (context) => {
-    requireOrgAdmin(context, "program:read");
+    const auth = requireOrgAdmin(context, "program:read");
     const environment = context.env as unknown as InstanceStatusEnvironment;
+    const mirrorEnvironment = context.env as unknown as MirrorActionEnvironment;
+    let mirror = {
+      configured: false,
+      mapped: false,
+      note: "No Airtable base is connected",
+    };
+    try {
+      const status = await readMirrorStatus(context.env.DB, mirrorEnvironment, auth.orgId);
+      mirror = {
+        configured: status.configured,
+        mapped: status.mapped,
+        note: status.configured
+          ? status.mapped
+            ? "Connected · three tables mirror local records"
+            : "Base verified · choose the three tables to start syncing"
+          : "No Airtable base is connected",
+      };
+    } catch {
+      // A deployment that has not yet applied the additive mirror migration
+      // should still answer the rest of the Server panel honestly.
+    }
     context.header("Cache-Control", "no-store");
     return context.json(
       {
         data: {
           host: instanceHostname(context.req.url),
-          rows: readInstanceStatus(environment, context.req.url),
+          rows: [
+            ...readInstanceStatus(environment, context.req.url),
+            {
+              key: "airtable" as const,
+              label: "Airtable mirror",
+              configured: mirror.configured && mirror.mapped,
+              note: mirror.note,
+              fix: ["Open Settings → Airtable"],
+            },
+          ],
         },
       },
       200,

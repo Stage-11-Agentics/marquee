@@ -189,6 +189,7 @@ app.post("/mirror/webhook", async (context) => {
     context.req.raw,
   );
   if (result.status === 401) return context.json(result.body, 401);
+  if (result.status === 202) return context.json(result.body, 202);
   return context.json(result.body, 200);
 });
 

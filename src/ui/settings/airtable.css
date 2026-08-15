@@ -1,0 +1,41 @@
+.airtable-page { max-width: 1120px; }
+.airtable-traffic-note { align-items: baseline; }
+.airtable-traffic-note strong { color: var(--ink); }
+.airtable-lede { color: var(--muted); font-size: 12px; line-height: 1.55; margin: 0 0 16px; max-width: 760px; }
+.airtable-connect-form { align-items: end; }
+.airtable-form-actions { display: flex; justify-content: flex-end; min-height: 40px; }
+.airtable-credential-facts { align-items: center; border-top: 1px solid var(--line); color: var(--muted); display: flex; flex-wrap: wrap; font-size: 11px; gap: 12px 20px; margin-top: 16px; padding-top: 13px; }
+.airtable-credential-facts code { color: var(--ink-soft); font: 400 10px var(--mono); }
+.airtable-credential-facts a { color: var(--accent-dark); }
+.airtable-mapping-fields { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.airtable-empty-mapping { align-items: baseline; background: var(--sunk); border: 1px dashed var(--line-strong); border-radius: 7px; color: var(--muted); display: flex; gap: 10px; min-height: 45px; padding: 12px; }
+.airtable-empty-mapping strong { color: var(--ink-soft); }
+.airtable-health-actions { display: flex; gap: 8px; }
+.airtable-counts { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 18px; }
+.airtable-counts > div { background: var(--sunk); border: 1px solid var(--line); border-radius: 7px; display: grid; gap: 4px; min-height: 88px; padding: 12px; }
+.airtable-counts span { color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.airtable-counts strong { color: var(--ink); font: 600 24px/1 var(--mono); }
+.airtable-counts .airtable-count-alarm { color: var(--danger, #b34848); }
+.airtable-counts .airtable-count-date { font-size: 15px; }
+.airtable-counts small { color: var(--muted); font-size: 10.5px; line-height: 1.35; }
+.airtable-table { border-collapse: collapse; min-width: 580px; width: 100%; }
+.airtable-table th, .airtable-table td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; }
+.airtable-table thead th { color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.airtable-table tbody th { color: var(--ink-soft); font-size: 12px; font-weight: 600; }
+.airtable-table td { color: var(--muted); font-size: 11px; }
+.airtable-last-error { margin-top: 16px; }
+.airtable-log { display: grid; gap: 0; list-style: none; margin: 0; padding: 0; }
+.airtable-log li { border-bottom: 1px solid var(--line); color: var(--ink-soft); font: 400 11px/1.5 var(--mono); padding: 9px 0; }
+.airtable-log li:last-child { border-bottom: 0; }
+.airtable-log-empty { color: var(--muted); font-size: 12px; min-height: 34px; }
+.airtable-skeleton { display: grid; gap: 12px; min-height: 120px; padding: 16px 0; }
+.airtable-skeleton span { background: var(--line); border-radius: 4px; display: block; height: 12px; width: 72%; }
+.airtable-skeleton span:first-child { height: 22px; width: 38%; }
+
+@media (max-width: 760px) {
+  .airtable-mapping-fields, .airtable-counts { grid-template-columns: 1fr; }
+  .airtable-health-actions { align-items: stretch; flex-direction: column; }
+  .airtable-health-actions .button { width: 100%; }
+  .airtable-form-actions { justify-content: stretch; }
+  .airtable-form-actions .button { width: 100%; }
+}

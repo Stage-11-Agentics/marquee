@@ -181,6 +181,7 @@ export const routeTable: readonly RouteDefinition[] = [
   // valid after.
   { id: "org-activity", path: "/org/activity", label: "Activity", icon: "", group: "utility" },
   { id: "webhooks", path: "/settings/webhooks", label: "Webhooks", icon: "", group: "utility" },
+  { id: "airtable-settings", path: "/settings/airtable", label: "Airtable", icon: "", group: "utility" },
   { id: "api-docs", path: "/api/docs", label: "API & CLI", icon: "⌘", group: "utility" },
   { id: "import", path: "/import", label: "Import speakers", icon: "", group: "utility" },
 ] as const;
@@ -248,6 +249,7 @@ const SIDEBAR_HOME: Readonly<Record<string, string>> = {
   "org-tokens": "org-settings",
   "api-tokens": "org-settings",
   webhooks: "settings",
+  "airtable-settings": "org-settings",
 };
 
 export function activeNavId(routeId: string | undefined): string | undefined {

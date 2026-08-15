@@ -190,6 +190,7 @@ export interface SubmissionListFilters {
 
 interface SubmissionQueryRow {
   id: string;
+  event_id: string;
   kind: "abstract" | "session";
   title: string;
   stored_status: Exclude<SubmissionListItem["status"], "scheduled" | "published">;
@@ -446,9 +447,15 @@ function notificationForRow(row: SubmissionQueryRow): NonNullable<SubmissionList
       return {
         state: "changed_in_airtable",
         label: "Changed in Airtable",
-        detail: "The Airtable mirror is currently cut; this is a theoretical legacy path. It deliberately did not run the acceptance cascade.",
+        detail: "Changed in Airtable · cascade not run. Marquee records the edit without sending mail or assigning onboarding tasks.",
         sent_at: null,
         outbox_status: null,
+        action: row.stored_status === "accepted"
+          ? {
+              label: "Run onboarding cascade",
+              route: `/api/v1/events/${encodeURIComponent(row.event_id)}/submissions/${encodeURIComponent(row.id)}/onboarding-cascade`,
+            }
+          : null,
       };
     case "not_delivered": {
       const status = row.notification_outbox_status;
@@ -463,6 +470,7 @@ function notificationForRow(row: SubmissionQueryRow): NonNullable<SubmissionList
             : "No delivered message is present in the mail outbox.",
         sent_at: row.notification_sent_at ?? null,
         outbox_status: row.notification_outbox_status ?? null,
+        action: null,
       };
     }
     case "no_valid_address":
@@ -472,6 +480,7 @@ function notificationForRow(row: SubmissionQueryRow): NonNullable<SubmissionList
         detail: "No usable speaker address was available, so no message could be queued.",
         sent_at: null,
         outbox_status: null,
+        action: null,
       };
     case "sent":
       return {
@@ -480,6 +489,7 @@ function notificationForRow(row: SubmissionQueryRow): NonNullable<SubmissionList
         detail: "The decision message was sent to the speaker.",
         sent_at: row.notification_sent_at ?? null,
         outbox_status: "sent",
+        action: null,
       };
     default:
       return {
@@ -488,6 +498,7 @@ function notificationForRow(row: SubmissionQueryRow): NonNullable<SubmissionList
         detail: "No usable speaker address was available, so no message could be queued.",
         sent_at: null,
         outbox_status: null,
+        action: null,
       };
   }
 }
@@ -558,6 +569,7 @@ function itemSelect(
     ? agentReviewsSelect(reviewCapabilities.includeOverrides)
     : "'[]' AS agent_reviews_json";
   return `
+  s.event_id,
   s.id,
   s.kind,
   s.title,
