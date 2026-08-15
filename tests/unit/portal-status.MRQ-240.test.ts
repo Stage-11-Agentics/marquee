@@ -10,7 +10,7 @@ describe("MRQ-240 portal status vocabulary", () => {
       ["in_review", { label: "Under review", tone: "" }],
       ["accepted", { label: "Accepted", tone: "success" }],
       ["waitlisted", { label: "Maybe", tone: "warning" }],
-      ["rejected", { label: "Not selected", tone: "alarm" }],
+      ["rejected", { label: "Rejected", tone: "alarm" }],
       ["withdrawn", { label: "Withdrawn", tone: "warning" }],
     ] as const;
     for (const [status, expected] of cases) {
