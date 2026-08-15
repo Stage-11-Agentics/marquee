@@ -308,12 +308,12 @@ const batchPublishRoute = defineApiRoute(
       `, eventId, submissionId, now, now);
     });
     const results = await database.batch([agendaUpdate, submissionUpdate, ...auditStatements]);
+    await purgePublicEmbedCache(context.env.CACHE, { eventId });
     const publishedCount = Number(results[0]?.meta?.changes ?? 0);
     const submissionChanges = Number(results[1]?.meta?.changes ?? 0);
     if (publishedCount !== submissionIds.length || submissionChanges !== submissionIds.length) {
       throw ApiError.conflict("the selected Sessions changed while publishing; refresh the agenda before trying again");
     }
-    await purgePublicEmbedCache(context.env.CACHE, { eventId });
     const publication = await readAgendaPublication(database, eventId, current.event.slug);
     return context.json({
       published_count: publishedCount,
