@@ -288,9 +288,21 @@ async function sessionsFor(db: D1Database, sponsorship: SponsorshipRow, showBuil
 }
 
 function boothFor(sponsorship: SponsorshipRow) {
-  // Booth data is a set of columns, so "has a booth" is those columns carrying
-  // something — not a flag, and not a second record type (ruling 5).
-  if (!sponsorship.booth_number && !sponsorship.booth_hall && !sponsorship.building_id) return null;
+  // Booth data is a set of columns, so "has a booth" is ANY of those columns
+  // carrying something — not a flag, and not a second record type (ruling 5).
+  // All of them, not the three obvious ones: a sponsorship carrying only a
+  // load-in window would otherwise render no booth card and silently drop the one
+  // fact it had.
+  const hasBoothData = [
+    sponsorship.booth_number,
+    sponsorship.booth_size,
+    sponsorship.booth_hall,
+    sponsorship.booth_load_in,
+    sponsorship.booth_access_note,
+    sponsorship.booth_leave_note,
+    sponsorship.building_id,
+  ].some((value) => value !== null && value !== "");
+  if (!hasBoothData) return null;
   return {
     number: sponsorship.booth_number,
     size: sponsorship.booth_size,

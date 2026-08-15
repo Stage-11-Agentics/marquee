@@ -202,6 +202,7 @@ const requiredIndexes = [
   "uq_participations_person_submission_role",
   "uq_reviewer_track_scopes_event_person_track",
   "uq_saved_views_event_person_name",
+  "uq_sponsor_tiers_event_name",
   "uq_sponsorship_contacts_sponsorship_person",
   "uq_sponsorship_primary_contact",
   "uq_sponsorships_event_company",

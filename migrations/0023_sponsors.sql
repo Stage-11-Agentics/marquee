@@ -105,6 +105,9 @@ ALTER TABLE submissions ADD COLUMN sponsorship_id TEXT REFERENCES sponsorships(i
 
 CREATE INDEX idx_companies_org_name ON companies(org_id, name);
 CREATE INDEX idx_sponsor_tiers_event_position ON sponsor_tiers(event_id, position);
+-- One tier of a given name per conference. Two "Gold" tiers is a data-entry
+-- mistake whose consequence is a hero chip nobody can interpret.
+CREATE UNIQUE INDEX uq_sponsor_tiers_event_name ON sponsor_tiers(event_id, name);
 CREATE INDEX idx_sponsorships_event_status ON sponsorships(event_id, status);
 CREATE INDEX idx_sponsorships_company ON sponsorships(company_id);
 -- One deal per company per conference. A second one is a data-entry mistake
