@@ -62,6 +62,12 @@ export const routeTable: readonly RouteDefinition[] = [
   // Org-level by design: one relationship, courted across years, each card
   // naming the conference it is currently aimed at.
   { id: "sourcing", path: ORG_HOME_OUTREACH_HREF, label: "Outreach", icon: "", group: "organization", sidebar: true },
+  // The agent-native front door, org-level like the tokens agents authenticate
+  // with — one instance, one skill file, one roster of agents worth running,
+  // whether or not a conference exists yet. It had been reachable only from the
+  // sidebar foot's "API & CLI", which is where a product puts what it is not
+  // really offering; ⌘ is the glyph that foot already used for it.
+  { id: "agents", path: "/agents", label: "Agents", icon: "⌘", group: "organization", sidebar: true },
   // ⚙ Settings closes the Organization group exactly as the whole conference
   // stack ends in its own Settings row (ruling O1). The symmetry is the lesson:
   // everything above the conference caption outlives every conference, and each

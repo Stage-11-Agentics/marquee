@@ -11,7 +11,7 @@ import { useBrowserRouter } from "./router";
 import { SeatBlockedPage, useSeat } from "./seat";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
-import { useIdentity } from "./identity";
+import { useIdentity, useOrgName } from "./identity";
 import { useEventContext } from "./event-context";
 import { NoConference } from "./NoConference";
 import { QuickSearch } from "./QuickSearch";
@@ -43,6 +43,7 @@ import { PeoplePage } from "../people/PeoplePage";
 import { SourcingPipelinePage } from "../people/SourcingPipelinePage";
 import { ServerPage } from "../settings/ServerPage";
 import { OrganizationHomePage } from "../org/OrganizationHomePage";
+import { AgentsPage } from "../agents/AgentsPage";
 
 type ResetResponse = {
   job_id?: unknown;
@@ -61,6 +62,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const navigationButtonRef = useRef<HTMLButtonElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const identity = useIdentity();
+  const orgName = useOrgName();
   const { eventId } = useEventContext();
   const [resetting, setResetting] = useState(false);
   const [toast, setToast] = useState("");
@@ -191,6 +193,11 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
     if (location.pathname === "/org/instance") navigate("/org/server", { replace: true });
   }, [location.pathname, navigate]);
   const isOrganizationHome = location.pathname === "/org/home";
+  // The agent-native front door is organization-level: it is about this
+  // instance, not about whichever conference is selected, and it answers before
+  // the conference guard so a fresh install can reach it with nothing created
+  // yet. Its crumb names the organization for the same reason.
+  const isAgents = route?.id === "agents";
   // The handoff is the second half of the claim, not an admin screen: it is
   // reached seconds after a session first exists, before there is a conference
   // to draw navigation around.
@@ -235,6 +242,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
         <Topbar
           eventName={eventName}
           routeName={routeName}
+          {...(isAgents ? { scopeName: orgName ?? "Organization", scopeHref: "/org/home" } : {})}
           pathname={location.pathname}
           navigate={navigate}
           identity={identity}
@@ -269,6 +277,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             : route?.id === "conference-new"
             ? <CreateConferencePage navigate={navigate} />
             : isOrganizationHome ? <OrganizationHomePage navigate={navigate} />
+            : isAgents ? <AgentsPage navigate={navigate} />
             : isPeople ? <PeoplePage search={location.search} navigate={navigate} />
             /* Lists is the People screen's second tab, not a screen of its own. */
             : route?.id === "lists" ? <PeoplePage search={location.search} navigate={navigate} tab="lists" />

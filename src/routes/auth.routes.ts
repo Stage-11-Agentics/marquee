@@ -140,6 +140,15 @@ const authMeResponseSchema = z.object({
    * organization default. Null means the organization has not chosen one.
    */
   org_default_theme: z.string().nullable().optional(),
+  /**
+   * The organization's name, for the breadcrumb on an organization-level screen.
+   *
+   * It rides here for the same reason the default theme does: the
+   * organization-settings read is administrator-only, and every seat that can
+   * stand on an org-level screen needs the crumb above it to say where they
+   * are. It costs one column on a query this handler already makes.
+   */
+  org_name: z.string().nullable().optional(),
 });
 
 const demoLogin = defineApiRoute(
@@ -481,9 +490,9 @@ const getCurrentAuth = defineApiRoute(
     if (!auth) return unauthorized(context);
     const demoEvent = await findDemoEvent(context.env.DB);
     const organization = await context.env.DB
-      .prepare("SELECT default_theme FROM organizations WHERE id = ?")
+      .prepare("SELECT name, default_theme FROM organizations WHERE id = ?")
       .bind(auth.orgId)
-      .first<{ default_theme: string | null }>();
+      .first<{ name: string | null; default_theme: string | null }>();
     if (auth.kind === "session") {
       const person = await context.env.DB
         .prepare("SELECT name, email FROM people WHERE id = ?")
@@ -502,6 +511,7 @@ const getCurrentAuth = defineApiRoute(
         person_name: person?.name ?? null,
         person_email: person?.email ?? null,
         org_default_theme: organization?.default_theme ?? null,
+        org_name: organization?.name ?? null,
       }, 200);
     }
     return context.json({
@@ -513,6 +523,7 @@ const getCurrentAuth = defineApiRoute(
       demo_event_id: demoEvent?.id ?? null,
       demo_event_name: demoEvent?.name ?? null,
       org_default_theme: organization?.default_theme ?? null,
+      org_name: organization?.name ?? null,
     }, 200);
   }) as never,
 );

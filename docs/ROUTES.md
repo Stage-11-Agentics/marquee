@@ -24,6 +24,7 @@ everything else is drawn inside the organizer shell.
 | `/people` | People CRM | organizer | yes | client push |
 | `/lists` | Lists | organizer | — | client push |
 | `/pipeline` | Outreach | organizer | yes | client push |
+| `/agents` | Agents | organizer | yes | client push |
 | `/org` | Settings | organizer | yes | client push |
 | `/org/server` | Server | organizer | — | client push |
 | `/org/instance` | Server | organizer | — | client push |
@@ -106,7 +107,7 @@ routes — the text to hand any agent or reader that needs to know what exists.
 ```text
 ROUTES (real paths, not hash routes):
   Public, no auth: / /:eventSlug/:kind/embed /agenda /agenda/agents /claim/:token /embed/:slug /embed/config /f/:slug /join/:token /login /p/:slug /s/:slug /sign-in /signin /site /speakers
-  Organizer (admin shell): /org/home /people /lists /pipeline /org /org/server /org/instance /org/tokens /crm /directory /contacts /org/organizers /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /agenda-builder /roster /tasks /communications /files /delivery-health /forms /evaluation /sponsor-portal /settings /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /org/activity /settings/webhooks /import
+  Organizer (admin shell): /org/home /people /lists /pipeline /agents /org /org/server /org/instance /org/tokens /crm /directory /contacts /org/organizers /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /agenda-builder /roster /tasks /communications /files /delivery-health /forms /evaluation /sponsor-portal /settings /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /org/activity /settings/webhooks /import
   Reviewer: /reviewer
   Review queue: /reviewer/queue
   Speaker portal: /portal

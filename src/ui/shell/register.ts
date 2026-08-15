@@ -65,6 +65,7 @@ const REGISTER_CHROME: Partial<Record<ThemeId, RegisterChrome>> = {
       "org-settings": "settings",
       people: "people crm",
       sourcing: "outreach",
+      agents: "agents",
       dashboard: "pipeline",
       board: "board",
       submissions: "sessions",
