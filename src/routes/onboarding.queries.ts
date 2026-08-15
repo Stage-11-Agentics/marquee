@@ -1,8 +1,11 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
+import type { ListEnvelope } from "../api/list";
+import { executeListPage, parsePagination } from "../api/pagination";
+import { localParts } from "../lib/event-time";
 import { listVersionsFor, listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
 import { isTaskDueWithinDays, isTaskOverdue, taskDaysOverdue } from "../lib/task-due";
-import { ONBOARDING_PERSON_SOURCE } from "./speakers.queries";
+import { ONBOARDING_PERSON_SOURCE, onboardingPersonSource } from "../lib/roster-source";
 
 export const ONBOARDING_FILTERS = ["all", "overdue", "incomplete", "risk"] as const;
 export type OnboardingFilter = (typeof ONBOARDING_FILTERS)[number];
@@ -80,7 +83,7 @@ export interface OnboardingRow {
   severity: number;
 }
 
-export interface OnboardingSnapshot {
+export interface OnboardingSnapshot extends ListEnvelope<OnboardingRow> {
   generated_at: number;
   risk_window_days: number;
   metrics: {
@@ -100,7 +103,6 @@ export interface OnboardingSnapshot {
     tracks: Array<{ id: string; name: string; color: string; count: number }>;
   };
   task_templates: OnboardingTaskTemplate[];
-  rows: OnboardingRow[];
 }
 
 export interface OnboardingFilters {
@@ -108,6 +110,150 @@ export interface OnboardingFilters {
   taskType?: string;
   track?: string;
   search?: string;
+  page?: number;
+  perPage?: number;
+}
+
+const DAY_MS = 86_400_000;
+const TASK_OWED_SQL = "task.status = 'open' AND task.cancelled_at IS NULL";
+const TASK_FIXED_SQL = "template.due_at IS NOT NULL AND task.due_at = template.due_at";
+const TASK_OVERDUE_SQL = `(
+  (${TASK_FIXED_SQL} AND date(task.due_at / 1000, 'unixepoch') < runtime.local_day)
+  OR ((template.due_at IS NULL OR task.due_at <> template.due_at) AND task.due_at < runtime.now_ms)
+)`;
+const TASK_RISK_SQL = `(
+  (${TASK_FIXED_SQL} AND date(task.due_at / 1000, 'unixepoch') >= runtime.local_day
+    AND date(task.due_at / 1000, 'unixepoch') <= runtime.risk_day)
+  OR ((template.due_at IS NULL OR task.due_at <> template.due_at)
+    AND task.due_at >= runtime.now_ms AND task.due_at <= runtime.now_ms + ${ONBOARDING_RISK_WINDOW_DAYS * DAY_MS})
+)`;
+const TASK_SEVERITY_SQL = `CASE
+  WHEN ${TASK_FIXED_SQL}
+    THEN MAX(1, CAST(julianday(runtime.local_day) - julianday(date(task.due_at / 1000, 'unixepoch')) AS INTEGER))
+  ELSE MAX(1, CAST(((runtime.now_ms - task.due_at) + ${DAY_MS - 1}) / ${DAY_MS} AS INTEGER))
+END`;
+
+/** The board's list read pages person ids in SQL, then hydrates only that page. */
+const ONBOARDING_PAGE_CTE = `
+WITH runtime AS (
+  SELECT ? AS now_ms, ? AS local_day, ? AS risk_day, ? AS event_id
+),
+task_rollup AS (
+  SELECT task.person_id,
+         SUM(CASE WHEN ${TASK_OWED_SQL} THEN 1 ELSE 0 END) AS owed_count,
+         SUM(CASE WHEN ${TASK_OWED_SQL} AND ${TASK_OVERDUE_SQL} THEN 1 ELSE 0 END) AS overdue_task_count,
+         SUM(CASE WHEN ${TASK_OWED_SQL} AND ${TASK_RISK_SQL} THEN 1 ELSE 0 END) AS risk_task_count,
+         MAX(CASE WHEN ${TASK_OWED_SQL} AND ${TASK_OVERDUE_SQL} THEN ${TASK_SEVERITY_SQL} ELSE 0 END) AS severity
+    FROM speaker_tasks task
+    JOIN task_templates template
+      ON template.id = task.template_id AND template.event_id = task.event_id
+    CROSS JOIN runtime
+   WHERE task.event_id = runtime.event_id
+   GROUP BY task.person_id
+),
+roster_people AS (
+  SELECT person.id, person.name, person.email, person.title, person.company, person.bio,
+         person.headshot_attachment_id,
+         MAX(outbox.created_at) AS last_contact,
+         runtime.event_id,
+         COALESCE(rollup.owed_count, 0) AS owed_count,
+         COALESCE(rollup.overdue_task_count, 0) AS overdue_task_count,
+         COALESCE(rollup.risk_task_count, 0) AS risk_task_count,
+         COALESCE(rollup.severity, 0) AS severity
+    FROM people person
+    CROSS JOIN runtime
+    LEFT JOIN outbox
+      ON outbox.event_id = runtime.event_id AND outbox.person_id = person.id
+    LEFT JOIN task_rollup rollup ON rollup.person_id = person.id
+   WHERE person.id IN (${onboardingPersonSource("runtime.event_id")})
+   GROUP BY person.id, person.name, person.email, person.title, person.company, person.bio,
+            person.headshot_attachment_id, runtime.event_id,
+            rollup.owed_count, rollup.overdue_task_count, rollup.risk_task_count, rollup.severity
+)
+`;
+
+function calendarDateAfter(day: string, days: number): string {
+  const timestamp = Date.parse(`${day}T00:00:00Z`);
+  return new Date(timestamp + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+async function eventTimezone(db: D1Database, eventId: string): Promise<string> {
+  const row = await db.prepare("SELECT timezone FROM events WHERE id = ?").bind(eventId).first<{ timezone: string | null }>();
+  return row?.timezone ?? "UTC";
+}
+
+function onboardingFilterWhere(filters: OnboardingFilters): { sql: string; bindings: (string | number)[] } {
+  const where: string[] = [];
+  const bindings: (string | number)[] = [];
+  const filter = filters.filter ?? "all";
+  if (filter === "overdue") where.push("roster.overdue_task_count > 0");
+  if (filter === "incomplete") where.push("roster.owed_count > 0");
+  if (filter === "risk") where.push("roster.risk_task_count > 0");
+  if (filters.taskType && filters.taskType !== "all") {
+    where.push(`EXISTS (
+      SELECT 1 FROM speaker_tasks task
+      WHERE task.event_id = roster.event_id AND task.person_id = roster.id
+        AND task.template_id = ? AND ${TASK_OWED_SQL}
+    )`);
+    bindings.push(filters.taskType);
+  }
+  if (filters.track && filters.track !== "all") {
+    where.push(`EXISTS (
+      SELECT 1
+        FROM participations track_part
+        JOIN submissions track_submission ON track_submission.id = track_part.submission_id
+        JOIN submission_tracks track_link ON track_link.submission_id = track_submission.id
+       WHERE track_part.person_id = roster.id
+         AND track_submission.event_id = roster.event_id
+         AND track_submission.status = 'accepted'
+         AND track_link.track_id = ?
+    )`);
+    bindings.push(filters.track);
+  }
+  const search = filters.search?.trim();
+  if (search) {
+    const pattern = `%${search}%`;
+    where.push(`(
+      roster.name LIKE ? COLLATE NOCASE
+      OR roster.company LIKE ? COLLATE NOCASE
+      OR roster.email LIKE ? COLLATE NOCASE
+      OR roster.id LIKE ? COLLATE NOCASE
+      OR EXISTS (
+        SELECT 1
+          FROM participations search_part
+          JOIN submissions search_submission ON search_submission.id = search_part.submission_id
+         WHERE search_part.person_id = roster.id
+           AND search_submission.event_id = roster.event_id
+           AND search_submission.status = 'accepted'
+           AND search_submission.title LIKE ? COLLATE NOCASE
+      )
+    )`);
+    bindings.push(pattern, pattern, pattern, pattern, pattern);
+  }
+  return { sql: where.length > 0 ? `WHERE ${where.join(" AND ")}` : "", bindings };
+}
+
+function onboardingPageQueries(
+  eventId: string,
+  filters: OnboardingFilters,
+  page: ReturnType<typeof parsePagination>,
+  now: number,
+  localDay: string,
+  riskDay: string,
+) {
+  const scope = onboardingFilterWhere(filters);
+  const runtimeBindings = [now, localDay, riskDay, eventId];
+  const where = scope.sql;
+  return {
+    countSql: `${ONBOARDING_PAGE_CTE}SELECT COUNT(*) AS total FROM roster_people roster ${where}`,
+    countBindings: [...runtimeBindings, ...scope.bindings],
+    dataSql: `${ONBOARDING_PAGE_CTE}SELECT roster.id, roster.name, roster.email, roster.title, roster.company, roster.bio,
+         roster.headshot_attachment_id, roster.last_contact
+    FROM roster_people roster ${where}
+    ORDER BY roster.severity DESC, roster.risk_task_count DESC, roster.name COLLATE NOCASE ASC, roster.id ASC
+    LIMIT ? OFFSET ?`,
+    dataBindings: [...runtimeBindings, ...scope.bindings, page.limit, page.offset],
+  };
 }
 
 interface SpeakerBaseRow {
@@ -512,48 +658,117 @@ function trackFacets(rows: readonly OnboardingRow[]): Array<{ id: string; name: 
   return [...counts.values()].sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
 }
 
+interface OnboardingAggregate {
+  all_count: number;
+  overdue: number;
+  incomplete: number;
+  risk: number;
+  overdue_tasks: number;
+  at_risk: number;
+}
+
+async function onboardingMetadata(
+  db: D1Database,
+  eventId: string,
+  templates: readonly OnboardingTaskTemplate[],
+  now: number,
+  timezone: string,
+): Promise<{
+  counts: OnboardingSnapshot["counts"];
+  metrics: Pick<OnboardingSnapshot["metrics"], "accepted_speakers" | "overdue_tasks" | "at_risk" | "ready_to_schedule">;
+  taskTypes: Array<OnboardingTaskTemplate & { count: number }>;
+  tracks: Array<{ id: string; name: string; color: string; count: number }>;
+}> {
+  const localDay = localParts(now, timezone).day;
+  const riskDay = calendarDateAfter(localDay, ONBOARDING_RISK_WINDOW_DAYS);
+  const runtimeBindings = [now, localDay, riskDay, eventId];
+  const [aggregate, acceptedSpeakers, readyToSchedule, taskCounts, trackRows] = await Promise.all([
+    db.prepare(
+      `${ONBOARDING_PAGE_CTE}
+       SELECT COUNT(*) AS all_count,
+              SUM(CASE WHEN overdue_task_count > 0 THEN 1 ELSE 0 END) AS overdue,
+              SUM(CASE WHEN owed_count > 0 THEN 1 ELSE 0 END) AS incomplete,
+              SUM(CASE WHEN risk_task_count > 0 THEN 1 ELSE 0 END) AS risk,
+              SUM(overdue_task_count) AS overdue_tasks,
+              SUM(CASE WHEN risk_task_count > 0 THEN 1 ELSE 0 END) AS at_risk
+          FROM roster_people`,
+    ).bind(...runtimeBindings).first<OnboardingAggregate>(),
+    acceptedSpeakerCount(db, eventId),
+    readyToScheduleCount(db, eventId),
+    db.prepare(
+      `SELECT task.template_id, COUNT(DISTINCT task.person_id) AS count
+         FROM speaker_tasks task
+        WHERE task.event_id = ? AND task.status = 'open' AND task.cancelled_at IS NULL
+        GROUP BY task.template_id`,
+    ).bind(eventId).all<{ template_id: string; count: number }>(),
+    db.prepare(
+      `SELECT track.id, track.name, track.color, COUNT(DISTINCT part.person_id) AS count
+         FROM participations part
+         JOIN submissions submission ON submission.id = part.submission_id
+         JOIN submission_tracks submission_track ON submission_track.submission_id = submission.id
+         JOIN tracks track ON track.id = submission_track.track_id AND track.event_id = submission.event_id
+        WHERE submission.event_id = ? AND submission.status = 'accepted'
+          AND part.role IN ('speaker', 'co_speaker')
+        GROUP BY track.id, track.name, track.color
+        ORDER BY track.name COLLATE NOCASE ASC, track.id ASC`,
+    ).bind(eventId).all<{ id: string; name: string; color: string; count: number }>(),
+  ]);
+  const summary = aggregate ?? { all_count: 0, overdue: 0, incomplete: 0, risk: 0, overdue_tasks: 0, at_risk: 0 };
+  const counts = {
+    all: Number(summary.all_count ?? 0),
+    overdue: Number(summary.overdue ?? 0),
+    incomplete: Number(summary.incomplete ?? 0),
+    risk: Number(summary.risk ?? 0),
+  };
+  const taskCountById = new Map(taskCounts.results.map((row) => [row.template_id, Number(row.count)]));
+  return {
+    counts,
+    metrics: {
+      accepted_speakers: acceptedSpeakers,
+      overdue_tasks: Number(summary.overdue_tasks ?? 0),
+      at_risk: Number(summary.at_risk ?? 0),
+      ready_to_schedule: readyToSchedule,
+    },
+    taskTypes: templates.map((template) => ({ ...template, count: taskCountById.get(template.id) ?? 0 })),
+    tracks: trackRows.results.map((row) => ({ ...row, count: Number(row.count) })),
+  };
+}
+
 export async function listOnboarding(
   db: D1Database,
   eventId: string,
   filters: OnboardingFilters = {},
   now = Date.now(),
 ): Promise<OnboardingSnapshot> {
-  const [templates, people, acceptedSpeakers, readyToSchedule] = await Promise.all([
-    listTemplates(db, eventId),
-    listPeople(db, eventId),
-    acceptedSpeakerCount(db, eventId),
-    readyToScheduleCount(db, eventId),
+  const [templates, timezone] = await Promise.all([listTemplates(db, eventId), eventTimezone(db, eventId)]);
+  const page = parsePagination({ page: filters.page, per_page: filters.perPage });
+  const localDay = localParts(now, timezone).day;
+  const riskDay = calendarDateAfter(localDay, ONBOARDING_RISK_WINDOW_DAYS);
+  const queries = onboardingPageQueries(eventId, filters, page, now, localDay, riskDay);
+  const [envelope, metadata] = await Promise.all([
+    executeListPage<SpeakerBaseRow>({
+      count: db.prepare(queries.countSql).bind(...queries.countBindings),
+      data: db.prepare(queries.dataSql).bind(...queries.dataBindings),
+      page,
+    }),
+    onboardingMetadata(db, eventId, templates, now, timezone),
   ]);
+  const people = envelope.data;
   const personIds = people.map((person) => person.id);
   const [taskRows, sessions] = await Promise.all([
     listTasks(db, eventId, personIds),
     listSessions(db, eventId, personIds),
   ]);
   const rows = buildRows(people, taskRows, templates, sessions, now);
-  const overdueTasks = taskRows.filter((task) => isOwedTask(task) && isTaskOverdue({
-    dueAt: task.due_at,
-    templateDueAt: task.template_due_at,
-    timezone: task.timezone,
-  }, now)).length;
-  const filteredRows = rows.filter((row) => rowMatchesOnboardingFilters(row, filters)).sort(compareOnboardingRows);
   return {
     generated_at: now,
     risk_window_days: ONBOARDING_RISK_WINDOW_DAYS,
-    metrics: {
-      accepted_speakers: acceptedSpeakers,
-      overdue_tasks: overdueTasks,
-      at_risk: rows.filter((row) => row.risk_task_count > 0).length,
-      ready_to_schedule: readyToSchedule,
-    },
-    counts: {
-      all: countByFilter(rows, "all"),
-      overdue: countByFilter(rows, "overdue"),
-      incomplete: countByFilter(rows, "incomplete"),
-      risk: countByFilter(rows, "risk"),
-    },
-    facets: { task_types: taskTypeFacets(rows, templates), tracks: trackFacets(rows) },
+    metrics: metadata.metrics,
+    counts: metadata.counts,
+    facets: { task_types: metadata.taskTypes, tracks: metadata.tracks },
     task_templates: templates,
-    rows: filteredRows,
+    ...envelope,
+    data: rows,
   };
 }
 

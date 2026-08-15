@@ -88,6 +88,7 @@ function DashboardContents({ snapshot, navigate, eventId }: { snapshot: Dashboar
     <section class="card instrument dashboard-pipeline-card" aria-label="Seven-stage program pipeline">
       {chrome.pipelineDeco === "bottleneck" && <BottleneckDeco />}
       <div class="dashboard-pipeline">{snapshot.pipeline.map((item) => <PipelineStage key={item.id} item={item} navigate={navigate} pinch={chrome.pipelineDeco === "bottleneck" && item.id === "accepted"} />)}</div>
+      <div class="dashboard-pipeline-scroll-note" role="note"><strong>{snapshot.pipeline.length} stages</strong><span>scroll sideways to see later stages</span></div>
       {chrome.pipelineDeco === "bottleneck" && <div class="register-pipeline-caption">{BOTTLENECK_CAPTION}</div>}
     </section>
 

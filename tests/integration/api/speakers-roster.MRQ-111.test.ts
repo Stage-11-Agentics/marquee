@@ -52,10 +52,20 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
   return app.request(`${ORIGIN}${path}`, { ...init, headers }, runtimeEnv());
 }
 
-async function roster(query = ""): Promise<{ rows: Array<Record<string, unknown>>; total: number; counts: Record<string, number> }> {
+async function roster(query = ""): Promise<{ data: Array<Record<string, unknown>>; total: number; counts: Record<string, number>; page: number; per_page: number; total_pages: number }> {
   const response = await request(`/api/v1/events/${EVENT_ID}/speakers${query}`);
   expect(response.status).toBe(200);
-  return await response.json();
+  const body = await response.json() as Record<string, unknown> & {
+    data: Array<Record<string, unknown>>;
+    total: number;
+    counts: Record<string, number>;
+    page: number;
+    per_page: number;
+    total_pages: number;
+  };
+  expect(body).not.toHaveProperty("rows");
+  expect(body).toEqual(expect.objectContaining({ data: expect.any(Array), page: expect.any(Number), per_page: expect.any(Number), total: expect.any(Number), total_pages: expect.any(Number) }));
+  return body;
 }
 
 function person(id: string, name: string, email: string): D1PreparedStatement {
@@ -124,7 +134,7 @@ test("CONTRACT · MRQ-111 · SPK-01 · the roster lists every speaker regardless
   expect(created.status).toBe(201);
 
   const body = await roster();
-  const names = body.rows.map((row) => row.name);
+  const names = body.data.map((row) => row.name);
   // Organizer-added (no session at all), plus both participation-derived people.
   expect(names).toContain("Priya Raman");
   expect(names).toContain("Marcus Okafor");
@@ -202,9 +212,9 @@ test("CONTRACT · MRQ-111 · SPK-04 · a status override persists, writes throug
   expect(body.speaker.sessions.map((session) => session.confirmation_status)).toEqual(["confirmed"]);
 
   const filtered = await roster("?status=confirmed");
-  expect(filtered.rows.map((row) => row.id)).toEqual([ACCEPTED_SPEAKER]);
+  expect(filtered.data.map((row) => row.id)).toEqual([ACCEPTED_SPEAKER]);
   const others = await roster("?status=pending");
-  expect(others.rows.map((row) => row.id)).not.toContain(ACCEPTED_SPEAKER);
+  expect(others.data.map((row) => row.id)).not.toContain(ACCEPTED_SPEAKER);
 });
 
 test("CONTRACT · MRQ-111 · SPK-04 · a session-less speaker can still be confirmed before scheduling", async () => {
@@ -239,14 +249,24 @@ test("CONTRACT · MRQ-111 · SPK-15 · logistics fields round-trip and clear hon
 
 test("CONTRACT · MRQ-111 · SPK-01 · search narrows to one speaker and clearing restores the roster", async () => {
   const all = await roster();
-  expect(all.rows.length).toBeGreaterThan(1);
+  expect(all.data.length).toBeGreaterThan(1);
   const narrowed = await roster("?q=Marcus");
-  expect(narrowed.rows.map((row) => row.name)).toEqual(["Marcus Okafor"]);
-  // `total` stays the roster size while `rows` narrows, so the UI can say
-  // "1 shown of N" instead of implying the roster shrank.
-  expect(narrowed.total).toBe(all.total);
+  expect(narrowed.data.map((row) => row.name)).toEqual(["Marcus Okafor"]);
+  // Amendment 7 makes `total` the count for the exact filtered list, while
+  // the status counts remain the unfiltered roster facets.
+  expect(narrowed.total).toBe(1);
+  expect(narrowed.total_pages).toBe(1);
+  expect(narrowed.counts.all).toBe(all.counts.all);
+  const secondPage = await roster("?page=2&per_page=1");
+  expect(secondPage.page).toBe(2);
+  expect(secondPage.per_page).toBe(1);
+  expect(secondPage.data).toHaveLength(1);
+  expect(secondPage.total_pages).toBe(all.total);
+  const softenedNavigation = await roster("?page=0&per_page=101");
+  expect(softenedNavigation.page).toBe(1);
+  expect(softenedNavigation.per_page).toBe(50);
   const restored = await roster("?q=");
-  expect(restored.rows.length).toBe(all.rows.length);
+  expect(restored.data.length).toBe(all.data.length);
 });
 
 test("CONTRACT · MRQ-111 · CNT-10 · one email is one person: a re-added speaker joins rather than duplicates", async () => {
@@ -257,8 +277,8 @@ test("CONTRACT · MRQ-111 · CNT-10 · one email is one person: a re-added speak
   });
   expect(first.status).toBe(201);
   const body = await roster();
-  expect(body.rows.filter((row) => row.email === "marcus@example.com").length).toBe(1);
-  expect(body.rows.find((row) => row.id === ACCEPTED_SPEAKER)?.bio).toBe("Re-entered by hand.");
+  expect(body.data.filter((row) => row.email === "marcus@example.com").length).toBe(1);
+  expect(body.data.find((row) => row.id === ACCEPTED_SPEAKER)?.bio).toBe("Re-entered by hand.");
 });
 
 test("CONTRACT · MRQ-176 · a hand-added speaker reaches its count and status tab, including an invited re-add", async () => {
@@ -271,13 +291,13 @@ test("CONTRACT · MRQ-176 · a hand-added speaker reaches its count and status t
   expect(created.status).toBe(201);
 
   const afterCreate = await roster();
-  const createdRow = afterCreate.rows.find((row) => row.email === "avery-mrq176@example.com");
+  const createdRow = afterCreate.data.find((row) => row.email === "avery-mrq176@example.com");
   expect(createdRow).toMatchObject({ name: "Avery Singh", status: "invited" });
   expect(afterCreate.total).toBe(before.total + 1);
   expect(afterCreate.counts.all).toBe(afterCreate.total);
   expect(afterCreate.counts.invited).toBe(before.counts.invited + 1);
   const invitedAfterCreate = await roster("?status=invited");
-  expect(invitedAfterCreate.rows.map((row) => row.email)).toContain("avery-mrq176@example.com");
+  expect(invitedAfterCreate.data.map((row) => row.email)).toContain("avery-mrq176@example.com");
 
   // A prior pending membership is already enough to put the person on the
   // roster. Re-adding them with `invited: true` must update that same row's
@@ -301,10 +321,10 @@ test("CONTRACT · MRQ-176 · a hand-added speaker reaches its count and status t
 
   const afterReAdd = await roster();
   expect(afterReAdd.total).toBe(beforeReAdd.total);
-  expect(afterReAdd.rows.filter((row) => row.email === "readd-mrq176@example.com")).toHaveLength(1);
-  expect(afterReAdd.rows.find((row) => row.email === "readd-mrq176@example.com")?.status).toBe("invited");
+  expect(afterReAdd.data.filter((row) => row.email === "readd-mrq176@example.com")).toHaveLength(1);
+  expect(afterReAdd.data.find((row) => row.email === "readd-mrq176@example.com")?.status).toBe("invited");
   const invitedAfterReAdd = await roster("?status=invited");
-  expect(invitedAfterReAdd.rows.filter((row) => row.email === "readd-mrq176@example.com")).toHaveLength(1);
+  expect(invitedAfterReAdd.data.filter((row) => row.email === "readd-mrq176@example.com")).toHaveLength(1);
   const membershipCount = await env.DB
     .prepare("SELECT COUNT(*) AS count FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'")
     .bind(EVENT_ID, READD_SPEAKER)
@@ -314,13 +334,13 @@ test("CONTRACT · MRQ-176 · a hand-added speaker reaches its count and status t
 
 test("CONTRACT · MRQ-111 · SPK-08 · every speaker payload carries the headshot pointer MRQ-112 renders", async () => {
   const body = await roster();
-  expect(body.rows.length).toBeGreaterThan(0);
-  for (const row of body.rows) expect(row).toHaveProperty("headshot_attachment_id");
+  expect(body.data.length).toBeGreaterThan(0);
+  for (const row of body.data) expect(row).toHaveProperty("headshot_attachment_id");
 });
 
 test("CONTRACT · MRQ-111 · SPK-01 · the roster is the speaker list, not the CFP funnel", async () => {
   const body = await roster();
-  const names = body.rows.map((row) => row.name);
+  const names = body.data.map((row) => row.name);
   // A person the conference rejected is not one of its speakers, and neither is
   // a moderator: listing either would make the roster a different noun.
   expect(names).not.toContain("Sam Reyes");

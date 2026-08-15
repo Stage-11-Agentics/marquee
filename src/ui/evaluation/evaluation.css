@@ -1,4 +1,5 @@
-.evaluation-layout { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.35fr) minmax(310px, .65fr); }
+.evaluation-layout { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.35fr) minmax(0, .65fr); min-width: 0; }
+.evaluation-layout > * { min-width: 0; }
 .evaluation-plan-card, .committee-card { grid-column: 1 / -1; }
 .evaluation-plan-heading { align-items: start; display: flex; gap: 16px; justify-content: space-between; }
 .evaluation-plan-heading h2 { font-size: 15px; font-weight: 500; line-height: 1.45; margin: 6px 0 0; max-width: 760px; }
@@ -152,15 +153,17 @@
   .criterion-row select { flex: 0 0 104px; width: auto; }
   .criterion-row .criterion-weight { flex: 0 0 76px; width: auto; }
   .criterion-detail { padding-left: 0; }
-  .evaluation-layout { grid-template-columns: 1fr; }
+  .evaluation-layout { grid-template-columns: minmax(0, 1fr); }
   .evaluation-plan-card, .committee-card { grid-column: auto; }
 }
 
 @media (max-width: 600px) {
-  .round-flow { grid-template-columns: 1fr; }
+  .round-flow { grid-template-columns: minmax(0, 1fr); }
   .round-arrow { transform: rotate(90deg); }
   .evaluation-plan-heading, .scorecard-line { align-items: flex-start; flex-direction: column; }
   .committee-intro { display: grid; gap: 5px; }
   .committee-person { grid-template-columns: 28px minmax(0, 1fr); padding: 8px 0; }
   .committee-person > .committee-person-action { grid-column: 2; justify-content: flex-start; }
+  .card-actions { flex-wrap: wrap; min-width: 0; }
+  .card-actions .button { flex: 1 1 130px; min-height: 40px; }
 }

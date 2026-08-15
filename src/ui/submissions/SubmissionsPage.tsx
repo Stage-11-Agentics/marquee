@@ -792,7 +792,8 @@ export function SubmissionsPage({
   const statusTone = statusError ? "error" : statusNotice ? "success" : "";
   const statusText = statusError || statusNotice
     || (refreshing ? "Refreshing submissions…" : "Select rows to accept, waitlist, or reject them together.");
-  return <div class="submissions-page">
+  const mobileSheetOpen = Boolean(selectedCount || bulkError || bulkMessage);
+  return <div class={`submissions-page${mobileSheetOpen ? " has-mobile-sheet" : ""}`}>
     <PageHeader
       title={notifiedQueue ? "Decided · not notified" : draftQueue ? "Drafts needing attention" : "Abstracts & sessions"}
       copy={envelope ? notifiedQueue
@@ -831,10 +832,10 @@ export function SubmissionsPage({
         </div>
         <span class="toolbar-spacer" />
         <Button small onClick={() => void saveCurrentView()} disabled={viewBusy}>Save current view</Button>
-        <Button small onClick={() => setColumnPanelOpen((open) => !open)} aria-expanded={columnPanelOpen}>{columnPanelOpen ? "Hide columns" : "Columns"}</Button>
+        <Button small class="columns-toggle" onClick={() => setColumnPanelOpen((open) => !open)} aria-expanded={columnPanelOpen}>{columnPanelOpen ? "Hide columns" : "Columns"}</Button>
       </div>
       {columnPanelOpen && <div class="column-panel" aria-label="Configure submission columns">
-        <div class="column-panel-heading"><div><strong>Columns</strong><span>Title is always visible. Changes stay reserved in this frame and persist for this conference.</span></div><span class="tabular">{columns.length} / {SUBMISSION_COLUMN_REGISTRY.length}</span></div>
+        <div class="column-panel-heading"><div><strong>Columns</strong><span>Title is always visible. Changes stay reserved in this frame and persist for this conference.</span></div><span class="column-panel-counter tabular">{columns.length} / {SUBMISSION_COLUMN_REGISTRY.length}</span></div>
         <div class="column-list">{orderedColumns.map((column) => {
           const position = columns.indexOf(column);
           const visible = position >= 0;
@@ -867,8 +868,10 @@ export function SubmissionsPage({
         height between its four states, or checking a row would push the row
         out from under the pointer that checked it.
       */}
-      <div class={`table-status-bar ${selectedCount ? "selecting" : statusTone}`} aria-live="polite">
-        {selectedCount ? <><strong class="tabular">{selectedCount.toLocaleString()} selected</strong>{!allMatching && envelope && selectedCount < envelope.total ? <Button small onClick={() => setAllMatching(true)}>Select all {envelope.total.toLocaleString()} matching</Button> : <span>All matching records selected</span>}<span class="toolbar-spacer" /><span class="selection-actions">{BULK_ACTIONS.map((option) => <Button key={option.action} small variant={option.variant} disabled={bulkBusy} onClick={() => { setBulkRequest(option.action); setBulkFeedback(""); setBulkError(""); }}>{option.label}</Button>)}</span></> : <><span class="table-status-text">{statusText}</span>{refreshError && <Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}</>}
+      <div class={`submissions-mobile-sheets${mobileSheetOpen ? " has-sheet" : ""}`}>
+        <div class={`table-status-bar ${selectedCount ? "selecting" : statusTone}`} aria-live="polite">
+          {selectedCount ? <><strong class="tabular">{selectedCount.toLocaleString()} selected</strong>{!allMatching && envelope && selectedCount < envelope.total ? <Button small onClick={() => setAllMatching(true)}>Select all {envelope.total.toLocaleString()} matching</Button> : <span>All matching records selected</span>}<span class="toolbar-spacer" /><span class="selection-actions">{BULK_ACTIONS.map((option) => <Button key={option.action} small variant={option.variant} disabled={bulkBusy} onClick={() => { setBulkRequest(option.action); setBulkFeedback(""); setBulkError(""); }}>{option.label}</Button>)}</span></> : <><span class="table-status-text">{statusText}</span>{refreshError && <Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}</>}
+        </div>
       </div>
       {bulkRequest && (() => {
         const option = BULK_ACTIONS.find((entry) => entry.action === bulkRequest)!;

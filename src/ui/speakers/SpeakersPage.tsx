@@ -104,7 +104,13 @@ export function SpeakersPage({
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [adding, setAdding] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
   const filterIdentity = JSON.stringify(filters);
+  const updateFilters = (update: typeof filters | ((current: typeof filters) => typeof filters)) => {
+    setPage(1);
+    setFilters(update);
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -114,19 +120,25 @@ export function SpeakersPage({
     const debounceMs = filters.query.trim() ? 180 : 0;
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams({ status: filters.status });
+      params.set("page", String(page));
+      params.set("per_page", String(pageSize));
       if (filters.track) params.set("track", filters.track);
       if (filters.query.trim()) params.set("q", filters.query.trim());
       apiFetch<SpeakerRosterSnapshot>(
         `/api/v1/events/${encodeURIComponent(eventId)}/speakers?${params.toString()}`,
         { route: "/api/v1/events/{eventId}/speakers", signal: controller.signal },
       )
-        .then((snapshot) => setState({ kind: "ready", snapshot }))
+        .then((snapshot) => {
+          setState({ kind: "ready", snapshot });
+          const lastPage = Math.max(1, snapshot.total_pages);
+          setPage((current) => current > lastPage ? lastPage : current);
+        })
         .catch((caught: unknown) => {
           if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(caught) });
         });
     }, debounceMs);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [eventId, filterIdentity, reloadToken]);
+  }, [eventId, filterIdentity, reloadToken, page]);
 
   // The record lives in the URL, so an organizer can send someone a speaker,
   // quick-search can deep-link one, and a reload lands back on the same record
@@ -147,19 +159,21 @@ export function SpeakersPage({
   }, [deepLinkedPerson]);
 
   const ready = state.kind === "ready" ? state.snapshot : null;
-  const rows = ready?.rows ?? [];
+  const rows = ready?.data ?? [];
   // Two speakers may legitimately share a name; the roster must not print them
   // as one indistinguishable pair.
   const displayNames = disambiguatedNames(rows);
   const counts = ready?.counts ?? { all: 0, pending: 0, invited: 0, confirmed: 0, declined: 0 };
   const hasFilters = filters.status !== "all" || Boolean(filters.track) || filters.query.trim().length > 0;
-  const clearFilters = () => setFilters({ status: "all", track: "", query: "" });
+  const clearFilters = () => updateFilters({ status: "all", track: "", query: "" });
+  const matchingTotal = ready?.total ?? 0;
+  const totalPages = Math.max(1, ready?.total_pages ?? Math.ceil(matchingTotal / pageSize));
 
   return <div class="speakers-page">
     <PageHeader
       title="Speakers"
       copy={ready
-        ? `${ready.total} speaker${ready.total === 1 ? "" : "s"} on the roster for this conference — everyone who submitted, was accepted, was imported, or was added by hand.`
+        ? `${ready.counts.all} speaker${ready.counts.all === 1 ? "" : "s"} on the roster for this conference — everyone who submitted, was accepted, was imported, or was added by hand.`
         : "Reading the conference roster…"}
       actions={<button class="speaker-fixed-action" type="button" onClick={() => setAdding((open) => !open)}>{adding ? "Close form" : "Add speaker"}</button>}
     />
@@ -178,7 +192,7 @@ export function SpeakersPage({
             type="button"
             key={filter.key}
             aria-pressed={filters.status === filter.key}
-            onClick={() => setFilters((current) => ({ ...current, status: filter.key }))}
+            onClick={() => updateFilters((current) => ({ ...current, status: filter.key }))}
           ><span>{filter.label}</span><strong class="tabular">{counts[filter.key] ?? 0}</strong></button>)}
         </div>
         <label class="speaker-search">
@@ -186,16 +200,16 @@ export function SpeakersPage({
           <input
             value={filters.query}
             placeholder="Search name, company, email, session"
-            onInput={(event) => setFilters((current) => ({ ...current, query: (event.currentTarget as HTMLInputElement).value }))}
+            onInput={(event) => updateFilters((current) => ({ ...current, query: (event.currentTarget as HTMLInputElement).value }))}
           />
         </label>
       </div>
       <div class="speaker-board-filters">
-        <label>Track<select value={filters.track} onChange={(event) => setFilters((current) => ({ ...current, track: (event.currentTarget as HTMLSelectElement).value }))}>
+        <label>Track<select value={filters.track} onChange={(event) => updateFilters((current) => ({ ...current, track: (event.currentTarget as HTMLSelectElement).value }))}>
           <option value="">All tracks</option>
           {(ready?.tracks ?? []).map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}
         </select></label>
-        <span class="speaker-filter-count tabular">{rows.length} shown of {ready?.total ?? 0}</span>
+        <span class="speaker-filter-count tabular">{rows.length} shown of {matchingTotal}</span>
       </div>
 
       {state.kind === "loading" ? <div class="speaker-board-state">Reading the conference roster…</div> : null}
@@ -215,8 +229,8 @@ export function SpeakersPage({
           <thead>
             <tr>
               <th scope="col">Speaker</th>
-              <th scope="col">Title &amp; company</th>
-              <th scope="col">Sessions</th>
+              <th scope="col" class="speaker-profile-column">Title &amp; company</th>
+              <th scope="col" class="speaker-sessions-column">Sessions</th>
               <th scope="col" class="speaker-status-column">Status</th>
               <th scope="col" class="speaker-tasks-column">Tasks</th>
               <th scope="col" class="speaker-action-column"><span class="sr-only">Actions</span></th>
@@ -230,8 +244,8 @@ export function SpeakersPage({
                   <span><strong>{displayNames.get(row.id) ?? row.name}</strong><small>{row.email}</small></span>
                 </button>
               </th>
-              <td>{[row.title, row.company].filter(Boolean).join(" · ") || <span class="speaker-muted">—</span>}</td>
-              <td>{row.sessions.length === 0
+              <td class="speaker-profile-column">{[row.title, row.company].filter(Boolean).join(" · ") || <span class="speaker-muted">—</span>}</td>
+              <td class="speaker-sessions-column">{row.sessions.length === 0
                 ? <span class="speaker-muted">—</span>
                 : <span class="speaker-session-titles">{row.sessions.map((session) => session.title).join(" · ")}</span>}</td>
               <td class="speaker-status-column"><SpeakerStatusBadge status={row.status} /></td>
@@ -240,6 +254,10 @@ export function SpeakersPage({
             </tr>)}
           </tbody>
         </table>
+      </div> : null}
+      {state.kind === "ready" && (rows.length > 0 || page > 1) ? <div class="speaker-tablefoot">
+        <span class="tabular">Showing {rows.length} of {matchingTotal} speakers</span>
+        <span class="speaker-pager"><Button small disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</Button><span class="speaker-pager-label tabular">Page {ready?.page ?? page} of {totalPages}</span><Button small disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>Next</Button></span>
       </div> : null}
     </section>
 

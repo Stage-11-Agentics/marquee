@@ -86,11 +86,11 @@ function FileRow({ eventId, row, personName, selected, onToggle }: { eventId: st
         <strong title={row.session?.title ?? (sessionChoices || undefined)}>{row.session?.title ?? (hasAmbiguousSession ? "Multiple accepted sessions" : <span class="files-empty-dash">—</span>)}</strong>
         <small title={hasAmbiguousSession ? sessionChoices : undefined}>{row.session ? "session" : hasAmbiguousSession ? `choose one: ${sessionChoices}` : "no session attached"}</small>
       </td>
-      <td><span class={`files-state state-${row.state}`}>{ROW_STATE_LABELS[row.state]}</span></td>
-      <td class="files-when">{hasFile ? formatDate(row.latest?.uploaded_at ?? null) : `due ${formatDate(row.task.due_at)}`}</td>
-      <td class="files-versions-count">{row.version_count > 0 ? `${row.version_count} version${row.version_count === 1 ? "" : "s"}` : "—"}</td>
-      <td class="files-size">{row.latest ? formatBytes(row.latest.size_bytes) : "—"}</td>
-      <td>
+      <td class="files-status-column"><span class={`files-state state-${row.state}`}>{ROW_STATE_LABELS[row.state]}</span></td>
+      <td class="files-when files-when-column">{hasFile ? formatDate(row.latest?.uploaded_at ?? null) : `due ${formatDate(row.task.due_at)}`}</td>
+      <td class="files-versions-count files-versions-column">{row.version_count > 0 ? `${row.version_count} version${row.version_count === 1 ? "" : "s"}` : "—"}</td>
+      <td class="files-size files-size-column">{row.latest ? formatBytes(row.latest.size_bytes) : "—"}</td>
+      <td class="files-action-column">
         <button class="files-expand" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
           {expanded ? "Hide" : hasFile ? "Versions" : "Details"}
         </button>
@@ -217,12 +217,12 @@ export function FilesPage({ eventId, navigate }: { eventId: string; navigate?: (
                 <th class="files-select-column"><input type="checkbox" aria-label="Select all shown deliverables" checked={allVisibleSelected} onChange={toggleAll} /></th>
                 <th scope="col">File</th>
                 <th scope="col">Speaker</th>
-                <th scope="col">Session</th>
-                <th scope="col">Status</th>
-                <th scope="col">Uploaded</th>
-                <th scope="col">Versions</th>
-                <th scope="col">Size</th>
-                <th scope="col"><span class="sr-only">Version history</span></th>
+                <th scope="col" class="files-session-column">Session</th>
+                <th scope="col" class="files-status-column">Status</th>
+                <th scope="col" class="files-when-column">Uploaded</th>
+                <th scope="col" class="files-versions-column">Versions</th>
+                <th scope="col" class="files-size-column">Size</th>
+                <th scope="col" class="files-action-column"><span class="sr-only">Version history</span></th>
               </tr></thead>
               <tbody>{rows.map((row) => <FileRow key={row.id} eventId={eventId} row={row} personName={personNames.get(row.person.id) ?? row.person.name} selected={selected.has(row.id)} onToggle={() => toggleRow(row.id)} />)}</tbody>
             </table>

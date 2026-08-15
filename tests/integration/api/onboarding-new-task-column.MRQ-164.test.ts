@@ -89,6 +89,8 @@ beforeEach(async () => {
 
 test("CONTRACT · MRQ-164 · a task authored after setup gets its own column with real per-speaker state", async () => {
   const before = await (await request(`/api/v1/events/${EVENT_ID}/onboarding`)).json() as OnboardingSnapshot;
+  expect(before).not.toHaveProperty("rows");
+  expect(before).toEqual(expect.objectContaining({ data: expect.any(Array), page: 1, per_page: 50, total_pages: expect.any(Number) }));
   expect(before.task_templates.map((template) => template.name)).toEqual(["Acknowledge acceptance"]);
 
   const created = await postJson(`/api/v1/events/${EVENT_ID}/task-templates`, {
@@ -102,18 +104,19 @@ test("CONTRACT · MRQ-164 · a task authored after setup gets its own column wit
   const newTemplateId = ((await created.json()) as { data: { id: string } }).data.id;
 
   const after = await (await request(`/api/v1/events/${EVENT_ID}/onboarding`)).json() as OnboardingSnapshot;
+  expect(after.data).toHaveLength(after.total);
   // The column exists, and it is not the only thing that has to be true: the
   // matrix reads state out of `cells`, keyed by template id.
   expect(after.task_templates.map((template) => template.name)).toContain("Confirm participation");
 
-  const marcus = after.rows.find((row) => row.person.id === MARCUS_ID);
+  const marcus = after.data.find((row) => row.person.id === MARCUS_ID);
   expect(marcus, "Marcus is on the board through his accepted session").toBeDefined();
   expect(marcus!.cells[newTemplateId]?.state).toBe("upcoming");
   // His row is not blank state everywhere — the newly authored task is real
   // work the board can see, which is exactly what round 4 could not read.
   expect(marcus!.tasks.some((task) => task.state !== "unassigned")).toBe(true);
 
-  const priya = after.rows.find((row) => row.person.id === PRIYA_ID);
+  const priya = after.data.find((row) => row.person.id === PRIYA_ID);
   expect(priya!.cells[newTemplateId]?.state).toBe("upcoming");
   expect(priya!.cells[ORIGINAL_TEMPLATE_ID]?.state).toBe("upcoming");
 
@@ -123,10 +126,14 @@ test("CONTRACT · MRQ-164 · a task authored after setup gets its own column wit
 
 test("CONTRACT · MRQ-164 · a speaker owing nothing is distinguishable from one whose tasks are unstarted", async () => {
   const snapshot = await (await request(`/api/v1/events/${EVENT_ID}/onboarding`)).json() as OnboardingSnapshot;
-  const marcus = snapshot.rows.find((row) => row.person.id === MARCUS_ID);
-  const priya = snapshot.rows.find((row) => row.person.id === PRIYA_ID);
+  const marcus = snapshot.data.find((row) => row.person.id === MARCUS_ID);
+  const priya = snapshot.data.find((row) => row.person.id === PRIYA_ID);
   // Marcus holds no task of any template; Priya holds one, unstarted. The two
   // cases must not read the same, which is what the matrix row now says.
   expect(marcus!.tasks.every((task) => task.state === "unassigned")).toBe(true);
   expect(priya!.tasks.some((task) => task.state === "upcoming")).toBe(true);
+
+  const softenedNavigation = await (await request(`/api/v1/events/${EVENT_ID}/onboarding?page=0&per_page=101`)).json() as OnboardingSnapshot;
+  expect(softenedNavigation.page).toBe(1);
+  expect(softenedNavigation.per_page).toBe(50);
 });

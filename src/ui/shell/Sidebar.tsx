@@ -1,9 +1,12 @@
 import type { JSX } from "preact";
+import { useCallback, useEffect, useRef } from "preact/hooks";
 import { EventSwitcher } from "./EventSwitcher";
 import { useEventContext } from "./event-context";
 import { matchRoute, routesFor, type RouteDefinition } from "./route-table";
 import { chromeFor, useThemeId, type RegisterChrome } from "./register";
 import { StageFlyout } from "./StageFlyout";
+import { ThemeSwitch } from "./ThemeSwitch";
+import { useDialogLifecycle } from "./OverlayHosts";
 
 /**
  * The public site and the speaker portal are real browser navigations out of
@@ -47,7 +50,7 @@ function AddSessionPlus({ navigate }: { navigate: (target: string) => void }): J
   >+</span>;
 }
 
-function Nav({ label, routes, activeId, navigate, slug, chrome, extraClass = "" }: { label: string; routes: readonly RouteDefinition[]; activeId?: string; navigate: (target: string) => void; slug: string | null; chrome: RegisterChrome; extraClass?: string }): JSX.Element {
+function Nav({ label, routes, activeId, navigate, slug, chrome, extraClass = "", onNavigate }: { label: string; routes: readonly RouteDefinition[]; activeId?: string; navigate: (target: string) => void; slug: string | null; chrome: RegisterChrome; extraClass?: string; onNavigate?: () => void }): JSX.Element {
   // Register chrome may rename the nav (swyxy's lowercase single-word labels);
   // the routes, order, and structure are always Marquee's.
   const labelFor = (route: RouteDefinition) => chrome.navLabels[route.id] ?? route.label;
@@ -60,7 +63,10 @@ function Nav({ label, routes, activeId, navigate, slug, chrome, extraClass = "" 
       data-nav-id={route.id}
       class={active ? "active" : ""}
       aria-current={active ? "page" : undefined}
-      onClick={(event) => { if (!route.external) { event.preventDefault(); navigate(route.path); } }}
+      onClick={(event) => {
+        onNavigate?.();
+        if (!route.external) { event.preventDefault(); navigate(route.path); }
+      }}
     >
       <NavIcon glyph={route.icon} />
       <span>{labelFor(route)}</span>
@@ -74,14 +80,51 @@ function Nav({ label, routes, activeId, navigate, slug, chrome, extraClass = "" 
 const SYSTEM_HEALTH_PATH = matchRoute("/delivery-health", "?view=system")?.path ?? "/delivery-health?view=system";
 const API_DOCS_PATH = matchRoute("/api/docs")?.path ?? "/api/docs";
 
-export function Sidebar({ activeId, eventName, navigate, resetting, onReset }: { activeId?: string; eventName: string; navigate: (target: string) => void; resetting: boolean; onReset: () => void }): JSX.Element {
+export function Sidebar({ activeId, eventName, navigate, resetting, onReset, drawerOpen = false, onClose }: { activeId?: string; eventName: string; navigate: (target: string) => void; resetting: boolean; onReset: () => void; drawerOpen?: boolean; onClose?: () => void }): JSX.Element {
   const { event } = useEventContext();
   const slug = event?.slug ?? null;
   const chrome = chromeFor(useThemeId());
+  const closeDrawer = useCallback(() => { onClose?.(); }, [onClose]);
+  const drawerNavigate = useCallback((target: string) => {
+    onClose?.();
+    navigate(target);
+  }, [navigate, onClose]);
+  const drawerRef = useDialogLifecycle(drawerOpen, closeDrawer);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const resetOnDesktop = () => {
+      if (window.innerWidth > 760) onClose?.();
+    };
+    const media = window.matchMedia?.("(max-width: 760px)");
+    window.addEventListener("resize", resetOnDesktop);
+    media?.addEventListener?.("change", resetOnDesktop);
+    resetOnDesktop();
+    return () => {
+      window.removeEventListener("resize", resetOnDesktop);
+      media?.removeEventListener?.("change", resetOnDesktop);
+    };
+  }, [drawerOpen, onClose]);
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const frame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [drawerOpen]);
   const group = (label: string, name: Parameters<typeof routesFor>[0], extraClass = "") =>
-    <Nav label={label} routes={routesFor(name)} activeId={activeId} navigate={navigate} slug={slug} chrome={chrome} extraClass={extraClass} />;
-  return <aside class="sidebar">
-    <a class="brand" href="/dashboard" onClick={(event) => { event.preventDefault(); navigate("/dashboard"); }}><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
+    <Nav label={label} routes={routesFor(name)} activeId={activeId} navigate={drawerNavigate} slug={slug} chrome={chrome} extraClass={extraClass} onNavigate={onClose} />;
+  return <>
+    {drawerOpen ? <button type="button" class="sidebar-backdrop" aria-label="Close navigation" onClick={closeDrawer} /> : null}
+    <aside
+      ref={drawerRef}
+      id="primary-navigation"
+      class={`sidebar${drawerOpen ? " drawer-open" : ""}`}
+      role={drawerOpen ? "dialog" : undefined}
+      aria-modal={drawerOpen ? "true" : undefined}
+      aria-label={drawerOpen ? "Navigation" : undefined}
+      tabIndex={drawerOpen ? -1 : undefined}
+    >
+    <button ref={closeButtonRef} type="button" class="mobile-nav-close" aria-label="Close navigation" onClick={closeDrawer}>×</button>
+    <a class="brand" href="/dashboard" onClick={(event) => { event.preventDefault(); drawerNavigate("/dashboard"); }}><span class="brand-mark">M</span><span class="brand-name">Marquee</span></a>
 {/*
       Organization sits ABOVE the conference switcher on purpose. The sidebar
       reads brand → what this organization owns → which conference you are in →
@@ -97,7 +140,7 @@ export function Sidebar({ activeId, eventName, navigate, resetting, onReset }: {
       in a place no other group's name appears.
     */}
     <div class="nav-label">Conference</div>
-    <EventSwitcher eventName={eventName} navigate={navigate} />
+    <EventSwitcher eventName={eventName} navigate={drawerNavigate} />
     {group("Conference", "conference")}
     <div class="nav-label">Speaker ops</div>
     {group("Speaker ops", "speaker-ops")}
@@ -109,12 +152,14 @@ export function Sidebar({ activeId, eventName, navigate, resetting, onReset }: {
         settings, and the group above it is what says so. */}
     {group("Settings", "settings", "settings-nav")}
     <div class="sidebar-foot">
-      <a href={API_DOCS_PATH}>⌘ API &amp; CLI</a>
-      <a href={SYSTEM_HEALTH_PATH}>◌ System health</a>
+      <div class="sidebar-theme-switch"><ThemeSwitch /></div>
+      <a href={API_DOCS_PATH} onClick={onClose}>⌘ API &amp; CLI</a>
+      <a href={SYSTEM_HEALTH_PATH} onClick={onClose}>◌ System health</a>
       <button type="button" class="reset-demo-button" onClick={onReset} disabled={resetting} aria-busy={resetting}>
         <span class="reset-demo-label">{resetting ? "Resetting…" : "↻ Reset demo"}</span>
       </button>
     </div>
-    <StageFlyout navigate={navigate} />
-  </aside>;
+    <StageFlyout navigate={drawerNavigate} />
+  </aside>
+  </>;
 }

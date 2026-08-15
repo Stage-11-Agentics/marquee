@@ -150,6 +150,7 @@ export function ProgramBoardPage({ eventId, navigate }: Props): JSX.Element {
         <span class="program-board-filter-summary tabular">{ready ? `${ready.cards.length.toLocaleString()} matching` : "—"}</span>
       </form>
       <BoardKindNote kind={filters.kind} />
+      <div class="program-board-scroll-note" role="note"><strong>{ready ? `${ready.columns.length} stages` : "Program stages"}</strong><span>scroll sideways to see later columns</span></div>
       {state.kind === "loading" && <div class="program-board-state">Loading the program board…</div>}
       {state.kind === "error" && <div class="program-board-state error"><strong>Program board did not load</strong><span>{state.message}</span><Button small onClick={() => setFilters({ ...filters })}>Retry</Button></div>}
       {ready && ready.cards.length === 0

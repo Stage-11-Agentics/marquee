@@ -1,6 +1,6 @@
 @import "../social/social-badge.css";
 
-.settings-page { display: grid; gap: 22px; }
+.settings-page { display: grid; gap: 22px; min-width: 0; }
 .settings-list-empty { align-items: start; color: var(--muted); display: grid; gap: 6px; min-height: 112px; padding: 18px 0; }
 .settings-list-empty strong { color: var(--ink-soft); font-size: 12px; }
 .settings-list-empty span { font-size: 11px; line-height: 1.5; }
@@ -75,6 +75,13 @@
 .skeleton-line.wide { width: 90%; height: 18px; }
 @media (max-width: 900px) { .settings-grid { grid-template-columns: 1fr; } .settings-details-card, .settings-venue-link, .settings-organizers { grid-column: auto; } .settings-row-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .settings-row-fields .field:first-child { grid-column: span 2; } }
 @media (max-width: 600px) { .settings-fields, .settings-row-fields, .track-fields { grid-template-columns: 1fr; } .span-2, .settings-row-fields .field:first-child { grid-column: auto; } .settings-venue-link, .settings-danger-card, .settings-savebar { align-items: stretch; flex-direction: column; } .settings-venue-link .button, .settings-danger-card .button, .settings-savebar .button { width: 100%; } .settings-danger-actions { align-items: stretch; flex-direction: column-reverse; } .settings-danger-actions .button { width: 100%; } }
+
+@media (max-width: 760px) {
+  .settings-page .settings-row-actions { align-items: stretch; flex-wrap: wrap; justify-content: flex-start; }
+  .settings-page .settings-row-actions .button { min-height: 40px; min-width: 40px; }
+  .settings-page .settings-social-name { min-width: 0; overflow-wrap: anywhere; }
+  .settings-page .settings-savebar { min-width: 0; }
+}
 
 .task-template-row { gap: 10px; }
 .task-template-row .settings-row-heading { padding-bottom: 2px; }
@@ -190,7 +197,7 @@
 .token-restriction { color: var(--ink-soft); font-size: 12px; }
 .token-form-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .token-table-card { min-width: 0; }
-.table-scroll { overflow-x: auto; }
+.table-scroll { max-width: 100%; min-width: 0; overflow-x: auto; position: relative; }
 .token-table { border-collapse: collapse; min-width: 900px; width: 100%; }
 .token-table th, .token-table td { border-bottom: 1px solid var(--line); font-size: 11px; padding: 12px 14px; text-align: left; vertical-align: top; }
 .token-table thead th { background: var(--sunk); color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
