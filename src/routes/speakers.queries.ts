@@ -16,7 +16,9 @@
  *     superset of the roster. A program-committee submitter belongs on the
  *     chase board and does not belong on a speaker roster.
  *
- * Status precedence lives in `rollupSpeakerStatus` and nowhere else.
+ * Roster status precedence lives in the SQL projection below and nowhere else.
+ * The page badge, detail badge, status filter, and facet counts all consume
+ * that same projection.
  */
 import type { D1Database } from "@cloudflare/workers-types";
 
@@ -52,37 +54,6 @@ export interface SpeakerParticipationRow {
   confirmation_status: "pending" | "confirmed" | "declined";
   confirmed_at: number | null;
   invited_at: number | null;
-}
-
-export interface SpeakerMembershipRow {
-  confirmation_status: "pending" | "confirmed" | "declined";
-  confirmed_at: number | null;
-  invited_at: number | null;
-}
-
-/**
- * The roster badge, derived — never stored.
- *
- * A speaker with sessions is described by those sessions: one decline is the
- * headline, all-confirmed is the clear state, and anything else is outstanding.
- * Only a speaker with no sessions at all falls through to the membership row,
- * which is the sole thing the organizer override can be recorded against before
- * a session exists ("she confirmed on a call" happens well before scheduling).
- * The override writes both, in one batch, so the two can never disagree.
- */
-export function rollupSpeakerStatus(
-  participations: readonly Pick<SpeakerParticipationRow, "confirmation_status" | "invited_at">[],
-  membership: SpeakerMembershipRow | null,
-): SpeakerStatus {
-  if (participations.length > 0) {
-    if (participations.some((row) => row.confirmation_status === "declined")) return "declined";
-    if (participations.every((row) => row.confirmation_status === "confirmed")) return "confirmed";
-    return participations.some((row) => row.invited_at !== null) ? "invited" : "pending";
-  }
-  if (!membership) return "pending";
-  if (membership.confirmation_status === "declined") return "declined";
-  if (membership.confirmation_status === "confirmed") return "confirmed";
-  return membership.invited_at === null ? "pending" : "invited";
 }
 
 export interface SpeakerTrack {
@@ -152,8 +123,7 @@ interface PersonQueryRow {
   created_at: number;
   updated_at: number;
   membership_status: "pending" | "confirmed" | "declined" | null;
-  membership_confirmed_at: number | null;
-  membership_invited_at: number | null;
+  roster_status: SpeakerStatus;
 }
 
 interface ParticipationQueryRow extends SpeakerParticipationRow {
@@ -184,9 +154,24 @@ const ROSTER_BASE_COLUMNS = `person.id, person.name, person.email, person.title,
        person.headshot_attachment_id, person.social_links, person.custom_fields,
        person.created_at, person.updated_at`;
 
+/**
+ * Canonical roster status projection. It is selected for page/detail rows and
+ * reused verbatim by the status filter and facet-count query. Session rows are
+ * hydrated separately for display; they do not derive a second roster status.
+ */
+export const ROSTER_STATUS_SQL = `CASE
+  WHEN COALESCE(rollup.participation_count, 0) > 0 AND rollup.declined_count > 0 THEN 'declined'
+  WHEN COALESCE(rollup.participation_count, 0) > 0
+    AND rollup.confirmed_count = rollup.participation_count THEN 'confirmed'
+  WHEN COALESCE(rollup.participation_count, 0) > 0 AND rollup.invited = 1 THEN 'invited'
+  WHEN COALESCE(rollup.participation_count, 0) = 0 AND membership.confirmation_status = 'declined' THEN 'declined'
+  WHEN COALESCE(rollup.participation_count, 0) = 0 AND membership.confirmation_status = 'confirmed' THEN 'confirmed'
+  WHEN COALESCE(rollup.participation_count, 0) = 0 AND membership.invited_at IS NOT NULL THEN 'invited'
+  ELSE 'pending'
+END`;
+
 const ROSTER_COLUMNS = `membership.confirmation_status AS membership_status,
-       membership.confirmed_at AS membership_confirmed_at,
-       membership.invited_at AS membership_invited_at`;
+       ${ROSTER_STATUS_SQL} AS roster_status`;
 
 const ROSTER_WITH = `WITH event_scope AS (SELECT ? AS event_id),
 participation_rollup AS (
@@ -297,13 +282,6 @@ function buildRow(
   tracks: readonly TrackQueryRow[],
   tasks: TaskCountRow | undefined,
 ): SpeakerRow {
-  const membership: SpeakerMembershipRow | null = person.membership_status === null
-    ? null
-    : {
-      confirmation_status: person.membership_status,
-      confirmed_at: person.membership_confirmed_at,
-      invited_at: person.membership_invited_at,
-    };
   return {
     id: person.id,
     name: person.name,
@@ -314,8 +292,8 @@ function buildRow(
     headshot_attachment_id: person.headshot_attachment_id,
     social_links: parseSocialLinks(person.social_links),
     custom_fields: parseCustomFields(person.custom_fields),
-    status: rollupSpeakerStatus(participations, membership),
-    is_member: membership !== null,
+    status: person.roster_status,
+    is_member: person.membership_status !== null,
     sessions: participations.map((row) => ({
       participation_id: row.id,
       submission_id: row.submission_id,
@@ -349,22 +327,6 @@ export function speakerMatchesFilters(row: SpeakerRow, filters: SpeakerFilters):
   }
   return true;
 }
-
-/**
- * The SQL status filter is evaluated against the same person projection as
- * the page. It remains named until C gives it one shared implementation with
- * `rollupSpeakerStatus`.
- */
-const ROSTER_STATUS_SQL = `CASE
-  WHEN COALESCE(rollup.participation_count, 0) > 0 AND rollup.declined_count > 0 THEN 'declined'
-  WHEN COALESCE(rollup.participation_count, 0) > 0
-    AND rollup.confirmed_count = rollup.participation_count THEN 'confirmed'
-  WHEN COALESCE(rollup.participation_count, 0) > 0 AND rollup.invited = 1 THEN 'invited'
-  WHEN COALESCE(rollup.participation_count, 0) = 0 AND membership.confirmation_status = 'declined' THEN 'declined'
-  WHEN COALESCE(rollup.participation_count, 0) = 0 AND membership.confirmation_status = 'confirmed' THEN 'confirmed'
-  WHEN COALESCE(rollup.participation_count, 0) = 0 AND membership.invited_at IS NOT NULL THEN 'invited'
-  ELSE 'pending'
-END`;
 
 function speakerFilterWhere(filters: SpeakerFilters): { sql: string; bindings: (string | number)[] } {
   const where: string[] = [];
