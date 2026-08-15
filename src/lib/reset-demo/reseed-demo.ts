@@ -3,6 +3,7 @@ import {
   SHIPPED_DEMO_ORGANIZATION_ID,
   shippedDemoFixtureRows,
 } from "./demo-fixture";
+import { mirrorSuppressionStatements } from "../../jobs/mirror/outbox";
 
 const DEMO_EVENT_ID = SHIPPED_DEMO_EVENT_ID;
 const DEMO_ORGANIZATION_ID = SHIPPED_DEMO_ORGANIZATION_ID;
@@ -465,9 +466,12 @@ export async function reseedDemo(
   if (!media) throw new Error("MEDIA binding is required for demo reset");
   const deletedObjects = await deleteDemoOrgObjects(db, media);
   const rows = shippedDemoFixtureRows(now);
+  const [suppressMirror, releaseMirror] = mirrorSuppressionStatements(db, now);
   await db.batch([
+    suppressMirror,
     ...scopedWipeStatements(db),
     ...rows.map((row) => db.prepare(row.statement).bind(...row.bindings)),
+    releaseMirror,
   ]);
   return {
     wipedTables: WIPE_ORDER.length,
