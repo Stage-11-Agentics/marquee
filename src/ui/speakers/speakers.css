@@ -68,6 +68,7 @@
 .speaker-board-state.error { color: var(--alarm); }
 .speaker-tablefoot { align-items: center; background: var(--sunk); border-top: 1px solid var(--line); color: var(--muted); display: flex; font: 10px/1 var(--mono); gap: 12px; justify-content: space-between; padding: 9px 10px; }
 .speaker-pager { align-items: center; display: flex; gap: 8px; }
+.speaker-pager-label { flex: 0 0 100px; text-align: center; white-space: nowrap; }
 
 /* Above the sticky topbar (z-index 50), matching the drawer layer convention
    in components.css and the onboarding board. At 40 the topbar painted over the

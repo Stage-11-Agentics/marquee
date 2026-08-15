@@ -4,6 +4,12 @@
 .sidebar::-webkit-scrollbar { width: 6px; }
 .sidebar::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 6px; }
 .sidebar::-webkit-scrollbar-track { background: transparent; }
+/* Theme-wide scrollbar furniture is intentionally 10px. The sidebar is the
+   exception: its six-pixel gutter is part of the shell geometry, so this
+   selector must beat `html[data-theme] *` in every themed register. */
+html[data-theme] .sidebar::-webkit-scrollbar { width: 6px; }
+html[data-theme] .sidebar::-webkit-scrollbar-thumb { background: var(--line-strong); border: 0; border-radius: 6px; }
+html[data-theme] .sidebar::-webkit-scrollbar-track { background: transparent; }
 .sidebar-backdrop, .mobile-nav-trigger, .mobile-event-context, .mobile-search-trigger, .mobile-nav-close, .sidebar-theme-switch { display: none; }
 .brand { align-items: center; display: flex; gap: 10px; padding: 2px 8px 21px; }
 .brand-mark { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); color: var(--accent-dark); display: grid; flex: 0 0 28px; font: 600 13px/1 var(--mono); height: 28px; place-items: center; width: 28px; }
