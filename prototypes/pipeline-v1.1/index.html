@@ -15,12 +15,14 @@
        read — then four suggested agents (setup · reviewer seat · chase ·
        program builder), each one sentence plus one prompt, a next-year
        line (event create --from), and two short honesty cards: built
-       for verification / what stays human. The API & CLI reference
-       keeps its sidebar-foot door; the page-head links into it and into
-       API tokens. The agent cards deliberately carry NO navigation —
-       Copy prompt is their only action (client ruling: this page tells
-       you how to set up your agent, it does not shuttle you elsewhere;
-       the cold-start replay stays on the landing page, its main home).
+       for verification / what stays human. Beside the connect card sit
+       three dark instrument doors — Create API token, the API & CLI
+       reference, and the machine copy (/SKILL.md, copy-the-URL) —
+       a prominent section, not header buttons (client ruling). The
+       agent cards deliberately carry NO navigation — Copy prompt is
+       their only action (client ruling: this page tells you how to set
+       up your agent, it does not shuttle you elsewhere; the cold-start
+       replay stays on the landing page, its main home).
        v1.15 (2026-08-14): the Organization concept completed (fresh-eyes
        review rulings, sequence/org-settings-design.md iteration 3). The
        Organization group becomes Home · People CRM · Outreach · Settings:
@@ -605,8 +607,17 @@
     /* ── Agents page (v1.16): the agent-native front door ─────────────────
        One connect prompt, the four-agent roster, two contract cards.
        Deliberately light — prompts over command anatomy. */
-    .agents-connect { margin-bottom: 14px; max-width: 820px; }
-    .agents-connect-body { display:grid; gap:10px; }
+    .agents-lead { display:grid; gap:14px; margin-bottom:14px; }
+    .agents-connect-body { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:10px 26px; align-items:start; }
+    .agents-connect-body .connect-side { display:grid; gap:10px; }
+    /* The three machine doors: dark instrument blocks, the strongest visual
+       register on the page — deliberately louder than header buttons. */
+    .agents-doors { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; grid-auto-rows:1fr; }
+    .agent-door { display:flex; flex-direction:column; gap:6px; padding:16px 18px; background:var(--canvas); border:1px solid var(--canvas-line); border-radius:var(--radius); color:var(--canvas-ink); }
+    .agent-door strong { font:600 13px/1.3 var(--mono); }
+    .agent-door > span { font-size:11px; line-height:1.5; color:var(--canvas-muted); }
+    .agent-door .button { margin-top:auto; align-self:flex-start; background:var(--canvas-btn); border-color:var(--canvas-tile-line); color:var(--canvas-tile-ink); }
+    .agent-door .button:hover { background:var(--canvas-btn); border-color:var(--canvas-link); color:var(--canvas-link); }
     .agents-connect-body .message-preview { margin:0; }
     .agents-connect-body p { margin:0; }
     .roster-head { display:flex; align-items:baseline; gap:12px; margin:20px 2px 10px; }
@@ -1194,7 +1205,7 @@
       .page { padding: 22px 16px 88px; }
       .page-head { display: grid; }
       .head-actions { justify-content: flex-start; }
-      .grid-2, .grid-3, .dashboard-grid, .portal-grid, .review-layout, .detail-grid, .comms-layout, .review-field-grid, .agent-roster { grid-template-columns: 1fr; }
+      .grid-2, .grid-3, .dashboard-grid, .portal-grid, .review-layout, .detail-grid, .comms-layout, .review-field-grid, .agent-roster, .agents-doors, .agents-connect-body { grid-template-columns: 1fr; }
       .attention-strip { grid-template-columns: 1fr; }
       .onboarding-metrics { grid-template-columns: repeat(2,1fr); }
       .hero { grid-template-columns: 1fr; padding-top: 25px; }
@@ -3489,16 +3500,36 @@
       function agentsView() {
         return shell(`<div class="page">
           ${pageHead("Agents",
-            "Marquee is agent-native: the CLI and API are first-class doors to the same records as these screens. Connect the agent of your choice and hand over the chase work.",
-            `<a class="button" href="#api/docs">API &amp; CLI reference</a><a class="button primary" href="#org/tokens">Create API token</a>`)}
-          <section class="card agents-connect">
-            <div class="card-head"><div><h2>Connect an agent</h2><span class="subtle">One prompt, pasted into the agent of your choice</span></div><span class="chip published">GET /SKILL.md</span></div>
-            <div class="card-body agents-connect-body">
-              <div class="message-preview">“${esc(AGENTS_CONNECT_PROMPT)}”</div>
-              <p class="subtle">It installs the skill, takes the token you mint here, and proves the connection with a read before anything writes.</p>
-              <div><button class="button small" data-copy-prompt="${esc(AGENTS_CONNECT_PROMPT)}">Copy prompt</button></div>
+            "Marquee is agent-native: the CLI and API are first-class doors to the same records as these screens. Connect the agent of your choice and hand over the chase work.")}
+          <div class="agents-lead">
+            <section class="card agents-connect">
+              <div class="card-head"><div><h2>Connect an agent</h2><span class="subtle">One prompt, pasted into the agent of your choice</span></div><span class="chip published">GET /SKILL.md</span></div>
+              <div class="card-body agents-connect-body">
+                <div class="message-preview">“${esc(AGENTS_CONNECT_PROMPT)}”</div>
+                <div class="connect-side">
+                  <p class="subtle">It installs the skill, takes the token you mint here, and proves the connection with a read before anything writes.</p>
+                  <div><button class="button small" data-copy-prompt="${esc(AGENTS_CONNECT_PROMPT)}">Copy prompt</button></div>
+                </div>
+              </div>
+            </section>
+            <div class="agents-doors">
+              <div class="agent-door">
+                <strong>Create API token</strong>
+                <span>Scoped to the organization or one conference, revocable in one click.</span>
+                <a class="button small" href="#org/tokens">Open API tokens →</a>
+              </div>
+              <div class="agent-door">
+                <strong>API &amp; CLI reference</strong>
+                <span>Every command and endpoint — the same surface these screens use.</span>
+                <a class="button small" href="#api/docs">Open the reference →</a>
+              </div>
+              <div class="agent-door">
+                <strong>/SKILL.md</strong>
+                <span>The full reference as one markdown file, straight from this instance — made to hand to an agent.</span>
+                <button class="button small" data-copy-url="https://marquee.stage11.dev/SKILL.md">Copy the URL →</button>
+              </div>
             </div>
-          </section>
+          </div>
           <div class="roster-head"><h2>Four agents worth running</h2><span class="subtle">Start from the prompt · check the receipts on these screens</span></div>
           <div class="agent-roster">
             ${AGENTS_ROSTER.map(a=>`<section class="card agent-card">
@@ -3536,6 +3567,7 @@
 
       function bindAgents() {
         document.querySelectorAll("[data-copy-prompt]").forEach(el=>el.onclick=()=>copyText(el.dataset.copyPrompt,"Prompt copied · paste it to your agent"));
+        document.querySelectorAll("[data-copy-url]").forEach(el=>el.onclick=()=>copyText(el.dataset.copyUrl,"URL copied · your agent can fetch it"));
       }
 
       function aiAssistView() {
