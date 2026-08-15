@@ -13,6 +13,11 @@ The command registry is:
 - `node cli/marquee.mjs setup instance`
 - `node cli/marquee.mjs event create --set name=<name> --set starts_on=<date> --set ends_on=<date> --set timezone=<tz> [--from <event-id>] [--copy <sets>]`
 - `node cli/marquee.mjs event list`
+- `node cli/marquee.mjs mirror connect --base-id <base-id> --airtable-token <token>`
+- `node cli/marquee.mjs mirror map --set submissions=<table-id> --set speaker_tasks=<table-id> --set people=<table-id>`
+- `node cli/marquee.mjs mirror status`
+- `node cli/marquee.mjs mirror sync`
+- `node cli/marquee.mjs mirror disconnect`
 - `node cli/marquee.mjs forms create <event-id> --set name=<name> --set slug=<slug> --set kind=abstract`
 - `node cli/marquee.mjs forms list <event-id>`
 - `node cli/marquee.mjs evaluation plan <event-id> --set name=<name>`
@@ -101,6 +106,32 @@ node cli/marquee.mjs evaluation plan "$EVENT_ID" --set name="Program committee" 
 Sane defaults are already set — one speaker minimum, format durations prefilled. Change only what the operator asked for. `setup instance` reports mail, uploads, spam protection, and domain, each derived from what is really configured; read it before you report anything about this deployment.
 
 7. **Stop before intake.** Do not publish the call for speakers. Report what you did, the instance status rows (mail included), and where the last step lives: opening intake is the operator's click, from the dashboard, with the consequences on screen.
+
+## Airtable mirror
+
+The Airtable integration is an optional two-way mirror. D1 remains Marquee's source of truth: request paths never read Airtable, and the provider is used only by the mirror jobs. The mirror is off until an operator explicitly maps the three tables.
+
+Before connecting a self-hosted deployment, create the Worker-only encryption secret. This is a random 32-byte value that the operator mints; Airtable does not provide it:
+
+```sh
+openssl rand -base64 32
+npx wrangler secret put MIRROR_CREDENTIAL_SECRET
+```
+
+Use Settings → Airtable for the screen flow, or run the same API-backed flow from a terminal. The Marquee bearer token authenticates these commands; the Airtable personal access token is passed only to the connect command and is stored encrypted after schema verification:
+
+```sh
+node cli/marquee.mjs mirror connect --base-id "$AIRTABLE_BASE_ID" --airtable-token "$AIRTABLE_TOKEN" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs mirror map --set submissions="$AIRTABLE_SUBMISSIONS_TABLE_ID" --set speaker_tasks="$AIRTABLE_TASKS_TABLE_ID" --set people="$AIRTABLE_PEOPLE_TABLE_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs mirror status --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+```
+
+Connect verifies the base schema before persisting anything. Mapping is the on-switch. Status reports the base link, both row counts as of the last sync, queued and stuck work, and webhook expiry; it never returns the provider token. `mirror sync` queues reconciliation, and `mirror disconnect` explicitly removes the webhook, credential, state, and pending feed:
+
+```sh
+node cli/marquee.mjs mirror sync --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs mirror disconnect --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+```
 
 ## Next year's conference
 

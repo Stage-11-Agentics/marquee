@@ -10,6 +10,8 @@ import { renderDiagnosticBundle, tailLogs } from "./diagnostics.mjs";
 const VALUE_OPTIONS = new Set([
   "--url",
   "--token",
+  "--airtable-token",
+  "--base-id",
   "--event-id",
   "--filter",
   "--page",
@@ -391,6 +393,24 @@ async function execute(command, arguments_, options, flags, client) {
   if (root === "event" && verb === "delete") {
     const eventId = await resolveEventId(client, command, arguments_, options);
     return client.remove(`/api/v1/events/${encodeURIComponent(eventId)}`);
+  }
+
+  // Airtable is organization-scoped and deliberately stays outside the event
+  // resolver. The Marquee bearer token and provider token have different names
+  // here so an agent cannot accidentally replace its API credential while
+  // connecting an external base.
+  if (root === "mirror") {
+    if (verb === "connect") {
+      const baseId = option(options, "--base-id");
+      const airtableToken = option(options, "--airtable-token");
+      if (!baseId) usageError(`${command.usage} requires --base-id`);
+      if (!airtableToken) usageError(`${command.usage} requires --airtable-token`);
+      return client.post("/api/v1/mirror/connect", { base_id: baseId, token: airtableToken });
+    }
+    if (verb === "map") return client.post("/api/v1/mirror/mapping", requireSetValues(command, options));
+    if (verb === "status") return client.get("/api/v1/mirror/status");
+    if (verb === "sync") return client.post("/api/v1/mirror/sync");
+    if (verb === "disconnect") return client.post("/api/v1/mirror/disconnect");
   }
 
   // Diagnostics and logs are about the deployment, not about one conference,

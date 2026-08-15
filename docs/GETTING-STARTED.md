@@ -171,6 +171,35 @@ and every send queues honestly in the outbox until mail exists. You can
 acknowledge and proceed — you may be handling mail elsewhere — but you will
 never find out from an angry speaker.
 
+### Optional: connect the Airtable mirror
+
+Airtable is optional and never becomes the source of truth: D1 owns the
+workflow, while the mirror jobs move explicitly selected fields in the
+background. Before connecting a self-hosted Worker, create the encryption
+secret yourself. It is a random 32-byte value, not a credential Airtable gives
+you:
+
+```sh
+openssl rand -base64 32
+npx wrangler secret put MIRROR_CREDENTIAL_SECRET
+```
+
+For local development, put the generated value in the ignored `.dev.vars`;
+`.dev.vars.example` shows the name. Then open **Settings → Airtable**, paste an
+Airtable personal access token and base ID, verify the returned schema, and map
+Submissions, Speaker tasks, and People. Mapping is the on-switch. The screen
+shows the Airtable base link, Marquee and Airtable row counts as of the last
+sync, queued versus stuck changes, last sync time, and webhook expiry. The
+token is stored encrypted and is never shown again.
+
+An agent can use the same API-backed commands without opening a screen:
+
+```sh
+node cli/marquee.mjs mirror connect --base-id "$AIRTABLE_BASE_ID" --airtable-token "$AIRTABLE_TOKEN" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs mirror map --set submissions="$AIRTABLE_SUBMISSIONS_TABLE_ID" --set speaker_tasks="$AIRTABLE_TASKS_TABLE_ID" --set people="$AIRTABLE_PEOPLE_TABLE_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs mirror status --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+```
+
 ## 6 · Open intake
 
 When the checklist reads four of five, the last step is yours: publish the

@@ -279,7 +279,7 @@ describe("MRQ-74 · capability verdicts", () => {
     expect(mirror?.headline).toBe("Airtable is not connected.");
   });
 
-  test("CONTRACT · the mirror row never offers a destination, because there is no mirror screen to reach", () => {
+  test("AC-311 · the mirror row links to the Airtable settings door and stays quiet when unconfigured", () => {
     const unconnected = deriveDeliveryHealth(facts(), UNREPORTED);
     const draining = deriveDeliveryHealth(
       facts({ mirror: { configured: true, pending: 30, stuck: 30, last_sync_at: NOW - 6 * HOUR, has_error: true } }),

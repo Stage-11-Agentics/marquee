@@ -294,11 +294,21 @@ in the environment; do not commit it.
    npx wrangler secret put R2_SECRET_ACCESS_KEY
    npx wrangler secret put UPLOAD_TOKEN_SECRET
    npx wrangler secret put UPLOAD_RATE_LIMIT_SECRET
+   # Marquee-minted random 32-byte key for encrypting Airtable credentials/webhook secrets
+   openssl rand -base64 32
+   npx wrangler secret put MIRROR_CREDENTIAL_SECRET
    ```
 
    Enter values from your secret manager when Wrangler prompts. Do not use
    `.dev.vars`, the published Turnstile test pair, or the fake R2 values for a
    hosted deployment.
+
+   `MIRROR_CREDENTIAL_SECRET` is an operator-generated random 32-byte value,
+   not a value supplied by Airtable. The `openssl` command prints the value;
+   paste that output into the Wrangler prompt. It encrypts the Airtable
+   personal access token and webhook signing secret at rest. The Airtable
+   mirror is optional and is connected later from Settings → Airtable or the
+   API-backed `marquee mirror` commands.
 
    To let Marquee know whether an accepted message reached a recipient, create
    a Resend webhook at `https://your-domain.example/api/v1/webhooks/resend`.

@@ -180,6 +180,20 @@ for `RESEND_WEBHOOK_SECRET` that is inbound webhook signature checking, while ou
 (`RESEND_API_KEY`) keeps working — and a half-working integration nobody flagged is how a
 feature gets reported as shipped when it is not.
 
+**Airtable mirror credential secret.** The mirror is optional, but before an operator opens
+Settings → Airtable, mint the encryption key locally and store it as a Wrangler secret:
+
+```sh
+openssl rand -base64 32
+npx wrangler secret put MIRROR_CREDENTIAL_SECRET
+```
+
+The first command generates a random 32-byte value that the operator owns; Airtable does not
+provide it. Paste that output into the second command. Marquee uses it to encrypt the Airtable
+personal access token and webhook signing secret, so do not put either credential in the
+repository or in `wrangler.jsonc`. After the Worker is deployed, connect and map the base from
+Settings → Airtable or with the API-backed `marquee mirror` CLI commands.
+
 ---
 
 ## After a deploy

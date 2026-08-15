@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader } from "../shell/components";
@@ -20,7 +20,7 @@ interface AirtableTable {
   fields: { id: string; name: string; type?: string }[];
 }
 
-interface MirrorStatus {
+export interface MirrorStatus {
   base_id: string | null;
   base_url: string | null;
   configured: boolean;
@@ -86,6 +86,38 @@ function expiryCopy(expiresAt: number | null): string | null {
   return null;
 }
 
+export function AirtableHealthCard({
+  status,
+  pending,
+  expiry,
+  onSync,
+  onDisconnect,
+}: {
+  status: MirrorStatus;
+  pending: string | null;
+  expiry: string | null;
+  onSync: () => void;
+  onDisconnect: () => void;
+}): JSX.Element {
+  const rowsByName = new Map(status.tables.map((row) => [row.name, row]));
+  return <>
+    {expiry && <div class="settings-warning" role="status"><strong>Webhook renewal</strong><span>{expiry}</span></div>}
+    <section class="card airtable-health-card">
+      <CardHeader title="Mirror health"><div class="airtable-health-actions"><Button small onClick={onSync} disabled={pending !== null}>{pending === "sync" ? "Queueing…" : "Sync now"}</Button><Button small variant="danger" onClick={onDisconnect} disabled={pending !== null}>{pending === "disconnect" ? "Disconnecting…" : "Disconnect"}</Button></div></CardHeader>
+      <CardBody>
+        <div class="airtable-counts"><div><span>Queued</span><strong>{status.queued}</strong><small>Local changes waiting for Airtable</small></div><div><span>Stuck</span><strong class={status.stuck > 0 ? "airtable-count-alarm" : ""}>{status.stuck}</strong><small>At the retry cap and needing attention</small></div><div><span>Last sync</span><strong class="airtable-count-date">{dateOnly(status.last_sync_at)}</strong><small>Both counts are as of last sync</small></div></div>
+        {status.last_error && <div class="settings-error airtable-last-error" role="alert"><strong>Last provider error</strong><span>{status.last_error}</span></div>}
+        <div class="table-scroll"><table class="airtable-table"><thead><tr><th scope="col">Table</th><th scope="col">Marquee rows</th><th scope="col">Airtable rows</th><th scope="col">As of last sync</th></tr></thead><tbody>{TABLE_ORDER.map((table) => { const row = rowsByName.get(table); return <tr key={table}><th scope="row">{TABLE_LABELS[table]}</th><td class="tabular">{row?.local_row_count ?? 0}</td><td class="tabular">{row?.remote_row_count ?? 0}</td><td class="tabular">{dateOnly(row?.last_sync_at ?? null)}</td></tr>; })}</tbody></table></div>
+      </CardBody>
+    </section>
+  </>;
+}
+
+export function AirtableConnectionFacts({ status }: { status: MirrorStatus }): JSX.Element | null {
+  if (!status.configured) return null;
+  return <div class="airtable-credential-facts"><span>Token fingerprint <code>{status.token_fingerprint ?? "—"}</code></span><span>Set {dateTime(status.set_at)}</span><span>Verified {dateTime(status.last_verified_at)}</span>{status.base_url && <a href={status.base_url} target="_blank" rel="noopener">Open base ↗</a>}</div>;
+}
+
 export function AirtablePage({ navigate }: { navigate: (target: string) => void }): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [token, setToken] = useState("");
@@ -99,8 +131,8 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
 
   const status = state.kind === "ready" ? state.status : null;
   const expiry = expiryCopy(status?.webhook_expires_at ?? null);
-  const mappingComplete = TABLE_ORDER.every((table) => mapping[table].length > 0);
-  const rowsByName = useMemo(() => new Map(status?.tables.map((row) => [row.name, row]) ?? []), [status]);
+  const mappingComplete = TABLE_ORDER.every((table) => mapping[table].length > 0)
+    && new Set(TABLE_ORDER.map((table) => mapping[table])).size === TABLE_ORDER.length;
 
   async function loadStatus(): Promise<void> {
     try {
@@ -243,7 +275,7 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
           <label class="field"><span>Base ID</span><input value={baseId || status?.base_id || ""} onInput={(event) => setBaseId(event.currentTarget.value)} placeholder="app…" /></label>
           <div class="airtable-form-actions"><Button variant="primary" type="submit" disabled={pending !== null || token.trim().length === 0 || (baseId || status?.base_id || "").trim().length === 0}>{pending === "connect" ? "Verifying…" : status?.configured ? "Verify and rotate" : "Verify connection"}</Button></div>
         </form>
-        {status?.configured && <div class="airtable-credential-facts"><span>Token fingerprint <code>{status.token_fingerprint ?? "—"}</code></span><span>Set {dateTime(status.set_at)}</span><span>Verified {dateTime(status.last_verified_at)}</span>{status.base_url && <a href={status.base_url} target="_blank" rel="noopener">Open base ↗</a>}</div>}
+        {status?.configured && <AirtableConnectionFacts status={status} />}
       </CardBody>
     </section>
 
@@ -257,17 +289,13 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
       </CardBody>
     </section>}
 
-    {status?.configured && status.mapped && <>
-      {expiry && <div class="settings-warning" role="status"><strong>Webhook renewal</strong><span>{expiry}</span></div>}
-      <section class="card airtable-health-card">
-        <CardHeader title="Mirror health"><div class="airtable-health-actions"><Button small onClick={() => void syncNow()} disabled={pending !== null}>{pending === "sync" ? "Queueing…" : "Sync now"}</Button><Button small variant="danger" onClick={() => void disconnect()} disabled={pending !== null}>{pending === "disconnect" ? "Disconnecting…" : "Disconnect"}</Button></div></CardHeader>
-        <CardBody>
-          <div class="airtable-counts"><div><span>Queued</span><strong>{status.queued}</strong><small>Local changes waiting for Airtable</small></div><div><span>Stuck</span><strong class={status.stuck > 0 ? "airtable-count-alarm" : ""}>{status.stuck}</strong><small>At the retry cap and needing attention</small></div><div><span>Last sync</span><strong class="airtable-count-date">{dateOnly(status.last_sync_at)}</strong><small>Both counts are as of last sync</small></div></div>
-          {status.last_error && <div class="settings-error airtable-last-error" role="alert"><strong>Last provider error</strong><span>{status.last_error}</span></div>}
-          <div class="table-scroll"><table class="airtable-table"><thead><tr><th scope="col">Table</th><th scope="col">Marquee rows</th><th scope="col">Airtable rows</th><th scope="col">As of last sync</th></tr></thead><tbody>{TABLE_ORDER.map((table) => { const row = rowsByName.get(table); return <tr key={table}><th scope="row">{TABLE_LABELS[table]}</th><td class="tabular">{row?.local_row_count ?? 0}</td><td class="tabular">{row?.remote_row_count ?? 0}</td><td class="tabular">{dateOnly(row?.last_sync_at ?? null)}</td></tr>; })}</tbody></table></div>
-        </CardBody>
-      </section>
-    </>}
+    {status?.configured && status.mapped && <AirtableHealthCard
+      status={status}
+      pending={pending}
+      expiry={expiry}
+      onSync={() => void syncNow()}
+      onDisconnect={() => void disconnect()}
+    />}
 
     <section class="card airtable-log-card"><CardHeader title="Live log"><span class="subtle">This screen's connection actions</span></CardHeader><CardBody>{log.length > 0 ? <ol class="airtable-log">{log.map((entry, index) => <li key={`${entry}-${index}`}>{entry}</li>)}</ol> : <div class="airtable-log-empty">No connection actions in this session.</div>}</CardBody></section>
   </div>;

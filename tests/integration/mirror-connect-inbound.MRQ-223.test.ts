@@ -1,13 +1,16 @@
 import { beforeEach, expect, test } from "vitest";
+import { SELF } from "cloudflare:test";
 import type { Queue } from "@cloudflare/workers-types";
 
-import { connectMirror, disconnectMirror, mapMirror, readMirrorStatus } from "../../src/jobs/mirror/actions";
+import { connectMirror, disconnectMirror, keepaliveMirror, mapMirror, readMirrorStatus } from "../../src/jobs/mirror/actions";
 import { runOnboardingCascade } from "../../src/jobs/cascade/decisions";
 import { encryptMirrorSecret, readMirrorCredential, tokenFingerprint } from "../../src/jobs/mirror/credentials";
 import { FakeAirtableTransport } from "../../src/jobs/mirror/fake-transport";
 import { drainMirrorOutbox } from "../../src/jobs/mirror/consumer";
+import { dispatchPendingMirrorMessages } from "../../src/jobs/mirror/outbox";
 import { handleMirrorWebhook, mirrorWebhookSignature, pullMirrorPayloads } from "../../src/jobs/mirror/inbound";
 import { MirrorTokenBucket } from "../../src/jobs/mirror/rate-limiter";
+import { sha256Hex } from "../../src/lib/auth/random-token";
 import type { MirrorActionEnvironment } from "../../src/jobs/mirror/actions";
 import type { MirrorConsumerEnvironment } from "../../src/jobs/mirror/consumer";
 import type { AirtableTable, AirtableWebhookPayload } from "../../src/jobs/mirror/transport";
@@ -151,6 +154,26 @@ async function person(): Promise<{ title: string | null; company: string | null;
   ).bind(PERSON_ID).first()) as { title: string | null; company: string | null; name: string; last_write_source: string };
 }
 
+async function insertScopedToken(id: string, permissions: string[]): Promise<string> {
+  const secret = `mq_${id}_secret`;
+  await env.DB.prepare(
+    `INSERT INTO api_tokens
+      (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at)
+     VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    id,
+    ORG_ID,
+    id,
+    await sha256Hex(secret),
+    secret.slice(0, 7),
+    JSON.stringify({ permissions, event_ids: [] }),
+    PERSON_ID,
+    NOW,
+    NOW,
+  ).run();
+  return secret;
+}
+
 beforeEach(async () => {
   await applyMigrations();
   await seedPerson();
@@ -201,9 +224,25 @@ test("AC-310 · mapping is the reachable mirror on-switch and creates all three 
   expect(fake.calls.map((call) => call.kind)).toEqual(["schema", "schema", "create_webhook"]);
   const status = await readMirrorStatus(env.DB, actionEnvironment(fake), ORG_ID);
   expect(status).toMatchObject({ configured: true, mapped: true, baseId: BASE_ID, trafficAssisted: true });
+
+  await env.DB.prepare(
+    "UPDATE people SET title = 'Reachable local edit', last_write_source = 'marquee', updated_at = ? WHERE id = ?",
+  ).bind(NOW + 1, PERSON_ID).run();
+  expect(await count("SELECT COUNT(*) AS count FROM mirror_outbox WHERE drained_at IS NULL")).toBe(1);
+  const drained = await drainMirrorOutbox(env.DB, consumerEnvironment(fake), [], {
+    transport: fake,
+    now: () => NOW + 1,
+  });
+  expect(drained.drained).toBe(1);
+  expect(fake.calls.filter((call) => call.kind === "patch")).toEqual([
+    expect.objectContaining({
+      tableId: TABLE_IDS.people,
+      records: [expect.objectContaining({ fields: expect.objectContaining({ title: "Reachable local edit" }) })],
+    }),
+  ]);
 });
 
-test("AC-313 · disconnect is explicit feed cleanup and removes the provider registration", async () => {
+test("AC-309 · disconnect removes encrypted credential material, provider registration, state, and pending feed", async () => {
   const fake = new FakeAirtableTransport(() => NOW, { tables: TABLES });
   await connectAndMap(fake);
   await env.DB.prepare(
@@ -211,6 +250,16 @@ test("AC-313 · disconnect is explicit feed cleanup and removes the provider reg
       (id, table_name, row_id, op, payload, status, attempts, created_at, updated_at)
      VALUES ('outbox_mrq223', 'people', ?, 'upsert', ?, 'queued', 0, ?, ?)`,
   ).bind(PERSON_ID, JSON.stringify({ marquee_id: PERSON_ID }), NOW, NOW).run();
+
+  const stored = await env.DB.prepare(
+    "SELECT token_ciphertext, webhook_secret_ciphertext FROM mirror_credentials WHERE org_id = ?",
+  ).bind(ORG_ID).first<{ token_ciphertext: string; webhook_secret_ciphertext: string }>();
+  expect(stored?.token_ciphertext).not.toContain(AIRTABLE_TOKEN);
+  expect(stored?.webhook_secret_ciphertext).not.toContain(btoa(fake.webhookSecret));
+  const statusBeforeDisconnect = await readMirrorStatus(env.DB, actionEnvironment(fake), ORG_ID);
+  expect(JSON.stringify(statusBeforeDisconnect)).not.toContain(AIRTABLE_TOKEN);
+  expect(JSON.stringify(fake.calls)).not.toContain(AIRTABLE_TOKEN);
+  expect(statusBeforeDisconnect.tokenFingerprint).toBe(await tokenFingerprint(AIRTABLE_TOKEN));
 
   const result = await disconnectMirror(actionEnvironment(fake), ORG_ID);
   expect(result.warning).toBeNull();
@@ -220,6 +269,91 @@ test("AC-313 · disconnect is explicit feed cleanup and removes the provider reg
   expect(await count("SELECT COUNT(*) AS count FROM mirror_credentials WHERE org_id = ?", ORG_ID)).toBe(0);
   expect(await count("SELECT COUNT(*) AS count FROM mirror_state")).toBe(0);
   expect(await count("SELECT COUNT(*) AS count FROM mirror_outbox WHERE drained_at IS NULL")).toBe(0);
+
+  const sends: unknown[] = [];
+  const afterDisconnectEnvironment = {
+    ...actionEnvironment(fake),
+    MIRROR_QUEUE: { send: async (...messages: unknown[]) => { sends.push(messages); } },
+  } as unknown as Parameters<typeof dispatchPendingMirrorMessages>[0];
+  expect(await dispatchPendingMirrorMessages(afterDisconnectEnvironment, "request-after-disconnect")).toBe(0);
+  expect(sends).toHaveLength(0);
+});
+
+test("AC-228 · status exposes base link, both row counts as of last sync, last sync, and queued versus stuck work", async () => {
+  const fake = new FakeAirtableTransport(() => NOW, { tables: TABLES });
+  await connectAndMap(fake);
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO mirror_outbox
+        (id, table_name, row_id, op, payload, status, attempts, created_at, updated_at)
+       VALUES ('outbox_queued_mrq223', 'people', ?, 'upsert', ?, 'queued', 0, ?, ?),
+              ('outbox_stuck_mrq223', 'people', ?, 'upsert', ?, 'failed', 5, ?, ?)`,
+    ).bind(
+      PERSON_ID,
+      JSON.stringify({ marquee_id: PERSON_ID }),
+      NOW,
+      NOW,
+      PERSON_ID,
+      JSON.stringify({ marquee_id: PERSON_ID }),
+      NOW,
+      NOW,
+    ),
+    env.DB.prepare(
+      "UPDATE mirror_state SET local_row_count = CASE table_name WHEN 'people' THEN 1 ELSE 0 END, remote_row_count = CASE table_name WHEN 'people' THEN 4 ELSE 2 END, last_sync_at = ?, updated_at = ?",
+    ).bind(NOW + 2, NOW + 2),
+  ]);
+
+  const status = await readMirrorStatus(env.DB, actionEnvironment(fake), ORG_ID);
+  expect(status).toMatchObject({
+    baseId: BASE_ID,
+    baseUrl: `https://airtable.com/${BASE_ID}`,
+    lastSyncAt: NOW + 2,
+    queued: 1,
+    stuck: 1,
+  });
+  expect(status.tables).toEqual([
+    expect.objectContaining({ name: "submissions", localRowCount: 0, remoteRowCount: 2, lastSyncAt: NOW + 2 }),
+    expect.objectContaining({ name: "speaker_tasks", localRowCount: 0, remoteRowCount: 2, lastSyncAt: NOW + 2 }),
+    expect.objectContaining({ name: "people", localRowCount: 1, remoteRowCount: 4, lastSyncAt: NOW + 2 }),
+  ]);
+});
+
+test("AC-229 · keepalive refreshes a near-expiry webhook and both local and Airtable counts", async () => {
+  let now = NOW;
+  const fake = new FakeAirtableTransport(() => now, { tables: TABLES });
+  await connectAndMap(fake);
+  const nearExpiry = NOW + 6 * 86_400_000 + 1 * 3_600_000;
+  await env.DB.prepare("UPDATE mirror_state SET webhook_expires_at = ?").bind(nearExpiry).run();
+  now = NOW + 6 * 86_400_000;
+  const before = await readMirrorStatus(env.DB, actionEnvironment(fake), ORG_ID);
+  expect(before.webhookExpiresAt).toBe(nearExpiry);
+  expect(before.webhookExpiresAt! - now).toBeLessThanOrEqual(24 * 3_600_000);
+
+  fake.records.set(TABLE_IDS.people, new Map([
+    ["remote-person-1", { fields: { marquee_id: "remote-person-1" } }],
+    ["remote-person-2", { fields: { marquee_id: "remote-person-2" } }],
+  ]));
+  fake.records.set(TABLE_IDS.submissions, new Map([
+    ["remote-submission-1", { fields: { marquee_id: "remote-submission-1" } }],
+  ]));
+
+  const keepaliveNow = now;
+  const result = await keepaliveMirror(actionEnvironment(fake), {
+    now: () => now,
+    sleep: async (milliseconds: number) => { now += milliseconds; },
+  });
+  expect(result).toMatchObject({ refreshed: true, requests: 4, records: 4 });
+  expect(fake.calls.filter((call) => call.kind === "create_webhook")).toHaveLength(2);
+  expect(fake.calls.filter((call) => call.kind === "list")).toHaveLength(3);
+
+  const after = await readMirrorStatus(env.DB, actionEnvironment(fake), ORG_ID);
+  expect(after.webhookExpiresAt).toBeGreaterThan(before.webhookExpiresAt!);
+  expect(after.lastSyncAt).toBe(keepaliveNow);
+  expect(after.tables).toEqual([
+    expect.objectContaining({ name: "submissions", localRowCount: 0, remoteRowCount: 1, lastSyncAt: keepaliveNow }),
+    expect.objectContaining({ name: "speaker_tasks", localRowCount: 0, remoteRowCount: 0, lastSyncAt: keepaliveNow }),
+    expect.objectContaining({ name: "people", localRowCount: 1, remoteRowCount: 2, lastSyncAt: keepaliveNow }),
+  ]);
 });
 
 test("AC-226 · one signed inbound edit applies allowlisted fields and drops the rest without a cascade", async () => {
@@ -379,4 +513,54 @@ test("CONTRACT · a signed webhook is only a cursor-pull trigger and rejects an 
   );
   expect(rejected).toEqual({ body: { accepted: false }, status: 401 });
   expect(fake.calls).toHaveLength(callsBeforeInvalid);
+});
+
+test("AC-313 · mirror writes require mirror:write, status accepts a read scope, and no route returns the provider token", async () => {
+  await env.DB.prepare(
+    `INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
+     VALUES ('membership_mrq223_owner', ?, NULL, ?, 'owner', ?, ?)`,
+  ).bind(ORG_ID, PERSON_ID, NOW, NOW).run();
+  const readToken = await insertScopedToken("token_mrq223_read", ["program:read"]);
+  const writeToken = await insertScopedToken("token_mrq223_write", ["mirror:write"]);
+
+  const status = await SELF.fetch("https://marquee.stage11.dev/api/v1/mirror/status", {
+    headers: { authorization: `Bearer ${readToken}` },
+  });
+  expect(status.status).toBe(200);
+  const statusBody = await status.text();
+  expect(statusBody).not.toContain(AIRTABLE_TOKEN);
+  expect(statusBody).toContain('"token_fingerprint":null');
+
+  const writeAttempts: Array<[string, RequestInit]> = [
+    ["/api/v1/mirror/connect", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${readToken}` },
+      body: JSON.stringify({ base_id: BASE_ID, token: AIRTABLE_TOKEN }),
+    }],
+    ["/api/v1/mirror/mapping", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${readToken}` },
+      body: JSON.stringify({ people: TABLE_IDS.people, submissions: TABLE_IDS.submissions, speaker_tasks: TABLE_IDS.speaker_tasks }),
+    }],
+    ["/api/v1/mirror/sync", {
+      method: "POST",
+      headers: { authorization: `Bearer ${readToken}` },
+    }],
+    ["/api/v1/mirror/disconnect", {
+      method: "POST",
+      headers: { authorization: `Bearer ${readToken}` },
+    }],
+  ];
+  for (const [path, init] of writeAttempts) {
+    const refused = await SELF.fetch(`https://marquee.stage11.dev${path}`, init);
+    expect(refused.status, path).toBe(403);
+    expect(await refused.text()).not.toContain(AIRTABLE_TOKEN);
+  }
+
+  const permittedDisconnect = await SELF.fetch("https://marquee.stage11.dev/api/v1/mirror/disconnect", {
+    method: "POST",
+    headers: { authorization: `Bearer ${writeToken}` },
+  });
+  expect(permittedDisconnect.status).toBe(200);
+  expect(await permittedDisconnect.text()).not.toContain(AIRTABLE_TOKEN);
 });

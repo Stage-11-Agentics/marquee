@@ -192,6 +192,10 @@ export async function mapMirror(
   const selected = MIRRORED_TABLES.map((tableName) => [tableName, mappingValue(input.mapping, tableName)] as const);
   const missing = selected.find(([, tableId]) => !tableId);
   if (missing) return { ok: false, field: "tables", message: `Choose the Airtable table for ${missing[0]}.` };
+  const selectedIds = selected.map(([, tableId]) => tableId!);
+  if (new Set(selectedIds).size !== selectedIds.length) {
+    return { ok: false, field: "tables", message: "Choose a different Airtable table for each mirrored record type." };
+  }
   const credential = await readMirrorCredential(env.DB, env, input.orgId);
   if (!credential) return { ok: false, field: "configuration", message: "Connect Airtable before mapping its tables." };
   if (!nonEmpty(env.MIRROR_CREDENTIAL_SECRET)) {

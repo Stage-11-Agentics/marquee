@@ -1,7 +1,10 @@
 import { expect, test } from "vitest";
+import { h } from "preact";
+import { renderToString } from "preact-render-to-string";
 
 import { RESEND_SENDER, readResendIdentity } from "../../src/lib/mail/config";
 import { readInstanceStatus, type InstanceStatusEnvironment } from "../../src/lib/instance-status";
+import { ServerPanel } from "../../src/ui/setup/ServerPanel";
 
 const URL = "https://marquee.example.test/dashboard";
 
@@ -29,4 +32,12 @@ test("CONTRACT · mail status and identity come from bindings, never a stored fl
   const rows = readInstanceStatus({ RESEND_API_KEY: "re_test_key", RESEND_ACCOUNT_NAME: "stage11-agentics" }, URL);
   expect(rows[0]).toMatchObject({ configured: true, sender: RESEND_SENDER, account: "stage11-agentics" });
   expect(readResendIdentity({ RESEND_API_KEY: "re_test_key" })).toEqual({ sender: RESEND_SENDER, account: null });
+});
+
+test("AC-311 · the Server panel keeps an unconfigured Airtable row visible with its settings door", () => {
+  const html = renderToString(h(ServerPanel, { showDemoControls: false }));
+  expect(html).toContain("Airtable mirror");
+  expect(html).toContain("not set up");
+  expect(html).toContain('href="/settings/airtable"');
+  expect(html).toContain("Connect Airtable");
 });
