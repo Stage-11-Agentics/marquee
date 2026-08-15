@@ -20,13 +20,41 @@ function visibleDialogControls(root: HTMLElement): HTMLElement[] {
     });
 }
 
+// The body scroll lock is shared, so it is refcounted rather than saved and
+// restored per dialog. Two dialogs can be open at once — the phone drawer is a
+// dialog on every admin route at <=760px, and "/" opens QuickSearch over it —
+// and a per-dialog save captures whatever the *other* dialog already set. The
+// second dialog then saves "hidden", and whichever cleanup runs last wins: with
+// the drawer dismissed first, QuickSearch's cleanup writes "hidden" back over an
+// empty page and nothing on screen explains why it will not scroll. Only the
+// first lock records the page's own overflow; only the last release restores it.
+let scrollLockDepth = 0;
+let scrollLockPrevious = "";
+
+function lockBodyScroll(): () => void {
+  if (scrollLockDepth === 0) scrollLockPrevious = document.body.style.overflow;
+  scrollLockDepth += 1;
+  document.body.style.overflow = "hidden";
+  let released = false;
+  return () => {
+    // Guarded because an effect cleanup must be idempotent under StrictMode;
+    // a double release would drop the depth below the dialogs still open.
+    if (released) return;
+    released = true;
+    scrollLockDepth -= 1;
+    if (scrollLockDepth <= 0) {
+      scrollLockDepth = 0;
+      document.body.style.overflow = scrollLockPrevious;
+    }
+  };
+}
+
 export function useDialogLifecycle(open: boolean, onClose: () => void) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const oldOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = lockBodyScroll();
     ref.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -41,7 +69,7 @@ export function useDialogLifecycle(open: boolean, onClose: () => void) {
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = oldOverflow;
+      releaseScrollLock();
       previous?.focus();
     };
   }, [open, onClose]);
