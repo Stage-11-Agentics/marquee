@@ -28,8 +28,10 @@ import {
   pipelineStageName,
   type PersonEventRow,
 } from "../lib/person-annotations";
+import { resolveEventForOrg } from "../lib/event-attendances";
 import { personFeedPage } from "../lib/org-activity";
 import type { ActivityLine } from "../lib/activity-copy";
+import { EVENT_POPULATIONS, type EventPopulation } from "../lib/roster-source";
 import { normalizeEmail } from "../lib/sessionize-import";
 import {
   buildPeopleQuery,
@@ -58,7 +60,9 @@ export const peopleListQuerySchema = z.object({
   stage: z.enum(PIPELINE_STAGE_IDS as unknown as [string, ...string[]]).optional(),
   list_id: z.string().trim().min(1).optional(),
   event_id: z.string().trim().min(1).optional()
-    .describe("Narrow the same query to one conference's roster population."),
+    .describe("Narrow the same query to one conference's population — see `kind`."),
+  kind: z.enum(EVENT_POPULATIONS as unknown as [EventPopulation, ...EventPopulation[]]).optional()
+    .describe("Which population `event_id` means: the speaker roster (default), the conference's attendees, or either."),
   // The directory predates the shared list contract but is pasted and
   // hand-edited exactly like every list built on it, so its navigational
   // parameters degrade to the endpoint's defaults rather than 400-ing the
@@ -361,6 +365,16 @@ const listPeople = defineApiRoute(
       ? await resolveListScope(context.env.DB, access.orgId, query.list_id)
       : { found: true, filters: {} };
     if (!resolvedList.found) throw ApiError.notFound("list not found");
+    // An id or a slug, because both are things a caller genuinely holds: the
+    // admin shell knows the id, and an agent reading the public site — or the
+    // import brief it was handed — knows the slug. Refusing one of them would
+    // make a documented loop fail on its last step.
+    const scopedEvent = query.event_id
+      ? await resolveEventForOrg(context.env.DB, access.orgId, query.event_id)
+      : null;
+    if (query.event_id && !scopedEvent) {
+      throw ApiError.unprocessable(`this organization has no conference "${query.event_id}"`, "event_id");
+    }
     const input = {
       orgId: access.orgId,
       ...resolvedList.filters,
@@ -369,7 +383,7 @@ const listPeople = defineApiRoute(
       ...(query.title ? { title: query.title } : {}),
       ...(query.tag ? { tag: query.tag } : {}),
       ...(query.stage ? { stage: query.stage } : {}),
-      ...(query.event_id ? { eventId: query.event_id } : {}),
+      ...(scopedEvent ? { eventId: scopedEvent.id, eventPopulation: query.kind ?? "roster" } : {}),
       ...(query.sort ? { sort: query.sort } : {}),
     };
     if (query.format === "csv") {

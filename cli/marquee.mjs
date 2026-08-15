@@ -270,7 +270,7 @@ async function reviewerRound(client, eventId) {
   return queue.round.id;
 }
 
-const PEOPLE_FILTER_KEYS = new Set(["q", "company", "title", "tag", "stage", "list_id", "event_id"]);
+const PEOPLE_FILTER_KEYS = new Set(["q", "company", "title", "tag", "stage", "list_id", "event_id", "kind"]);
 const AUDIENCE_FILTER_KEYS = new Set(["person_ids", "list_id"]);
 
 function requirePersonId(command, arguments_) {
@@ -301,7 +301,11 @@ async function executeOrgCommand(command, verb, arguments_, options, client) {
     const path = option(options, "--file");
     if (!path) usageError(`${command.usage} requires --file`);
     const csv = await readFile(path, "utf8");
-    return client.post("/api/v1/org/imports", { csv, filename: basename(path) });
+    // `--set event=<id|slug>` also records everyone in the file as attending
+    // that conference; the import writes those rows itself, so a ticket export
+    // is one call rather than two.
+    const fields = parseSetValues(command, options);
+    return client.post("/api/v1/org/imports", { csv, filename: basename(path), ...fields });
   }
   if (root === "people" && verb === "email") {
     const audience = requireFilters(command, options, AUDIENCE_FILTER_KEYS);

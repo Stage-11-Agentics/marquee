@@ -323,10 +323,57 @@ export interface PersonListMemberRow {
 export interface PublicScheduleRow {
   code: string;
   created_at: EpochMilliseconds;
+  /**
+   * 1 when a browser created this code, so the demand aggregate counts that
+   * browser once through its beacons rather than twice. Deliberately a flag and
+   * not the device: sharing that value with `session_star_beacons` would join a
+   * verified claim to every anonymous star its owner ever placed.
+   */
+  from_device: 0 | 1;
   event_id: Id;
   session_ids: JsonText<Id[]>;
   updated_at: EpochMilliseconds;
   write_key_hash: string;
+}
+
+/** How a person became an attendee of one conference. */
+export type AttendanceSource = "import" | "claim";
+
+export interface EventAttendanceRow extends MutableRecord {
+  event_id: Id;
+  person_id: Id;
+  /** Set only on a claim-sourced row: which schedule code the attendee owns. */
+  schedule_code: string | null;
+  source: AttendanceSource;
+  /** Null until the emailed link is opened; an unverified claim never lands here. */
+  verified_at: EpochMilliseconds | null;
+}
+
+/** One anonymous device's star on one session. No person, ever. */
+export interface SessionStarBeaconRow {
+  created_at: EpochMilliseconds;
+  device_hash: string;
+  event_id: Id;
+  session_id: Id;
+}
+
+/** The code is the key: one live claim per schedule, replaced rather than stacked. */
+export interface ScheduleClaimRow {
+  code: string;
+  created_at: EpochMilliseconds;
+  email: string;
+  event_id: Id;
+  /** 1 when this claim is what created the person row — the unlink rule turns on it. */
+  minted_person: 0 | 1;
+  /** Read-only handle carried by the owner's calendar feed, so pins stay theirs. */
+  feed_token: string | null;
+  /** Set while a claim mail is unopened; cleared the moment it is verified. */
+  pending_write_key: string | null;
+  person_id: Id | null;
+  requested_at: EpochMilliseconds;
+  token_hash: string;
+  updated_at: EpochMilliseconds;
+  verified_at: EpochMilliseconds | null;
 }
 
 export interface MembershipRow extends MutableRecord {
@@ -830,12 +877,15 @@ export const CORE_TABLE_NAMES = [
   "person_lists",
   "person_list_members",
   "public_schedules",
+  "event_attendances",
+  "session_star_beacons",
+  "schedule_claims",
   "webhook_endpoints",
   "webhook_deliveries",
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 53 as const;
+export const CORE_TABLE_COUNT = 56 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -853,7 +903,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 53>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 56>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -873,6 +923,7 @@ export const CORE_TABLES = {
   evaluations: "evaluations",
   event_settings: "event_settings",
   file_comments: "file_comments",
+  event_attendances: "event_attendances",
   events: "events",
   form_admins: "form_admins",
   form_fields: "form_fields",
@@ -892,6 +943,8 @@ export const CORE_TABLES = {
   person_list_members: "person_list_members",
   person_lists: "person_lists",
   public_schedules: "public_schedules",
+  schedule_claims: "schedule_claims",
+  session_star_beacons: "session_star_beacons",
   reviewer_track_scopes: "reviewer_track_scopes",
   rooms: "rooms",
   round_assignments: "round_assignments",
@@ -929,6 +982,7 @@ export interface CoreTableRows {
   evaluations: EvaluationRow;
   event_settings: EventSettingRow;
   file_comments: FileCommentRow;
+  event_attendances: EventAttendanceRow;
   events: EventRow;
   form_admins: FormAdminRow;
   form_fields: FormFieldRow;
@@ -948,6 +1002,8 @@ export interface CoreTableRows {
   person_list_members: PersonListMemberRow;
   person_lists: PersonListRow;
   public_schedules: PublicScheduleRow;
+  schedule_claims: ScheduleClaimRow;
+  session_star_beacons: SessionStarBeaconRow;
   reviewer_track_scopes: ReviewerTrackScopeRow;
   rooms: RoomRow;
   round_assignments: RoundAssignmentRow;
@@ -987,6 +1043,7 @@ interface CoreDefaultColumns {
   evaluations: "abstained" | "comment";
   event_settings: never;
   file_comments: never;
+  event_attendances: never;
   events: "demo_mode" | "status";
   form_admins: never;
   form_fields: "config" | "required";
@@ -1014,6 +1071,8 @@ interface CoreDefaultColumns {
   person_list_members: never;
   person_lists: "config_json";
   public_schedules: never;
+  schedule_claims: "minted_person";
+  session_star_beacons: never;
   reviewer_track_scopes: never;
   rooms: "av_capabilities";
   round_assignments: never;

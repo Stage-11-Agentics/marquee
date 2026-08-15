@@ -53,8 +53,12 @@ const SEEDED_COUNTS: Record<string, number> = {
   task_templates: 6,
   agenda_items: 25,
   embeds: 0,
-  // Attendee-created, never seeded: a fresh demo has nobody's schedule in it.
+  // Attendee-created, never seeded: a fresh demo has nobody's schedule in it,
+  // nobody's stars, and nobody's email attached to either.
   public_schedules: 0,
+  schedule_claims: 0,
+  session_star_beacons: 0,
+  event_attendances: 0,
   import_rows: 0,
   imports: 0,
   submissions: 1000,
@@ -208,6 +212,24 @@ async function dirtyDemoState(): Promise<void> {
     env.DB.prepare(
       "INSERT INTO mirror_outbox (id, table_name, row_id, op, payload, status, created_at, updated_at) VALUES (?, 'submissions', ?, 'upsert', ?, 'queued', ?, ?)",
     ).bind("mirror-dirty", inReview.results[0]!.id, JSON.stringify({ event_id: DEMO_EVENT_ID }), NOW, NOW),
+    // MRQ-208. The demo is exactly where anonymous stars and claimed schedules
+    // land, and a wipe that walked past them would delete the sessions and
+    // people they reference and abort the whole batch — leaving a demo that can
+    // never be reset again, with a real email address in it. Asserting zero
+    // afterwards proves nothing unless something is here to remove.
+    env.DB.prepare(
+      "INSERT INTO public_schedules (code, event_id, session_ids, write_key_hash, from_device, created_at, updated_at) VALUES (?, ?, ?, 'dirty-hash', 1, ?, ?)",
+    ).bind("MQ-DIRTYSCHEDULE", DEMO_EVENT_ID, JSON.stringify([unplaced!.id]), NOW, NOW),
+    env.DB.prepare(
+      "INSERT INTO session_star_beacons (event_id, session_id, device_hash, created_at) VALUES (?, ?, ?, ?)",
+    ).bind(DEMO_EVENT_ID, unplaced!.id, "d".repeat(32), NOW),
+    env.DB.prepare(
+      "INSERT INTO event_attendances (id, person_id, event_id, source, schedule_code, verified_at, created_at, updated_at) VALUES (?, ?, ?, 'claim', ?, ?, ?, ?)",
+    ).bind("attendance-dirty", DEMO_ORGANIZER_PERSON_ID, DEMO_EVENT_ID, "MQ-DIRTYSCHEDULE", NOW, NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO schedule_claims (code, event_id, email, token_hash, pending_write_key, feed_token, person_id, minted_person, requested_at, verified_at, created_at, updated_at)
+       VALUES (?, ?, 'dirty.attendee@example.com', 'dirty-token-hash', NULL, NULL, ?, 0, ?, ?, ?, ?)`,
+    ).bind("MQ-DIRTYSCHEDULE", DEMO_EVENT_ID, DEMO_ORGANIZER_PERSON_ID, NOW, NOW, NOW, NOW),
   ]);
 
   await env.MEDIA.put(DEMO_OBJECT_KEY, new Uint8Array([1, 2, 3, 4]));

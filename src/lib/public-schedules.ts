@@ -22,9 +22,18 @@ export interface PublicScheduleRow {
   event_id: string;
   session_ids: string;
   write_key_hash: string;
+  /**
+   * 1 when a browser created this code. It is a flag rather than the device
+   * itself, so nothing here can be joined back to that browser's anonymous
+   * stars — see the migration.
+   */
+  from_device: 0 | 1;
   created_at: number;
   updated_at: number;
 }
+
+/** The handle a browser mints for itself. Sixteen to sixty-four hex characters. */
+export const DEVICE_HASH_PATTERN = /^[0-9a-f]{16,64}$/;
 
 export interface PublicScheduleUrls {
   share: string;
@@ -38,6 +47,12 @@ export interface PublicScheduleView {
   code: string;
   event: PublicEvent;
   sessions: PublicSession[];
+  /**
+   * The whole published programme this code was read against. It costs nothing
+   * — the view already loads it to resolve the set — and it is what lets a
+   * caller derive the owner's speaking sessions without a second query.
+   */
+  allSessions: PublicSession[];
   overlaps: Array<[string, string]>;
   updatedAt: number;
 }
@@ -78,17 +93,29 @@ export function timingSafeEqual(left: string, right: string): boolean {
   return difference === 0;
 }
 
-export function scheduleUrls(code: string, eventSlug: string, origin: string, writeKey?: string): PublicScheduleUrls {
+export function scheduleUrls(
+  code: string,
+  eventSlug: string,
+  origin: string,
+  writeKey?: string,
+  /**
+   * The owner's read-only feed handle. It is what separates "my calendar" from
+   * "the feed anyone holding my share code could construct": the sessions the
+   * owner is speaking at ride the feed only for a caller presenting this.
+   */
+  feedToken?: string | null,
+): PublicScheduleUrls {
   const base = origin.replace(/\/+$/, "");
   const host = base.replace(/^https?:\/\//, "");
   const agenda = `${base}/agenda?event=${encodeURIComponent(eventSlug)}&sched=${code}`;
+  const feed = `/api/v1/public/schedules/${code}/calendar.ics${feedToken ? `?f=${encodeURIComponent(feedToken)}` : ""}`;
   return {
     share: agenda,
     // The key rides the fragment, which no browser sends to a server: the sync
     // link can be shown, scanned, and pasted without the key ever being logged.
     sync: writeKey ? `${agenda}#k=${writeKey}` : agenda,
-    webcal: `webcal://${host}/api/v1/public/schedules/${code}/calendar.ics`,
-    ics: `${base}/api/v1/public/schedules/${code}/calendar.ics`,
+    webcal: `webcal://${host}${feed}`,
+    ics: `${base}${feed}`,
     json: `${base}/api/v1/public/schedules/${code}`,
   };
 }
@@ -176,7 +203,7 @@ export async function checkScheduleCreateLimit(
 
 export async function readSchedule(database: D1Database, code: string): Promise<PublicScheduleRow | null> {
   return database
-    .prepare("SELECT code, event_id, session_ids, write_key_hash, created_at, updated_at FROM public_schedules WHERE code = ? LIMIT 1")
+    .prepare("SELECT code, event_id, session_ids, write_key_hash, from_device, created_at, updated_at FROM public_schedules WHERE code = ? LIMIT 1")
     .bind(code)
     .first<PublicScheduleRow>();
 }
@@ -204,6 +231,7 @@ export async function loadScheduleView(
     code: row.code,
     event: agenda.event,
     sessions,
+    allSessions: agenda.sessions,
     overlaps: computeOverlaps(sessions),
     updatedAt: row.updated_at,
   };

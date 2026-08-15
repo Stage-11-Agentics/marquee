@@ -25,7 +25,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
 
   /* ── State ─────────────────────────────────────────────────────────── */
 
-  const emptyState = () => ({ v: 1, sessionIds: [], code: null, writeKey: null });
+  const emptyState = () => ({ v: 1, sessionIds: [], code: null, writeKey: null, feedToken: null, adoptPending: false });
 
   function readState() {
     try {
@@ -36,6 +36,10 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         sessionIds: raw.sessionIds.filter((id) => typeof id === 'string'),
         code: typeof raw.code === 'string' ? raw.code : null,
         writeKey: typeof raw.writeKey === 'string' ? raw.writeKey : null,
+        // The read-only handle that puts the owner's own talks in their feed.
+        feedToken: typeof raw.feedToken === 'string' ? raw.feedToken : null,
+        // An adoption that has taken the code but not yet merged its sessions.
+        adoptPending: raw.adoptPending === true,
       };
     } catch { return emptyState(); }
   }
@@ -47,6 +51,40 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   let state = readState();
   const starred = new Set(state.sessionIds);
   const isStarred = (id) => starred.has(id);
+
+  /**
+   * The device handle behind the demand signal. It is random, it is per
+   * browser rather than per event, and it is the only thing a star ever sends
+   * — no person, nothing derived from one. Private mode leaves it null, in
+   * which case stars still work and simply are not counted; a schedule that
+   * refuses to save because a counter is unavailable would be the worse trade.
+   */
+  const DEVICE_KEY = 'marquee:device';
+  function readDevice() {
+    try {
+      let value = localStorage.getItem(DEVICE_KEY);
+      if (!value || !/^[0-9a-f]{16,64}$/.test(value)) {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        value = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+        localStorage.setItem(DEVICE_KEY, value);
+      }
+      return value;
+    } catch { return null; }
+  }
+  const DEVICE = readDevice();
+
+  /**
+   * What the server knows about this code: the address it is linked to, and —
+   * only when that address turned out to belong to a speaker here — the
+   * sessions they are speaking at. Both are read with the write key, so a
+   * share link never sees either. The pins are held apart from the starred
+   * set on purpose: they are derived, they are never pushed, and unstarring
+   * cannot reach them.
+   */
+  let claim = null;
+  let speaking = new Set();
+  const inMine = (id) => starred.has(id) || speaking.has(id);
 
   /* ── The program, read from the card hooks ─────────────────────────── */
 
@@ -72,7 +110,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   readCards();
 
   const mineSessions = () => [...cardsById.values()]
-    .filter((session) => isStarred(session.id))
+    .filter((session) => inMine(session.id))
     .sort((left, right) => left.start - right.start);
 
   /** Touching is not overlapping: a 14:00–14:45 and a 14:45–15:30 are a plan, not a conflict. */
@@ -124,7 +162,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   function paintMine() {
     if (!MINE) return;
     const mine = mineSessions();
-    for (const session of cardsById.values()) session.card.hidden = !isStarred(session.id);
+    for (const session of cardsById.values()) session.card.hidden = !inMine(session.id);
     for (const slot of document.querySelectorAll('.public-agenda-slot')) {
       slot.hidden = !slot.querySelector('[data-public-session-id]:not([hidden])');
     }
@@ -161,8 +199,10 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       counts.append(total, perDay);
     }
     paintOverlapChips(mine);
+    paintSpeakingChips();
     paintNextChip(mine);
     paintGlance(mine);
+    paintIdentity(mine);
   }
 
   /** Noted, never nagged: double-starring is a conscious act. */
@@ -261,7 +301,8 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         const earlier = twin && (session.start < twin.start || (session.start === twin.start && session.id < twin.id));
         const block = document.createElement('button');
         block.type = 'button';
-        block.className = 'glance-block' + (twin ? (earlier ? ' lane-a' : ' lane-b') : '') + (session.id === nextId ? ' is-next' : '');
+        block.className = 'glance-block' + (twin ? (earlier ? ' lane-a' : ' lane-b') : '')
+          + (session.id === nextId ? ' is-next' : '') + (speaking.has(session.id) ? ' speaking' : '');
         block.dataset.scheduleBlock = session.id;
         const bounds = at.get(session.id);
         block.style.top = pct(bounds.start) + '%';
@@ -285,6 +326,25 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         lane.append(rule);
       }
       glance.append(lane);
+    }
+  }
+
+  /**
+   * "You're speaking" on the sessions the claimed address turned out to own.
+   * Rendered from the derived set every paint, so it appears with the identity
+   * and vanishes with it — there is no stored state to go stale.
+   */
+  function paintSpeakingChips() {
+    for (const chip of document.querySelectorAll('.speaking-chip')) chip.remove();
+    if (!MINE) return;
+    for (const id of speaking) {
+      const session = cardsById.get(id);
+      const title = session?.card.querySelector('.public-session-title');
+      if (!title) continue;
+      const chip = document.createElement('span');
+      chip.className = 'speaking-chip';
+      chip.textContent = "You're speaking";
+      title.append(chip);
     }
   }
 
@@ -398,8 +458,13 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
 
   scrim?.addEventListener('click', closeSheets);
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') closeSheets();
-    else trapFocus(event);
+    if (event.key === 'Escape') { closeSheets(); return; }
+    if (event.key === 'Enter' && event.target?.dataset?.scheduleClaimEmail) {
+      event.preventDefault();
+      document.querySelector('[data-schedule-claim-send]')?.click();
+      return;
+    }
+    trapFocus(event);
   });
 
   /**
@@ -413,7 +478,8 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       const day = config.days.find((entry) => entry.date === session.day);
       return '- ' + (day ? day.label : session.day) + ' · ' + hhmm(session.start) + '–' + hhmm(session.end)
         + ' · "' + session.title + '"' + (session.room ? ' — ' + session.room : '')
-        + (session.speakers ? ' (' + session.speakers + ')' : '');
+        + (session.speakers ? ' (' + session.speakers + ')' : '')
+        + (speaking.has(session.id) ? " — I'M SPEAKING at this one" : '');
     });
     const pairs = [];
     mine.forEach((left, index) => {
@@ -441,14 +507,17 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     ].filter((line) => line !== '').join('\\n');
   }
 
+  /** Present only for the owner of a verified claim; a share link never has it. */
+  const feedSuffix = () => (state.feedToken ? '?f=' + encodeURIComponent(state.feedToken) : '');
+
   function liveUrls() {
     const origin = window.location.origin;
     const base = origin + '/api/v1/public/schedules/';
     return {
       program: origin + '/api/v1/public/agenda?event=' + encodeURIComponent(config.eventSlug),
       schedule: state.code ? base + state.code : null,
-      webcal: state.code ? 'webcal://' + window.location.host + '/api/v1/public/schedules/' + state.code + '/calendar.ics' : null,
-      ics: state.code ? base + state.code + '/calendar.ics' : null,
+      webcal: state.code ? 'webcal://' + window.location.host + '/api/v1/public/schedules/' + state.code + '/calendar.ics' + feedSuffix() : null,
+      ics: state.code ? base + state.code + '/calendar.ics' + feedSuffix() : null,
       share: state.code ? origin + '/agenda?event=' + encodeURIComponent(config.eventSlug) + '&sched=' + state.code : null,
       sync: state.code && state.writeKey
         ? origin + '/agenda?event=' + encodeURIComponent(config.eventSlug) + '&sched=' + state.code + '#k=' + state.writeKey
@@ -745,6 +814,49 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     }
   }
 
+  /* ── Identity: the page says what it knows about you ───────────────── */
+
+  /**
+   * Three sentences, one slot, one height. The anonymous one is the truth the
+   * server rendered; the other two replace its text once the browser — and,
+   * for a claimed code, the server — have answered. Nothing is inserted or
+   * removed, so the line never pushes the itinerary down as it resolves.
+   */
+  function paintIdentity(mine) {
+    const line = document.querySelector('[data-schedule-identity]');
+    if (!line) return;
+    line.hidden = mine.length === 0;
+    const copy = line.querySelector('[data-schedule-identity-copy]');
+    const action = line.querySelector('[data-schedule-identity-action]');
+    if (!copy || !action) return;
+    const strong = (text) => { const node = document.createElement('b'); node.textContent = text; return node; };
+    copy.textContent = '';
+    if (claim && claim.status === 'verified') {
+      line.classList.add('linked');
+      copy.append('Linked to ', strong(claim.maskedEmail), ' — recoverable by email, on any device.');
+      if (speaking.size > 0) {
+        copy.append(" You're speaking at ");
+        copy.append(strong(String(speaking.size)));
+        copy.append(' session' + (speaking.size === 1 ? '' : 's') + ' — pinned below.');
+      }
+      action.textContent = 'Manage';
+      return;
+    }
+    if (claim && claim.status === 'pending') {
+      line.classList.remove('linked');
+      // Deliberately no longer than the anonymous sentence it replaces: this
+      // line sits above the whole itinerary, and a state change that adds a
+      // wrapped line on a phone pushes the attendee's day down the screen.
+      // What opening the link actually does is said in full in the sheet.
+      copy.append('Check your email — link sent to ', strong(claim.maskedEmail), '.');
+      action.textContent = 'Manage';
+      return;
+    }
+    line.classList.remove('linked');
+    copy.append('Saved on ', strong('this device only'), ' — no account, not linked to an email.');
+    action.textContent = 'Get it by email';
+  }
+
   function paint() {
     paintStars();
     paintMine();
@@ -788,7 +900,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     pending = fetch(SCHEDULES, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ eventSlug: config.eventSlug, sessionIds: posted }),
+      body: JSON.stringify({ eventSlug: config.eventSlug, sessionIds: posted, deviceHash: DEVICE || undefined }),
     })
       .then((response) => {
         if (response.ok) return response.json();
@@ -826,12 +938,18 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   let unpushed = false;
   function pushUpdate(delay = 700) {
     if (!state.code || !state.writeKey) return;
+    // The adopted code's own sessions are not in the starred set yet. Pushing
+    // now would replace them with this device's old set — the precise way a
+    // recovered schedule gets destroyed by the act of recovering it.
+    if (adoptPending()) return;
     clearTimeout(pushTimer);
     pushTimer = setTimeout(() => {
       fetch(SCHEDULES + '/' + encodeURIComponent(state.code), {
         method: 'PUT',
         headers: { 'content-type': 'application/json', 'x-schedule-write-key': state.writeKey },
-        body: JSON.stringify({ sessionIds: [...starred] }),
+        // The device travels with the set so the aggregate counts this browser
+        // once — as a device — rather than twice, once more as a code.
+        body: JSON.stringify({ sessionIds: [...starred], deviceHash: DEVICE || undefined }),
       }).then((response) => {
         if (response.ok) { unpushed = false; return; }
         if (response.status === 422) {
@@ -916,8 +1034,17 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
    * a screenshot, a shared URL, or a history entry.
    */
   const fragmentKey = /^#k=(.+)$/.exec(window.location.hash)?.[1] ?? null;
-  if (fragmentKey) {
-    history.replaceState(null, '', window.location.pathname + window.location.search);
+  /**
+   * The claim token from the mail. Like the write key it is read once and
+   * removed from the address bar — a verification link left sitting in a
+   * history entry is a link somebody else can follow.
+   */
+  const claimToken = query.get('claim');
+  if (fragmentKey || claimToken) {
+    const remaining = new URLSearchParams(window.location.search);
+    remaining.delete('claim');
+    const search = remaining.toString();
+    history.replaceState(null, '', window.location.pathname + (search ? '?' + search : ''));
   }
 
   let sharedSessions = null;
@@ -935,6 +1062,10 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
 
   function loadShared() {
     if (!sharedCode) return;
+    // Arriving on your own claim link is not somebody sharing their picks with
+    // you, and the strip that says so is the slot the arrival's own message
+    // needs. The verify path owns this banner when a token is present.
+    const ownArrival = Boolean(claimToken);
     fetch(SCHEDULES + '/' + encodeURIComponent(sharedCode), { headers: { accept: 'application/json' } })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error('unknown code'))))
       .then((payload) => {
@@ -960,6 +1091,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
           if (banner) banner.hidden = false;
           return;
         }
+        if (ownArrival) return;
         const banner = document.querySelector('[data-schedule-import]');
         const message = document.querySelector('[data-schedule-import-message]');
         if (message) {
@@ -972,7 +1104,371 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
       .catch(() => { /* a dead code is not worth a banner */ });
   }
 
+  /* ── The claim: request, verify, unlink ────────────────────────────── */
+
+  const CLAIM_BASE = () => SCHEDULES + '/' + encodeURIComponent(state.code);
+
+  /**
+   * Read what the server knows about this code. The write key is what makes
+   * the answer ours: without it the same endpoint returns the schedule and
+   * nothing about who owns it, which is exactly what a shared link should see.
+   */
+  /**
+   * Persisted, not just held in memory.
+   *
+   * The adoption is two writes — take the code, then union its sessions — and
+   * only the first is local. If the owner read that carries the second fails,
+   * an in-memory flag died with the tab and the NEXT star pushed this device's
+   * old set over the adopted code, destroying the picks the attendee had just
+   * recovered while the banner said both were kept. The intent lives in
+   * localStorage until it is actually carried out, so a reload finishes it and
+   * nothing is pushed before it does.
+   */
+  const adoptPending = () => state.adoptPending === true;
+
+  function loadOwnerState() {
+    if (!state.code || !state.writeKey) return Promise.resolve();
+    return fetch(CLAIM_BASE(), { headers: { accept: 'application/json', 'x-schedule-write-key': state.writeKey } })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!payload) return;
+        claim = payload.claim ?? null;
+        speaking = new Set(Array.isArray(payload.speakingSessionIds) ? payload.speakingSessionIds : []);
+        if (payload.feedToken && payload.feedToken !== state.feedToken) {
+          state.feedToken = payload.feedToken;
+          writeState();
+        }
+        if (adoptPending()) {
+          // Union, never replace: recovering a schedule must not delete a star
+          // this device already had. Only ever while the adoption is pending —
+          // doing this on every read would resurrect a star just removed.
+          const before = starred.size;
+          for (const session of payload.sessions ?? []) starred.add(session.id);
+          state.sessionIds = [...starred];
+          state.adoptPending = false;
+          writeState();
+          if (starred.size !== before) pushUpdate(0);
+        }
+        paint();
+        renderClaimRow();
+      })
+      .catch(() => {});
+  }
+
+  /**
+   * Turnstile, loaded only when the sheet that needs it opens. The agenda is
+   * the page people leave open all morning; it should not pay for a third-party
+   * script because one row inside one sheet might accept an email. Exempt
+   * conferences (demo mode) send no site key and mount nothing.
+   */
+  let turnstileToken = '';
+  /**
+   * The widget id, so a spent token can be reset rather than re-sent. A
+   * Turnstile token is single-use server-side, and every non-demo claim — send
+   * AND resend — is verified, so reusing one turns Resend into a 403 the
+   * attendee cannot get past. Demo conferences are exempt from the challenge,
+   * which is exactly why driving the demo could never show this.
+   */
+  let turnstileWidget = null;
+  function mountTurnstile() {
+    const siteKey = config.turnstileSiteKey;
+    const holder = document.querySelector('[data-schedule-turnstile]');
+    if (!siteKey || !holder || holder.childElementCount > 0) return;
+    const render = () => {
+      if (!window.turnstile || typeof window.turnstile.render !== 'function') return;
+      try {
+        turnstileWidget = window.turnstile.render(holder, {
+          sitekey: siteKey,
+          callback: (token) => { turnstileToken = token; },
+          'expired-callback': () => { turnstileToken = ''; },
+          'error-callback': () => { turnstileToken = ''; },
+        }) ?? null;
+      } catch { /* the send still tries; the server is the gate */ }
+    };
+    if (window.turnstile) { render(); return; }
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async = true;
+    script.defer = true;
+    script.addEventListener('load', render);
+    document.head.append(script);
+  }
+
+  function claimRowElements() {
+    return {
+      row: document.querySelector('[data-schedule-claim-row]'),
+      controls: document.querySelector('[data-schedule-claim-controls]'),
+    };
+  }
+
+  function claimLine(text, quiet) {
+    const line = document.createElement('div');
+    line.className = 'claim-done' + (quiet ? ' quiet-state' : '');
+    line.style.flex = '1 1 auto';
+    const copy = document.createElement('span');
+    copy.textContent = text;
+    line.append(copy);
+    return { line, copy };
+  }
+
+  function quietButton(label, hook) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'quiet';
+    button.textContent = label;
+    button.dataset[hook] = 'true';
+    return button;
+  }
+
+  /**
+   * Every state of this row is the same height, because they replace each
+   * other in place: the input, "check your email", "linked to …", and the
+   * unlink confirmation. Nothing here jumps while somebody reads it.
+   */
+  function renderClaimRow(justUnlinked) {
+    const { controls } = claimRowElements();
+    if (!controls) return;
+    // The row replaces itself wholesale on every state change, so a reader who
+    // is not looking at it needs to be told what it now says.
+    controls.setAttribute('role', 'status');
+    controls.setAttribute('aria-live', 'polite');
+    controls.textContent = '';
+
+    if (justUnlinked) {
+      // Two true sentences, because there are two situations. Removing a
+      // verified claim gets the ruled wording exactly; cancelling a request
+      // nobody has opened yet must not claim to have removed something from
+      // records it never reached.
+      const copy = justUnlinked === 'pending'
+        ? 'Cancelled — that link no longer works, and your email was never shared.'
+        : 'Unlinked — your email and picks are removed from the organizers' + String.fromCharCode(39) + ' records.';
+      const { line } = claimLine(copy, true);
+      controls.append(line);
+      setTimeout(() => { if (!claim) renderClaimRow(); }, 3200);
+      return;
+    }
+
+    if (claim && claim.status === 'verified') {
+      const { line } = claimLine('', false);
+      const copy = line.firstChild;
+      copy.textContent = 'Linked to ' + claim.maskedEmail + ' — the organizers can see your picks.'
+        + (speaking.size > 0 ? " You're speaking at " + speaking.size + ' session' + (speaking.size === 1 ? '' : 's') + ' — pinned in My schedule.' : '');
+      const actions = document.createElement('span');
+      actions.className = 'claim-actions';
+      actions.append(quietButton('Resend', 'scheduleClaimResend'), quietButton('Unlink', 'scheduleClaimUnlink'));
+      line.append(actions);
+      controls.append(line);
+      addChallenge(controls);
+      return;
+    }
+
+    if (claim && claim.status === 'pending') {
+      const { line } = claimLine('Check your email — link sent to ' + claim.maskedEmail + '. Opening it is what links your picks.', false);
+      const actions = document.createElement('span');
+      actions.className = 'claim-actions';
+      // A request has to be cancellable. The mail says the attendee can undo
+      // this at any time, and "any time" has to include the window before they
+      // open it — otherwise a typo'd address sits in a row they cannot reach.
+      actions.append(quietButton('Resend', 'scheduleClaimResend'), quietButton('Cancel', 'scheduleClaimUnlink'));
+      line.append(actions);
+      controls.append(line);
+      addChallenge(controls);
+      return;
+    }
+
+    if (config.claimEnabled === false) {
+      // Not a disabled button and not a lie: the conference has not switched
+      // mail on, and the way to move a schedule across devices is named.
+      const { line } = claimLine('Email links are not switched on for this conference yet — use Open on your phone to carry your schedule across.', true);
+      controls.append(line);
+      return;
+    }
+
+    const input = document.createElement('input');
+    input.className = 'claim-input';
+    input.type = 'email';
+    input.placeholder = 'you@example.com';
+    input.setAttribute('aria-label', 'Your email address');
+    input.dataset.scheduleClaimEmail = 'true';
+    const send = document.createElement('button');
+    send.type = 'button';
+    send.className = 'copy-btn';
+    send.style.flexBasis = '96px';
+    send.style.width = '96px';
+    send.textContent = 'Send link';
+    send.dataset.scheduleClaimSend = 'true';
+    controls.append(input, send);
+    addChallenge(controls);
+  }
+
+  /**
+   * Mounted in every state that can send, which is all three: the input, the
+   * pending line with Resend, and the linked line with Resend. Leaving it out
+   * of the last two left those buttons holding a token the server had already
+   * spent.
+   */
+  function addChallenge(controls) {
+    if (!config.turnstileSiteKey) return;
+    // The row reserves the challenge's height in EVERY state — the widget
+    // arriving late is not the only way this moves; pressing Send swaps a
+    // 101px input row for a 36px sentence and the Done button below would
+    // slide up under the finger.
+    controls.classList.add('has-challenge');
+    const holder = document.createElement('div');
+    holder.dataset.scheduleTurnstile = 'true';
+    holder.className = 'claim-turnstile';
+    controls.append(holder);
+    turnstileToken = '';
+    turnstileWidget = null;
+    mountTurnstile();
+  }
+
+  function claimError(message) {
+    showError('share', message);
+  }
+
+  /**
+   * An omitted email is a resend: the server keeps the address, the page keeps
+   * only its masked form, and the write key is what says this is the same
+   * person asking.
+   */
+  function sendClaim(email) {
+    return ensureCode()
+      .then(() => fetch(CLAIM_BASE() + '/claim', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-schedule-write-key': state.writeKey },
+        body: JSON.stringify({ email: email || undefined, turnstileToken: turnstileToken || undefined }),
+      }))
+      .then((response) => response.json().then((payload) => ({ ok: response.ok, payload })))
+      .then((result) => {
+        if (!result.ok) {
+          claimError(result.payload?.error?.message ?? 'That did not reach the server. Try again in a moment.');
+          return;
+        }
+        claim = result.payload.claim ?? null;
+        // Single-use server-side: whatever happens next needs a fresh one.
+        turnstileToken = '';
+        clearErrors();
+        renderClaimRow();
+        paint();
+      })
+      .catch(() => claimError('That did not reach the server. Your stars are safe on this device — try again when you have a signal.'));
+  }
+
+  function unlinkClaim() {
+    if (!state.code || !state.writeKey) return;
+    const wasPending = claim?.status === 'pending';
+    fetch(CLAIM_BASE() + '/claim', {
+      method: 'DELETE',
+      headers: { 'x-schedule-write-key': state.writeKey },
+    }).then((response) => {
+      if (!response.ok) { claimError('That did not reach the server. Try again in a moment.'); return; }
+      claim = null;
+      speaking = new Set();
+      state.feedToken = null;
+      writeState();
+      renderClaimRow(wasPending ? 'pending' : 'verified');
+      paint();
+    }, () => claimError('That did not reach the server. Try again in a moment.'));
+  }
+
+  /**
+   * The verification. The mail's link carries the code and a token that stays
+   * valid until a resend replaces it — the same mail has to keep working —
+   * and never the write key. The token is taken out of the address bar on
+   * arrival so a screenshot or a forwarded URL cannot carry it.
+   *
+   * The code is passed in rather than read from state, because the whole point
+   * of a recovery mail is that it may arrive on a device that already has a
+   * schedule of its own. Verifying against whatever this browser happened to be
+   * holding would post the mail's token to a stranger's code and answer 404 —
+   * on the one journey this feature exists for.
+   */
+  function verifyClaimToken(code, token) {
+    if (!code || !token) return Promise.resolve();
+    return fetch(SCHEDULES + '/' + encodeURIComponent(code) + '/claim/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+      .then((response) => response.json().then((payload) => ({ ok: response.ok, payload })))
+      .then((result) => {
+        if (!result.ok) {
+          // A link that has been superseded by a resend is the ordinary way
+          // this fails, and the server has a sentence for it. Swallowing that
+          // left the page anonymous with no explanation and no way forward —
+          // and the token is already out of the address bar, so a refresh
+          // cannot retry. Say what happened, and open the door back.
+          claimArrivalError(result.payload?.error?.message
+            ?? 'That link could not be checked just now. Ask for a new one from Subscribe / share.');
+          return;
+        }
+        claim = result.payload.claim ?? null;
+        speaking = new Set(Array.isArray(result.payload.speakingSessionIds) ? result.payload.speakingSessionIds : []);
+        // Adopting the verified code, the way arriving with a write key in the
+        // fragment used to: this device now edits THAT schedule. The union is
+        // deliberate and matches the fragment path — recovering a schedule must
+        // never silently delete a star this device already had.
+        const switching = state.code !== code;
+        state.code = code;
+        // The mail deliberately does not carry the write key; verifying is how
+        // this device earns it. Storing it is what makes "open it on any device
+        // and keep editing" true.
+        if (result.payload.writeKey) state.writeKey = result.payload.writeKey;
+        else if (switching) state.writeKey = null;
+        if (result.payload.feedToken) state.feedToken = result.payload.feedToken;
+        if (switching) state.adoptPending = true;
+        writeState();
+        if (switching) {
+          // The more consequential of the two arrivals, so it is the one that
+          // must not happen in silence — the same rule the shared-link path
+          // already follows.
+          announceArrival('This device now edits schedule ' + code + ' — your own stars were kept.');
+        }
+        paint();
+        renderClaimRow();
+      })
+      .catch(() => claimArrivalError('That link could not be checked just now — you may be offline. Your picks are safe on this device.'));
+  }
+
+  /**
+   * An arrival that failed has nowhere to put an error yet: the share sheet is
+   * closed and the claim row is not on screen. The import strip is the one slot
+   * this page already reserves for "something happened when you arrived", so
+   * the message lands there rather than in a sheet nobody opened.
+   */
+  function claimArrivalError(message) {
+    // Deliberately NOT also showError('share', …): openSheet clears errors
+    // unconditionally, so the copy telling somebody to open Subscribe / share
+    // was wiped by the act of following it.
+    announceArrival(message);
+  }
+
+  /** The strip this page already reserves for "something happened when you arrived". */
+  function announceArrival(message) {
+    const banner = document.querySelector('[data-schedule-import]');
+    const copy = document.querySelector('[data-schedule-import-message]');
+    const button = document.querySelector('[data-schedule-action="import"]');
+    if (button) button.hidden = true;
+    if (copy) copy.textContent = message;
+    if (banner) banner.hidden = false;
+  }
+
   /* ── Interaction ───────────────────────────────────────────────────── */
+
+  /**
+   * The demand beacon: anonymous, best-effort, and deliberately unawaited. A
+   * star is a local act that must never wait on a network, and a signal that
+   * failed to send is not a reason to tell somebody their star did not land.
+   */
+  function sendBeacon(id, starred) {
+    if (!DEVICE) return;
+    fetch('/api/v1/public/stars', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ eventSlug: config.eventSlug, sessionId: id, deviceHash: DEVICE, starred }),
+    }).catch(() => {});
+  }
 
   function toggleStar(id, button) {
     const adding = !isStarred(id);
@@ -980,6 +1476,7 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
     state.sessionIds = [...starred];
     writeState();
     pushUpdate();
+    sendBeacon(id, adding);
     paint();
     if (adding && button) {
       button.classList.add('just-starred');
@@ -1015,6 +1512,34 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
         ? document.querySelector('[data-schedule-brief]')?.textContent ?? ''
         : document.querySelector('[data-schedule-url="' + which + '"]')?.textContent ?? '';
       copyText(copy, source);
+      return;
+    }
+
+    const send = event.target.closest?.('[data-schedule-claim-send]');
+    if (send) {
+      const field = document.querySelector('[data-schedule-claim-email]');
+      const value = (field?.value ?? '').trim();
+      if (!value || value.indexOf('@') < 1) { field?.focus(); return; }
+      send.disabled = true;
+      sendClaim(value).finally(() => { if (send.isConnected) send.disabled = false; });
+      return;
+    }
+
+    const resend = event.target.closest?.('[data-schedule-claim-resend]');
+    if (resend) {
+      resend.disabled = true;
+      resend.textContent = 'Sending';
+      sendClaim(null).finally(() => {
+        if (!resend.isConnected) return;
+        resend.disabled = false;
+        resend.textContent = 'Sent';
+        setTimeout(() => { if (resend.isConnected) resend.textContent = 'Resend'; }, 1400);
+      });
+      return;
+    }
+
+    if (event.target.closest?.('[data-schedule-claim-unlink]')) {
+      unlinkClaim();
       return;
     }
 
@@ -1074,5 +1599,19 @@ export const PUBLIC_SCHEDULE_SCRIPT = `
   applyOrigin();
   paint();
   loadShared();
+  renderClaimRow();
+  /**
+   * Arriving from the mail. The code has to be adopted before the verify call,
+   * because a device that has never seen this schedule has nothing in
+   * localStorage to address — that is the whole point of the recovery link. The
+   * write key comes back from the verify itself.
+   */
+  if (claimToken) {
+    verifyClaimToken(sharedCode || state.code, claimToken).then(loadOwnerState);
+  } else {
+    // Also the retry: an adoption whose owner read failed last time is still
+    // marked pending, and this is what finishes it.
+    loadOwnerState();
+  }
 })();
 `;

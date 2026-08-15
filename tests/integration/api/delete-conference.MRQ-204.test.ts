@@ -61,6 +61,12 @@ const EVENT_SCOPED_COUNTS: Record<string, string> = {
   speaker_tasks: "SELECT COUNT(*) AS total FROM speaker_tasks WHERE event_id = ?",
   calendar_invites: "SELECT COUNT(*) AS total FROM calendar_invites WHERE submission_id IN (SELECT id FROM submissions WHERE event_id = ?)",
   public_schedules: "SELECT COUNT(*) AS total FROM public_schedules WHERE event_id = ?",
+  // MRQ-208. Each of these references a schedule, a person or the event, so a
+  // cascade that did not know them would abort and the conference could not be
+  // deleted at all once one attendee had starred or claimed anything.
+  schedule_claims: "SELECT COUNT(*) AS total FROM schedule_claims WHERE event_id = ?",
+  session_star_beacons: "SELECT COUNT(*) AS total FROM session_star_beacons WHERE event_id = ?",
+  event_attendances: "SELECT COUNT(*) AS total FROM event_attendances WHERE event_id = ?",
   imports: "SELECT COUNT(*) AS total FROM imports WHERE event_id = ?",
   import_rows: "SELECT COUNT(*) AS total FROM import_rows WHERE import_id IN (SELECT id FROM imports WHERE event_id = ?)",
   embeds: "SELECT COUNT(*) AS total FROM embeds WHERE event_id = ?",
@@ -306,6 +312,9 @@ async function seedFixture(): Promise<void> {
     statement("INSERT INTO embeds (id, event_id, name, kind, slug, config, enabled, created_at, updated_at) VALUES ('embed_delete_204', ?, 'Agenda embed', 'agenda', 'delete-embed', '{}', 1, ?, ?)", EVENT_ID, NOW, NOW),
     statement("INSERT INTO event_settings (id, event_id, key, value_json, created_at, updated_at) VALUES ('setting_delete_204', ?, 'speaker_social_platforms', '[\"x\"]', ?, ?)", EVENT_ID, NOW, NOW),
     statement("INSERT INTO public_schedules (code, event_id, session_ids, write_key_hash, created_at, updated_at) VALUES ('share204', ?, '[\"submission_delete_204_session\"]', 'write-key', ?, ?)", EVENT_ID, NOW, NOW),
+    statement("INSERT INTO session_star_beacons (event_id, session_id, device_hash, created_at) VALUES (?, 'submission_delete_204_session', ?, ?)", EVENT_ID, "a".repeat(32), NOW),
+    statement("INSERT INTO event_attendances (id, person_id, event_id, source, schedule_code, verified_at, created_at, updated_at) VALUES ('attendance_delete_204', ?, ?, 'claim', 'share204', ?, ?, ?)", REVIEWER_ID, EVENT_ID, NOW, NOW, NOW),
+    statement("INSERT INTO schedule_claims (code, event_id, email, token_hash, pending_write_key, feed_token, person_id, minted_person, requested_at, verified_at, created_at, updated_at) VALUES ('share204', ?, 'attendee204@example.com', 'claim-hash', NULL, NULL, ?, 0, ?, ?, ?, ?)", EVENT_ID, REVIEWER_ID, NOW, NOW, NOW, NOW),
     statement("INSERT INTO webhook_endpoints (id, event_id, url, secret_hash, events_json, enabled, created_at) VALUES ('webhook_delete_204', ?, 'https://hooks.example.test/marquee', 'secret', '[\"agenda.published\"]', 1, ?)", EVENT_ID, NOW),
     statement("INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at) VALUES ('token_delete_204', ?, ?, 'Event token', 'token-hash', 'mq_test', ?, ?, ?, ?)", ORG_ID, EVENT_ID, JSON.stringify({ permissions: ["program:write"], event_ids: [EVENT_ID] }), ACTOR_ID, NOW, NOW),
     statement("INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at) VALUES (?, ?, NULL, 'Multi-event token', 'multi-token-hash', 'mq_multi', ?, ?, ?, ?)", MULTI_EVENT_TOKEN_ID, ORG_ID, JSON.stringify({ permissions: ["program:read"], event_ids: [EVENT_ID, SIBLING_EVENT_ID] }), ACTOR_ID, NOW, NOW),

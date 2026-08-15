@@ -35,6 +35,11 @@ export interface Env {
   LOG_LEVEL?: string;
   /** `"0"` or `"false"` turns the browser error beacon off at the source. */
   CLIENT_TELEMETRY?: string;
+  /**
+   * `"1"` lets an attendee's "get it by email" claim actually send. Ships off:
+   * the mail plan is the constraint, not the code (design §7, Constraints).
+   */
+  ATTENDEE_CLAIM_MAIL?: string;
   MAIL_QUEUE: Queue<unknown>;
   RESEND_API_KEY?: string;
   /** Optional display label for the connected Resend account. */

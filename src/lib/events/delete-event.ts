@@ -183,6 +183,13 @@ export async function deleteEventCascade(
     prepared(db, `DELETE FROM speaker_tasks WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM task_templates WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM agenda_items WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
+    // MRQ-208, before the schedules and the people they point at. A claim
+    // references both, so deleting either first aborts the whole batch and the
+    // conference cannot be deleted at all once one attendee has claimed a
+    // schedule.
+    prepared(db, `DELETE FROM schedule_claims WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
+    prepared(db, `DELETE FROM session_star_beacons WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
+    prepared(db, `DELETE FROM event_attendances WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM public_schedules WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM embeds WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM import_rows WHERE import_id IN ${importsSql}`, ...eventBindings),

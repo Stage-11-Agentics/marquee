@@ -39,6 +39,18 @@ import {
 import { hasSpeakerTaskCancellationColumn, submissionFilterSchema } from "./submissions.queries";
 import { auditStatement } from "../lib/audit";
 
+/**
+ * Attendee claim mail is not conference communication, and this surface renders
+ * whole message bodies to anyone with comms access.
+ *
+ * Two things would otherwise be readable by the very people a claim discloses
+ * an attendee to: the address of somebody who typed it and has NOT yet verified
+ * — the exact disclosure that request-then-verify exists to withhold — and the
+ * link that opens their schedule. Delivery accounting still counts these rows;
+ * they simply are not part of "what this conference has sent its speakers".
+ */
+const NOT_ATTENDEE_MAIL = "template_key <> 'attendee_schedule_claim'";
+
 const eventParams = z.object({ eventId: z.string().min(1) });
 const templateParams = eventParams.extend({ templateId: z.string().min(1) });
 const personParams = eventParams.extend({ personId: z.string().min(1) });
@@ -947,10 +959,12 @@ const getOutbox = defineApiRoute(
     const { eventId } = context.req.valid("param");
     requireComms(context, eventId, false);
     const { page, per_page } = context.req.valid("query");
-    const totalRow = await context.env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE event_id = ?").bind(eventId).first<{ total: number }>();
+    const totalRow = await context.env.DB
+      .prepare(`SELECT COUNT(*) AS total FROM outbox WHERE event_id = ? AND ${NOT_ATTENDEE_MAIL}`)
+      .bind(eventId).first<{ total: number }>();
     const rows = await context.env.DB.prepare(
       `SELECT id, event_id, template_key, person_id, to_email, subject, html, text, status, send_policy, suppressed_reason, idempotency_key, provider_message_id, error, created_at, sent_at
-       FROM outbox WHERE event_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+       FROM outbox WHERE event_id = ? AND ${NOT_ATTENDEE_MAIL} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
     ).bind(eventId, per_page, (page - 1) * per_page).all();
     return context.json({ data: rows.results, page, per_page, total: Number(totalRow?.total ?? 0) }, 200);
   },
@@ -972,7 +986,7 @@ const getPersonMessages = defineApiRoute(
     requireComms(context, eventId, false);
     const rows = await context.env.DB.prepare(
       `SELECT id, event_id, template_key, person_id, to_email, subject, html, text, status, send_policy, suppressed_reason, idempotency_key, provider_message_id, error, created_at, sent_at
-       FROM outbox WHERE event_id = ? AND person_id = ? ORDER BY created_at DESC`,
+       FROM outbox WHERE event_id = ? AND person_id = ? AND ${NOT_ATTENDEE_MAIL} ORDER BY created_at DESC`,
     ).bind(eventId, personId).all<OutboxRow>();
     return context.json({ data: rows.results }, 200);
   },

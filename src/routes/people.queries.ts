@@ -29,7 +29,7 @@ import { z } from "@hono/zod-openapi";
 
 import { resolveSort, type PageParams, type SortRegistry } from "../api/pagination";
 import { PIPELINE_STAGE_IDS } from "../lib/person-annotations";
-import { SPEAKER_ROSTER_PERSON_SOURCE } from "../lib/roster-source";
+import { ATTENDEE_PERSON_SOURCE, SPEAKER_ROSTER_PERSON_SOURCE, type EventPopulation } from "../lib/roster-source";
 
 /**
  * The saved filter behind a Live list. It lives beside the query rather than
@@ -125,8 +125,15 @@ export interface PeopleFilters {
   stage?: string;
   /** Restrict to a saved Fixed list's members. */
   listId?: string;
-  /** Restrict to one conference's roster population — the roster entrance. */
+  /** Restrict to one conference's population — see `eventPopulation`. */
   eventId?: string;
+  /**
+   * Which population `eventId` means. `roster` is who speaks at the conference
+   * (the entrance the roster screen uses); `attendee` is who is coming to it;
+   * `any` is either. One builder, three entrances — two implementations of
+   * "who belongs to this conference" would be two bugs.
+   */
+  eventPopulation?: EventPopulation;
   /** Read exactly one person through the same projection the list uses. */
   personId?: string;
   /**
@@ -319,8 +326,17 @@ function filterClauses(input: PeopleQueryInput): Clauses {
     bindings.push(input.orgId);
   }
   if (input.eventId) {
-    where.push(`person.id IN (${SPEAKER_ROSTER_PERSON_SOURCE})`);
-    bindings.push(input.eventId, input.eventId);
+    const population = input.eventPopulation ?? "roster";
+    if (population === "attendee") {
+      where.push(`person.id IN (${ATTENDEE_PERSON_SOURCE})`);
+      bindings.push(input.eventId);
+    } else if (population === "any") {
+      where.push(`(person.id IN (${SPEAKER_ROSTER_PERSON_SOURCE}) OR person.id IN (${ATTENDEE_PERSON_SOURCE}))`);
+      bindings.push(input.eventId, input.eventId, input.eventId);
+    } else {
+      where.push(`person.id IN (${SPEAKER_ROSTER_PERSON_SOURCE})`);
+      bindings.push(input.eventId, input.eventId);
+    }
   }
   const search = input.q?.trim();
   if (search) {

@@ -441,7 +441,7 @@ export const COMMAND_REGISTRY = [
     operations: ["listOrgPeople"],
     skill: "people",
     options: [
-      { name: "--filter <key=value>", description: "Repeat: q, company, title, tag, stage, list_id, event_id." },
+      { name: "--filter <key=value>", description: "Repeat: q, company, title, tag, stage, list_id, event_id, kind." },
       { name: "--page <n>", description: "One-based result page." },
       { name: "--per-page <n>", description: "Rows per page, up to 100." },
       { name: "--sort <key>", description: "name, name_desc, company, newest, updated, or last_contact." },
@@ -475,11 +475,15 @@ export const COMMAND_REGISTRY = [
   },
   {
     path: ["people", "import"],
-    usage: "marquee people import --file <path.csv>",
+    usage: "marquee people import --file <path.csv> [--set event=<id|slug>]",
     summary: "Import people from a CSV, matched on email so nobody is duplicated.",
     operations: ["importOrgPeople"],
     skill: "people",
-    options: [{ name: "--file <path>", description: "Required; the CSV to import." }],
+    set: ["event"],
+    options: [
+      { name: "--file <path>", description: "Required; the CSV to import." },
+      { name: "--set event=<id|slug>", description: "Also record everyone in the file as attending that conference." },
+    ],
   },
   {
     path: ["people", "email"],

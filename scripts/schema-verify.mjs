@@ -142,6 +142,15 @@ const requiredIndexes = [
   "idx_agenda_event_starts_room",
   "idx_agenda_room_starts",
   "idx_agenda_track_starts",
+  // MRQ-208. The beacon index is wide because the demand aggregate's GROUP BY
+  // runs on the public agenda's hot path and would otherwise plan a temp
+  // B-tree; the attendance ones are what make an attendee list a query rather
+  // than a scan. This list is the only guard that notices one being dropped.
+  "idx_session_star_beacons_event",
+  "idx_event_attendances_event_source",
+  "uq_event_attendances_person_event_source",
+  "idx_schedule_claims_token",
+  "idx_schedule_claims_event",
   "idx_attachments_draft_files",
   "idx_attachments_owner",
   "idx_attachments_submission_files",
@@ -174,8 +183,8 @@ const requiredIndexes = [
 
 assert.equal(initialTables.length, 46, "0001 must define exactly 46 product tables");
 assert.equal(new Set(initialTables).size, 46, "0001 contains duplicate table names");
-assert.equal(expectedTables.length, 53, "Applied migrations must define exactly 53 product tables");
-assert.equal(new Set(expectedTables).size, 53, "Applied migrations contain duplicate table names");
+assert.equal(expectedTables.length, 56, "Applied migrations must define exactly 56 product tables");
+assert.equal(new Set(expectedTables).size, 56, "Applied migrations contain duplicate table names");
 for (const index of requiredIndexes) {
   assert.ok(expectedIndexes.includes(index), `Required schema index is missing: ${index}`);
 }
@@ -306,7 +315,7 @@ try {
       "FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f " +
       "WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%'",
   ).all();
-  assert.equal(foreignKeyRows.length, 109, "Expected the exact foreign-key graph");
+  assert.equal(foreignKeyRows.length, 115, "Expected the exact foreign-key graph");
   const foreignKeyCheck = sqlite.prepare("PRAGMA foreign_key_check").all();
   assert.deepEqual(foreignKeyCheck, [], "Fresh migration has unresolved foreign keys");
 

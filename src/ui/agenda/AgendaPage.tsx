@@ -32,6 +32,7 @@ import { apiFetch, errorSummary } from "../shell/api-client";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
 import { orderNewestFirst } from "../shell/wide-grid";
+import { DemandPanel } from "./DemandPanel";
 import { sessionDay, sessionTime, TrackBoard } from "./track-board";
 import "./agenda.css";
 
@@ -1269,6 +1270,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
       onBack={() => { setPublicationError(""); setPublicationStep("select"); }}
       onPublish={() => void publishSelected()}
     />
+    <DemandPanel eventId={eventId} timezone={snapshot.event.timezone} />
     {activeRoom && <RoomPanel room={activeRoom} showBuildingComparison={showBuildingComparison} onClose={() => setRoomPanelId(null)} />}
     {conflictsOpen && <ConflictPanel conflicts={snapshot.conflicts} sessions={snapshot.sessions} showBuildingComparison={showBuildingComparison} onClose={() => setConflictsOpen(false)} onJump={jumpToSession} />}
   </div>;

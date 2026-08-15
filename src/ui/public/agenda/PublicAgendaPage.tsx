@@ -5,6 +5,7 @@ import { SocialBadges } from "../../social/SocialBadges";
 import SOCIAL_BADGE_STYLES from "../../social/social-badge.css?raw";
 import { sessionCalendarLinks, sessionDirectionsUrl } from "../../../lib/public-calendar";
 import { PUBLIC_SPEAKER_EMPTY_LABEL } from "../../../lib/participants";
+import { starCountLabel } from "../../../lib/star-beacons";
 import {
   publicAbstractSnippet,
   type PublicAgendaData,
@@ -27,6 +28,10 @@ export const PUBLIC_SITE_STYLES = `
   --public-rule: #c8d2da;
   --public-rule-soft: #dde4ea;
   --public-accent: #0b6a72;
+  /* Accent text ON the wash, from the ratified skin. Four rules referenced it
+     and nothing defined it, so every one of them silently inherited body ink —
+     including .claim-done, which is new here. */
+  --public-accent-ink: #084f55;
   --public-accent-wash: #e2f0f1;
   --public-warn: #8a5c00;
   --public-warn-wash: #fdf1dd;
@@ -178,6 +183,51 @@ export const PUBLIC_SITE_STYLES = `
 .star-btn[aria-pressed="true"] .glyph::before { content: "★"; }
 .star-btn.just-starred { transform: scale(1.12); }
 .public-agenda-row > .star-btn { margin-top: -2px; }
+
+/* The demand count, as SESSION METADATA beside the format and track chips —
+   deliberately out of the star's gravity so it never reads as a like counter
+   (round-2 review ruling). The slot is reserved whether or not a number
+   renders: a session crossing the threshold must not move the card. */
+.public-star-chip { display: inline-flex; min-height: 23px; min-width: 52px; align-items: center; justify-content: flex-end; border: 1px solid var(--public-rule-soft); border-radius: 2px; padding: 3px 6px; color: var(--public-muted); font: 650 9.5px/1.2 var(--public-mono); font-variant-numeric: tabular-nums; }
+.public-star-chip.empty { border-color: transparent; }
+.star-count-inline { color: var(--public-muted); font: 650 11px/1.4 var(--public-mono); font-variant-numeric: tabular-nums; }
+
+/* Identity: the page says what it knows about you. Anonymous or linked, the
+   line is the same height and lives in the same place — the answer changes,
+   the furniture does not. */
+.identity-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; min-height: 40px; margin: -6px 0 14px; padding: 7px 12px; border: 1px solid var(--public-rule-soft); background: var(--public-surface); color: var(--public-muted); font-size: 12px; }
+.identity-line .who { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.identity-line .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--public-rule); flex: 0 0 auto; }
+.identity-line.linked .dot { background: var(--public-accent); }
+.identity-line b { color: var(--public-soft); font-weight: 650; }
+.identity-line .public-button { min-height: 28px; padding: 4px 9px; font-size: 11px; }
+
+/* "You're speaking": the claimed email matched a speaker at this conference,
+   so their own sessions pin into the itinerary. Ink and gold, the star's own
+   palette — this is the attendee-visible payoff of attendees in the CRM. */
+.speaking-chip { display: inline-flex; align-items: center; min-height: 18px; margin-left: 8px; border-radius: 2px; padding: 2px 6px; background: var(--public-ink); color: #ffc94d; font: 700 9px/1 var(--public-mono); letter-spacing: .12em; text-transform: uppercase; vertical-align: 2px; }
+.glance-block.speaking { border-color: var(--public-ink); background: var(--public-ink); }
+.glance-block.speaking strong { color: #fff; }
+.glance-block.speaking small { color: #ffc94d; }
+
+/* The email claim row, inside the share sheet. Every state is the same height:
+   the input, the pending line, the linked line, and the unlink confirmation. */
+/* The challenge is 300px wide and lands beside a 96px button — on a phone that
+   leaves the address field about eighty pixels, narrower than the address being
+   typed into it, and the widget itself wider than the sheet. It gets its own
+   row instead, and the row keeps the height of its tallest state so pressing
+   Send changes the sentence and not the layout. */
+.claim-line { min-height: 36px; flex-wrap: wrap; }
+.claim-line.has-challenge { min-height: 109px; align-content: flex-start; }
+.claim-input { flex: 1 1 auto; min-width: 0; height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-surface); padding: 0 9px; font-size: 12px; }
+.claim-done { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; border: 1px solid var(--public-rule); border-radius: 2px; background: var(--public-accent-wash); padding: 4px 10px; font: 600 11.5px/1.4 var(--public-sans); color: var(--public-accent-ink); }
+.claim-done.quiet-state { background: var(--public-sunk); color: var(--public-soft); }
+.claim-actions { display: inline-flex; gap: 12px; flex: 0 0 auto; }
+/* The challenge mounts asynchronously from a third-party script. Its slot is
+   reserved at the size it will take, so arriving late moves nothing. */
+.claim-turnstile { flex: 1 0 100%; min-height: 65px; }
+.claim-done .quiet { background: none; border: 0; padding: 0; min-width: 46px; text-align: center; color: var(--public-accent); font: 650 10.5px/1 var(--public-mono); letter-spacing: .04em; }
+.claim-done .quiet:hover, .claim-done .quiet:focus-visible { text-decoration: underline; outline: none; }
 
 /* Two labelled buttons, not a toggle: the current view and the way back
    are both legible. The count is fixed-width so nothing shifts as it fills. */
@@ -388,6 +438,14 @@ export interface PublicScheduleConfig {
   timezone: string;
   days: Array<{ date: string; label: string }>;
   view: "agenda" | "mine";
+  /**
+   * Whether "get it by email" can actually send. The claim row reads this and
+   * says so plainly when it cannot — a Send button that queues nothing is a
+   * dead end, and the mail plan is a real constraint rather than a bug.
+   */
+  claimEnabled?: boolean;
+  /** Null when this conference is exempt (demo mode), exactly as the public form resolves it. */
+  turnstileSiteKey?: string | null;
 }
 
 export type PublicScheduleView = "agenda" | "mine";
@@ -501,12 +559,17 @@ function speakerHref(slug: string): string {
   return `/p/${encodeURIComponent(slug)}`;
 }
 
-function TrackChips({ session }: { session: PublicSession }): JSX.Element {
+function TrackChips({ session, starCount, reserveCount = true }: { session: PublicSession; starCount?: number; reserveCount?: boolean }): JSX.Element {
   return (
     <div class="public-track-list">
       {session.tracks.length > 0 ? session.tracks.map((track) => (
         <span class="public-track-chip" style={{ "--track-color": track.color }} key={track.id}>{track.name}</span>
       )) : <span class="public-track-chip">—</span>}
+      {/* Inside the chip flow, so the count sits BESIDE the taxonomy chips as
+          ruled rather than on a grid row of its own beneath them — and so the
+          uppercase, letter-spaced rule on `.public-meta-row > span` cannot
+          claim it and eat its tabular figures. */}
+      {reserveCount ? <StarCountChip count={starCount} /> : null}
     </div>
   );
 }
@@ -522,12 +585,28 @@ function FormatChip({ session }: { session: PublicSession }): JSX.Element {
  * always render — "—" where a session carries no value — so a card's height
  * does not change with its data.
  */
-function CardMeta({ session }: { session: PublicSession }): JSX.Element {
+function CardMeta({ session, starCount }: { session: PublicSession; starCount?: number }): JSX.Element {
   return (
     <div class="public-card-meta">
       <div class="public-meta-row"><span>Format</span><FormatChip session={session} /></div>
-      <div class="public-meta-row"><span>Track</span><TrackChips session={session} /></div>
+      <div class="public-meta-row"><span>Track</span><TrackChips session={session} starCount={starCount} /></div>
     </div>
+  );
+}
+
+/**
+ * The demand count as a quiet chip beside the taxonomy chips, and never under
+ * the star. It is a server aggregate refreshed on render — session metadata,
+ * not a tally that moves while you watch it — and the empty chip holds the
+ * slot so a session crossing the threshold changes a number, not a layout.
+ */
+function StarCountChip({ count }: { count?: number }): JSX.Element {
+  if (typeof count !== "number") return <span class="public-star-chip empty" aria-hidden="true" />;
+  return (
+    <span class="public-star-chip num" title={starCountLabel(count)}>
+      <span aria-hidden="true">★ {count}</span>
+      <span class="sr-only">{starCountLabel(count)}</span>
+    </span>
   );
 }
 
@@ -584,7 +663,7 @@ function SessionAbstract({ session }: { session: PublicSession }): JSX.Element {
  * schedule module render an itinerary without scraping the card's markup.
  * The same hooks are what a computer-use agent drives.
  */
-function SessionCard({ session }: { session: PublicSession }): JSX.Element {
+function SessionCard({ session, starCount }: { session: PublicSession; starCount?: number }): JSX.Element {
   return (
     <article
       class="public-agenda-row"
@@ -609,7 +688,7 @@ function SessionCard({ session }: { session: PublicSession }): JSX.Element {
         <SpeakerLine session={session} />
         <SessionAbstract session={session} />
       </div>
-      <CardMeta session={session} />
+      <CardMeta session={session} starCount={starCount} />
     </article>
   );
 }
@@ -665,6 +744,20 @@ function MySchedulePanels({ days, eventSlug }: { days: PublicAgendaData["days"];
       <noscript>
         <p class="sched-note">Your schedule lives in this browser, so it needs JavaScript. Everything below is the full conference program.</p>
       </noscript>
+      {/*
+        The identity line, round 3. It ships in its anonymous state because
+        that is the truth for a reader with no JavaScript and the honest
+        default for everyone else; the module rewrites the sentence in place
+        once it has read localStorage and, if the code is claimed, the server.
+        Fixed height, one position — the answer changes, the furniture does not.
+      */}
+      <div class="identity-line" data-schedule-identity hidden>
+        <span class="who">
+          <span class="dot" aria-hidden="true" />
+          <span data-schedule-identity-copy>Saved on <b>this device only</b> — no account, not linked to an email.</span>
+        </span>
+        <button type="button" class="public-button" data-schedule-action="share" data-schedule-identity-action>Get it by email</button>
+      </div>
       <div class="sched-summary" data-schedule-summary hidden>
         <span class="counts num" data-schedule-counts />
         <div class="sched-export">
@@ -734,6 +827,20 @@ function ScheduleSheets(): JSX.Element {
             <button type="button" class="copy-btn" data-schedule-copy="share">Copy</button>
           </div>
         </div>
+        {/*
+          The claim. The disclosure is the first thing in the row rather than
+          fine print under the button, because what it costs is the whole
+          decision: an address the organizers can see, attached to picks they
+          can see. Nothing here writes anything until the mailed link is opened.
+        */}
+        <div class="sheet-row" data-schedule-claim-row>
+          <h3>Get it by email</h3>
+          <p class="hint">We'll email you this schedule's link, so you can always find your way back — even on a new device with nothing saved. Your email and your picks become visible to the organizers. No account, no password, nothing else.</p>
+          <div class="url-line claim-line" data-schedule-claim-controls>
+            <input class="claim-input" type="email" placeholder="you@example.com" aria-label="Your email address" data-schedule-claim-email />
+            <button type="button" class="copy-btn" style={{ flexBasis: "96px", width: "96px" }} data-schedule-claim-send>Send link</button>
+          </div>
+        </div>
         <button type="button" class="public-button sheet-close" data-schedule-close>Done</button>
       </div>
       <div class="sheet" id="schedule-brief-sheet" role="dialog" aria-modal="true" aria-labelledby="schedule-brief-title" data-schedule-sheet="brief">
@@ -751,7 +858,20 @@ function ScheduleSheets(): JSX.Element {
   );
 }
 
-export function PublicAgendaPage({ data, view = "agenda" }: { data: PublicAgendaData; view?: PublicScheduleView }): JSX.Element {
+export function PublicAgendaPage({
+  data,
+  view = "agenda",
+  starCounts = {},
+  claimEnabled = false,
+  turnstileSiteKey = null,
+}: {
+  data: PublicAgendaData;
+  view?: PublicScheduleView;
+  /** Only the sessions the organizer's setting allows to show a number appear here. */
+  starCounts?: Record<string, number>;
+  claimEnabled?: boolean;
+  turnstileSiteKey?: string | null;
+}): JSX.Element {
   const eventQuery = `event=${encodeURIComponent(data.event.slug)}`;
   const mine = view === "mine";
   const hasFilters = Boolean(
@@ -787,6 +907,8 @@ export function PublicAgendaPage({ data, view = "agenda" }: { data: PublicAgenda
         timezone: data.event.timezone,
         days: data.days.map((day) => ({ date: day.id, label: day.label })),
         view,
+        claimEnabled,
+        turnstileSiteKey,
       }}
       /*
         The itinerary is the attendee's own page: brand, the two segments, and
@@ -805,9 +927,14 @@ export function PublicAgendaPage({ data, view = "agenda" }: { data: PublicAgenda
         <div class="public-heading">
           <div>
             <h1>{mine ? "My schedule" : "Agenda"}</h1>
+            {/*
+              Round 3: the page says up front what it is going to do with a
+              star, because "how do I log in?" is the first thing an attendee
+              asks a conference site and the honest answer is "you don't".
+            */}
             <p>{mine
               ? "Everything you've starred, in the order your conference happens. Stars live on this device until you sync or share."
-              : data.event.tagline ?? "Practical sessions for people building and operating AI."}</p>
+              : `${data.event.tagline ?? "Practical sessions for people building and operating AI."} Star what you want to go to — your schedule follows you. No sign-in: stars save on this device, and you can add your email later to keep them everywhere.`}</p>
           </div>
         </div>
         {/*
@@ -815,7 +942,7 @@ export function PublicAgendaPage({ data, view = "agenda" }: { data: PublicAgenda
           code is fetched, so the strip ships at its final size and the script
           fills the sentence — the same reserve-then-fill rule as the summary.
         */}
-        <div class="sched-note" data-schedule-import hidden>
+        <div class="sched-note" data-schedule-import role="status" aria-live="polite" hidden>
           <span data-schedule-import-message>Someone shared a schedule with you.</span>{" "}
           <button type="button" class="public-button" data-schedule-action="import">Import a copy into my schedule</button>
         </div>
@@ -868,7 +995,7 @@ export function PublicAgendaPage({ data, view = "agenda" }: { data: PublicAgenda
               {group.slots.map((slot) => (
                 <div class="public-agenda-slot" key={`${group.date}-${slot.time}`}>
                   <h3 class="public-slot-head">{slot.time}</h3>
-                  {slot.sessions.map((session) => <SessionCard session={session} key={session.id} />)}
+                  {slot.sessions.map((session) => <SessionCard session={session} starCount={starCounts[session.id]} key={session.id} />)}
                 </div>
               ))}
             </div>
@@ -888,7 +1015,7 @@ export function PublicAgendaPage({ data, view = "agenda" }: { data: PublicAgenda
  * there. `origin` comes from the request so the links a local dev server hands
  * out point at that server rather than at production.
  */
-export function PublicSessionPage({ event, venue, session, origin }: { event: PublicEvent; venue: PublicVenueDisclosure; session: PublicSession; origin: string }): JSX.Element {
+export function PublicSessionPage({ event, venue, session, origin, starCounts = {} }: { event: PublicEvent; venue: PublicVenueDisclosure; session: PublicSession; origin: string; starCounts?: Record<string, number> }): JSX.Element {
   const venueName = venue.buildingName ?? event.venue ?? "Online";
   const links = sessionCalendarLinks(session, event, origin);
   const directions = sessionDirectionsUrl(session);
@@ -925,7 +1052,10 @@ export function PublicSessionPage({ event, venue, session, origin }: { event: Pu
           data-public-session-speakers={session.speakers.map((speaker) => speaker.name).join(", ")}
         >
           <div class="public-kicker">{venueName}</div>
-          <div class="public-track-list" style={{ justifyContent: "flex-start" }}><FormatChip session={session} /><TrackChips session={session} /></div>
+          {/* No reserved count slot here: the detail page states the number in
+              its own line below, so an always-empty 52px chip would be furniture
+              for something that never arrives. */}
+          <div class="public-track-list" style={{ justifyContent: "flex-start" }}><FormatChip session={session} /><TrackChips session={session} reserveCount={false} /></div>
           <h1>{session.title}</h1>
           <p class="public-detail-meta">{session.day} · {session.time}–{session.endTime} · {session.roomLabel} · {session.durationMin} minutes</p>
           <p class="public-detail-meta">Format: {session.format?.name ?? "—"} · Track: {session.tracks.map((track) => track.name).join(", ") || "—"}</p>
@@ -934,6 +1064,14 @@ export function PublicSessionPage({ event, venue, session, origin }: { event: Pu
             <a class="public-button" href={icsHref}>Add to calendar (.ics)</a>
             <a class="public-button" href={links.google} target="_blank" rel="noopener">Google</a>
             <a class="public-button" href={links.outlook} target="_blank" rel="noopener">Outlook</a>
+            {typeof starCounts[session.id] === "number"
+              ? (
+                <span class="star-count-inline num" title={starCountLabel(starCounts[session.id]!)}>
+                  <span aria-hidden="true">★ {starCounts[session.id]} schedules</span>
+                  <span class="sr-only">{starCountLabel(starCounts[session.id]!)}</span>
+                </span>
+              )
+              : null}
           </div>
           <div class="public-divider" />
           <h2>About this session</h2>
@@ -1019,11 +1157,49 @@ GET  /api/v1/public/schedules/{code}
 PUT  /api/v1/public/schedules/{code}
      (X-Schedule-Write-Key header) → replace the set
 
-GET  /api/v1/public/schedules/{code}/calendar.ics
-     → the live calendar feed; webcal:// is the same URL
+GET  /api/v1/public/schedules/{code}/calendar.ics[?f=…]
+     → the live calendar feed; webcal:// is the same URL.
+       The optional f= handle comes back from a verified claim
+       and adds the sessions its owner is speaking at; without
+       it the feed is exactly the starred picks.
+
+POST /api/v1/public/schedules/{code}/claim/verify
+     { "token": "…from the mailed link" }
+     → completes a claim and returns the write key once,
+       plus the feed handle
+
+DELETE /api/v1/public/schedules/{code}/claim
+     (X-Schedule-Write-Key header) → detach the email again
 
 GET  /api/v1/public/sessions/{slug}/calendar.ics
-     → one session as a calendar file`}</pre>
+     → one session as a calendar file
+
+POST /api/v1/public/stars
+     { "eventSlug": "${event.slug}",
+       "sessionId": "ses_…",
+       "deviceHash": "<16–64 hex chars you mint once>",
+       "starred": true }
+     → records one anonymous device's interest in a session.
+       Idempotent both ways; unstar with "starred": false.`}</pre>
+          <div class="public-divider" />
+          <h2>The demand signal</h2>
+          <p>
+            Building a schedule here counts toward this conference's session demand signal, anonymously.
+            The organizer sees how many distinct devices and distinct agent-built schedules include each
+            session — a room-planning number, weeks before the doors open — and never who they belong to.
+            A schedule you create through <code class="num">POST /schedules</code> counts as one; if you
+            are also driving a browser, pass the same <code class="num">deviceHash</code> on both and the
+            pair counts once rather than twice.
+          </p>
+          <div class="public-divider" />
+          <h2>Attaching an email</h2>
+          <p>
+            A schedule can be linked to an address so its owner can recover it anywhere:
+            <code class="num"> POST /schedules/&#123;code&#125;/claim</code> with the write key. It sends
+            one mail and writes nothing else — the link in that mail is what completes the claim. Do not
+            claim a schedule on somebody's behalf without asking them; the address becomes visible to the
+            conference organizers along with the picks.
+          </p>
           <div class="public-divider" />
           <h2>What to hand a human</h2>
           <p>
@@ -1032,7 +1208,7 @@ GET  /api/v1/public/sessions/{slug}/calendar.ics
           <div class="public-divider" />
           <h2>Rules worth knowing</h2>
           <p>
-            Session ids and slugs are both accepted, so it does not matter whether you read the API or the page. Only published sessions of the named event resolve; anything else is a 422 that names it. A set is capped at 200 sessions. Overlaps are computed server-side and returned as id pairs — touching sessions are not overlapping. Losing the write key makes a code permanently read-only; it is stored only as a hash.
+            Session ids and slugs are both accepted, so it does not matter whether you read the API or the page. Only published sessions of the named event resolve; anything else is a 422 that names it. A set is capped at 200 sessions. Overlaps are computed server-side and returned as id pairs — touching sessions are not overlapping. Losing the write key makes a code read-only — unless an email is attached to it, in which case opening the mailed link returns the key again. It is stored on the schedule only as a hash.
           </p>
           <div class="public-divider" />
           <h2>Driving the UI instead</h2>
