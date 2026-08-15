@@ -1,30 +1,35 @@
-# MRQ-215: Mobile update: drawer nav + phone-width sweep (single PR)
+# MRQ-215 — Mobile update: drawer nav + phone-width sweep
 
-ONE ticket, ONE PR, by operator ruling (2026-08-14): the ≤760px navigation redesign plus every phone-width defect from the mobile QA sweep merge together.
+## Objective
 
-## Binding design
-prototypes/mobile-nav/index.html (committed 850ccc58) — drive it. Rulings encoded there:
-- ≤760px: the bottom strip is DELETED; nav becomes an overlay drawer off an ink-filled hamburger (primary-action register, 36×30, white 2px lines) top-left in the topbar. 761–1000px icon rail unchanged.
-- The drawer is the Sidebar component VERBATIM — CSS repositions it, no second nav implementation. Full parity: brand, conference switcher, group labels, all sidebar rows at 40px touch height, footer.
-- Mobile topbar = hamburger + flexing search + avatar, nothing else. Theme select moves into the drawer footer at phone width.
-- Dismissal: scrim tap, ✕, Escape, any navigation. aria-modal dialog semantics; focus → ✕ on open, → hamburger on close; page scroll locks; 160ms ease-out, none under prefers-reduced-motion.
-- Drawer scrollbar THEMED via tokens (scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent + ::-webkit-scrollbar pair) so dark registers inherit. Never OS-default chrome inside themed chrome.
+Implement the binding `prototypes/mobile-nav/index.html` fold and the complete M-01..M-35 390px QA register in one reviewable branch and one PR. At phone width (<=760px), the shared Sidebar becomes an overlay drawer behind the hamburger; the bottom strip is removed; the mobile topbar exposes conference identity, QuickSearch, and account access without page overflow. The 761–1000px icon rail remains unchanged.
 
-## Defect register (mobile QA, 390px viewport — full detail in ticket comment M-01..M-22)
-Root-cause fixes, in commit order for reviewability:
-1. M-01 BLOCKER, fix first: .global-search { width:100% } at ≤760 makes header.topbar 549px wide in a 373px viewport → 176px page-level h-scroll on EVERY admin screen, theme+account off-viewport. Fix: flex:1; min-width:0; theme select to drawer foot. (/reviewer has no topbar and scrolls 373/373 — proof.)
-2. Drawer fold itself (see design above). The ≤1000px hides of .event-context-row/.nav-label/.sidebar-foot must band to (max-width:1000px) and (min-width:761px), WRITTEN PREFIX-FIRST so MRQ-203 contract tests' indexOf("@media (max-width: 1000px)") still matches. DeliveryHealthShell mounts Sidebar+Topbar too — wire it identically. .page bottom padding returns to normal (no strip to clear).
-3. M-04/M-13/M-14 grid blowout family (BLOCKERS on /dashboard + /delivery-health, major /evaluation): outer grid tracks with auto min-content minimums compute literal 734px/635px columns in 341px containers. minmax(0,1fr) on outer tracks + single-column phone breakpoints on inner grids (344px 344px, 366px 366px, 86px 594px).
-4. Touch targets app-wide (M-02/03/09/14/15/16/19 + M-11/M-17 controls): 12px checkboxes, 17-20px inputs/selects, 22-26px chips/tabs/buttons, 15px name-buttons. One breakpoint-scoped pass on shared control geometry: ≥24×24 visual, ≥40px hit at ≤760 (WCAG 2.2 AA floor is 24; Apple floor 44).
-5. Tables at phone width (M-07 roster, M-10 onboarding matrix, M-11 comms, M-15 files, M-16 people): the field the screen exists for (STATUS etc.) must be visible without sideways scroll — column-priority or card-collapse. /tasks and /reviewer are the clean references.
-6. M-08 + M-15/M-16 pagination: roster/onboarding render all ~508 rows (34,900px docs); /submissions' 50-at-a-time pattern already exists — apply it. R7.
-7. Polish where cheap: M-05/M-18 scroll affordances, M-10 chip overflow, M-11 message-status 9px overflow, M-17 name-button above move-select spacing, M-21 public /agenda target sizes. M-06 board stays a kanban scroller (its nested-axis pain dies with M-01); single-column board mode explicitly OUT of scope.
+## Scope and approach
 
-## Acceptance
-- At 390px: document.scrollWidth == viewport width on EVERY admin route (the M-20 /reviewer standard).
-- Drawer full parity + all dismissal paths + focus discipline as prototyped; strip gone.
-- /dashboard and /delivery-health fully readable at rest — "Plan next wave", ACT NOW banner + "Open the list" on-screen.
-- Roster STATUS / files STATUS visible without horizontal scroll; roster+onboarding paginate.
-- Interactive controls meet the target floor at ≤760.
-- MRQ-203 contract tests updated only where the ≤760 contract changed; suite within budget; pr-gate green.
-- in_validation: drive the real site at 390px (browser pane) across all admin routes + drawer flows; attach evidence.
+1. Topbar/M-01 first: make the shared topbar fit the viewport (`flex: 1; min-width: 0` search), add the mobile hamburger and conference-name door, collapse search to the QuickSearch icon, keep the avatar reachable with a 40px hit area, and preserve desktop/reviewer/portal shell behavior.
+2. Drawer fold: reuse Sidebar markup in AppShell and DeliveryHealthShell, add scrim/close/navigate/Escape dismissal, dialog semantics, focus return, page-scroll lock, 160ms reduced-motion-safe transitions, themed drawer scrollbars, switcher/footer parity, and retire strip geometry plus the 88px bottom reserve together. Keep the ≤1000px media rule prefix-first and banded to `min-width: 761px`.
+3. Grid family: constrain outer tracks with `minmax(0, 1fr)` and collapse fixed-minimum inner grids at phone width for dashboard, delivery health, evaluation, and submission record (M-04/M-13/M-14/M-23).
+4. Shared touch geometry: apply the <=760px target floor to controls, checkboxes, selects, chips, tabs, buttons, name controls, reorder actions, and public agenda controls without making labels or toggles jump.
+5. Table families: make the purpose-bearing status/action fields readable at phone width for roster, onboarding, communications, files, and People/Outreach; use the existing narrow-screen card/priority patterns and keep intentional kanban/matrix inner scrolling discoverable.
+6. Pagination: paginate roster and onboarding (and any affected large list where the existing server-side pattern applies), preserving server-side search/filter/sort and stable controls.
+7. Polish/edge sweep: portal visually-hidden file input and task title treatment, speaker record drawer overflow, account menu, fixed-width columns toggle/counter, scroll affordances, message status, form action layout, no-jump reservation, and mobile conference identity/a11y cleanup. Keep the strip and `.page` bottom padding change atomic.
+
+## Verification plan
+
+- Baseline before implementation: `npm test` after `npm ci`: 203 files / 1,434 tests passed; status `pass-over-budget`, 60.824s / 45s objective, with existing missing-secret warnings.
+- Add or update only the MRQ-203 contract assertions whose <=760 contract changes; keep tests focused and fast. Run affected unit tests after each logical commit, then `npm test` and `npm run pr-gate` under the shared gate lock before opening the PR.
+- Browser validation is explicitly approved by the ticket: use c11 embedded browser surface `surface:413` in workspace `workspace:23`, an isolated pane exactly 390px wide. Start `npx vite dev`, sign in through the demo login, walk every admin route, and measure `document.scrollWidth === document.documentElement.clientWidth` on each route. Drive prototype-parity drawer flows: hamburger/conference door, focus to close, scrim, close button, Escape, navigation dismissal, focus return, switcher, footer theme, scrollbar/scroll lock, and account menu. Verify dashboard and delivery-health at rest, roster/files status visibility, and roster/onboarding pagination. Record observed route-by-route measurements and interactions in a Lattice validation comment.
+- Keep inference separate from observed browser/runtime evidence in the handoff.
+
+## Artifacts and handoff
+
+- Logical commits follow the numbered scope above and map M-numbers in the PR body.
+- Branch `mobile-nav-drawer` is pushed to `github` and the PR is opened against `main`; do not merge.
+- Transition MRQ-215 through `in_validation` only after recorded browser evidence, then to `pr_open` with the PR URL and gate result. Send the same completion summary to workspace `workspace:10`, surface `surface:401`.
+
+## Non-goals
+
+- Do not add a second navigation implementation or change the 761–1000px icon rail.
+- Do not turn the program board into single-column mode; its intentional kanban scroller remains.
+- Do not change reviewer/portal shells beyond the specific M-24/M-25 portal and M-26 record-drawer phone fixes.
+- Do not merge or deploy.

@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useCallback, useState } from "preact/hooks";
+import { useCallback, useRef, useState } from "preact/hooks";
 
 import { ErrorBoundary } from "../shell/ErrorSurface";
 import { ToastHost } from "../shell/OverlayHosts";
@@ -25,12 +25,19 @@ export function DeliveryHealthShell({ eventName }: { eventName: string }): JSX.E
   // `AppShell` would never reach.
   const { eventId } = useEventContext();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const navigationButtonRef = useRef<HTMLButtonElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const identity = useIdentity();
   const [resetting, setResetting] = useState(false);
   const [toast, setToast] = useState("");
 
   const navigate = useCallback((target: string) => { window.location.assign(target); }, []);
+  const openNavigation = useCallback(() => {
+    navigationButtonRef.current?.focus();
+    setDrawerOpen(true);
+  }, []);
+  const closeNavigation = useCallback(() => setDrawerOpen(false), []);
   const resetDemo = useCallback(async () => {
     if (resetting) return;
     if (!window.confirm("Reset the demo conference? This removes demo edits, submissions, uploads, and queued work.")) return;
@@ -54,6 +61,8 @@ export function DeliveryHealthShell({ eventName }: { eventName: string }): JSX.E
         navigate={navigate}
         resetting={resetting}
         onReset={() => void resetDemo()}
+        drawerOpen={drawerOpen}
+        onClose={closeNavigation}
       />
       <main class="main">
         <Topbar
@@ -64,6 +73,9 @@ export function DeliveryHealthShell({ eventName }: { eventName: string }): JSX.E
           openSearch={() => setSearchOpen(true)}
           toggleUser={() => setUserMenuOpen((open) => !open)}
           closeUser={() => setUserMenuOpen(false)}
+          drawerOpen={drawerOpen}
+          onOpenNavigation={openNavigation}
+          navigationButtonRef={navigationButtonRef}
         />
         <div class="page">
           {/* The shell's own boundary, as the admin shell keeps: a screen that
