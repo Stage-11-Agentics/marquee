@@ -21,7 +21,7 @@ export const GLOBAL_OPTIONS = [
 ];
 
 /** The copy sets `POST /events` accepts, mirroring `src/lib/events/copy-manifest.ts`. */
-export const COPY_SETS = ["formats", "tracks", "forms", "task_templates", "email_templates", "evaluation_plan", "venues"];
+export const COPY_SETS = ["formats", "tracks", "forms", "routing", "task_templates", "email_templates", "evaluation_plan", "venues"];
 
 const SET_OPTION = {
   name: "--set <key=value>",

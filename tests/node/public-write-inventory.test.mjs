@@ -84,7 +84,7 @@ test("CONTRACT · public answer projection and direct answer writers have an exp
       { file: "src/lib/sessionize-import.ts", count: 2 },
       { file: "src/routes/portal.routes.ts", count: 1 },
       { file: "src/routes/public-form.shared.ts", count: 1 },
-      { file: "src/routes/submission-record.routes.ts", count: 2 },
+      { file: "src/routes/submission-record.routes.ts", count: 1 },
     ],
     "direct submission-answer writer inventory changed; re-audit evaluator coverage and trusted-import exceptions. Observed: "
       + JSON.stringify(directAnswerWriters),
@@ -95,6 +95,6 @@ test("CONTRACT · public answer projection and direct answer writers have an exp
   assert.ok(directAnswerWriters.some((writer) => writer.file === "src/routes/public-form.shared.ts"));
   assert.equal(
     directAnswerWriters.filter((writer) => writer.file === "src/routes/submission-record.routes.ts").length,
-    2,
+    1,
   );
 });
