@@ -4,7 +4,7 @@
 **Actor:** `agent:delegator-mrq-237`  
 **Worktree:** `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/mrq-237-publication-truth`  
 **Branch:** `mrq-237-publication-truth`  
-**Plan status:** `in_planning`; Cycle 2 plan amendment is authoritative after plan-review FAIL artifact `art_01M052WPMCQCNN4S1WQV65VG3W`; implementation remains held.
+**Plan status:** `in_planning`; Cycle 3 plan amendment is authoritative after plan-review FAIL artifact `art_01M054BTBP96CHT4TPAANVZQPN`; implementation remains held.
 **Base/head at planning start:** `github/main` = `52bb485f105e0392fe475332b87cbb48dbcee832`; local `HEAD` matches exactly.  
 **Terminal boundary:** stop at `pr_open`; Merge Captain owns merge. No deploy or publication.
 
@@ -138,7 +138,8 @@ Request one non-author review from the Adoption Orchestrator, address any review
 ## Branch and evidence ledger
 
 - Cycle 1 plan commit: `7bf8fa266e1bf330e83b2ab1254c2f9bcf5c54b7` (plan-only, pushed).
-- Cycle 2 amendment commit: pending; must remain plan-only and be pushed before any code.
+- Cycle 2 amendment commit: `a76264aacc0cbb8d96682b49c39b91da86477012` (plan-only, pushed).
+- Cycle 3 amendment commit: pending; must remain plan-only and be pushed before any code.
 - Implementation commits: one logical concern per commit, pushed immediately.
 - Migration: currently none; recheck at implementation and after any rebase.
 - Browser/live approval: not requested; validation N/A and no live side effects.
@@ -209,25 +210,46 @@ PUBLIC_BOUNDARY_CLOSED -> "the public agenda is not open yet"
 PRIVACY_EXCLUDED       -> "withheld from the public agenda by privacy rules"
 ```
 
-For event `e`, define these named fact sets over submission IDs. `Session` means both the submission and its matching agenda item have `kind = 'session'`; `Item` is the same-event, same-submission, session-kind agenda join; `ValidSlot` means a non-null, valid start, positive duration, room, and room/building belonging to `e`; `PublicBoundary` and `PrivacyAllowed` are the existing event/public-projection facts, not UI state:
+For event `e`, define these named fact sets over submission IDs. The submission-side Session fact is deliberately independent of an optional agenda item: `AgendaItem` is a separate relation, never part of the definition of a Session. `ValidSlot` means exactly one matching item with a non-null valid start, positive duration, room, and room/building belonging to `e`; `PublicBoundary` and `PrivacyAllowed` are the existing event/public-projection facts, not UI state:
 
 ```text
-E_e       = { s | s.event_id = e }
-K_e       = E_e ∩ Session
-A_e       = { s ∈ K_e | s.status = accepted }
-P_e       = { s ∈ K_e | Item(s) ∧ Item(s).is_published = 1 }
-V_e       = { s ∈ K_e | Item(s) ∧ ValidSlot(s) }
+S_e = { s | s.event_id = e ∧ s.kind = 'session' }
+I_e(s) = { a | a.event_id = e ∧ a.submission_id = s.id ∧ a.kind = 'session' }
+n_e(s) = |I_e(s)|
+NoItem_e = { s ∈ S_e | n_e(s) = 0 }
+OneItem_e = { s ∈ S_e | n_e(s) = 1 }
+MultiItem_e = { s ∈ S_e | n_e(s) > 1 }
+A_e = { s ∈ S_e | s.status = accepted }
+Published_e = { s ∈ OneItem_e | the item in I_e(s) has is_published = 1 }
+Unpublished_e = { s ∈ OneItem_e | the item in I_e(s) has is_published = 0 }
 
-AcceptedUnscheduled_e   = A_e \ (V_e ∪ P_e)
-ScheduledUnpublished_e  = { s ∈ K_e | ValidSlot(s) ∧ s ∉ P_e }
-NotYetPublic_e          = ScheduledUnpublished_e ∩ A_e
-PublishedWithAnomalies_e = P_e                         # status-blind
-PublicLive_e            = P_e ∩ A_e ∩ V_e ∩ PublicBoundary_e ∩ PrivacyAllowed_e
-BoardAnomaly_e          = P_e ∩ { s | s.status ∈ {rejected, withdrawn} }
-ReadyToPublish_e        = NotYetPublic_e ∩ PublicBoundary_e
+AcceptedUnscheduled_e = { s ∈ NoItem_e | s.status = accepted }
+UnscheduledWithheld_e = { s ∈ NoItem_e | s.status ≠ accepted }
+ExistingItemMalformed_e = MultiItem_e ∪
+  { s ∈ Unpublished_e | ¬ValidSlot(s) }
+ExistingItemWithheld_e = { s ∈ Unpublished_e | ValidSlot(s) ∧
+  (s.status ≠ accepted ∨ ¬PublicBoundary_e) }
+ReadyToPublish_e = { s ∈ Unpublished_e | ValidSlot(s) ∧
+  s.status = accepted ∧ PublicBoundary_e }
+
+ScheduledUnpublishedDiagnostics_e =
+  { (s, 'withheld') | s ∈ ExistingItemWithheld_e } ⊔
+  { (s, 'ready') | s ∈ ReadyToPublish_e }
+
+BoardAnomaly_e = { s ∈ Published_e |
+  s.status ∈ {rejected, withdrawn} }
+PublicLive_e = { s ∈ Published_e |
+  s.status = accepted ∧ ValidSlot(s) ∧ PublicBoundary_e ∧ PrivacyAllowed_e }
+PublishedNotPublic_e = Published_e \ (BoardAnomaly_e ∪ PublicLive_e)
+PublishedIncludingAnomalies_e =
+  BoardAnomaly_e ⊔ PublicLive_e ⊔ PublishedNotPublic_e
+
+S_e = AcceptedUnscheduled_e ⊔ UnscheduledWithheld_e ⊔
+  ExistingItemMalformed_e ⊔ ExistingItemWithheld_e ⊔ ReadyToPublish_e ⊔
+  BoardAnomaly_e ⊔ PublicLive_e ⊔ PublishedNotPublic_e
 ```
 
-The `Unscheduled` gauge reads `AcceptedUnscheduled_e`; the signed `Not yet public` gauge reads `NotYetPublic_e`; the signed `Live on site` gauge reads `PublicLive_e` and carries the warning/sub-line derived from `BoardAnomaly_e`. `ScheduledUnpublished_e` remains a distinct diagnostic set so a scheduled but reversed row is not silently counted as publishable. `PublishedWithAnomalies_e` is the source for organizer/board retention and includes every published agenda row regardless of current status; `PublicLive_e` is the attendee-facing projection and therefore excludes the anomaly and privacy-rejected rows. Every set is derived from the same fact object and helper, with no consumer-specific WHERE predicate.
+The displayed `Unscheduled` gauge reads exactly `AcceptedUnscheduled_e`; an accepted Session with no matching agenda item can never disappear into a join omission. The signed `Not yet public` gauge reads exactly the `ready` arm of `ScheduledUnpublishedDiagnostics_e`, which is `ReadyToPublish_e`; the `withheld` arm is diagnostic only and is never counted as ready. The signed `Live on site` gauge reads `PublicLive_e` and carries the warning/sub-line from the disjoint `BoardAnomaly_e`. `PublishedIncludingAnomalies_e` is an aggregate label whose three tagged children are the non-overlapping published states; it is never counted alongside its children. `ExistingItemMalformed_e` is separate from `ExistingItemWithheld_e`; malformed scheduled rows never enter either publishable or scheduled-unpublished-ready counts. The displayed state partition is exhaustive and pairwise disjoint, and every projection uses this same fact object rather than a consumer-specific WHERE predicate.
 
 ### 2. Selected-ID explainer and all-or-nothing publication
 
@@ -241,25 +263,37 @@ The shared helper must expose `explainPublicationSelection(event_id, selected_id
   rows: [{
     submission_id: string,
     title: string | null,
+    classification: "UNKNOWN_ID" | "FOREIGN_EVENT" | "WRONG_KIND" |
+      "STALE_SELECTION" | "ACCEPTED_UNSCHEDULED" | "UNSCHEDULED_WITHHELD" |
+      "EXISTING_ITEM_MALFORMED" | "EXISTING_ITEM_WITHHELD" |
+      "READY_TO_PUBLISH" | "BOARD_ANOMALY" | "PUBLIC_LIVE" | "PUBLISHED_NOT_PUBLIC",
+    observed_state: string | null,
     primary_reason_code: PublicationReasonCode,
     reason_codes: PublicationReasonCode[],
     reason_details: object,
     observed_revision: { submission_updated_at, agenda_updated_at } | null,
     expected_revision: { submission_updated_at, agenda_updated_at } | null
   }],
-  counts: { ready, withheld, already_published, malformed, foreign, stale },
+  counts: {
+    unknown_id, foreign_event, wrong_kind, stale_selection,
+    accepted_unscheduled, unscheduled_withheld, existing_item_malformed,
+    existing_item_withheld, ready_to_publish, board_anomaly,
+    public_live, published_not_public
+  },
   all_or_nothing: true
 }
 ```
 
-The review response carries each row's revisions; the batch request echoes them in `expected_revisions`. A changed revision, changed status/slot, or a failed write CAS emits `STALE_SELECTION` for that ID with the observed revision. The explainer must explicitly emit, rather than collapse into a generic 409, the following selected-ID cases:
+The review response carries each row's revisions; the batch request echoes them in `expected_revisions`. A changed revision, changed status/slot, or a failed write CAS emits `STALE_SELECTION` for that ID with the observed revision and one `observed_state` from the partition below. The explainer must explicitly emit, rather than collapse into a generic 409, the following selected-ID cases:
 
-- already-published: `P_e` is true, including a stale submission mirror;
-- wrong-kind: either side of the session join is not a Session;
+- already-published: `Published_e` is true, including a stale submission mirror;
+- wrong-kind: the submission exists in the requested lookup but `submission.kind ≠ 'session'`;
 - foreign-event: the row exists but its event differs from the requested event;
 - stale: the expected revision no longer equals the authoritative revision;
-- malformed: the row has an invalid/missing slot fact, with `reason_details` naming each observed defect;
+- malformed: `ExistingItemMalformed_e`, with `reason_details` naming missing/invalid time, duration, room, foreign room, or multiple matching items;
 - missing/foreign rows: `UNKNOWN_ID`, `MISSING_AGENDA_ITEM`, or `FOREIGN_ROOM` as appropriate.
+
+Each selected ID receives exactly one top-level `classification`: `UNKNOWN_ID`, `FOREIGN_EVENT`, `WRONG_KIND`, `STALE_SELECTION`, or exactly one of the eight state-bucket names in the set partition (`ACCEPTED_UNSCHEDULED`, `UNSCHEDULED_WITHHELD`, `EXISTING_ITEM_MALFORMED`, `EXISTING_ITEM_WITHHELD`, `READY_TO_PUBLISH`, `BOARD_ANOMALY`, `PUBLIC_LIVE`, `PUBLISHED_NOT_PUBLIC`). A stale result carries the observed bucket separately and does not also claim a second top-level classification. `reason_codes` may carry the true detail facts (for example `ALREADY_PUBLISHED` plus `POST_PUBLISH_REVERSED`), but the bucket and its primary explanation are exhaustive and non-overlapping. No selected ID may be silently absent from `rows`.
 
 The agenda batch endpoint must return the full explainer rows for every selected ID that is not `READY_TO_PUBLISH`. Any such row causes one structured conflict and zero writes, zero cache purge, and zero audit rows. The selected-ID set is never narrowed to the publishable subset. Duplicate IDs are a request error for the agenda publish endpoint, not a silent skip. This preserves all-or-nothing semantics while making every withheld reason inspectable.
 
@@ -285,10 +319,65 @@ No-op responses must carry a non-null reason code and notice. Pre-admission sche
 | `POST /api/v1/events/{eventId}/agenda/publish`; any selected ID is already published, foreign, wrong-kind, stale, or malformed | `409`; existing conflict envelope plus `operation` and complete explainer `rows`; explicit duplicate IDs are `422` with no operation | `no_op`; all-or-nothing notice names the first/aggregate reason, e.g. `all N scheduled sessions are already live` | No purge on conflict | No rows | Fresh ULID for the admitted conflict; no ID for 422 | Never silently skipped | No request idempotency key; repeat re-explains current facts. `submission_ids` is required and non-empty; empty never means all. |
 | `POST /api/v1/events/{eventId}/submissions/bulk`; filter resolves to zero or every unique ID is already in the requested decision state | Filter-empty: `404` standard error `empty_selection`; all-already-state: `200` existing `bulkResult` plus `operation` | Empty is refused with `that selection resolves to nobody in this conference`; all-already-state is `no_op`, `ALREADY_IN_STATE`, `nothing changed — every selected record is already {state}` | No purge | No rows for no-op | No ID for 404; fresh ULID for admitted 200 | First-seen ID de-duplication is reported in `duplicate_skipped`; no duplicate is applied twice | No implicit all. `selector.ids: []` is `400` and filter-zero is `404`; no idempotency key, so repeats re-evaluate current state and return a fresh operation ID. |
 | `POST /api/v1/events/{eventId}/submissions/not-notified/notify`; no eligible decision remains, or all candidates lack valid addresses | `409` admitted no-candidate response, or `202` existing summary when candidates are all address-excluded; both include `operation` | `no_op`, `NO_DECISIONS_REMAIN` / `NO_VALID_RECIPIENT`, with an explicit notice; never `0` as success-only prose | No cache | No rows | Fresh ULID for each admitted no-op | Server-side ID set is de-duplicated; report `duplicate_skipped: 0` because callers do not supply a selector | No request idempotency key; `cursor` is pagination only. Empty server result means no matching decisions, never all decisions. |
-| `POST /api/v1/events/{eventId}/comms/send`; explicit empty selector, filter-zero, or all selected rows duplicate/skipped | Explicit `ids: []`: `400`; valid selector resolving nobody: `404` standard error `empty_selection`; all duplicate/skipped: `202` existing comms envelope plus `operation` | Duplicate-only is `no_op`, `DUPLICATE_SKIPPED`, `all selected messages were already queued`; `outbox_ids: []`, exact `duplicate`/`skipped` counts retained | No purge | No rows when nothing inserted; true inserts retain existing per-recipient audit | No ID for 400/404; fresh or replayed ULID for admitted 202 | `duplicate` and `duplicate_skipped` equal the registry-deduped count; skipped recipients remain named | Explicit empty never means all. With `Idempotency-Key`, same compose+selector replays the identical envelope and IDs; key reuse with a different payload is `409`. Without a key, each ad-hoc request is a new nudge; the registry still reports duplicates rather than silently claiming a send. |
+| `POST /api/v1/events/{eventId}/comms/send`; actual conference selector dimensions and all duplicate/skipped cases | Exact statuses, envelopes, operation IDs, notices, queue/audit effects, and duplicate accounting are bound in §3a below; no generic `ids` selector is valid | See §3a | See §3a | See §3a | See §3a | See §3a | Omitted selector, `{}`, every present empty array, and implicit-all behavior are all explicitly refused in §3a. |
+| `POST /api/v1/org/comms/send`; actual org audience dimensions and all duplicate/skipped cases | Exact statuses, envelopes, operation IDs, notices, queue/audit effects, and duplicate accounting are bound in §3a below | See §3a | See §3a | See §3a | See §3a | See §3a | Omitted audience, `{}`, and implicit-all behavior are all explicitly refused in §3a. |
 | `POST /api/v1/events/{eventId}/submissions/{submissionId}/decision/resend`; no current accepted/rejected decision or no valid speaker address | No decision: `409` existing conflict error; invalid address: `422` existing validation error; no `operation`/`operation_id` | Refusal names the exact reason; never a successful zero-count envelope | No cache | No rows | None because the request is rejected before admission | Always `0` | This route is deliberately non-idempotent: valid resend is `202` with a fresh operation ID and fresh outbox ID every time; no duplicate skip and no `Idempotency-Key` replay. An empty decision set is a refusal, never a broadcast. |
 
 For every row above, a true effect uses the existing write/audit/cache/queue semantics and an `operation.effect = "changed"`; only the no-op branches are prohibited from creating a hidden write or cache churn. Tests must assert status, complete envelope, operation ID presence/absence, effect, notice, cache calls, audit count, outbox count, duplicate count, and repeat-request behavior—not just a numeric `0`.
+
+### 3a. Actual conference and organization communication selector contract
+
+The conference send route uses the real `reminderSelectorSchema`; it does not use a generic `ids` field and it must remove the current default `{}`. The accepted selector dimensions are:
+
+```text
+selector = {
+  status?: string,
+  track_id?: string,
+  format_id?: string,
+  task_state?: "open" | "done",
+  role?: "speaker" | "co_speaker" | "moderator" | "chairperson" | "submitter" | "sponsor_contact",
+  submission_ids?: string[1..500],
+  person_ids?: string[1..500],
+  recipient_pairs?: { person_id: string, submission_id: string | null }[1..500]
+}
+```
+
+At least one dimension must be present and valid. `submission_ids`, `person_ids`, and `recipient_pairs` are the exact-set dimensions; the other five are the server-side filter dimensions. The parser rejects an omitted `selector`, `selector: {}`, every present empty array (including an empty array alongside another dimension), and empty dimension values. None of these requests gets an `operation_id`, queues mail, writes audit, or resolves to all conference recipients. A selector containing only a filter dimension is explicit and may resolve to a non-empty conference audience; filter-zero is not an implicit all.
+
+The organization send route uses the real `audienceSchema` and has no `selector` wrapper:
+
+```text
+audience = {
+  person_ids?: string[1..500],
+  list_id?: string
+}
+```
+
+Exactly one dimension is required: `person_ids` or `list_id`. Omitted audience fields, `{}`, `person_ids: []`, and an empty `list_id` are `400` validation errors with no operation, queue, audit, or implicit-all fallback. Organization filters are not silently invented; `list_id` is the only saved-filter dimension on this endpoint.
+
+The two routes use the following exact outcome rules. Every response uses the existing route payload plus the binding `operation` object and adds `duplicate_skipped` for input de-duplication; `duplicate` remains the count of resolved recipient rows rejected by the outbox idempotency registry. `selected` counts unique resolved recipients, `queued` counts newly inserted outbox rows, and `outbox_ids` contains only newly inserted rows.
+
+| Selector case | Conference `/events/{eventId}/comms/send` | Organization `/org/comms/send` | Operation/notice/side effects |
+|---|---|---|---|
+| Omitted selector/audience or `{}` | `400` error code `selector_required` / `selector_dimension_required` | `400` error `audience_dimension_required` | No operation ID; queue `0`; audit `0`; no duplicate count; never implicit all. |
+| Any present empty array | `400` `empty_selector_dimension` for empty `submission_ids`, `person_ids`, or `recipient_pairs` | `400` schema error for empty `person_ids` | No operation ID; queue `0`; audit `0`; no implicit all. |
+| Duplicate input values | Dedupe `submission_ids` and `person_ids` by first appearance; dedupe `recipient_pairs` by `(person_id, submission_id)` including `null` | Dedupe `person_ids` by first appearance | `duplicate_skipped` reports only input duplicates; `selected` uses the unique resolved audience; no duplicate input is queued twice or audited twice. |
+| Unknown/foreign IDs or pairs | Unknown submission/person/pair is a skipped row with its selector dimension and reason; if no valid recipient remains, `404` `empty_selection` | Unknown or out-of-org person is a skipped row; if no valid person remains, `404` `empty_selection` | `404` has no operation ID, queue, or audit. Mixed known/unknown sends only known rows and names every skipped row; no ID is treated as an implicit filter. |
+| Filter-zero | A valid `status`, `track_id`, `format_id`, `task_state`, or `role` filter resolving zero is `404` `filter_zero` | A `list_id` resolving to no in-org people is `404` `filter_zero` | No operation ID; queue `0`; audit `0`; notice states that the explicit selection resolves to nobody. |
+| Duplicate-only after resolution | `202` existing `sendResponse` plus `operation = { effect: no_op, reason_code: DUPLICATE_SKIPPED, notice: "all selected messages were already queued", duplicate_skipped, duplicate: selected, queued: 0, outbox_ids: [] }` | `202` existing org envelope plus the same operation semantics; `excluded_people` remains the do-not-contact list | Fresh operation ID on first admitted request; queue `0`; audit `0`; duplicate accounting is exact and not reported as a send. |
+| Non-empty mixed result | `202`; queue/audit only newly inserted rows; skipped rows and both duplicate counters are returned | `202`; queue only newly inserted rows; `excluded_people`, skipped people, and both duplicate counters are returned | `operation.effect = changed` when `queued > 0`; no-op only when `queued = 0`. |
+| Repeated request with the same `Idempotency-Key` and byte-identical compose/selector | `202` replay of the original envelope, operation ID, and outbox IDs | Same | Queue `0`; audit `0`; no new duplicate rows. A reused key with a different subject/body/template or canonical selector is `409` key-conflict with no operation/queue/audit. |
+| Repeated request without an `Idempotency-Key` | Each ad-hoc compose is a new nudge with a new operation ID; registry outcomes still populate `duplicate` where its business key says duplicate | Same | No claim of idempotency; duplicate-only remains a reasoned `202`, never silent success. |
+
+The canonical selector must be included in the idempotency fingerprint after first-seen de-duplication and stable sorting. `recipient_pairs` must never be expanded into independent person or submission filters: the pair relationship is the selected unit. For all send forms, omitted and `{}` are invalid, every present empty array is invalid, and no code path may interpret them as “all recipients.”
+
+## Plan-Review Cycle 2 Resolutions (AUTHORITATIVE)
+
+**Review artifact:** `art_01M054BTBP96CHT4TPAANVZQPN` at exact head `a76264aacc0cbb8d96682b49c39b91da86477012`.
+
+This Cycle 3 amendment resolves the remaining algebra and communication-selector blockers. The event-scoped submission partition above is now the only source for readiness, diagnostics, gauges, anomaly/public projections, and selected-ID explanations; the actual conference/org schemas and every empty/duplicate/idempotent send case are bound in §3a. No feature code, contract-file edit, stable US/AC number, browser proof, migration, gate, or live side effect is authorized.
+
+The cleared Cycle 2 decisions remain unchanged and binding: v1.17 six-gauge/seven-stage geometry and exact clickthroughs; public privacy exclusion with the explicit `SPEC-MRQ-237-PUBLIC-PRIVACY` marker; retained published-column anomalies and warning chips; `CONTRACT · MRQ-237 ...` trace names; browser/computer validation `N/A — approval not granted`; and no migration, with migration numbering rechecked at implementation/rebase. The Adoption Orchestrator still owns the post-MRQ-244 consolidation fold, and stable claims remain held until explicit `CONSOLIDATION RESUME`.
 
 ### 4. Post-resume contract fold owner and destination
 
@@ -311,5 +400,7 @@ The orchestrator records the fold owner, destination paths, next-mint decision, 
 - **Trace:** targeted test names keep the `CONTRACT · MRQ-237 ...` prefix; claims remain held for consolidation.
 - **Browser:** browser/computer-use validation remains `N/A — approval not granted`; no approval is inferred from the plan review.
 - **Migration:** no migration is planned or authorized. Recheck the current migration number at implementation and after rebase; if code proves one necessary, stop and recheck the slot rather than assuming a number.
+
+## Reset 2026-08-16 by agent:delegator-mrq-237
 
 ## Reset 2026-08-16 by agent:delegator-mrq-237
