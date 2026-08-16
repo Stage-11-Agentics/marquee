@@ -273,6 +273,13 @@ const EXPECTED_PLACEHOLDER_SITES = [
     classification: "NAMED_FINDING: the organizer DELETE supplies one event ID; remove-demo accepts an unbounded event set but deleteEventCascade chunks it to 32 IDs, so the widest three-way statement binds 96 values, below D1's 100-binding cap",
   },
   {
+    file: "src/lib/person-merge.ts",
+    owner: "insertRow",
+    binding: null,
+    expression: 'columns.map(() => "?")',
+    classification: "one placeholder per COLUMN of a single-row receipt restore; the row is a database snapshot bounded by the table schema, not a caller-sized list, so it cannot approach D1's binding cap",
+  },
+  {
     file: "src/lib/files/versions.ts",
     owner: "readAttachments",
     binding: "result",
@@ -292,6 +299,13 @@ const EXPECTED_PLACEHOLDER_SITES = [
     binding: null,
     expression: 'columns.map(() => "?")',
     classification: "one placeholder per COLUMN of a single-row INSERT; bounded by the table schema, not by any caller-supplied list, so it cannot approach D1's binding cap",
+  },
+  {
+    file: "src/lib/reset-demo/reseed-demo.ts",
+    owner: "deleteExactObjectKeys",
+    binding: "rows",
+    expression: 'chunk.map(() => "?")',
+    classification: "explicit 90-key object-reference reads stay below D1's 100-binding cap; the chunk is internal reset cleanup, not a user-sized write",
   },
   {
     file: "src/jobs/mirror/consumer.ts",
