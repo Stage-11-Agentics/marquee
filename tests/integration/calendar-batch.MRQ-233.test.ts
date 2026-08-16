@@ -1,4 +1,5 @@
 import { env, SELF } from "cloudflare:test";
+import type { D1Database } from "@cloudflare/workers-types";
 import type { Queue } from "@cloudflare/workers-types";
 import { beforeEach, expect, test } from "vitest";
 
@@ -147,6 +148,22 @@ async function getIcs(uid: string): Promise<{ body: string; response: Response }
   return { body: await response.text(), response };
 }
 
+function countedDatabase(): { db: D1Database; sql: string[] } {
+  const sql: string[] = [];
+  const db = new Proxy(env.DB, {
+    get(target, property, receiver) {
+      if (property === "prepare") {
+        return (query: string) => {
+          sql.push(query);
+          return target.prepare(query);
+        };
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  }) as D1Database;
+  return { db, sql };
+}
+
 beforeEach(async () => {
   await seedFixture();
 });
@@ -247,6 +264,14 @@ test("batch debt ignores non-slot snapshot changes, then a real agenda move crea
     `${SUBMISSION_ONE}.${SPEAKER_ID}@marquee.stage11.dev:1`,
   ]);
   expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM outbox WHERE event_id = ? AND template_key = 'calendar_batch_request'").bind(EVENT_ID).first<{ count: number }>())?.count).toBe(2);
+});
+
+test("batch projection reads all participations through one bounded agenda query", async () => {
+  const counted = countedDatabase();
+  const result = await sendCalendarBatch({ db: counted.db, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW });
+  expect(result.deliveries).toHaveLength(1);
+  expect(counted.sql.filter((query) => query.includes("FROM agenda_items agenda"))).toHaveLength(1);
+  expect(counted.sql.some((query) => query.includes("FROM calendar_invites WHERE submission_id = ? AND person_id = ?"))).toBe(false);
 });
 
 test("projection names invalid recipients before valid-email filtering and the batch fails closed when all debt is blocked", async () => {
