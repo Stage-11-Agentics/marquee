@@ -3,6 +3,7 @@ import type { Context } from "hono";
 
 import {
   BULK_FAILURE_REPORT_LIMIT,
+  BULK_ID_LIMIT,
   buildBulkResult,
   bulkResultSchema,
   bulkSelectorWireSchema,
@@ -95,6 +96,9 @@ const bulkDecideSubmissions = defineApiRoute(
         eventId,
         ...(selector.filter as z.infer<typeof submissionFilterSchema>),
       });
+      if (ids.length > BULK_ID_LIMIT) {
+        throw ApiError.unprocessable(`selector resolves to more than ${BULK_ID_LIMIT} submissions; narrow the selection`, "selector");
+      }
     }
     if (body.wave_id) {
       const wave = await context.env.DB
@@ -193,7 +197,7 @@ const notifyNotifiedSubmissions = defineApiRoute(
   async (context) => {
     const { eventId } = context.req.valid("param");
     const { cursor } = context.req.valid("query");
-    const ids = await selectSubmissionIds(context.env.DB, { eventId, status: "not_notified" });
+    const ids = await selectSubmissionIds(context.env.DB, { eventId, status: "not_notified" }, { limit: null });
     const result = await notifyExistingDecisions({
       db: context.env.DB,
       queue: context.env.MAIL_QUEUE,

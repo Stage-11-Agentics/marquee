@@ -23,9 +23,11 @@ import { canTransitionSubmissionStatus } from "../../lib/submission-transitions"
 import { enqueueMailMessage } from "../mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../mail/idempotency";
 import { enqueueTrigger } from "../mail/triggers";
+import { isValidEmail } from "../../lib/email-validity";
+import type { DecisionPlanAction } from "./decision-plan";
 
-export type DecisionAction = "accept" | "reject" | "waitlist";
-export type BulkAction = DecisionAction | "withdraw";
+export type DecisionAction = Exclude<DecisionPlanAction, "withdraw">;
+export type BulkAction = DecisionPlanAction;
 
 export interface DecisionActor {
   kind: "user" | "api_token";
@@ -183,10 +185,6 @@ const DECISION_TARGETS = {
   waitlist: { decision: "maybe", status: "waitlisted" },
   reject: { decision: "deny", status: "rejected" },
 } as const;
-
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
 
 export function normalizeDecisionFeedback(value: string | null | undefined): string | null {
   const normalized = value?.replace(/\r\n?/g, "\n").trim() ?? "";

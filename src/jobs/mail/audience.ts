@@ -139,7 +139,7 @@ export async function selectCommsAudienceSubmissionIds(
   // MRQ-8 audience status filters are stored decision-status selectors. They
   // intentionally include accepted speakers who still have onboarding work;
   // the pipeline list uses the derived, mutually exclusive stage vocabulary.
-  return selectSubmissionIds(db, filters, { statusSemantics: "stored" });
+  return selectSubmissionIds(db, filters, { statusSemantics: "stored", limit: null });
 }
 
 /**

@@ -9,6 +9,8 @@ import type {
   SubmissionSpeakerListItem,
   SubmissionTrackListItem,
 } from "../api/submissions";
+import { BULK_ID_LIMIT } from "../api/bulk";
+import { emailValiditySql } from "../lib/email-validity";
 import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-conditions";
 import { formatEventDateTime, localParts } from "../lib/event-time";
 import { DECISION_RECIPIENT_ROLES, participantListSql, primaryParticipantSql } from "../lib/participants";
@@ -377,7 +379,7 @@ const NOTIFICATION_STATE_SQL = `CASE
   WHEN notification_outbox.status = 'sent' THEN 'sent'
   WHEN notification_outbox.id IS NOT NULL THEN 'not_delivered'
   WHEN s.last_write_source = 'airtable' THEN 'changed_in_airtable'
-  WHEN trim(${NOTIFICATION_ADDRESS_SQL}) <> '' AND ${NOTIFICATION_ADDRESS_SQL} LIKE '%@%.%' THEN 'not_delivered'
+  WHEN ${emailValiditySql(NOTIFICATION_ADDRESS_SQL)} THEN 'not_delivered'
   ELSE 'no_valid_address'
 END`;
 
@@ -917,7 +919,7 @@ function countValue(value: unknown): number {
 export async function selectSubmissionIds(
   database: D1Database,
   filters: SubmissionFilter & { eventId: string },
-  options: { statusSemantics?: SubmissionStatusSemantics } = {},
+  options: { statusSemantics?: SubmissionStatusSemantics; limit?: number | null } = {},
 ): Promise<string[]> {
   const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
   const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
@@ -931,9 +933,11 @@ export async function selectSubmissionIds(
   );
   const includeFormMetadata = await hasColumns(database, "forms", ["id", "event_id", "status", "opens_at", "closes_at"]);
   const source = filters.status === "not_notified" ? notificationFrom(includeFormMetadata) : submissionFrom(includeFormMetadata);
-  const result = await database
-    .prepare(`SELECT DISTINCT s.id ${source} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC`)
-    .bind(...bindings)
-    .all<{ id: string }>();
+  const limit = options.limit === undefined ? BULK_ID_LIMIT + 1 : options.limit;
+  const limitClause = limit === null ? "" : " LIMIT ?";
+  const statement = database.prepare(`SELECT DISTINCT s.id ${source} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC${limitClause}`);
+  const result = limit === null
+    ? await statement.bind(...bindings).all<{ id: string }>()
+    : await statement.bind(...bindings, limit).all<{ id: string }>();
   return result.results.map((row) => row.id);
 }
