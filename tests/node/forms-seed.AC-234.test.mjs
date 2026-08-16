@@ -12,6 +12,7 @@ const fields = rows
 test("AC-234 · the seeded CFP exposes the complete participant, file, track, and conditional baseline", () => {
   assert.deepEqual(fields.map((field) => field.key), [
     "title", "abstract", "audience_outcome", "format", "tracks",
+    "audience_level",
     "speaker_name", "speaker_email", "speaker_role", "speaker_company",
     "biography", "headshot", "co_speaker_name", "co_speaker_email",
     "supporting_file", "vendor_content", "vendor_product",
@@ -25,6 +26,8 @@ test("AC-234 · the seeded CFP exposes the complete participant, file, track, an
     source: "tracks",
     minItems: 1,
   });
+  const level = fields.find((field) => field.key === "audience_level");
+  assert.deepEqual(JSON.parse(level.config), { source: "levels" });
   assert.equal(fields.find((field) => field.key === "headshot").required, 1);
   assert.equal(fields.find((field) => field.key === "co_speaker_name").required, 0);
   assert.equal(fields.find((field) => field.key === "supporting_file").required, 0);

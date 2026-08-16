@@ -4,6 +4,7 @@ import type { FormRow, PersonRow, SubmissionRow } from "../db/schema";
 import {
   projectApplicableAnswers,
   type FormLengthRule,
+  parseFormCondition,
   type FormAnswerValue,
   type FormValidationIssue,
   type ProjectedFormAnswers,
@@ -11,6 +12,8 @@ import {
 import { sha256Hex } from "../lib/auth/random-token";
 import { readMagicLink } from "../lib/auth/magic-links";
 import { submitterEditability } from "../lib/submission-editing";
+import { boundSourceOf } from "../lib/bound-options";
+import { taxonomyNameKey } from "../lib/taxonomy";
 import {
   DEFAULT_SUBMISSION_LIMIT,
   effectiveSubmitterLimit,
@@ -328,7 +331,7 @@ async function readAnswers(
       `SELECT ff.key, sa.value_json, sa.value_text
        FROM submission_answers sa
        JOIN form_fields ff ON ff.id = sa.field_id
-       WHERE sa.submission_id = ? ORDER BY ff.position ASC, ff.id ASC`,
+       WHERE sa.submission_id = ? AND ff.deleted_at IS NULL ORDER BY ff.position ASC, ff.id ASC`,
     )
     .bind(submissionId)
     .all<{ key: string; value_json: string | null; value_text: string | null }>();
@@ -848,31 +851,108 @@ export function answerAttachmentId(value: unknown): string | null {
   return null;
 }
 
-/** Replace rows from one already-projected answer map; callers must project first. */
+/**
+ * Apply one already-projected answer map without blanket deletion. Public
+ * arrivals may submit partial answer payloads while a draft is being resumed;
+ * callers identify explicit clears through `explicitlyRemovedFieldIds`.
+ */
+export async function projectedAnswerStatements(
+  db: D1Database,
+  submissionId: string,
+  fields: readonly FormFieldView[],
+  answers: Record<string, FormAnswerValue>,
+  now: number,
+  explicitlyRemovedFieldIds: readonly string[] = [],
+): Promise<D1PreparedStatement[]> {
+  const existing = (await db.prepare(`
+    SELECT answer.id, answer.field_id, answer.value_text, answer.value_json
+    FROM submission_answers answer
+    LEFT JOIN form_fields field ON field.id = answer.field_id
+    WHERE answer.submission_id = ?
+  `).bind(submissionId).all<{ id: string; field_id: string; value_text: string | null; value_json: string | null }>()).results;
+  const removal = new Set(explicitlyRemovedFieldIds);
+  const existingByField = new Map(existing.map((row) => [row.field_id, row]));
+  const statements: D1PreparedStatement[] = [];
+  const levelFields = fields.filter((field) => boundSourceOf(field) === "levels");
+  let levelByKey = new Map<string, { id: string; name: string }>();
+  if (levelFields.length > 0) {
+    const form = await db.prepare(`
+      SELECT event_id FROM forms WHERE id = (SELECT form_id FROM form_fields WHERE id = ?)
+    `).bind(levelFields[0]!.id).first<{ event_id: string }>();
+    if (form) {
+      const rows = await db.prepare("SELECT id, name, name_key FROM levels WHERE event_id = ? AND deleted_at IS NULL").bind(form.event_id).all<{ id: string; name: string; name_key: string }>();
+      levelByKey = new Map(rows.results.flatMap((row) => [[row.id, row], [taxonomyNameKey(row.name_key ?? row.name), row]]));
+    }
+  }
+  for (const field of fields) {
+    if (!Object.prototype.hasOwnProperty.call(answers, field.key)) continue;
+    const value = answers[field.key];
+    const level = boundSourceOf(field) === "levels" && typeof value === "string"
+      ? levelByKey.get(value) ?? levelByKey.get(taxonomyNameKey(value))
+      : undefined;
+    const stringValue = level?.name ?? (typeof value === "string" ? value : null);
+    const jsonValue = level
+      ? JSON.stringify({ bound_source: "levels", id: level.id, label: level.name })
+      : stringValue === null ? JSON.stringify(value) : null;
+    const existingRow = existingByField.get(field.id);
+    statements.push(existingRow
+      ? db.prepare(
+        `UPDATE submission_answers SET value_text = ?, value_json = ?, updated_at = ?
+         WHERE id = ? AND submission_id = ? AND field_id = ?`,
+      ).bind(stringValue, jsonValue, now, existingRow.id, submissionId, field.id)
+      : db.prepare(
+        `INSERT INTO submission_answers
+         (id, submission_id, field_id, value_text, value_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(crypto.randomUUID(), submissionId, field.id, stringValue, jsonValue, now, now));
+  }
+  for (const fieldId of removal) {
+    statements.push(db.prepare("DELETE FROM submission_answers WHERE submission_id = ? AND field_id = ?").bind(submissionId, fieldId));
+  }
+  return statements;
+}
+
 export async function replaceProjectedAnswers(
   db: D1Database,
   submissionId: string,
   fields: readonly FormFieldView[],
   answers: Record<string, FormAnswerValue>,
   now: number,
+  explicitlyRemovedFieldIds: readonly string[] = [],
 ): Promise<void> {
-  const statements = [db.prepare("DELETE FROM submission_answers WHERE submission_id = ?").bind(submissionId)];
-  for (const field of fields) {
-    if (!Object.prototype.hasOwnProperty.call(answers, field.key)) continue;
-    const value = answers[field.key];
-    const stringValue = typeof value === "string" ? value : null;
-    const jsonValue = stringValue === null ? JSON.stringify(value) : null;
-    statements.push(
-      db
-        .prepare(
-          `INSERT INTO submission_answers
-           (id, submission_id, field_id, value_text, value_json, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(crypto.randomUUID(), submissionId, field.id, stringValue, jsonValue, now, now),
-    );
-  }
-  await db.batch(statements);
+  const statements = await projectedAnswerStatements(db, submissionId, fields, answers, now, explicitlyRemovedFieldIds);
+  if (statements.length > 0) await db.batch(statements);
+}
+
+/**
+ * Work out which existing answer rows a caller explicitly removed from its
+ * projection. Omitted keys remain retained for partial draft autosaves. A
+ * controlling key supplied in the same request also explicitly removes an
+ * answer that became inapplicable, so conditional answers cannot reappear with
+ * stale data when the controlling choice is restored later.
+ */
+export async function projectedAnswerRemovals(
+  db: D1Database,
+  submissionId: string,
+  fields: readonly FormFieldView[],
+  answers: Record<string, FormAnswerValue>,
+  suppliedKeys: ReadonlySet<string>,
+  removeAllMissing = false,
+): Promise<string[]> {
+  const rows = (await db.prepare(`
+    SELECT answer.field_id, field.key
+    FROM submission_answers answer
+    LEFT JOIN form_fields field ON field.id = answer.field_id
+    WHERE answer.submission_id = ?
+  `).bind(submissionId).all<{ field_id: string; key: string | null }>()).results;
+  const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
+  return rows.flatMap((row) => {
+    if (!row.key || Object.prototype.hasOwnProperty.call(answers, row.key)) return [];
+    const field = fieldsByKey.get(row.key);
+    if (!field) return [];
+    const dependencies = parseFormCondition(field.condition)?.all.map((clause) => clause.fieldKey) ?? [];
+    return removeAllMissing || suppliedKeys.has(row.key) || dependencies.some((key) => suppliedKeys.has(key)) ? [row.field_id] : [];
+  });
 }
 
 export async function findEventContext(

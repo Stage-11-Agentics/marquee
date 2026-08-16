@@ -880,7 +880,7 @@ async function importSession(
   const submitter = speakers[0]!;
   const trackName = row.track.trim();
   const formatName = row.format.trim();
-  const track = trackName ? await db.prepare("SELECT id FROM tracks WHERE event_id = ? AND lower(name) = lower(?)").bind(event.id, trackName).first<{ id: string }>() : null;
+  const track = trackName ? await db.prepare("SELECT id FROM tracks WHERE event_id = ? AND deleted_at IS NULL AND lower(name) = lower(?)").bind(event.id, trackName).first<{ id: string }>() : null;
   const format = formatName ? await db.prepare("SELECT id FROM formats WHERE event_id = ? AND lower(name) = lower(?)").bind(event.id, formatName).first<{ id: string }>() : null;
   const customFields = parseJsonObject(row.custom_fields);
   let formId = current?.form_id ?? null;

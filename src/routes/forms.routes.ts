@@ -373,10 +373,32 @@ function conditionJson(value: unknown): string | null {
  * the next rename in Conference settings and the field starts offering an
  * option the submit path will refuse.
  */
-function fieldConfigJson(value: unknown, type: FormFieldType): string {
+function fieldConfigJson(value: unknown, type: FormFieldType, key?: string): string {
   const result = normalizeFieldConfig((value ?? {}) as Record<string, unknown>, type);
   if ("error" in result) throw ApiError.unprocessable(result.error, "config");
+  if (result.config.source === "levels" && key !== "audience_level") {
+    throw ApiError.unprocessable("Conference level fields must use the audience_level key.", "key");
+  }
   return JSON.stringify(result.config);
+}
+
+async function assertSingleLevelField(
+  db: D1Database,
+  formId: string,
+  config: Record<string, unknown>,
+  key: string,
+  excludeFieldId?: string,
+): Promise<void> {
+  if (config.source !== "levels") return;
+  const duplicate = await db.prepare(`
+    SELECT id FROM form_fields
+    WHERE form_id = ? AND deleted_at IS NULL
+      AND json_extract(config, '$.source') = 'levels'
+      ${excludeFieldId ? "AND id <> ?" : ""}
+    LIMIT 1
+  `).bind(...(excludeFieldId ? [formId, excludeFieldId] : [formId])).first<{ id: string }>();
+  if (duplicate) throw ApiError.conflict("a form may have only one Conference levels field", { field_id: duplicate.id });
+  if (key !== "audience_level") throw ApiError.unprocessable("Conference level fields must use the audience_level key.", "key");
 }
 
 /** Answer with the options a caller will actually be held to at submit time. */
@@ -487,7 +509,7 @@ async function destinationFormForLibrary(
 }
 
 async function normalizeFieldPositions(db: D1Database, formId: string): Promise<void> {
-  const fields = await db.prepare("SELECT id FROM form_fields WHERE form_id = ? ORDER BY position ASC, id ASC").bind(formId).all<{ id: string }>();
+  const fields = await db.prepare("SELECT id FROM form_fields WHERE form_id = ? AND deleted_at IS NULL ORDER BY position ASC, id ASC").bind(formId).all<{ id: string }>();
   if (fields.results.length === 0) return;
   await db.batch(fields.results.map((field, position) =>
     db.prepare("UPDATE form_fields SET position = ?, updated_at = ? WHERE id = ? AND form_id = ?").bind(position, Date.now(), field.id, formId),
@@ -496,7 +518,7 @@ async function normalizeFieldPositions(db: D1Database, formId: string): Promise<
 
 async function getField(context: Context<ApiEnv>, eventId: string, formId: string, fieldId: string, write = false): Promise<FormFieldRow> {
   await getOwnedForm(context, eventId, formId, write);
-  const field = await context.env.DB.prepare("SELECT * FROM form_fields WHERE id = ? AND form_id = ?").bind(fieldId, formId).first<FormFieldRow>();
+  const field = await context.env.DB.prepare("SELECT * FROM form_fields WHERE id = ? AND form_id = ? AND deleted_at IS NULL").bind(fieldId, formId).first<FormFieldRow>();
   if (!field) throw ApiError.notFound("form field not found");
   return field;
 }
@@ -704,7 +726,7 @@ const duplicateEventForm = defineApiRoute(
   async (context) => {
     const { eventId, formId } = context.req.valid("param");
     const source = await getOwnedForm(context, eventId, formId, true);
-    const fields = await context.env.DB.prepare("SELECT * FROM form_fields WHERE form_id = ? ORDER BY position ASC, id ASC").bind(formId).all<FormFieldRow>();
+    const fields = await context.env.DB.prepare("SELECT * FROM form_fields WHERE form_id = ? AND deleted_at IS NULL ORDER BY position ASC, id ASC").bind(formId).all<FormFieldRow>();
     const lengthRules = await context.env.DB.prepare("SELECT * FROM form_length_rules WHERE form_id = ? ORDER BY sort_order ASC, id ASC").bind(formId).all<FormLengthRuleRow>();
     const admins = await context.env.DB.prepare("SELECT person_id FROM form_admins WHERE form_id = ? ORDER BY person_id").bind(formId).all<{ person_id: string }>();
     const now = Date.now();
@@ -1122,7 +1144,29 @@ const createFormField = defineApiRoute(
     const body = context.req.valid("json");
     const condition = conditionJson(body.condition);
     if (body.save_to_library) rejectParticipantQuestion(body.key);
-    const current = await context.env.DB.prepare("SELECT COUNT(*) AS count FROM form_fields WHERE form_id = ?").bind(formId).first<{ count: number }>();
+    const configJson = fieldConfigJson(body.config, body.type, body.key);
+    const normalizedConfig = JSON.parse(configJson) as Record<string, unknown>;
+    const duplicate = await context.env.DB.prepare("SELECT * FROM form_fields WHERE form_id = ? AND key = ?").bind(formId, body.key).first<FormFieldRow>();
+    if (duplicate && duplicate.deleted_at !== null) {
+      await assertSingleLevelField(context.env.DB, formId, normalizedConfig, body.key, duplicate.id);
+      const current = await context.env.DB.prepare("SELECT COUNT(*) AS count FROM form_fields WHERE form_id = ? AND deleted_at IS NULL").bind(formId).first<{ count: number }>();
+      const count = Number(current?.count ?? 0);
+      const position = Math.min(body.position ?? count, count);
+      const now = Date.now();
+      await context.env.DB.batch([
+        context.env.DB.prepare("UPDATE form_fields SET position = position + 1, updated_at = ? WHERE form_id = ? AND deleted_at IS NULL AND position >= ?").bind(now, formId, position),
+        context.env.DB.prepare(
+          `UPDATE form_fields SET deleted_at = NULL, label = ?, help_text = ?, type = ?, required = ?, position = ?, config = ?, condition = ?, updated_at = ?
+           WHERE id = ? AND form_id = ? AND deleted_at IS NOT NULL`,
+        ).bind(body.label, body.help_text ?? null, body.type, body.required ? 1 : 0, position, configJson, condition, now, duplicate.id, formId),
+      ]);
+      const restored = await context.env.DB.prepare("SELECT * FROM form_fields WHERE id = ? AND form_id = ?").bind(duplicate.id, formId).first<FormFieldRow>();
+      if (!restored) throw new Error("restored form field disappeared");
+      return context.json(await fieldResponse(context.env.DB, eventId, restored), 201);
+    }
+    if (duplicate) throw ApiError.conflict("a field with that key already exists in this form", { field_id: duplicate.id });
+    await assertSingleLevelField(context.env.DB, formId, normalizedConfig, body.key);
+    const current = await context.env.DB.prepare("SELECT COUNT(*) AS count FROM form_fields WHERE form_id = ? AND deleted_at IS NULL").bind(formId).first<{ count: number }>();
     const count = Number(current?.count ?? 0);
     const position = Math.min(body.position ?? count, count);
     const now = Date.now();
@@ -1130,7 +1174,7 @@ const createFormField = defineApiRoute(
     const libraryId = body.save_to_library ? crypto.randomUUID() : null;
     try {
       await context.env.DB.batch([
-        context.env.DB.prepare("UPDATE form_fields SET position = position + 1, updated_at = ? WHERE form_id = ? AND position >= ?").bind(now, formId, position),
+        context.env.DB.prepare("UPDATE form_fields SET position = position + 1, updated_at = ? WHERE form_id = ? AND deleted_at IS NULL AND position >= ?").bind(now, formId, position),
         ...(libraryId ? [context.env.DB.prepare(
           `INSERT INTO field_library
             (id, event_id, key, label, help_text, type, required, config, condition, version, created_at, updated_at)
@@ -1143,7 +1187,7 @@ const createFormField = defineApiRoute(
           body.help_text ?? null,
           body.type,
           body.required ? 1 : 0,
-          fieldConfigJson(body.config, body.type),
+          configJson,
           condition,
           now,
           now,
@@ -1161,7 +1205,7 @@ const createFormField = defineApiRoute(
           body.type,
           body.required ? 1 : 0,
           position,
-          fieldConfigJson(body.config, body.type),
+          configJson,
           condition,
           libraryId,
           libraryId ? 1 : null,
@@ -1198,6 +1242,9 @@ const updateFormField = defineApiRoute(
     const values: (string | number | null)[] = [];
     const set = (column: string, value: string | number | null) => { updates.push(`${column} = ?`); values.push(value); };
     const nextType = body.type ?? current.type;
+    const nextKey = body.key ?? current.key;
+    const nextConfigJson = fieldConfigJson(body.config ?? normalizeField(current).config, nextType, nextKey);
+    await assertSingleLevelField(context.env.DB, formId, JSON.parse(nextConfigJson) as Record<string, unknown>, nextKey, fieldId);
     if (body.key !== undefined) set("key", body.key);
     if (body.label !== undefined) set("label", body.label);
     if (body.help_text !== undefined) set("help_text", body.help_text);
@@ -1207,7 +1254,7 @@ const updateFormField = defineApiRoute(
     // stored config even when the caller omitted it, so a bound select cannot
     // silently become a non-select while retaining an unusable source.
     if (body.config !== undefined || body.type !== undefined) {
-      set("config", fieldConfigJson(body.config ?? normalizeField(current).config, nextType));
+      set("config", nextConfigJson);
     }
     if (body.condition !== undefined) set("condition", conditionJson(body.condition));
     if (updates.length > 0) {
@@ -1239,9 +1286,37 @@ const deleteFormField = defineApiRoute(
   async (context) => {
     const { eventId, formId, fieldId } = context.req.valid("param");
     await getField(context, eventId, formId, fieldId, true);
-    await context.env.DB.prepare("DELETE FROM form_fields WHERE id = ? AND form_id = ?").bind(fieldId, formId).run();
+    const now = Date.now();
+    await context.env.DB.prepare("UPDATE form_fields SET deleted_at = ?, updated_at = ? WHERE id = ? AND form_id = ? AND deleted_at IS NULL").bind(now, now, fieldId, formId).run();
     await normalizeFieldPositions(context.env.DB, formId);
     return context.json({ deleted: true }, 200);
+  },
+);
+
+const restoreFormField = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/forms/{formId}/fields/{fieldId}/restore",
+    operationId: "restoreFormField",
+    summary: "Restore an archived form field",
+    tags: ["Forms"],
+    request: { params: fieldParams },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: jsonResponse(formFieldSchema, "Restored field"), ...errorResponses([401, 403, 404, 409, 422, 429, 500]) },
+  },
+  async (context) => {
+    const { eventId, formId, fieldId } = context.req.valid("param");
+    await getOwnedForm(context, eventId, formId, true);
+    const current = await context.env.DB.prepare("SELECT * FROM form_fields WHERE id = ? AND form_id = ?").bind(fieldId, formId).first<FormFieldRow>();
+    if (!current) throw ApiError.notFound("form field not found");
+    if (current.deleted_at === null) return context.json(await fieldResponse(context.env.DB, eventId, current), 200);
+    const occupied = await context.env.DB.prepare("SELECT id FROM form_fields WHERE form_id = ? AND key = ? AND deleted_at IS NULL").bind(formId, current.key).first<{ id: string }>();
+    if (occupied) throw ApiError.conflict("an active field with that key already exists in this form", { field_id: occupied.id });
+    const now = Date.now();
+    await context.env.DB.prepare("UPDATE form_fields SET deleted_at = NULL, updated_at = ? WHERE id = ? AND form_id = ?").bind(Math.max(now, current.updated_at + 1), fieldId, formId).run();
+    const restored = await context.env.DB.prepare("SELECT * FROM form_fields WHERE id = ? AND form_id = ?").bind(fieldId, formId).first<FormFieldRow>();
+    if (!restored) throw new Error("restored form field disappeared");
+    return context.json(await fieldResponse(context.env.DB, eventId, restored), 200);
   },
 );
 
@@ -1260,7 +1335,7 @@ const reorderFormFields = defineApiRoute(
     const { eventId, formId } = context.req.valid("param");
     await getOwnedForm(context, eventId, formId, true);
     const body = context.req.valid("json");
-    const existing = await context.env.DB.prepare("SELECT id FROM form_fields WHERE form_id = ? ORDER BY id").bind(formId).all<{ id: string }>();
+    const existing = await context.env.DB.prepare("SELECT id FROM form_fields WHERE form_id = ? AND deleted_at IS NULL ORDER BY id").bind(formId).all<{ id: string }>();
     const expected = existing.results.map((field) => field.id).sort();
     const received = [...body.field_ids].sort();
     if (expected.length !== received.length || expected.some((id, index) => id !== received[index])) {
@@ -1464,6 +1539,7 @@ export const apiRoutes = [
   createFormLengthRule,
   updateFormLengthRule,
   deleteFormLengthRule,
+  restoreFormField,
   listFormAdminsRoute,
   addFormAdmin,
   removeFormAdmin,

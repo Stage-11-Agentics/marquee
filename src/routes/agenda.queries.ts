@@ -398,7 +398,7 @@ async function readFormats(database: D1Database, eventId: string): Promise<Agend
 
 async function readTracks(database: D1Database, eventId: string): Promise<AgendaTrack[]> {
   const result = await database.prepare(
-    "SELECT id, name, color FROM tracks WHERE event_id = ? ORDER BY position ASC, id ASC",
+    "SELECT id, name, color FROM tracks WHERE event_id = ? AND deleted_at IS NULL ORDER BY position ASC, id ASC",
   ).bind(eventId).all<TrackQueryRow>();
   return result.results;
 }
@@ -698,7 +698,7 @@ export async function trackBelongsToEvent(
   trackId: string,
 ): Promise<boolean> {
   const row = await database.prepare(
-    "SELECT 1 AS present FROM tracks WHERE id = ? AND event_id = ?",
+    "SELECT 1 AS present FROM tracks WHERE id = ? AND event_id = ? AND deleted_at IS NULL",
   ).bind(trackId, eventId).first<{ present: number }>();
   return row !== null;
 }

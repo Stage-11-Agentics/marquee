@@ -109,9 +109,17 @@ async function readDashboardBuildingComparison(database: D1Database, eventId: st
   }
 }
 
+async function hasTrackDeletedAtColumn(database: D1Database): Promise<boolean> {
+  const row = await database
+    .prepare("SELECT 1 AS present FROM pragma_table_info('tracks') WHERE name = 'deleted_at'")
+    .first<{ present: number }>();
+  return row?.present === 1;
+}
+
 async function readDashboard(database: D1Database, eventId: string, now: number): Promise<DashboardSnapshot> {
   const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
   const includeTemplateProvenance = await hasSpeakerTaskTemplateProvenance(database);
+  const includeTrackDeletedAt = await hasTrackDeletedAtColumn(database);
   const event = await database.prepare("SELECT timezone FROM events WHERE id = ?").bind(eventId).first<{ timezone: string }>();
   const timezone = event?.timezone ?? "UTC";
   const overdueDay = localParts(now, timezone).day;
@@ -156,7 +164,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       LEFT JOIN submissions s ON s.id = submission_track.submission_id
         AND s.event_id = track.event_id
         AND ${submissionStatusPredicate("unreviewed", { submission: "s" })}
-      WHERE track.event_id = ?
+      WHERE track.event_id = ?${includeTrackDeletedAt ? " AND track.deleted_at IS NULL" : ""}
       GROUP BY track.id, track.name, track.position
       ORDER BY count DESC, track.position ASC, track.id ASC
     `).bind(eventId).all<{ id: string; name: string; count: number | null }>(),

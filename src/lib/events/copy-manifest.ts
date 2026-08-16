@@ -30,11 +30,14 @@
  *     opening intake is a decision, never a side effect of creating a record.
  */
 
+import { canonicalRoutingFieldKey } from "../form-conditions";
+
 /** The organizer-facing copy sets, in the order the checklist presents them. */
 export const COPY_SET_KEYS = [
   "formats",
   "tracks",
   "forms",
+  "routing",
   "task_templates",
   "email_templates",
   "evaluation_plan",
@@ -57,6 +60,7 @@ export const DEFAULT_COPY_SELECTION: Record<CopySetKey, boolean> = {
   task_templates: true,
   email_templates: true,
   evaluation_plan: true,
+  routing: false,
   venues: false,
 };
 
@@ -88,12 +92,74 @@ export interface CopyTable {
   verbatim: readonly string[];
   /** Rows the engine declines to copy, with the reason surfaced in the receipt. */
   skip?: (row: Record<string, unknown>) => boolean;
+  /** Optional remap for an owned JSON payload after parent id maps exist. */
+  mapJson?: (column: string, value: unknown, idMaps: ReadonlyMap<string, ReadonlyMap<string, string>>) => unknown;
 }
 
 const FORMS_OF_EVENT = "SELECT id FROM forms WHERE event_id = ?";
 const PLANS_OF_EVENT = "SELECT id FROM evaluation_plans WHERE event_id = ?";
 const ROUNDS_OF_EVENT =
   "SELECT r.id FROM evaluation_rounds r JOIN evaluation_plans p ON p.id = r.plan_id WHERE p.event_id = ?";
+
+function mappedId(value: unknown, table: string, idMaps: ReadonlyMap<string, ReadonlyMap<string, string>>): unknown {
+  return typeof value === "string" ? idMaps.get(table)?.get(value) ?? value : value;
+}
+
+function remapRoutingJson(
+  column: string,
+  value: unknown,
+  idMaps: ReadonlyMap<string, ReadonlyMap<string, string>>,
+): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const tableForField = (fieldValue: unknown): string | null => {
+      if (typeof fieldValue !== "string") return null;
+      switch (canonicalRoutingFieldKey(fieldValue)) {
+        case "format": return "formats";
+        case "tracks": return "tracks";
+        case "audience_level": return "levels";
+        default: return null;
+      }
+    };
+    const remapValue = (raw: unknown, table: string): unknown => {
+      if (typeof raw === "string") return mappedId(raw, table, idMaps);
+      if (Array.isArray(raw)) return raw.map((item) => mappedId(item, table, idMaps));
+      return raw;
+    };
+    if (column === "when_json" && Array.isArray(parsed.all)) {
+      return JSON.stringify({
+        ...parsed,
+        all: parsed.all.map((clause) => {
+          if (typeof clause !== "object" || clause === null || Array.isArray(clause)) return clause;
+          const next = { ...(clause as Record<string, unknown>) };
+          const field = typeof next.fieldKey === "string" ? next.fieldKey : typeof next.field === "string" ? next.field : "";
+          const table = tableForField(field);
+          if (table) next.value = remapValue(next.value, table);
+          return next;
+        }),
+      });
+    }
+    if (column === "when_json") {
+      const table = tableForField(parsed.field);
+      if (table) parsed.value = remapValue(parsed.value, table);
+    }
+    if (column === "then_json") {
+      for (const key of ["track_id", "trackId", "set_track_id", "setTrackId"]) {
+        if (key in parsed) parsed[key] = remapValue(parsed[key], "tracks");
+      }
+      for (const key of ["level_id", "levelId", "set_level_id", "setLevelId"]) {
+        if (key in parsed) parsed[key] = remapValue(parsed[key], "levels");
+      }
+      for (const key of ["add_tag_ids", "addTagIds", "tag_ids", "tagIds"]) {
+        if (key in parsed) parsed[key] = remapValue(parsed[key], "tags");
+      }
+    }
+    return JSON.stringify(parsed);
+  } catch {
+    return value;
+  }
+}
 
 /**
  * Parents precede children: every remap target is already in the id map by the
@@ -119,10 +185,37 @@ export const COPY_TABLES: readonly CopyTable[] = [
     scope: { kind: "event" },
     orderBy: "position, id",
     remap: { event_id: "__event__" },
-    nulls: [],
     constants: {},
     stamps: ["created_at", "updated_at"],
-    verbatim: ["name", "color", "position"],
+    nulls: ["deleted_at"],
+    verbatim: ["name", "name_key", "color", "position"],
+    skip: (row) => row.deleted_at !== null && row.deleted_at !== undefined,
+  },
+  {
+    table: "tags",
+    set: "routing",
+    key: "id",
+    scope: { kind: "event" },
+    orderBy: "position, id",
+    remap: { event_id: "__event__" },
+    nulls: ["deleted_at"],
+    constants: {},
+    stamps: ["created_at", "updated_at"],
+    verbatim: ["name", "name_key", "position"],
+    skip: (row) => row.deleted_at !== null && row.deleted_at !== undefined,
+  },
+  {
+    table: "levels",
+    set: "routing",
+    key: "id",
+    scope: { kind: "event" },
+    orderBy: "position, id",
+    remap: { event_id: "__event__" },
+    nulls: ["deleted_at"],
+    constants: {},
+    stamps: ["created_at", "updated_at"],
+    verbatim: ["name", "name_key", "position"],
+    skip: (row) => row.deleted_at !== null && row.deleted_at !== undefined,
   },
   {
     table: "buildings",
@@ -205,13 +298,14 @@ export const COPY_TABLES: readonly CopyTable[] = [
     scope: { kind: "subquery", column: "form_id", sql: FORMS_OF_EVENT },
     orderBy: "position, id",
     remap: { form_id: "forms", library_field_id: "field_library" },
-    nulls: [],
+    nulls: ["deleted_at"],
     constants: {},
     stamps: ["created_at", "updated_at"],
     // Neither JSON blob carries an id: `condition` keys on fieldKey
     // (src/lib/form-conditions.ts) and `config` carries source/minItems only.
     // Stated so nobody builds a remapper for them.
     verbatim: ["key", "label", "help_text", "type", "required", "position", "config", "condition", "library_field_version"],
+    skip: (row) => row.deleted_at !== null && row.deleted_at !== undefined,
   },
   {
     table: "form_length_rules",
@@ -242,6 +336,28 @@ export const COPY_TABLES: readonly CopyTable[] = [
     // says so — they administer a form, which is not the same thing as the
     // reviewer authority a committee carries, and that is why committees don't.
     verbatim: ["person_id"],
+  },
+  {
+    table: "routing_rules",
+    set: "routing",
+    key: "id",
+    scope: { kind: "event" },
+    orderBy: "position, id",
+    remap: { event_id: "__event__" },
+    nulls: ["deleted_at"],
+    constants: {},
+    stamps: ["created_at", "updated_at"],
+    verbatim: ["name", "when_json", "then_json", "position", "enabled"],
+    skip: (row) => {
+      if (row.deleted_at !== null && row.deleted_at !== undefined) return true;
+      try {
+        const action = JSON.parse(String(row.then_json)) as Record<string, unknown>;
+        return Boolean(action.committee_id || action.plan_id || action.round_id);
+      } catch {
+        return true;
+      }
+    },
+    mapJson: remapRoutingJson,
   },
   {
     table: "email_templates",

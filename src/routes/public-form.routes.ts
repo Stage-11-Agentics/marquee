@@ -1,5 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import type { Context } from "hono";
+import type { D1PreparedStatement } from "@cloudflare/workers-types";
 
 import type { ApiEnv } from "../api/runtime";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
@@ -16,12 +17,12 @@ import { auditStatement } from "../lib/audit";
 import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../lib/auth/draft-resume-copy";
 import { mintMagicLink, mintMagicLink as issueParticipantMagicLink, promoteMagicLinkToResumeCapability } from "../lib/auth/magic-links";
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
-import { noPersonReferencesPredicate } from "../lib/person-references";
 import { verifyTurnstile } from "../lib/r2/turnstile";
 import { submitterEditability } from "../lib/submission-editing";
 import { withSubmissionReferenceAllocation } from "../lib/submission-reference";
 import { submissionCapacityMessage, submissionCapacityRefusal } from "../lib/submission-capacity";
 import { boundSourceOf } from "../lib/bound-options";
+import { taxonomyNameKey } from "../lib/taxonomy";
 import {
   answerAttachmentId,
   advertisedMaxSpeakers,
@@ -42,19 +43,21 @@ import {
   loadPublicForm,
   normalisePublicEmail,
   projectPublicAnswers,
+  projectedAnswerRemovals,
   publicFormIsClosed,
   publicIssues,
   rawAnswersFromBody,
   replaceProjectedAnswers,
+  projectedAnswerStatements,
   toPublicFormState,
   upsertPublicPerson,
   vendorAffiliation,
 } from "./public-form.shared";
 import { PUBLIC_PARTICIPANT_ROLES, type PublicFormState } from "./public-form.types";
 import {
-  assertRoutingPoolAllowed,
+  assertRoutingPoolAllowedForTracks,
+  routingPoolAssignmentStatements,
   selectSubmissionRouting,
-  writeRoutingPoolAssignment,
 } from "./public-form-routing";
 
 const publicParams = z.object({ slug: z.string().min(1).max(160) });
@@ -346,12 +349,15 @@ function requiredSubmissionIssues(
 
 async function referenceId(
   db: D1Database,
-  table: "formats" | "tracks",
+  table: "formats" | "tracks" | "levels",
   eventId: string,
   value: string,
 ): Promise<string | null> {
-  const row = await db.prepare(`SELECT id FROM ${table} WHERE event_id = ? AND (id = ? OR lower(name) = lower(?)) LIMIT 1`).bind(eventId, value, value).first<{ id: string }>();
-  return row?.id ?? null;
+  const rows = table === "formats"
+    ? await db.prepare("SELECT id, name FROM formats WHERE event_id = ?").bind(eventId).all<{ id: string; name: string; name_key?: string }>()
+    : await db.prepare(`SELECT id, name, name_key FROM ${table} WHERE event_id = ? AND deleted_at IS NULL`).bind(eventId).all<{ id: string; name: string; name_key?: string }>();
+  const key = taxonomyNameKey(value);
+  return rows.results.find((row) => row.id === value || taxonomyNameKey(row.name_key ?? row.name) === key)?.id ?? null;
 }
 
 async function resolveDomainReferences(
@@ -359,9 +365,10 @@ async function resolveDomainReferences(
   eventId: string,
   fields: readonly FormFieldView[],
   answers: Record<string, unknown>,
-): Promise<{ formatId: string | null; trackIds: string[]; issues: Array<{ fieldKey: string; message: string }> }> {
+): Promise<{ formatId: string | null; levelId: string | null; trackIds: string[]; issues: Array<{ fieldKey: string; message: string }> }> {
   const issues: Array<{ fieldKey: string; message: string }> = [];
   let formatId: string | null = null;
+  let levelId: string | null = null;
   // Bound fields are the source of truth even when an organizer gives the
   // field a human key such as `session_format`. The canonical keys remain the
   // compatibility fallback for older/custom forms that predate `source`.
@@ -381,9 +388,17 @@ async function resolveDomainReferences(
   for (const track of tracks) {
     const id = await referenceId(db, "tracks", eventId, track);
     if (!id) issues.push({ fieldKey: tracksKey, message: "Choose conference tracks from the list, then try again." });
-    else trackIds.push(id);
+    else if (!trackIds.includes(id)) trackIds.push(id);
   }
-  return { formatId, trackIds, issues };
+  const levelField = fields.find((field) => boundSourceOf(field) === "levels")
+    ?? fields.find((field) => field.key === "audience_level" && boundSourceOf(field) === "levels");
+  const levelKey = levelField?.key ?? "audience_level";
+  const level = answerText(answers, levelKey);
+  if (levelField && level) {
+    levelId = await referenceId(db, "levels", eventId, level);
+    if (!levelId) issues.push({ fieldKey: levelKey, message: "Choose an audience level from the list, then try again." });
+  }
+  return { formatId, levelId, trackIds, issues };
 }
 
 type InsertedParticipant = {
@@ -553,6 +568,145 @@ async function persistParticipantRoster(
   return { identities, invitees: inserted.invitees };
 }
 
+interface PublicPersonPreparation {
+  byEmail: Map<string, PersonRow>;
+  statements: D1PreparedStatement[];
+}
+
+function publicPersonRow(input: {
+  id: string;
+  orgId: string;
+  email: string;
+  name: string;
+  company?: string | null;
+  title?: string | null;
+  bio?: string | null;
+  now: number;
+}): PersonRow {
+  return {
+    id: input.id,
+    org_id: input.orgId,
+    email: input.email,
+    name: input.name || input.email,
+    title: input.title ?? null,
+    company: input.company ?? null,
+    bio: input.bio ?? null,
+    headshot_attachment_id: null,
+    social_links: "[]" as PersonRow["social_links"],
+    is_demo: 0,
+    last_write_source: "marquee",
+    created_at: input.now,
+    updated_at: input.now,
+    company_id: null,
+    custom_fields: "{}" as PersonRow["custom_fields"],
+    do_not_contact: 0,
+    kind: "human",
+  };
+}
+
+/** Read-or-compose a public person without mutating D1 before the arrival batch. */
+async function preparePublicPerson(
+  db: D1Database,
+  preparation: PublicPersonPreparation,
+  input: {
+    orgId: string;
+    email: string;
+    name: string;
+    company?: string | null;
+    title?: string | null;
+    bio?: string | null;
+    now: number;
+  },
+): Promise<PersonRow> {
+  const email = input.email.trim().toLowerCase();
+  const cached = preparation.byEmail.get(email);
+  if (cached) return cached;
+  const existing = await findPersonByEmail(db, input.orgId, email);
+  if (existing) {
+    preparation.byEmail.set(email, existing);
+    return existing;
+  }
+  const person = publicPersonRow({ id: crypto.randomUUID(), ...input, email });
+  preparation.byEmail.set(email, person);
+  preparation.statements.push(db.prepare(
+    `INSERT INTO people
+      (id, org_id, email, name, title, company, bio, headshot_attachment_id, social_links, is_demo, last_write_source, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', 0, 'marquee', ?, ?)`,
+  ).bind(person.id, person.org_id, person.email, person.name, person.title, person.company, person.bio, input.now, input.now));
+  return person;
+}
+
+/** Compose the participant/person side of a public arrival transaction. */
+async function prepareParticipantRoster(
+  db: D1Database,
+  input: {
+    submissionId: string;
+    orgId: string;
+    submitter: PersonRow;
+    answers: Record<string, unknown>;
+    roster: PublicParticipantRoster;
+    now: number;
+    preparation: PublicPersonPreparation;
+  },
+): Promise<{ identities: IntakeIdentities; invitees: InsertedParticipant[]; statements: D1PreparedStatement[] }> {
+  let speaker = input.submitter;
+  if (input.roster.onBehalfOf !== null) {
+    const speakerEmail = normalisePublicEmail(input.answers.speaker_email);
+    const speakerName = answerText(input.answers, "speaker_name");
+    if (speakerEmail && speakerName) {
+      speaker = await preparePublicPerson(db, input.preparation, {
+        orgId: input.orgId,
+        email: speakerEmail,
+        name: speakerName,
+        company: answerText(input.answers, "speaker_company"),
+        title: answerText(input.answers, "speaker_role"),
+        bio: answerText(input.answers, "biography"),
+        now: input.now,
+      });
+    }
+  }
+
+  const participants: Array<{ person: PersonRow; role: InsertedParticipant["role"]; position: number; invite: boolean }> = [];
+  const primaryNamed = Boolean(answerText(input.answers, "speaker_name") || input.answers.speaker_email);
+  if (primaryNamed) {
+    participants.push({ person: speaker, role: "speaker", position: 0, invite: speaker.id !== input.submitter.id });
+  }
+  const seen = new Set<string>([input.submitter.id, speaker.id]);
+  for (const [index, entry] of input.roster.participants.entries()) {
+    const person = await preparePublicPerson(db, input.preparation, {
+      orgId: input.orgId,
+      email: entry.email,
+      name: entry.name,
+      now: input.now,
+    });
+    if (seen.has(person.id)) continue;
+    seen.add(person.id);
+    participants.push({ person, role: entry.role, position: index + 1, invite: true });
+  }
+
+  const insertedParticipants = participants.map((participant) => ({ ...participant, id: crypto.randomUUID() }));
+  const statements: D1PreparedStatement[] = [
+    db.prepare("DELETE FROM participations WHERE submission_id = ?").bind(input.submissionId),
+    db.prepare(
+      `INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at)
+       VALUES (?, ?, ?, 'submitter', 0, 'confirmed', ?, ?)`,
+    ).bind(crypto.randomUUID(), input.submissionId, input.submitter.id, input.now, input.now),
+    db.prepare("UPDATE submissions SET participants_json = ?, updated_at = ? WHERE id = ?")
+      .bind(writeParticipantRoster(input.roster), input.now, input.submissionId),
+  ];
+  for (const participant of insertedParticipants) {
+    statements.push(db.prepare(
+      `INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
+    ).bind(participant.id, input.submissionId, participant.person.id, participant.role, participant.position, input.now, input.now));
+  }
+  return {
+    identities: { submitter: input.submitter, speaker },
+    invitees: insertedParticipants.filter((participant) => participant.invite),
+    statements,
+  };
+}
+
 /** What the invitation calls the seat, in the applicant's own vocabulary. */
 function invitationRoleNoun(role: InsertedParticipant["role"]): string {
   return role === "moderator" ? "the moderator" : role === "speaker" ? "the speaker" : "a co-speaker";
@@ -611,104 +765,46 @@ async function enqueueCoSpeakerInvitation(
   ).bind(input.now, input.now, input.participant.id, input.submissionId, input.participant.person.id).run();
 }
 
-async function persistTracks(db: D1Database, submissionId: string, trackIds: string[], now: number): Promise<void> {
-  const statements = [db.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(submissionId)];
+function trackStatements(db: D1Database, submissionId: string, trackIds: readonly string[], now: number): D1PreparedStatement[] {
+  const statements: D1PreparedStatement[] = [
+    db.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(submissionId),
+    db.prepare("UPDATE submissions SET primary_track_id = ?, updated_at = ? WHERE id = ?").bind(trackIds[0] ?? null, now, submissionId),
+  ];
   for (const [position, trackId] of trackIds.entries()) {
     statements.push(db.prepare(
       `INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     ).bind(crypto.randomUUID(), submissionId, trackId, position === 0 ? 1 : 0, now, now));
   }
-  await db.batch(statements);
+  return statements;
 }
 
-interface TrackSnapshot {
-  created_at: number;
-  id: string;
-  is_primary: number;
-  track_id: string;
-  updated_at: number;
+function tagStatements(db: D1Database, submissionId: string, tagIds: readonly string[], now: number): D1PreparedStatement[] {
+  return [...new Set(tagIds)].map((tagId) => db.prepare(
+    `INSERT OR IGNORE INTO submission_tags (id, submission_id, tag_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).bind(crypto.randomUUID(), submissionId, tagId, now, now));
 }
 
-interface RoutingStage {
-  createdSubmission: boolean;
-  previousTracks: TrackSnapshot[];
-  personId: string;
-  personCreated: boolean;
-  submissionId: string;
-}
-
-async function stageRoutingSubmission(input: {
-  db: D1Database;
-  eventId: string;
-  existing: { id: string } | null;
-  formId: string;
-  kind: "abstract" | "session";
-  personId: string;
-  personCreated: boolean;
-  submissionId: string;
-  title: string;
-  abstract: string | null;
-  formatId: string | null;
-  trackIds: string[];
-  vendorAffiliation: "none" | "vendor_to_fi" | "vendor_with_champion";
-  resumeHash: string;
-  now: number;
-  searchBlob: string;
-}): Promise<RoutingStage> {
-  const previousTracks = input.existing
-    ? (await input.db.prepare(
-      "SELECT id, track_id, is_primary, created_at, updated_at FROM submission_tracks WHERE submission_id = ? ORDER BY is_primary DESC, id",
-    ).bind(input.submissionId).all<TrackSnapshot>()).results
-    : [];
-  if (!input.existing) {
-    await withSubmissionReferenceAllocation(input.db, input.eventId, input.now, (referenceCode) => [
-      input.db.prepare(
-        `INSERT INTO submissions
-          (id, event_id, reference_code, form_id, kind, title, abstract, status, format_id, primary_track_id,
-           origin, vendor_affiliation, submitter_person_id, resume_token_hash, last_saved_at,
-           search_blob, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, 'public', ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(
-        input.submissionId, input.eventId, referenceCode, input.formId, input.kind, input.title, input.abstract,
-        input.formatId, input.trackIds[0] ?? null, input.vendorAffiliation, input.personId,
-        input.resumeHash, input.now, input.searchBlob, input.now, input.now,
-      ),
-    ]);
+function attachmentStatements(
+  db: D1Database,
+  submissionId: string,
+  previousOwnerId: string | null,
+  answers: Record<string, unknown>,
+  now: number,
+): D1PreparedStatement[] {
+  if (!previousOwnerId) return [];
+  const attachmentIds = [...new Set(Object.values(answers).map(answerAttachmentId).filter((id): id is string => id !== null))];
+  if (attachmentIds.length === 0) return [];
+  const statements: D1PreparedStatement[] = [];
+  for (let offset = 0; offset < attachmentIds.length; offset += 80) {
+    const chunk = attachmentIds.slice(offset, offset + 80);
+    statements.push(db.prepare(
+      `UPDATE attachments SET owner_type = 'submission_file', owner_id = ?, updated_at = ?
+       WHERE owner_type = 'draft_file' AND owner_id = ? AND id IN (${chunk.map(() => "?").join(",")})`,
+    ).bind(submissionId, now, previousOwnerId, ...chunk));
   }
-  await persistTracks(input.db, input.submissionId, input.trackIds, input.now);
-  return {
-    createdSubmission: input.existing === null,
-    previousTracks,
-    personId: input.personId,
-    personCreated: input.personCreated,
-    submissionId: input.submissionId,
-  };
-}
-
-async function rollbackRoutingStage(db: D1Database, stage: RoutingStage): Promise<void> {
-  if (stage.createdSubmission) {
-    await db.batch([
-      db.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(stage.submissionId),
-      db.prepare("DELETE FROM submissions WHERE id = ? AND status = 'draft'").bind(stage.submissionId),
-    ]);
-  } else {
-    const statements = [db.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(stage.submissionId)];
-    for (const track of stage.previousTracks) {
-      statements.push(db.prepare(
-        `INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      ).bind(track.id, stage.submissionId, track.track_id, track.is_primary, track.created_at, track.updated_at));
-    }
-    await db.batch(statements);
-  }
-  if (stage.personCreated) {
-    await db.prepare(`
-      DELETE FROM people
-      WHERE id = ?
-        AND ${noPersonReferencesPredicate()}
-    `).bind(stage.personId).run();
-  }
+  return statements;
 }
 
 async function moveAttachments(
@@ -717,14 +813,8 @@ async function moveAttachments(
   previousOwnerId: string | null,
   answers: Record<string, unknown>,
 ): Promise<void> {
-  if (!previousOwnerId) return;
-  const attachmentIds = [...new Set(Object.values(answers).map(answerAttachmentId).filter((id): id is string => id !== null))];
-  if (attachmentIds.length === 0) return;
-  const placeholders = attachmentIds.map(() => "?").join(",");
-  await db.prepare(
-    `UPDATE attachments SET owner_type = 'submission_file', owner_id = ?, updated_at = ?
-     WHERE owner_type = 'draft_file' AND owner_id = ? AND id IN (${placeholders})`,
-  ).bind(submissionId, Date.now(), previousOwnerId, ...attachmentIds).run();
+  const statements = attachmentStatements(db, submissionId, previousOwnerId, answers, Date.now());
+  if (statements.length > 0) await db.batch(statements);
 }
 
 async function formResponse(
@@ -867,6 +957,7 @@ async function autosaveDraft(
   }
   const raw = rawAnswersFromBody(answerMap(body), body.email);
   const projected = projectPublicAnswers(base.fields, raw, base.lengthRules);
+  const removals = await projectedAnswerRemovals(context.env.DB, base.submission.id, base.fields, projected.projected.answers, new Set(Object.keys(raw)));
   const now = Date.now();
   const event = await findEventContext(context.env.DB, base.form.event_id);
   if (!event) throw ApiError.notFound("This conference is no longer available.");
@@ -902,7 +993,7 @@ async function autosaveDraft(
     bio: roster.onBehalfOf ? null : answerText(projected.projected.answers, "biography"),
     now,
   });
-  await replaceProjectedAnswers(context.env.DB, base.submission.id, base.fields, projected.projected.answers, now);
+  await replaceProjectedAnswers(context.env.DB, base.submission.id, base.fields, projected.projected.answers, now, removals);
   await persistParticipantRoster(context.env.DB, {
     submissionId: base.submission.id,
     orgId: event.org_id,
@@ -964,49 +1055,50 @@ async function editSubmittedSubmission(
   const title = answerText(projected.projected.answers, "title") ?? base.submission.title ?? "Untitled abstract";
   const abstract = answerText(projected.projected.answers, "abstract");
   const now = Date.now();
-  if (title === base.submission.title && abstract === base.answers.abstract) {
+  const removals = await projectedAnswerRemovals(context.env.DB, base.submission.id, base.fields, projected.projected.answers, new Set(Object.keys(raw)), true);
+  const contentChanged = title !== base.submission.title || abstract !== base.answers.abstract;
+  const answerRows = body.answers === undefined
+    ? []
+    : await projectedAnswerStatements(context.env.DB, base.submission.id, base.fields, projected.projected.answers, now, removals);
+  if (!contentChanged && answerRows.length === 0) {
     return formResponse(context, slug, token, base.email ?? emailFromAnswers(projected.projected.answers) ?? undefined);
   }
-  await context.env.DB.batch([
-    context.env.DB.prepare(
-      `UPDATE submissions SET title = ?, abstract = ?, search_blob = ?, last_saved_at = ?,
-       last_write_source = 'marquee', updated_at = ?
-       WHERE id = ? AND form_id = ? AND submitter_person_id = ?
-         AND status IN ('submitted', 'in_review')`,
-    ).bind(
-      title,
-      abstract,
-      JSON.stringify(projected.projected.answers),
-      now,
-      now,
-      base.submission.id,
-      base.form.id,
-      base.submission.submitter_person_id,
-    ),
-    auditStatement(context.env.DB, {
-      eventId: base.form.event_id,
-      actorKind: "user",
-      actorPersonId: base.submission.submitter_person_id,
-      action: "speaker_talk_updated",
-      entityType: "submission",
-      entityId: base.submission.id,
-      before: { title: base.submission.title, description: base.answers.abstract ?? base.submission.abstract },
-      after: { title, description: abstract },
-      now,
-      requestId: context.get("requestId") ?? null,
-    }),
-  ]);
-  await replaceProjectedAnswers(context.env.DB, base.submission.id, base.fields, projected.projected.answers, now);
-  // Write the roster through unchanged. This path takes no roster from the
-  // request and does not mean to, but `replaceProjectedAnswers` deletes every
-  // answer and re-inserts only the served set — which no longer includes the
-  // legacy `co_speaker_*` pair. On a form still carrying it, the first edit
-  // would destroy the only record of that person before anything had migrated
-  // them into `participants_json`: the page would then report no participants
-  // while the participation row still existed, and a form with
-  // `min_speakers >= 2` would refuse every later edit forever, on a screen with
-  // no participant control to satisfy it. Every other path migrates before it
-  // wipes; this makes that true here too.
+  const statements = answerRows;
+  if (contentChanged) {
+    statements.unshift(
+      context.env.DB.prepare(
+        `UPDATE submissions SET title = ?, abstract = ?, search_blob = ?, last_saved_at = ?,
+         last_write_source = 'marquee', updated_at = ?
+         WHERE id = ? AND form_id = ? AND submitter_person_id = ?
+           AND status IN ('submitted', 'in_review')`,
+      ).bind(
+        title,
+        abstract,
+        JSON.stringify(projected.projected.answers),
+        now,
+        now,
+        base.submission.id,
+        base.form.id,
+        base.submission.submitter_person_id,
+      ),
+      auditStatement(context.env.DB, {
+        eventId: base.form.event_id,
+        actorKind: "user",
+        actorPersonId: base.submission.submitter_person_id,
+        action: "speaker_talk_updated",
+        entityType: "submission",
+        entityId: base.submission.id,
+        before: { title: base.submission.title, description: base.answers.abstract ?? base.submission.abstract },
+        after: { title, description: abstract },
+        now,
+        requestId: context.get("requestId") ?? null,
+      }),
+    );
+  }
+  await context.env.DB.batch(statements);
+  // Write the roster through unchanged. The answer writer updates existing rows
+  // in place and only removes fields the merged projection explicitly dropped,
+  // so legacy participant answers remain available to the roster migration.
   await context.env.DB
     .prepare("UPDATE submissions SET participants_json = ?, updated_at = ? WHERE id = ?")
     .bind(writeParticipantRoster(base.roster), now, base.submission.id)
@@ -1039,7 +1131,16 @@ async function handlePublicSubmission(
   ) {
     await requireTurnstile(context, tokenFromBody(body));
   }
-  if (base.submission && base.submission.status !== "draft") throw ApiError.conflict("This abstract was already submitted. Use its confirmation link to view it.");
+  if (base.submission && base.submission.status !== "draft") {
+    const resumeHash = resumeToken ? await sha256Hex(resumeToken) : null;
+    const arrival = resumeHash
+      ? await context.env.DB.prepare(
+        "SELECT submission_id FROM submission_arrivals WHERE submission_id = ? AND resume_token_hash = ?",
+      ).bind(base.submission.id, resumeHash).first<{ submission_id: string }>()
+      : null;
+    if (arrival) return formResponse(context, slug, resumeToken, body.email ?? undefined);
+    throw ApiError.conflict("This abstract was already submitted. Use its confirmation link to view it.");
+  }
   if (publicFormIsClosed(base.form)) throw ApiError.conflict("This call for speakers is closed. Keep your answers and return when the conference reopens.");
   // A resumed draft gets the path-aware capacity response below, after its
   // owner and exclusion-aware count are known. New submissions can refuse now.
@@ -1076,12 +1177,24 @@ async function handlePublicSubmission(
   }
 
   const routing = await selectSubmissionRouting(context.env.DB, base.form.event_id, {
+    answers: projected.projected.answers,
+    eventFieldKeys: (await context.env.DB.prepare(`
+      SELECT DISTINCT field.key
+      FROM form_fields field
+      JOIN forms form ON form.id = field.form_id
+      WHERE form.event_id = ? AND field.deleted_at IS NULL
+    `).bind(base.form.event_id).all<{ key: string }>()).results.map((field) => field.key),
     formatId: references.formatId,
+    formFieldKeys: base.fields.map((field) => field.key),
+    levelId: references.levelId,
     trackIds: references.trackIds,
     vendorAffiliation: vendorAffiliation(projected.projected.answers),
   });
   const now = Date.now();
   const existing = base.submission;
+  const removals = existing
+    ? await projectedAnswerRemovals(context.env.DB, existing.id, base.fields, projected.projected.answers, new Set(Object.keys(raw)), true)
+    : [];
   // Who the record's submitter is: whoever `email` names, which the disclosure
   // decides. Resolving from the draft's owner instead — as this did — made the
   // record permanently disagree with the mail: a submitter who ticks "on behalf
@@ -1102,12 +1215,22 @@ async function handlePublicSubmission(
       submissionCapacityRefusal(base.effectiveLimit, existingPersonCount, "new"),
     ));
   }
-  // The submitter's own profile fields come from the speaker card only when the
-  // submitter *is* the speaker. Under the disclosure those fields describe
-  // somebody else, and writing them here would file an executive's bio against
-  // their comms manager's record.
-  const person = existingPerson ?? await upsertPublicPerson({
-    db: context.env.DB,
+  const submissionId = existing?.id ?? crypto.randomUUID();
+  const rawResumeToken = resumeToken ?? mintToken();
+  const resumeHash = await sha256Hex(rawResumeToken);
+  const title = answerText(projected.projected.answers, "title") ?? "Untitled abstract";
+  const abstract = answerText(projected.projected.answers, "abstract");
+  const vendor = vendorAffiliation(projected.projected.answers);
+  // Everything through the arrival claim is prepared first and committed in
+  // one D1 batch. In particular, do not create a person, draft submission, or
+  // track projection before the reviewer-scope preflight has passed: an
+  // action-only rule has the same transaction boundary as a committee route.
+  const preparation: PublicPersonPreparation = {
+    byEmail: new Map(),
+    statements: [],
+  };
+  if (existingPerson) preparation.byEmail.set(email!.trim().toLowerCase(), existingPerson);
+  const person = existingPerson ?? await preparePublicPerson(context.env.DB, preparation, {
     orgId: event.org_id,
     email: email!,
     name: roster.onBehalfOf?.name ?? answerText(projected.projected.answers, "speaker_name") ?? email!,
@@ -1123,83 +1246,19 @@ async function handlePublicSubmission(
       submissionCapacityRefusal(base.effectiveLimit, existingCount, existing ? "resumed-draft" : "new"),
     ));
   }
-  const submissionId = existing?.id ?? crypto.randomUUID();
-  const rawResumeToken = resumeToken ?? mintToken();
-  const resumeHash = await sha256Hex(rawResumeToken);
-  const title = answerText(projected.projected.answers, "title") ?? "Untitled abstract";
-  const abstract = answerText(projected.projected.answers, "abstract");
-  const vendor = vendorAffiliation(projected.projected.answers);
-  let routingStage: RoutingStage | null = null;
-  if (routing.committeeId !== null) {
-    routingStage = await stageRoutingSubmission({
-      db: context.env.DB,
-      eventId: base.form.event_id,
-      existing: existing ? { id: existing.id } : null,
-      formId: base.form.id,
-      kind: base.form.kind,
-      personId: person.id,
-      personCreated: existingPerson === null,
-      submissionId,
-      title,
-      abstract,
-      formatId: references.formatId,
-      trackIds: references.trackIds,
-      vendorAffiliation: vendor,
-      resumeHash,
-      now,
-      searchBlob: JSON.stringify(projected.projected.answers),
-    });
-    try {
-      await assertRoutingPoolAllowed(context.env.DB, base.form.event_id, submissionId, routing);
-    } catch (error) {
-      await rollbackRoutingStage(context.env.DB, routingStage);
-      throw error;
-    }
-  }
+  const intake = await prepareParticipantRoster(context.env.DB, {
+    submissionId,
+    orgId: event.org_id,
+    submitter: person,
+    answers: projected.projected.answers,
+    roster,
+    now,
+    preparation,
+  });
+  await assertRoutingPoolAllowedForTracks(context.env.DB, base.form.event_id, routing.trackIds, routing);
+
   const confirmationUrl = `${publicOrigin(context.req.url)}/f/${encodeURIComponent(slug)}?resume=${encodeURIComponent(rawResumeToken)}`;
   let referenceCode = existing?.reference_code ?? null;
-  if (existing || routingStage !== null) {
-    if (referenceCode === null && routingStage === null) {
-      referenceCode = await withSubmissionReferenceAllocation(context.env.DB, base.form.event_id, now, (allocatedCode) => [
-        context.env.DB.prepare(
-          `UPDATE submissions SET reference_code = ?, title = ?, abstract = ?, status = 'submitted', origin = 'public',
-           format_id = ?, primary_track_id = ?, vendor_affiliation = ?, submitted_at = ?,
-           last_saved_at = ?, search_blob = ?, applied_rule_id = ?, submitter_person_id = ?, updated_at = ?
-           WHERE id = ? AND status = 'draft'`,
-        ).bind(
-          allocatedCode, title, abstract, references.formatId, references.trackIds[0] ?? null, vendor, now,
-          now, JSON.stringify(projected.projected.answers), routing.ruleId, person.id, now, submissionId,
-        ),
-      ]);
-    } else {
-      await context.env.DB.prepare(
-        `UPDATE submissions SET title = ?, abstract = ?, status = 'submitted', origin = 'public',
-         format_id = ?, primary_track_id = ?, vendor_affiliation = ?, submitted_at = ?,
-         last_saved_at = ?, search_blob = ?, applied_rule_id = ?, submitter_person_id = ?, updated_at = ?
-         WHERE id = ? AND status = 'draft'`,
-      ).bind(
-        title, abstract, references.formatId, references.trackIds[0] ?? null, vendor, now,
-        now, JSON.stringify(projected.projected.answers), routing.ruleId, person.id, now, submissionId,
-      ).run();
-    }
-  } else {
-    referenceCode = await withSubmissionReferenceAllocation(context.env.DB, base.form.event_id, now, (allocatedCode) => [
-      context.env.DB.prepare(
-        `INSERT INTO submissions
-         (id, event_id, reference_code, form_id, kind, title, abstract, status, format_id, primary_track_id,
-          origin, vendor_affiliation, submitter_person_id, resume_token_hash, submitted_at,
-          last_saved_at, search_blob, applied_rule_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?, 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(
-        submissionId, base.form.event_id, allocatedCode, base.form.id, base.form.kind, title, abstract,
-        references.formatId, references.trackIds[0] ?? null, vendor, person.id, resumeHash,
-        now, now, JSON.stringify(projected.projected.answers), routing.ruleId, now, now,
-      ),
-    ]);
-  }
-  if (base.resumeSource === "magic" && base.resumeMagicLinkId !== null) {
-    await promoteMagicLinkToResumeCapability(context.env.DB, base.resumeMagicLinkId, now);
-  }
   // The first two moments of MRQ-211's submission timeline. Everything that
   // happens to a record afterwards — decided, reversed, mailed — already writes
   // an audit row; arrival and routing did not, so the one question the timeline
@@ -1214,7 +1273,14 @@ async function handlePublicSubmission(
       action: "submission.received",
       entityType: "submission",
       entityId: submissionId,
-      after: { title, kind: base.form.kind, form_id: base.form.id },
+      after: {
+        title,
+        kind: base.form.kind,
+        form_id: base.form.id,
+        track_ids: routing.trackIds,
+        tag_ids: routing.action?.addTagIds ?? [],
+        level_id: routing.levelId,
+      },
       now,
       requestId: context.get("requestId") ?? null,
     }),
@@ -1230,24 +1296,93 @@ async function handlePublicSubmission(
       action: "submission.routed",
       entityType: "submission",
       entityId: submissionId,
-      after: { rule_id: routing.ruleId, rule_name: routing.ruleName, committee_id: routing.committeeId },
+      after: {
+        rule_id: routing.ruleId,
+        rule_name: routing.ruleName,
+        track_ids: routing.trackIds,
+        tag_ids: routing.action?.addTagIds ?? [],
+        level_id: routing.levelId,
+        committee_id: routing.committeeId,
+      },
       now,
       requestId: context.get("requestId") ?? null,
     }));
   }
-  await context.env.DB.batch(intakeRows);
-  await replaceProjectedAnswers(context.env.DB, submissionId, base.fields, projected.projected.answers, now);
-  await persistTracks(context.env.DB, submissionId, references.trackIds, now);
-  const intake = await persistParticipantRoster(context.env.DB, {
+  const answerRows = await projectedAnswerStatements(
+    context.env.DB,
     submissionId,
-    orgId: event.org_id,
-    submitter: person,
-    answers: projected.projected.answers,
-    roster,
+    base.fields,
+    projected.projected.answers,
     now,
-  });
-  await moveAttachments(context.env.DB, submissionId, existing?.id ?? null, projected.projected.answers);
-  await writeRoutingPoolAssignment(context.env.DB, submissionId, routing, now);
+    removals,
+  );
+  const submissionRow = existing
+    ? (referenceCode === null
+      ? (allocatedCode: string) => context.env.DB.prepare(
+        `UPDATE submissions SET reference_code = ?, title = ?, abstract = ?, status = 'submitted', origin = 'public',
+         format_id = ?, primary_track_id = ?, level_id = ?, vendor_affiliation = ?, submitted_at = ?,
+         last_saved_at = ?, search_blob = ?, applied_rule_id = ?, submitter_person_id = ?, updated_at = ?
+         WHERE id = ? AND status = 'draft'`,
+      ).bind(
+        allocatedCode, title, abstract, references.formatId, routing.trackIds[0] ?? null, routing.levelId, vendor, now,
+        now, JSON.stringify(projected.projected.answers), routing.ruleId, person.id, now, submissionId,
+      )
+      : () => context.env.DB.prepare(
+        `UPDATE submissions SET title = ?, abstract = ?, status = 'submitted', origin = 'public',
+         format_id = ?, primary_track_id = ?, level_id = ?, vendor_affiliation = ?, submitted_at = ?,
+         last_saved_at = ?, search_blob = ?, applied_rule_id = ?, submitter_person_id = ?, updated_at = ?
+         WHERE id = ? AND status = 'draft'`,
+      ).bind(
+        title, abstract, references.formatId, routing.trackIds[0] ?? null, routing.levelId, vendor, now,
+        now, JSON.stringify(projected.projected.answers), routing.ruleId, person.id, now, submissionId,
+      ))
+    : (allocatedCode: string) => context.env.DB.prepare(
+      `INSERT INTO submissions
+       (id, event_id, reference_code, form_id, kind, title, abstract, status, format_id, primary_track_id, level_id,
+        origin, vendor_affiliation, submitter_person_id, resume_token_hash, submitted_at,
+        last_saved_at, search_blob, applied_rule_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?, ?, 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      submissionId, base.form.event_id, allocatedCode, base.form.id, base.form.kind, title, abstract,
+      references.formatId, routing.trackIds[0] ?? null, routing.levelId, vendor, person.id, resumeHash,
+      now, now, JSON.stringify(projected.projected.answers), routing.ruleId, now, now,
+    );
+
+  const postSubmissionStatements: D1PreparedStatement[] = [
+    ...answerRows,
+    ...trackStatements(context.env.DB, submissionId, routing.trackIds, now),
+    ...tagStatements(context.env.DB, submissionId, routing.action?.addTagIds ?? [], now),
+    context.env.DB.prepare(
+      "UPDATE submissions SET level_id = ?, applied_rule_id = ?, updated_at = ? WHERE id = ?",
+    ).bind(routing.levelId, routing.ruleId, now, submissionId),
+    ...intake.statements,
+    ...attachmentStatements(context.env.DB, submissionId, existing?.id ?? null, projected.projected.answers, now),
+    ...await routingPoolAssignmentStatements(context.env.DB, submissionId, routing, now),
+    ...intakeRows,
+    context.env.DB.prepare(
+      `INSERT INTO submission_arrivals
+         (submission_id, resume_token_hash, applied_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).bind(submissionId, resumeHash, now, now, now),
+  ];
+  const commonStatements: D1PreparedStatement[] = [
+    ...preparation.statements,
+    ...(referenceCode === null ? [] : [submissionRow(referenceCode)]),
+    ...postSubmissionStatements,
+  ];
+  if (referenceCode === null) {
+    referenceCode = await withSubmissionReferenceAllocation(context.env.DB, base.form.event_id, now, (allocatedCode) => [
+      ...preparation.statements,
+      submissionRow(allocatedCode),
+      ...postSubmissionStatements,
+    ]);
+  } else {
+    await context.env.DB.batch(commonStatements);
+  }
+
+  if (base.resumeSource === "magic" && base.resumeMagicLinkId !== null) {
+    await promoteMagicLinkToResumeCapability(context.env.DB, base.resumeMagicLinkId, now);
+  }
 
   if (referenceCode === null) {
     referenceCode = (await context.env.DB.prepare(

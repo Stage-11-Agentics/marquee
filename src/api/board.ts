@@ -271,8 +271,12 @@ function toCard(row: BoardQueryRow): BoardCard {
 }
 
 async function facets(db: D1Database, eventId: string): Promise<BoardFacets> {
+  const trackDeletedAt = await db
+    .prepare("SELECT 1 AS present FROM pragma_table_info('tracks') WHERE name = 'deleted_at'")
+    .first<{ present: number }>();
+  const trackTombstonePredicate = trackDeletedAt?.present === 1 ? " AND deleted_at IS NULL" : "";
   const [tracks, formats, waves] = await Promise.all([
-    db.prepare("SELECT id, name FROM tracks WHERE event_id = ? ORDER BY position, id").bind(eventId).all<{ id: string; name: string }>(),
+    db.prepare(`SELECT id, name FROM tracks WHERE event_id = ?${trackTombstonePredicate} ORDER BY position, id`).bind(eventId).all<{ id: string; name: string }>(),
     db.prepare("SELECT id, name FROM formats WHERE event_id = ? ORDER BY position, id").bind(eventId).all<{ id: string; name: string }>(),
     db.prepare("SELECT id, name FROM waves WHERE event_id = ? ORDER BY position, id").bind(eventId).all<{ id: string; name: string }>(),
   ]);

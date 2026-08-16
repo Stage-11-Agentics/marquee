@@ -28,6 +28,15 @@
 .record-slot .record-publication-confirm > .record-publication-warning { color: var(--warning, #8a5a00); font-weight: 600; }
 .record-publication-confirm-actions { display: flex; gap: 7px; justify-content: flex-end; min-height: 28px; }
 .record-action-row { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.record-routing-form { display: grid; gap: 12px; }
+.record-routing-form > .subtle { line-height: 1.45; margin: 0; }
+.record-routing-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.record-routing-fieldset { border: 1px solid var(--line); display: grid; gap: 7px; margin: 0; min-width: 0; padding: 10px; }
+.record-routing-fieldset legend { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .1em; padding: 0 4px; text-transform: uppercase; }
+.record-routing-option { align-items: center; display: flex; gap: 7px; min-height: 24px; }
+.record-routing-option span { font-size: 10.5px; overflow-wrap: anywhere; }
+.record-routing-grid > .field { align-self: end; }
+.record-routing-grid select { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: 10.5px; min-height: 30px; padding: 5px 7px; width: 100%; }
 /* Same slot and font-size as the undecided `.subtle` caption it replaces —
    only color and weight change — so naming a standing decision never grows
    the fixed-height `.card-head` it lives in. */
@@ -249,7 +258,7 @@
   .record-publication-action { justify-content: flex-start; min-width: 0; }
   .record-publication-confirm { max-width: none; text-align: left; }
   .record-participants, .record-aside { display: grid; grid-template-columns: 1fr; }
-  .record-form-grid, .record-schedule-form, .record-new-person-grid { grid-template-columns: 1fr; }
+  .record-form-grid, .record-schedule-form, .record-new-person-grid, .record-routing-grid { grid-template-columns: 1fr; }
   .record-form-wide { grid-column: auto; }
 }
 

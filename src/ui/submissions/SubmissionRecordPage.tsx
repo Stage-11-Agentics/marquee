@@ -35,6 +35,10 @@ const CONTENT_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/conte
 const CONTENT_RESTORE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/content/restore";
 const PARTICIPANTS_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/participants";
 const PARTICIPANT_DELETE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/participants/{participationId}";
+const ROUTING_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/routing";
+const TRACKS_ROUTE = "/api/v1/events/{eventId}/tracks";
+const TAGS_ROUTE = "/api/v1/events/{eventId}/tags";
+const LEVELS_ROUTE = "/api/v1/events/{eventId}/levels";
 const SEARCH_ROUTE = "/api/v1/events/{eventId}/search";
 const TIMELINE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/timeline";
 const NOTES_ROUTE = "/api/v1/submissions/{submissionId}/notes";
@@ -119,9 +123,12 @@ interface RecordData {
   is_published: boolean;
   slot: { day: string; time: string; room: string; building: string; duration_min: number; is_published: boolean } | null;
   format: { id: string; name: string | null } | null; wave: { id: string; name: string | null } | null;
+  primary_track_id: string | null;
+  level: { id: string; name: string | null; deleted_at: number | null } | null;
+  tags: Array<{ id: string; name: string; name_key?: string; deleted_at: number | null }>;
   routing: { rule_id: string; name: string } | null;
-  tracks: Array<{ id: string; name: string; color: string; is_primary: boolean }>;
-  participants: Participant[]; answers: Array<{ id: string; field_id: string; label: string | null; key: string | null; type: string | null; value_text: string | null; value_json: unknown; file: FileAnswerView | null }>;
+  tracks: Array<{ id: string; name: string; color: string | null; deleted_at: number | null; is_primary: boolean }>;
+  participants: Participant[]; answers: Array<{ id: string; field_id: string; label: string | null; key: string | null; type: string | null; value_text: string | null; value_json: unknown; deleted_at?: number | null; file: FileAnswerView | null }>;
   decisions: Array<{ id: string; kind?: "decision" | "reversal"; decision: string; resulting_status: string; feedback_md: string | null; note?: string | null; decided_at: number; decided_by_name: string | null }>;
   /** Who a decision mail goes to today, decided by the sender's own rule. */
   decision_recipient: { person_id: string; name: string; email: string } | null;
@@ -135,7 +142,7 @@ interface RecordData {
   history_total: number;
   history_next_cursor: string | null;
   history_has_more: boolean;
-  actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_unpublish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean; can_send_calendar_invite: boolean; can_edit_participants: boolean; can_override_scores: boolean; can_view_notes: boolean };
+  actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_unpublish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean; can_send_calendar_invite: boolean; can_edit_participants: boolean; can_edit_routing: boolean; can_override_scores: boolean; can_view_notes: boolean };
 }
 
 export interface SubmissionNote {
@@ -595,6 +602,141 @@ function EvaluationEvidenceRow({ evaluation, displayName, criteria, canOverride,
           </div>}
     </div>}
   </div>;
+}
+
+interface RoutingOption {
+  id: string;
+  name: string;
+  color?: string | null;
+  deleted_at?: number | null;
+}
+
+function carriedRoutingOptions(active: RoutingOption[], carried: RoutingOption[]): RoutingOption[] {
+  const byId = new Map(active.map((option) => [option.id, option]));
+  for (const option of carried) if (!byId.has(option.id)) byId.set(option.id, option);
+  return [...byId.values()];
+}
+
+/**
+ * The record-side routing editor is a full replacement, not a second rule
+ * evaluator. Deleted values already attached to the submission are carried
+ * into the choices so loading and saving this form cannot silently discard
+ * historical routing; a fresh deleted value still cannot be selected because
+ * it never arrives from the active taxonomy endpoints.
+ */
+function SubmissionRoutingCard({ eventId, submissionId, record, busy, onSaved }: {
+  eventId: string;
+  submissionId: string;
+  record: RecordData;
+  busy: boolean;
+  onSaved: () => void;
+}): JSX.Element {
+  const [tracks, setTracks] = useState<RoutingOption[]>([]);
+  const [tags, setTags] = useState<RoutingOption[]>([]);
+  const [levels, setLevels] = useState<RoutingOption[]>([]);
+  const [trackIds, setTrackIds] = useState<string[]>([]);
+  const [primaryTrackId, setPrimaryTrackId] = useState<string | null>(null);
+  const [tagIds, setTagIds] = useState<string[]>([]);
+  const [levelId, setLevelId] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const currentTrackIds = record.tracks.map((track) => track.id);
+    setTrackIds(currentTrackIds);
+    setPrimaryTrackId(record.primary_track_id ?? record.tracks.find((track) => track.is_primary)?.id ?? currentTrackIds[0] ?? null);
+    setTagIds(record.tags.map((tag) => tag.id));
+    setLevelId(record.level?.id ?? "");
+    setNotice("");
+    setError("");
+    if (!record.actions.can_edit_routing) return;
+
+    const controller = new AbortController();
+    setLoading(true);
+    void Promise.all([
+      apiFetch<{ data: RoutingOption[] }>(`/api/v1/events/${encodeURIComponent(eventId)}/tracks`, { signal: controller.signal, route: TRACKS_ROUTE }),
+      apiFetch<{ data: RoutingOption[] }>(`/api/v1/events/${encodeURIComponent(eventId)}/tags`, { signal: controller.signal, route: TAGS_ROUTE }),
+      apiFetch<{ data: RoutingOption[] }>(`/api/v1/events/${encodeURIComponent(eventId)}/levels`, { signal: controller.signal, route: LEVELS_ROUTE }),
+    ]).then(([trackResponse, tagResponse, levelResponse]) => {
+      if (controller.signal.aborted) return;
+      setTracks(carriedRoutingOptions(trackResponse.data, record.tracks));
+      setTags(carriedRoutingOptions(tagResponse.data, record.tags));
+      setLevels(carriedRoutingOptions(levelResponse.data, record.level ? [{ id: record.level.id, name: record.level.name ?? "Archived level", deleted_at: record.level.deleted_at }] : []));
+      setLoading(false);
+    }).catch((caught: unknown) => {
+      if (controller.signal.aborted) return;
+      setError(errorSummary(caught));
+      setLoading(false);
+    });
+    return () => controller.abort();
+  }, [eventId, record.id, record.updated_at, record.actions.can_edit_routing]);
+
+  const toggleTrack = (id: string, checked: boolean) => {
+    setTrackIds((current) => {
+      const next = checked ? [...current, id] : current.filter((value) => value !== id);
+      if (!checked && primaryTrackId === id) setPrimaryTrackId(next[0] ?? null);
+      if (checked && primaryTrackId === null) setPrimaryTrackId(id);
+      return next;
+    });
+  };
+
+  const toggleTag = (id: string, checked: boolean) => {
+    setTagIds((current) => checked ? [...current, id] : current.filter((value) => value !== id));
+  };
+
+  const save = async (event: JSX.TargetedSubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setNotice("");
+    const selectedPrimary = primaryTrackId !== null && trackIds.includes(primaryTrackId) ? primaryTrackId : trackIds[0] ?? null;
+    try {
+      await apiFetch<{ data: unknown }>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/routing`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ track_ids: trackIds, primary_track_id: selectedPrimary, tag_ids: tagIds, level_id: levelId || null }),
+        route: ROUTING_ROUTE,
+      });
+      setPrimaryTrackId(selectedPrimary);
+      setNotice("Routing saved.");
+      onSaved();
+    } catch (caught: unknown) {
+      setError(errorSummary(caught));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!record.actions.can_edit_routing) return <></>;
+  return <Card>
+    <CardHeader title="Routing"><span class="subtle">{record.routing ? `Applied by ${record.routing.name}` : "Manual projection"}</span></CardHeader>
+    <CardBody>
+      <form class="record-routing-form" onSubmit={(event) => void save(event)}>
+        <p class="subtle">Replace the submission's tracks, tags, and level. This is a manual projection and does not re-run public arrival rules.</p>
+        <div class="record-routing-grid">
+          <fieldset class="record-routing-fieldset">
+            <legend>Tracks</legend>
+            {loading ? <span class="subtle">Loading tracks…</span> : tracks.length === 0 ? <span class="subtle">No tracks configured.</span> : tracks.map((track) => <label class="record-routing-option" key={track.id}>
+              <input type="checkbox" checked={trackIds.includes(track.id)} onChange={(event) => toggleTrack(track.id, event.currentTarget.checked)} />
+              <span>{track.name}{track.deleted_at !== null && track.deleted_at !== undefined ? " · Archived" : ""}</span>
+            </label>)}
+            <label class="field"><span>Primary track</span><select value={primaryTrackId ?? ""} disabled={trackIds.length === 0} onChange={(event) => setPrimaryTrackId(event.currentTarget.value || null)}><option value="">No primary track</option>{tracks.filter((track) => trackIds.includes(track.id)).map((track) => <option value={track.id} key={track.id}>{track.name}</option>)}</select></label>
+          </fieldset>
+          <fieldset class="record-routing-fieldset">
+            <legend>Tags</legend>
+            {loading ? <span class="subtle">Loading tags…</span> : tags.length === 0 ? <span class="subtle">No tags configured.</span> : tags.map((tag) => <label class="record-routing-option" key={tag.id}>
+              <input type="checkbox" checked={tagIds.includes(tag.id)} onChange={(event) => toggleTag(tag.id, event.currentTarget.checked)} />
+              <span>{tag.name}{tag.deleted_at !== null && tag.deleted_at !== undefined ? " · Archived" : ""}</span>
+            </label>)}
+          </fieldset>
+          <label class="field"><span>Level</span><select value={levelId} onChange={(event) => setLevelId(event.currentTarget.value)}><option value="">No level</option>{levels.map((level) => <option value={level.id} key={level.id}>{level.name}{level.deleted_at !== null && level.deleted_at !== undefined ? " · Archived" : ""}</option>)}</select></label>
+        </div>
+        <div class="record-action-row"><Button variant="primary" type="submit" disabled={loading || saving || busy}>{saving ? "Saving…" : "Save routing"}</Button><span class={`record-inline-message ${error ? "error" : notice ? "notice" : ""}`} role={error ? "alert" : notice ? "status" : undefined}>{error || notice || " "}</span></div>
+      </form>
+    </CardBody>
+  </Card>;
 }
 
 export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props): JSX.Element {
@@ -1330,7 +1472,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           </form>}
         </CardBody></Card>
         <Card><CardHeader title="Message participant"><span class="subtle">Logged on this record · demo-safe</span></CardHeader><CardBody><form class="record-message-form" onSubmit={(event) => void sendMessage(event)}><label class="field"><span>Recipient and role</span><select value={messageRecipientId} onChange={(event) => setMessageRecipientId(event.currentTarget.value)}>{record.participants.map((participant) => <option value={participant.id} key={participant.id}>{participantNames.get(participant.person_id) ?? participant.name} · {statusLabel(participant.role)}</option>)}</select></label><label class="field"><span>Subject</span><input required value={messageSubject} onInput={(event) => setMessageSubject(event.currentTarget.value)} /></label><label class="field"><span>Message</span><textarea required rows={5} value={messageBody} onInput={(event) => setMessageBody(event.currentTarget.value)} /><small>Use the shared merge fields, such as <code>{"{{speaker.first_name}}"}</code> and <code>{"{{submission.title}}"}</code>.</small></label><div class="record-action-row"><span class={`record-inline-message ${messageError ? "error" : messageNotice ? "notice" : ""}`}>{messageError || messageNotice}</span><Button variant="primary" type="submit" disabled={Boolean(busy)}>{busy === "message" ? "Queueing…" : "Queue message"}</Button></div></form></CardBody></Card>
-        <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <EvaluationEvidenceRow key={`${evaluation.id}-${index}`} evaluation={evaluation} displayName={evidenceNames.get(evaluation.reviewer_person_id) ?? evaluation.reviewer_name} criteria={criteriaByRound.get(evaluation.round_id) ?? []} canOverride={record.actions.can_override_scores} busy={Boolean(busy)} onOverride={overrideScore} onClear={clearOverride} error={busy === `override-${evaluation.id}` ? "" : overrideError} />)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · <ReviewerName name={evidenceNames.get(comparison.reviewer_person_id) ?? comparison.reviewer_name} kind={comparison.reviewer_kind} /></small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
+        <Card><CardHeader title="Answers and evaluation evidence" /><CardBody><div class="record-answer-list">{record.answers.length ? record.answers.map((answer) => <div class="record-answer" key={answer.id}><small>{answer.label || answer.key || answer.field_id}{answer.deleted_at ? " · Deleted field" : ""}</small>{answer.file ? <FileAnswer label={answer.label || answer.key || "File"} file={answer.file} /> : <strong>{answerText(answer)}</strong>}</div>) : <span class="subtle">No form answers recorded.</span>}{record.evaluations.map((evaluation, index) => <EvaluationEvidenceRow key={`${evaluation.id}-${index}`} evaluation={evaluation} displayName={evidenceNames.get(evaluation.reviewer_person_id) ?? evaluation.reviewer_name} criteria={criteriaByRound.get(evaluation.round_id) ?? []} canOverride={record.actions.can_override_scores} busy={Boolean(busy)} onOverride={overrideScore} onClear={clearOverride} error={busy === `override-${evaluation.id}` ? "" : overrideError} />)}{record.comparisons.map((comparison, index) => <div class="record-answer" key={`${comparison.round_id}-${comparison.reviewer_name}-${index}`}><small>{comparison.round_name} · Comparison · <ReviewerName name={evidenceNames.get(comparison.reviewer_person_id) ?? comparison.reviewer_name} kind={comparison.reviewer_kind} /></small><strong>{comparison.submission_ids.length} cards ranked</strong><span>{JSON.stringify(comparison.ranking)}</span></div>)}</div></CardBody></Card>
         <Card><CardHeader title="Timeline"><span class="subtle">Submitted, decided, mailed — who, and when.</span></CardHeader><CardBody><ContentHistory
           entries={shownHistory}
           onRestore={record.actions.can_restore_content ? ((entryId) => void restoreVersion(entryId, isLivePublicly)) : undefined}
@@ -1348,6 +1490,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
       </div>
       <aside class="record-aside stack">
         <Card><CardHeader title="Tracks" /><CardBody><div class="track-chips">{record.tracks.length ? record.tracks.map((track) => <Chip key={track.id}>{track.name}{track.is_primary ? " · Primary" : ""}</Chip>) : <span class="subtle">No tracks assigned</span>}</div></CardBody></Card>
+        <SubmissionRoutingCard eventId={eventId} submissionId={submissionId} record={record} busy={Boolean(busy)} onSaved={refreshRecord} />
         <Card><CardHeader title="Evaluation panel"><span class="subtle">Current reviewers · coverage</span></CardHeader><CardBody><div class="record-rounds">{record.evaluation.rounds.length ? record.evaluation.rounds.map((round) => <section class="record-round" key={round.id}>
           <div class="record-round-head"><strong>{round.name}</strong><span class="tabular">{round.mode === "comparison" ? "Comparison" : "Scorecard"} · target {round.target_reviews_per_submission}</span></div>
           {round.evaluations.filter((evaluation) => !evaluation.abstained).length > 0 && <div class="record-round-evidence"><small>{round.evaluations.filter((evaluation) => !evaluation.abstained).length} scorecard result{round.evaluations.filter((evaluation) => !evaluation.abstained).length === 1 ? "" : "s"}</small></div>}

@@ -20,6 +20,8 @@ export const WIPE_ORDER = [
   "submission_decisions",
   "submission_answers",
   "submission_tracks",
+  "submission_tags",
+  "submission_arrivals",
   "participations",
   "evaluations",
   "comparisons",
@@ -69,6 +71,8 @@ export const WIPE_ORDER = [
   "email_templates",
   "outbox",
   "routing_rules",
+  "tags",
+  "levels",
   "waves",
   "rooms",
   "buildings",
@@ -194,6 +198,14 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   },
   submission_tracks: {
     sql: `DELETE FROM submission_tracks WHERE submission_id IN (SELECT id FROM submissions WHERE event_id IN (${ORG_EVENTS}))`,
+    bindings: ORG,
+  },
+  submission_tags: {
+    sql: `DELETE FROM submission_tags WHERE submission_id IN (SELECT id FROM submissions WHERE event_id IN (${ORG_EVENTS}))`,
+    bindings: ORG,
+  },
+  submission_arrivals: {
+    sql: `DELETE FROM submission_arrivals WHERE submission_id IN (SELECT id FROM submissions WHERE event_id IN (${ORG_EVENTS}))`,
     bindings: ORG,
   },
   participations: {
@@ -333,6 +345,14 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   },
   routing_rules: {
     sql: `DELETE FROM routing_rules WHERE event_id IN (${ORG_EVENTS})`,
+    bindings: ORG,
+  },
+  tags: {
+    sql: `DELETE FROM tags WHERE event_id IN (${ORG_EVENTS})`,
+    bindings: ORG,
+  },
+  levels: {
+    sql: `DELETE FROM levels WHERE event_id IN (${ORG_EVENTS})`,
     bindings: ORG,
   },
   waves: {

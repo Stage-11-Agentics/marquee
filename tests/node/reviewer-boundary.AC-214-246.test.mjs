@@ -222,8 +222,8 @@ test("CONTRACT · the manifest has one guarded reviewer inventory and guarded wr
 
   const publicForm = parsedModules.find(({ module }) => module.path === "src/routes/public-form.routes.ts");
   assert.ok(publicForm);
-  const assertRoutingCalls = callSites(publicForm.sourceFile, "assertRoutingPoolAllowed");
-  const writeRoutingCalls = callSites(publicForm.sourceFile, "writeRoutingPoolAssignment");
+  const assertRoutingCalls = callSites(publicForm.sourceFile, "assertRoutingPoolAllowedForTracks");
+  const writeRoutingCalls = callSites(publicForm.sourceFile, "routingPoolAssignmentStatements");
   assert.equal(assertRoutingCalls.length, 1);
   assert.equal(writeRoutingCalls.length, 1);
   assert.ok(assertRoutingCalls[0].line < writeRoutingCalls[0].line, "routing writes must follow the no-human-in-loop guard");

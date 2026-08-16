@@ -619,7 +619,7 @@ function sessionRowsQuery(
 
 async function loadTrackCatalog(database: D1Database, eventId: string): Promise<PublicTrack[]> {
   const result = await database
-    .prepare("SELECT id, name, color FROM tracks WHERE event_id = ? ORDER BY position ASC, id ASC")
+    .prepare("SELECT id, name, color FROM tracks WHERE event_id = ? AND deleted_at IS NULL ORDER BY position ASC, id ASC")
     .bind(eventId)
     .all<PublicTrack>();
   return result.results.map((track) => ({ id: track.id, name: track.name, color: track.color }));

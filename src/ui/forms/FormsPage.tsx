@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { BOUND_SOURCE_LABELS, BOUND_SOURCES, boundSourceOf, isBoundSourceCompatible, type BoundSource } from "../../lib/bound-options";
 import { eventTimeLabel, instantToLocalDateTime, localDateTimeToInstant } from "../../lib/event-time";
-import { evaluateFormLengthRules, fieldPreviewProjection, isCombinedLengthField, isFieldApplicable, projectApplicableAnswers, type FormAnswerValue, type FormCondition, type FormLengthRule } from "../../lib/form-conditions";
+import { canonicalRoutingFieldKey, evaluateFormLengthRules, evaluateRoutingConditions, fieldPreviewProjection, isCombinedLengthField, isFieldApplicable, projectApplicableAnswers, type FormAnswerValue, type FormCondition, type FormConditionClause, type FormLengthRule } from "../../lib/form-conditions";
 import { disambiguatedNames } from "../../lib/duplicate-names";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
@@ -105,6 +105,132 @@ interface FormDetail extends FormSummary {
   length_rules?: FormLengthRuleView[];
   admins: FormAdmin[];
   preview_fields: Array<{ key: string; label: string; type: string; position: number; required: boolean; condition: FormCondition | null }>;
+}
+
+interface RoutingRule {
+  id: string;
+  event_id: string;
+  name: string;
+  when_json: { all?: FormConditionClause[]; field?: string; op?: string; value?: FormAnswerValue };
+  then_json: { track_id?: string | null; add_tag_ids?: string[]; level_id?: string | null; plan_id?: string | null; committee_id?: string | null; round_id?: string | null };
+  position: number;
+  enabled: boolean;
+  dangling_references: string[];
+  dangling_reason: string | null;
+  summary: string;
+  updated_at: number;
+}
+
+interface RoutingOption { id: string; name: string; color?: string; position?: number }
+
+interface RoutingRuleDraft {
+  id?: string;
+  name: string;
+  conditions: FormConditionClause[];
+  action: {
+    track_id: string | null;
+    add_tag_ids: string[];
+    level_id: string | null;
+    plan_id: string | null;
+    committee_id: string | null;
+    round_id: string | null;
+  };
+}
+
+interface RoutingPreviewRule {
+  rule_id: string;
+  state: "matchable" | "skipped" | "dangling" | "invalid";
+  would_have_matched: number | null;
+  rules_above: number;
+  landing: {
+    track_id: string | null;
+    tag_ids: string[];
+    level_id: string | null;
+    plan_id: string | null;
+    committee_id: string | null;
+    round_id: string | null;
+  } | null;
+  reason: string | null;
+}
+
+interface RoutingPreview {
+  form_id: string;
+  sample_size: number;
+  last_arrival_at: number | null;
+  max_sample_size: 100;
+  rules: RoutingPreviewRule[];
+}
+
+const ROUTING_OPERATORS = ["equals", "not_equals", "contains", "not_contains", "answered", "not_answered"] as const;
+type RoutingOperator = (typeof ROUTING_OPERATORS)[number];
+
+interface ReviewOption extends RoutingOption {
+  status?: string;
+  plan_id?: string;
+}
+
+function routingConditions(rule: RoutingRule): FormConditionClause[] {
+  const raw = Array.isArray(rule.when_json.all)
+    ? rule.when_json.all
+    : typeof rule.when_json.field === "string"
+      ? [{ fieldKey: rule.when_json.field, op: rule.when_json.op ?? "equals", ...(rule.when_json.value === undefined ? {} : { value: rule.when_json.value }) }]
+      : [];
+  return raw.map((clause) => ({
+    fieldKey: canonicalRoutingFieldKey(clause.fieldKey),
+    op: clause.op,
+    ...(clause.value === undefined ? {} : { value: clause.value }),
+  }));
+}
+
+function routingAction(rule: RoutingRule): RoutingRuleDraft["action"] {
+  const raw = rule.then_json as Record<string, unknown>;
+  const tagIds = raw.add_tag_ids ?? raw.addTagIds;
+  return {
+    track_id: typeof (raw.track_id ?? raw.trackId) === "string" ? String(raw.track_id ?? raw.trackId) : null,
+    add_tag_ids: Array.isArray(tagIds) ? tagIds.filter((id): id is string => typeof id === "string") : [],
+    level_id: typeof (raw.level_id ?? raw.levelId) === "string" ? String(raw.level_id ?? raw.levelId) : null,
+    plan_id: typeof raw.plan_id === "string" ? raw.plan_id : null,
+    committee_id: typeof raw.committee_id === "string" ? raw.committee_id : null,
+    round_id: typeof raw.round_id === "string" ? raw.round_id : null,
+  };
+}
+
+function emptyRoutingDraft(fieldKey: string): RoutingRuleDraft {
+  return {
+    name: "",
+    conditions: [{ fieldKey, op: "equals", value: "Yes" }],
+    action: { track_id: null, add_tag_ids: [], level_id: null, plan_id: null, committee_id: null, round_id: null },
+  };
+}
+
+function operatorLabel(operator: string): string {
+  return operator.replaceAll("_", " ");
+}
+
+function fieldLabelFor(fieldKey: string, choices: Array<{ value: string; label: string }>): string {
+  const canonical = canonicalRoutingFieldKey(fieldKey);
+  return choices.find((choice) => canonicalRoutingFieldKey(choice.value) === canonical)?.label ?? fieldKey;
+}
+
+function conditionSentence(conditions: readonly FormConditionClause[], choices: Array<{ value: string; label: string }>): string {
+  if (!conditions.length) return "Always";
+  return conditions.map((condition) => {
+    const value = condition.value === undefined ? "" : ` ${String(condition.value)}`;
+    return `${fieldLabelFor(condition.fieldKey, choices)} ${operatorLabel(condition.op)}${value}`;
+  }).join(" and ");
+}
+
+function actionSentence(action: RoutingRuleDraft["action"], tracks: RoutingOption[], tags: RoutingOption[], levels: RoutingOption[]): string {
+  const track = tracks.find((item) => item.id === action.track_id)?.name;
+  const tagNames = action.add_tag_ids.map((id) => tags.find((item) => item.id === id)?.name ?? id).map((name) => `+ ${name}`);
+  const level = levels.find((item) => item.id === action.level_id)?.name;
+  const review = action.plan_id || action.committee_id || action.round_id ? "route to review" : "";
+  return [track ? `track ${track}` : "", ...tagNames, level ? `level ${level}` : "", review].filter(Boolean).join(", ") || "no destination";
+}
+
+function landingSentence(action: RoutingRuleDraft["action"], tracks: RoutingOption[], tags: RoutingOption[], levels: RoutingOption[]): string {
+  const destination = actionSentence(action, tracks, tags, levels);
+  return destination === "no destination" ? "Would land in: no rule destination" : `Would land in: ${destination}`;
 }
 
 interface ListResponse {
@@ -794,18 +920,244 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
           <div class="forms-field-list">{form.fields.length ? [...form.fields].sort((left, right) => left.position - right.position).map((field, index) => { const summary = field.condition ? conditionSummary(field.condition) : ""; return <button key={field.id} class={`forms-field-row ${field.id === selectedFieldId ? "active" : ""}`} data-builder-field={field.key} onClick={() => setSelectedFieldId(field.id)}><span class="forms-drag-handle" aria-hidden="true">⋮⋮</span><span class="forms-field-order">{String(index + 1).padStart(2, "0")}</span><span class="forms-field-copy"><strong data-field-label={field.label}>{field.label}{field.required ? " *" : ""}</strong><small data-condition-summary={summary}>{fieldTypeLabel(field.type)} · {field.required ? "Required" : "Optional"}{summary ? ` · When ${summary}` : ""}</small></span><span class="forms-field-actions"><span class="chip">{field.type}</span><span class="forms-arrow" aria-hidden="true">→</span></span></button>; }) : <div class="forms-field-empty"><strong>No fields yet</strong><span>Add the first question to give the public form a place to start.</span><Button small variant="primary" onClick={() => addField()}>＋ Add first field</Button></div>}</div>
           {selectedField && <div class="forms-field-editor"><div class="forms-editor-heading"><div><span class="eyebrow">Editing field</span><h3>{selectedField.label}</h3></div><div class="forms-reorder-actions"><Button small onClick={() => moveField(-1)}>↑</Button><Button small onClick={() => moveField(1)}>↓</Button><Button small variant="danger" onClick={deleteField}>Delete</Button></div></div><div class="grid-2"><div class="field"><label>Field key</label><input value={selectedField.key} onInput={(event) => setFieldValue("key", (event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label>Field type</label><select value={selectedField.type} onChange={(event) => setFieldValue("type", (event.currentTarget as HTMLSelectElement).value)}>{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div></div><div class="field"><label>Label</label><input value={selectedField.label} onInput={(event) => setFieldValue("label", (event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label>Help text</label><textarea value={selectedField.help_text ?? ""} onInput={(event) => setFieldValue("help_text", (event.currentTarget as HTMLTextAreaElement).value)} /></div><label class="forms-check"><input type="checkbox" checked={selectedField.required} onChange={(event) => setFieldValue("required", (event.currentTarget as HTMLInputElement).checked)} /> Required when this field applies</label><FieldValidationEditor field={selectedField} onConfig={setFieldConfig} /><CombinedLimitsEditor fields={form.fields} rules={form.length_rules ?? []} newLabel={newLengthRuleLabel} newMaxChars={newLengthRuleMaxChars} newFieldKeys={newLengthRuleFieldKeys} onNewLabel={setNewLengthRuleLabel} onNewMaxChars={setNewLengthRuleMaxChars} onNewFieldKeys={setNewLengthRuleFieldKeys} onRuleChange={setLengthRuleValue} onCreate={createLengthRule} onSave={saveLengthRule} onDelete={deleteLengthRule} busy={busy} /><div class="forms-condition-box"><div><strong>Conditional visibility</strong><span>Persisted as <code>{"{ all: [{ fieldKey, op, value }] }"}</code>; hidden values are never written.</span></div><div class="grid-2"><div class="field"><label>Show when this field</label><select value={conditionTrigger} onChange={(event) => setConditionTrigger((event.currentTarget as HTMLSelectElement).value)}><option value="">Always show</option>{form.fields.filter((field) => field.id !== selectedField.id).map((field) => <option key={field.id} value={field.key}>{field.label}</option>)}</select></div><div class="field"><label>Equals</label><input value={conditionValue} onInput={(event) => setConditionValue((event.currentTarget as HTMLInputElement).value)} disabled={!conditionTrigger} /></div></div></div><Button variant="primary" onClick={saveField} disabled={busy !== null}>{busy === "field" ? "Saving…" : "Save field"}</Button></div>}
           {!selectedField && <CombinedLimitsEditor fields={form.fields} rules={form.length_rules ?? []} newLabel={newLengthRuleLabel} newMaxChars={newLengthRuleMaxChars} newFieldKeys={newLengthRuleFieldKeys} onNewLabel={setNewLengthRuleLabel} onNewMaxChars={setNewLengthRuleMaxChars} onNewFieldKeys={setNewLengthRuleFieldKeys} onRuleChange={setLengthRuleValue} onCreate={createLengthRule} onSave={saveLengthRule} onDelete={deleteLengthRule} busy={busy} />}
-        </> : <StepPanel step={step} form={form} setForm={setForm} saveForm={saveForm} setLifecycle={setLifecycle} busy={busy} adminPersonId={adminPersonId} setAdminPersonId={setAdminPersonId} addAdmin={addAdmin} removeAdmin={removeAdmin} />}</CardBody>
+        </> : <StepPanel step={step} form={form} setForm={setForm} saveForm={saveForm} setLifecycle={setLifecycle} busy={busy} adminPersonId={adminPersonId} setAdminPersonId={setAdminPersonId} addAdmin={addAdmin} removeAdmin={removeAdmin} previewAnswers={previewAnswers} />}</CardBody>
       </section>
       <section class="card forms-preview-card" aria-label="Live preview"><CardHeader title="Live preview"><Chip>Same field schema</Chip></CardHeader><div class="forms-preview-reservation"><span>Reserved preview column</span><small>Fields change inside this frame; the editor stays put.</small></div><Preview fields={form.fields} lengthRules={form.length_rules ?? []} answers={previewAnswers} onAnswer={(key, value) => setPreviewAnswers((current) => ({ ...current, [key]: value }))} /><div class="forms-projection" aria-label="Preview projection"><span class="eyebrow">Deep-equal projection</span><code>{JSON.stringify(projection.map((field) => ({ label: field.label, type: field.type, position: field.position, required: field.required })))}</code></div></section>
     </div>
   </div>;
 }
 
-function StepPanel({ step, form, setForm, saveForm, setLifecycle, busy, adminPersonId, setAdminPersonId, addAdmin, removeAdmin }: { step: number; form: FormDetail; setForm: (form: FormDetail) => void; saveForm: () => void; setLifecycle: (next: "publish" | "close" | "reopen") => void; busy: string | null; adminPersonId: string; setAdminPersonId: (value: string) => void; addAdmin: () => void; removeAdmin: (personId: string) => void }): JSX.Element {
+function StepPanel({ step, form, setForm, saveForm, setLifecycle, busy, adminPersonId, setAdminPersonId, addAdmin, removeAdmin, previewAnswers }: { step: number; form: FormDetail; setForm: (form: FormDetail) => void; saveForm: () => void; setLifecycle: (next: "publish" | "close" | "reopen") => void; busy: string | null; adminPersonId: string; setAdminPersonId: (value: string) => void; addAdmin: () => void; removeAdmin: (personId: string) => void; previewAnswers: Record<string, FormAnswerValue> }): JSX.Element {
   if (step === 0) return <div class="forms-step-panel"><p class="subtle">Choose the intake target and make the public identity legible before opening the conference form.</p><div class="field"><label>Form name</label><input value={form.name} onInput={(event) => setForm({ ...form, name: (event.currentTarget as HTMLInputElement).value })} /></div><div class="field"><label>Public slug</label><input value={form.slug} onInput={(event) => setForm({ ...form, slug: (event.currentTarget as HTMLInputElement).value })} /></div><div class="forms-lock-note">{form.status === "draft" ? "This target can still be changed while the form is unpublished." : "Target locked after opening. Reopening preserves this URL and its responses."}</div><Button variant="primary" onClick={saveForm} disabled={busy !== null}>Save Type & basics</Button></div>;
   if (step === 1) return <div class="forms-step-panel"><p class="subtle">Welcome copy appears above the first field on the public form.</p><div class="field"><label>Welcome copy</label><textarea rows={7} value={form.welcome_md} onInput={(event) => setForm({ ...form, welcome_md: (event.currentTarget as HTMLTextAreaElement).value })} /></div><Button variant="primary" onClick={saveForm} disabled={busy !== null}>Save welcome</Button></div>;
   if (step === 3) return <div class="forms-step-panel"><p class="subtle">Speaker and sponsor limits are stated before the first add-person control.</p><div class="grid-2"><div class="field"><label>Minimum speakers</label><input type="number" min="0" value={form.min_speakers} onInput={(event) => setForm({ ...form, min_speakers: Number((event.currentTarget as HTMLInputElement).value) || 0 })} /></div><div class="field"><label>Maximum speakers</label><input type="number" min="0" value={form.max_speakers} onInput={(event) => setForm({ ...form, max_speakers: Number((event.currentTarget as HTMLInputElement).value) || 0 })} /></div></div><div class="field"><label>Maximum sponsors</label><input type="number" min="0" value={form.max_sponsors} onInput={(event) => setForm({ ...form, max_sponsors: Number((event.currentTarget as HTMLInputElement).value) || 0 })} /></div><div class="forms-limit-note">{form.min_speakers}–{form.max_speakers} speakers · up to {form.max_sponsors} sponsor{form.max_sponsors === 1 ? "" : "s"}</div><Button variant="primary" onClick={saveForm} disabled={busy !== null}>Save participants</Button></div>;
-  if (step === 4) return <div class="forms-step-panel"><p class="subtle">Conditions are schema-driven. Routing rules can consume the same field keys and answers at submission time.</p><div class="forms-rule-row"><strong>Vendor content</strong><span>When the vendor answer is Yes → workshop review</span><Chip>Schema rule</Chip></div><div class="forms-rule-row"><strong>Tracks</strong><span>One or more tracks; first selected remains primary for the agenda.</span><Chip>AC-234</Chip></div></div>;
+  if (step === 4) return <RoutingRulesPanel eventId={form.event_id} form={form} previewAnswers={previewAnswers} />;
   if (step === 5) return <div class="forms-step-panel"><p class="subtle">Messages and named administrators are part of the form, not a conference-wide default.</p><div class="field"><label>Thank-you template key</label><input value={form.thankyou_template_key ?? ""} placeholder="submission_confirmation" onInput={(event) => setForm({ ...form, thankyou_template_key: (event.currentTarget as HTMLInputElement).value || null })} /></div><div class="field"><label>Reminder offset hours</label><input type="number" min="0" value={form.reminder_offset_hours ?? ""} onInput={(event) => { const value = (event.currentTarget as HTMLInputElement).value; setForm({ ...form, reminder_offset_hours: value === "" ? null : Number(value) }); }} /></div><div class="forms-admin-list"><span class="eyebrow">Form administrators</span>{form.admins.length ? form.admins.map((admin) => <div key={admin.id}><strong>{disambiguatedNames(form.admins.map((entry) => ({ id: entry.person_id, name: entry.name }))).get(admin.person_id) ?? admin.name}</strong><span>{admin.email}</span><Button small variant="ghost" aria-label={`Remove ${disambiguatedNames(form.admins.map((entry) => ({ id: entry.person_id, name: entry.name }))).get(admin.person_id) ?? admin.name} as a form administrator`} onClick={() => removeAdmin(admin.person_id)} disabled={busy !== null}>Remove</Button></div>) : <span class="subtle">No explicit form administrators. Program staff retain access.</span>}<div class="forms-admin-add"><input value={adminPersonId} placeholder="person_id" aria-label="Administrator person ID" onInput={(event) => setAdminPersonId((event.currentTarget as HTMLInputElement).value)} /><Button small onClick={addAdmin} disabled={busy !== null || !adminPersonId.trim()}>Add admin</Button></div></div><Button variant="primary" onClick={saveForm} disabled={busy !== null}>Save messages</Button></div>;
   return <div class="forms-step-panel"><div class="forms-publish-summary"><span class="eyebrow">Publication state</span><strong>{form.status === "open" ? "Open and public" : form.status === "closed" ? "Closed, URL preserved" : "Unpublished draft"}</strong><span>{form.response_count.toLocaleString()} responses · {form.fields.length} fields · {form.kind === "abstract" ? "Enters evaluation" : "Ready for agenda"}</span></div><div class="forms-state-buttons"><Button onClick={() => setLifecycle("close")} disabled={busy !== null || form.status !== "open"}>Close</Button><Button onClick={() => setLifecycle("reopen")} disabled={busy !== null || form.status !== "closed"}>Reopen</Button><Button variant="primary" onClick={() => setLifecycle("publish")} disabled={busy !== null || form.status === "open"}>Publish</Button></div></div>;
+}
+
+function RoutingRulesPanel({ eventId, form, previewAnswers }: { eventId: string; form: FormDetail; previewAnswers: Record<string, FormAnswerValue> }): JSX.Element {
+  const [rules, setRules] = useState<RoutingRule[]>([]);
+  const [tracks, setTracks] = useState<RoutingOption[]>([]);
+  const [tags, setTags] = useState<RoutingOption[]>([]);
+  const [levels, setLevels] = useState<RoutingOption[]>([]);
+  const [reviewPlans, setReviewPlans] = useState<ReviewOption[]>([]);
+  const [reviewCommittees, setReviewCommittees] = useState<ReviewOption[]>([]);
+  const [reviewRounds, setReviewRounds] = useState<ReviewOption[]>([]);
+  const [preview, setPreview] = useState<RoutingPreview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [editor, setEditor] = useState<RoutingRuleDraft | null>(null);
+  const [fixingRuleId, setFixingRuleId] = useState<string | null>(null);
+
+  const fieldChoices = fieldOptions(form);
+
+  const loadPreview = async (): Promise<void> => {
+    try {
+      const result = await request<{ data: RoutingPreview }>(`/api/v1/events/${eventId}/forms/${form.id}/routing-preview`, "/api/v1/events/{eventId}/forms/{formId}/routing-preview");
+      setPreview(result.data);
+    } catch {
+      // Preview is an evidence panel, not a second source of rule state. A
+      // missing review grant or an empty fixture should not hide the builder.
+      setPreview(null);
+    }
+  };
+
+  const load = async (): Promise<void> => {
+    setLoading(true);
+    try {
+      const [ruleResult, settingsResult, tagResult, levelResult, planResult] = await Promise.all([
+        request<{ data: RoutingRule[] }>(`/api/v1/events/${eventId}/routing-rules`, "/api/v1/events/{eventId}/routing-rules"),
+        request<{ data: { tracks: RoutingOption[] } }>(`/api/v1/events/${eventId}/settings`, "/api/v1/events/{eventId}/settings"),
+        request<{ data: RoutingOption[] }>(`/api/v1/events/${eventId}/tags`, "/api/v1/events/{eventId}/tags"),
+        request<{ data: RoutingOption[] }>(`/api/v1/events/${eventId}/levels`, "/api/v1/events/{eventId}/levels"),
+        request<{ data: ReviewOption[] }>(`/api/v1/events/${eventId}/plans?page=1&per_page=100`, "/api/v1/events/{eventId}/plans"),
+      ]);
+      const planDetails = await Promise.all(planResult.data.map((plan) => request<{ rounds?: ReviewOption[]; committees?: ReviewOption[] }>(`/api/v1/events/${eventId}/plans/${plan.id}`, "/api/v1/events/{eventId}/plans/{planId}")));
+      setRules(ruleResult.data.sort((left, right) => left.position - right.position || left.id.localeCompare(right.id)));
+      setTracks(settingsResult.data.tracks);
+      setTags(tagResult.data);
+      setLevels(levelResult.data);
+      setReviewPlans(planResult.data);
+      setReviewRounds(planDetails.flatMap((detail, index) => (detail.rounds ?? []).map((round) => ({ ...round, plan_id: planResult.data[index]?.id }))));
+      setReviewCommittees(planDetails.flatMap((detail) => detail.committees ?? []).filter((committee, index, all) => all.findIndex((item) => item.id === committee.id) === index));
+      setMessage("");
+    } catch (error) {
+      setMessage(errorSummary(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void load(); void loadPreview(); }, [eventId, form.id]);
+
+  const run = async (key: string, action: () => Promise<void>): Promise<void> => {
+    setBusy(key);
+    setMessage("");
+    try { await action(); } catch (error) { setMessage(errorSummary(error)); } finally { setBusy(null); }
+  };
+
+  const refreshPreview = async (): Promise<void> => {
+    await loadPreview();
+  };
+
+  const updateEditor = (change: Partial<RoutingRuleDraft>): void => {
+    setEditor((current) => current ? { ...current, ...change } : current);
+  };
+
+  const updateCondition = (index: number, change: Partial<FormConditionClause>): void => {
+    setEditor((current) => current ? { ...current, conditions: current.conditions.map((condition, itemIndex) => itemIndex === index ? { ...condition, ...change } : condition) } : current);
+  };
+
+  const updateAction = (change: Partial<RoutingRuleDraft["action"]>): void => {
+    setEditor((current) => current ? { ...current, action: { ...current.action, ...change } } : current);
+  };
+
+  const openNew = (): void => {
+    setFixingRuleId(null);
+    setEditor(emptyRoutingDraft(fieldChoices[0]?.value ?? "vendor_content"));
+    setMessage("");
+  };
+
+  const openEdit = (rule: RoutingRule, fix = false): void => {
+    setFixingRuleId(fix ? rule.id : null);
+    setEditor({ id: rule.id, name: rule.name, conditions: routingConditions(rule), action: routingAction(rule) });
+    setMessage(fix ? "This rule is disabled for you, not deleted. Replace the dangling reference, then save." : "");
+  };
+
+  const save = () => void run("save", async () => {
+    if (!editor) return;
+    const conditions = editor.conditions.map((condition) => ({
+      fieldKey: canonicalRoutingFieldKey(condition.fieldKey),
+      op: condition.op,
+      ...(condition.value === undefined ? {} : { value: condition.value }),
+    }));
+    const action = {
+      track_id: editor.action.track_id,
+      add_tag_ids: [...new Set(editor.action.add_tag_ids)],
+      level_id: editor.action.level_id,
+      plan_id: editor.action.plan_id,
+      committee_id: editor.action.committee_id,
+      round_id: editor.action.round_id,
+    };
+    const payload = { name: editor.name.trim() || "Untitled routing rule", when_json: { all: conditions }, then_json: action, enabled: true };
+    const result = editor.id
+      ? await request<{ data: RoutingRule }>(`/api/v1/events/${eventId}/routing-rules/${editor.id}`, "/api/v1/events/{eventId}/routing-rules/{ruleId}", { method: "PATCH", body: JSON.stringify(payload) })
+      : await request<{ data: RoutingRule }>(`/api/v1/events/${eventId}/routing-rules`, "/api/v1/events/{eventId}/routing-rules", { method: "POST", body: JSON.stringify(payload) });
+    setRules((current) => {
+      const next = editor.id ? current.map((rule) => rule.id === result.data.id ? result.data : rule) : [...current, result.data];
+      return next.sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
+    });
+    setEditor(null);
+    setFixingRuleId(null);
+    await refreshPreview();
+  });
+
+  const toggle = (rule: RoutingRule) => void run(`toggle-${rule.id}`, async () => {
+    if (rule.dangling_references.length > 0) {
+      openEdit(rule, true);
+      return;
+    }
+    const result = await request<{ data: RoutingRule }>(`/api/v1/events/${eventId}/routing-rules/${rule.id}`, "/api/v1/events/{eventId}/routing-rules/{ruleId}", { method: "PATCH", body: JSON.stringify({ enabled: !rule.enabled }) });
+    setRules((current) => current.map((item) => item.id === result.data.id ? result.data : item));
+    await refreshPreview();
+  });
+
+  const remove = (rule: RoutingRule) => void run(`delete-${rule.id}`, async () => {
+    await request<{ data: RoutingRule }>(`/api/v1/events/${eventId}/routing-rules/${rule.id}`, "/api/v1/events/{eventId}/routing-rules/{ruleId}", { method: "DELETE" });
+    setRules((current) => current.filter((item) => item.id !== rule.id));
+    if (editor?.id === rule.id) setEditor(null);
+    await refreshPreview();
+  });
+
+  const move = (rule: RoutingRule, direction: -1 | 1) => void run(`move-${rule.id}`, async () => {
+    const ordered = [...rules].sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
+    const current = ordered.findIndex((item) => item.id === rule.id);
+    const position = Math.max(0, Math.min(ordered.length - 1, current + direction));
+    if (current < 0 || position === current) return;
+    const result = await request<{ data: RoutingRule[] }>(`/api/v1/events/${eventId}/routing-rules/reorder`, "/api/v1/events/{eventId}/routing-rules/reorder", { method: "PATCH", body: JSON.stringify({ rule_id: rule.id, position }) });
+    setRules(result.data);
+    await refreshPreview();
+  });
+
+  const liveAnswers: Record<string, FormAnswerValue> = {};
+  for (const [key, value] of Object.entries(previewAnswers)) liveAnswers[canonicalRoutingFieldKey(key)] = value;
+  const derivedKeys = ["format", "tracks", "vendor", "vendor_content", "vendor_affiliation"];
+  const eventFieldKeys = new Set([...derivedKeys, ...fieldChoices.map((field) => canonicalRoutingFieldKey(field.value))]);
+  const formFieldKeys = new Set([...derivedKeys, ...form.fields.map((field) => canonicalRoutingFieldKey(field.key))]);
+  const liveRule = rules.find((rule) => rule.enabled && rule.dangling_references.length === 0 && evaluateRoutingConditions(routingConditions(rule), { eventFieldKeys, formFieldKeys, answers: liveAnswers }).state === "matched");
+
+  const selectedPlanRounds = editor?.action.plan_id ? reviewRounds.filter((round) => round.plan_id === editor.action.plan_id) : reviewRounds;
+  const selectedConditionKeys = new Set(editor?.conditions.map((condition) => condition.fieldKey) ?? []);
+
+  return <div class="forms-step-panel forms-routing-panel">
+    <div class="forms-routing-header">
+      <div><span class="eyebrow">Conference routing</span><strong>Rules apply across every form on this conference.</strong><span class="subtle">A rule that names a question this form does not ask is skipped here, never evaluated.</span></div>
+      <Button variant="primary" onClick={openNew} disabled={busy !== null || loading}>＋ New rule</Button>
+    </div>
+    <p class="subtle">Rules run top to bottom. The first matching rule wins; setting a track replaces the submitted track projection, while tags are added idempotently. Manual record edits never re-run these rules.</p>
+    {message && <p class="record-inline-message error" role="alert">{message}</p>}
+
+    {editor && <section class="forms-routing-editor" aria-label={editor.id ? "Edit routing rule" : "New routing rule"}>
+      <div class="forms-editor-heading"><div><span class="eyebrow">{editor.id ? fixingRuleId ? "Fix rule" : "Edit rule" : "New rule"}</span><h3>{editor.name || "Untitled routing rule"}</h3></div><Button small variant="ghost" onClick={() => { setEditor(null); setFixingRuleId(null); }}>Cancel</Button></div>
+      <label class="field"><span>Name</span><input value={editor.name} placeholder="Vendor content review" onInput={(event) => updateEditor({ name: event.currentTarget.value })} /></label>
+      <div class="forms-routing-conditions">
+        <div class="forms-routing-section-heading"><strong>When</strong><span>All conditions must match · 1–5 conditions</span></div>
+        {editor.conditions.map((condition, index) => <div class={`forms-routing-condition ${fixingRuleId ? "is-dangling" : ""}`} key={`${editor.id ?? "new"}-${index}`}>
+          <span class="forms-routing-condition-number">{index + 1}</span>
+          <label class="field"><span>Question or answer</span><select value={condition.fieldKey} onChange={(event) => updateCondition(index, { fieldKey: event.currentTarget.value })}>{selectedConditionKeys.has(condition.fieldKey) && !fieldChoices.some((field) => field.value === condition.fieldKey) && <option value={condition.fieldKey}>{condition.fieldKey} (missing)</option>}{fieldChoices.map((field) => <option value={field.value} key={field.value}>{field.label}</option>)}</select></label>
+          <label class="field"><span>Operator</span><select value={condition.op} onChange={(event) => { const op = event.currentTarget.value as RoutingOperator; updateCondition(index, op === "answered" || op === "not_answered" ? { op, value: undefined } : { op, value: condition.value === undefined ? "Yes" : condition.value }); }}>{ROUTING_OPERATORS.map((item) => <option value={item} key={item}>{operatorLabel(item)}</option>)}</select></label>
+          <label class="field"><span>Value</span><input value={condition.value === undefined ? "" : String(condition.value)} disabled={condition.op === "answered" || condition.op === "not_answered"} onInput={(event) => updateCondition(index, { value: event.currentTarget.value })} /></label>
+          <Button small variant="ghost" aria-label={`Remove condition ${index + 1}`} onClick={() => setEditor((current) => current && current.conditions.length > 1 ? { ...current, conditions: current.conditions.filter((_, itemIndex) => itemIndex !== index) } : current)} disabled={editor.conditions.length <= 1}>Remove</Button>
+        </div>)}
+        <Button small onClick={() => setEditor((current) => current && current.conditions.length < 5 ? { ...current, conditions: [...current.conditions, { fieldKey: fieldChoices[0]?.value ?? "vendor_content", op: "equals", value: "Yes" }] } : current)} disabled={editor.conditions.length >= 5}>＋ Add condition</Button>
+      </div>
+
+      <div class="forms-routing-actions">
+        <div class="forms-routing-section-heading"><strong>Then</strong><span>Choose one or more destinations</span></div>
+        <div class="grid-2">
+          <label class="field"><span>Set primary track</span><select value={editor.action.track_id ?? ""} onChange={(event) => updateAction({ track_id: event.currentTarget.value || null })}><option value="">Keep submitted track</option>{tracks.map((track) => <option value={track.id} key={track.id}>{track.name}</option>)}</select></label>
+          <label class="field"><span>Set audience level</span><select value={editor.action.level_id ?? ""} onChange={(event) => updateAction({ level_id: event.currentTarget.value || null })}><option value="">Keep submitted level</option>{levels.map((level) => <option value={level.id} key={level.id}>{level.name}</option>)}</select></label>
+          <label class="field"><span>Add tags</span><select multiple size={Math.min(5, Math.max(2, tags.length))} onChange={(event) => updateAction({ add_tag_ids: Array.from(event.currentTarget.selectedOptions).map((option) => option.value) })}>{tags.map((tag) => <option value={tag.id} selected={editor.action.add_tag_ids.includes(tag.id)} key={tag.id}>{tag.name}</option>)}</select></label>
+          <div class="forms-routing-review-target"><span class="eyebrow">Route to review</span><label class="field"><span>Plan</span><select value={editor.action.plan_id ?? ""} onChange={(event) => { const planId = event.currentTarget.value || null; const roundId = editor.action.round_id && reviewRounds.some((round) => round.id === editor.action.round_id && round.plan_id === planId) ? editor.action.round_id : null; updateAction({ plan_id: planId, round_id: roundId }); }}><option value="">No review plan</option>{reviewPlans.map((plan) => <option value={plan.id} key={plan.id}>{plan.name}{plan.status && plan.status !== "open" ? ` · ${plan.status}` : ""}</option>)}</select></label><label class="field"><span>Committee</span><select value={editor.action.committee_id ?? ""} onChange={(event) => updateAction({ committee_id: event.currentTarget.value || null })}><option value="">Default committee</option>{reviewCommittees.map((committee) => <option value={committee.id} key={committee.id}>{committee.name}</option>)}</select></label><label class="field"><span>Round</span><select value={editor.action.round_id ?? ""} onChange={(event) => updateAction({ round_id: event.currentTarget.value || null })}><option value="">Default round</option>{selectedPlanRounds.map((round) => <option value={round.id} key={round.id}>{round.name}</option>)}</select></label></div>
+        </div>
+        {!reviewPlans.length && <span class="field-note">Create an open review plan before routing arrivals into review.</span>}
+      </div>
+      <div class="forms-routing-editor-footer"><span class="subtle">{landingSentence(editor.action, tracks, tags, levels)}</span><Button variant="primary" onClick={save} disabled={busy !== null || editor.conditions.length < 1}>{busy === "save" ? "Saving…" : "Save rule"}</Button></div>
+    </section>}
+
+    <div class="forms-routing-preview" aria-live="polite">
+      <div class="forms-routing-section-heading"><strong>Live proof</strong><span>Last 100 public arrivals · rule order is binding</span></div>
+      {preview ? <>
+        <div class="forms-routing-proof">{preview.rules.length ? preview.rules.map((item) => <div key={item.rule_id}><strong>{rules.find((rule) => rule.id === item.rule_id)?.name ?? item.rule_id}</strong><span>of the last {preview.sample_size} arrivals, {item.would_have_matched ?? 0} would have matched · {item.rules_above} rules above run first</span>{item.reason && <small>{item.reason}</small>}</div>) : <span class="subtle">No enabled rules to preview yet.</span>}</div>
+        <div class="forms-routing-landing"><span class="eyebrow">This answer preview</span><strong>{liveRule ? landingSentence(routingAction(liveRule), tracks, tags, levels) : "Would land in: no rule matches — stays as submitted"}</strong></div>
+      </> : <span class="subtle">Live proof is unavailable until this form has a readable routing preview.</span>}
+    </div>
+
+    <div class="forms-routing-list" aria-live="polite">
+      <div class="forms-routing-section-heading"><strong>Ordered rules</strong><span>{rules.length} rule{rules.length === 1 ? "" : "s"} · first match wins</span></div>
+      {loading ? <span class="subtle">Reading routing rules…</span> : rules.length === 0 ? <span class="subtle">No routing rules yet. Add a rule to prove where the next arrival will land.</span> : rules.map((rule, index) => {
+        const clauses = routingConditions(rule);
+        const action = routingAction(rule);
+        const previewRule = preview?.rules.find((item) => item.rule_id === rule.id);
+        return <article class={`forms-rule-row ${rule.enabled ? "" : "is-disabled"} ${rule.dangling_references.length ? "is-dangling" : ""}`} key={rule.id}>
+          <div class="forms-rule-copy"><strong>{index + 1}. {rule.name}</strong><span>When {conditionSentence(clauses, fieldChoices)} → {actionSentence(action, tracks, tags, levels)}</span>{rule.dangling_reason && <small>{rule.dangling_reason} This rule is disabled for you, not deleted.</small>}{previewRule && <small class="forms-rule-proof">of the last {preview?.sample_size ?? 0} arrivals, {previewRule.would_have_matched ?? 0} would have matched · {previewRule.rules_above} rules above run first</small>}</div>
+          <div class="forms-rule-actions"><Chip tone={rule.enabled ? "success" : "warning"}>{rule.dangling_references.length ? "Fix needed" : rule.enabled ? "On" : "Off"}</Chip><Button small onClick={() => openEdit(rule)} disabled={busy !== null}>Edit</Button>{rule.dangling_references.length > 0 && <Button small variant="primary" onClick={() => openEdit(rule, true)} disabled={busy !== null}>Fix rule</Button>}<Button small onClick={() => void move(rule, -1)} disabled={busy !== null || index === 0} aria-label={`Move ${rule.name} up`}>↑</Button><Button small onClick={() => void move(rule, 1)} disabled={busy !== null || index === rules.length - 1} aria-label={`Move ${rule.name} down`}>↓</Button><Button small onClick={() => void toggle(rule)} disabled={busy !== null}>{rule.enabled ? "Turn off" : "Turn on"}</Button><Button small variant="danger" onClick={() => void remove(rule)} disabled={busy !== null}>Archive</Button></div>
+        </article>;
+      })}
+    </div>
+  </div>;
+}
+
+function fieldOptions(form: FormDetail): Array<{ value: string; label: string }> {
+  const derived = [
+    { value: "format", label: "Format" },
+    { value: "tracks", label: "Tracks" },
+    { value: "vendor_content", label: "Vendor content" },
+    { value: "vendor", label: "Vendor flag" },
+    { value: "vendor_affiliation", label: "Vendor affiliation" },
+  ];
+  const fields = form.fields.map((field) => ({ value: field.key, label: field.label }));
+  return [...derived, ...fields.filter((field) => !derived.some((item) => item.value === field.value))];
 }

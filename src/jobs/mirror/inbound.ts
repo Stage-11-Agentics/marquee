@@ -171,7 +171,7 @@ async function trackIdsFor(
   if (requested.length === 0) return [];
   const result = await db.prepare(
     `SELECT id, name FROM tracks
-      WHERE event_id = ? AND (id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+      WHERE event_id = ? AND deleted_at IS NULL AND (id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
         OR name IN (SELECT CAST(value AS TEXT) FROM json_each(?)))`,
   ).bind(eventId, JSON.stringify(requested), JSON.stringify(requested)).all<{ id: string; name: string }>();
   const byKey = new Map(result.results.flatMap((row) => [[row.id, row.id], [row.name, row.id]] as const));
@@ -283,7 +283,7 @@ async function applySubmissionRecord(
     const candidate = stringValue(fields.primary_track_id);
     if (candidate === null) primaryTrackId = null;
     else {
-      const track = await db.prepare("SELECT id FROM tracks WHERE id = ? AND event_id = ?").bind(candidate, row.event_id).first<{ id: string }>();
+      const track = await db.prepare("SELECT id FROM tracks WHERE id = ? AND event_id = ? AND deleted_at IS NULL").bind(candidate, row.event_id).first<{ id: string }>();
       if (track) primaryTrackId = track.id;
     }
     if (primaryTrackId !== undefined) {

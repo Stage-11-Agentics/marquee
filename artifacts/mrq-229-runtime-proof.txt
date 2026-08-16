@@ -1,0 +1,90 @@
+MRQ-229 runtime behavior proof
+================================
+
+Run mode: real local Wrangler Worker at http://127.0.0.1:8787
+Database: disposable seeded D1 state under /tmp/mrq-229-runtime-proof.pYztk9
+Credentials: cookie jar and resume capability intentionally omitted/redacted.
+
+1. Authenticate and create the routing fixtures
+-----------------------------------------------
+
+$ curl -sS -c cookies.txt -H 'content-type: application/json' \
+    --data '{"role":"organizer"}' \
+    http://127.0.0.1:8787/api/v1/auth/demo
+{"ok":true,"role":"organizer","event_id":"evt_aie-ny-2026","person":{"id":"per_aie-program-committee","name":"AIE Program Committee"}}
+HTTP_STATUS=200
+
+$ curl -sS -b cookies.txt -H 'content-type: application/json' \
+    --data '{"name":"MRQ-229 Runtime Tag"}' \
+    http://127.0.0.1:8787/api/v1/events/evt_aie-ny-2026/tags
+{"data":{"id":"04745ad2-4cd7-4b02-82b5-0ff3f62b925e","name":"MRQ-229 Runtime Tag","position":3,"deleted_at":null}}
+HTTP_STATUS=201
+
+$ curl -sS -b cookies.txt -H 'content-type: application/json' \
+    --data '{"name":"MRQ-229 Runtime Level"}' \
+    http://127.0.0.1:8787/api/v1/events/evt_aie-ny-2026/levels
+{"data":{"id":"84e5e7dd-6f8f-47dc-9966-d17e1774d6be","name":"MRQ-229 Runtime Level","position":3,"deleted_at":null}}
+HTTP_STATUS=201
+
+$ curl -sS -b cookies.txt -H 'content-type: application/json' \
+    --data '{"name":"MRQ-229 notes answer routing","when_json":{"all":[{"fieldKey":"notes","op":"contains","value":"MRQ-229-ARBITRARY-ANSWER"}]},"then_json":{"add_tag_ids":["04745ad2-4cd7-4b02-82b5-0ff3f62b925e"],"level_id":"84e5e7dd-6f8f-47dc-9966-d17e1774d6be"},"enabled":true}' \
+    http://127.0.0.1:8787/api/v1/events/evt_aie-ny-2026/routing-rules
+{"data":{"id":"0522d5df-c230-4cbc-8fe4-6864e8a4cf4f","name":"MRQ-229 notes answer routing","when_json":{"all":[{"fieldKey":"notes","op":"contains","value":"MRQ-229-ARBITRARY-ANSWER"}]},"then_json":{"add_tag_ids":["04745ad2-4cd7-4b02-82b5-0ff3f62b925e"],"level_id":"84e5e7dd-6f8f-47dc-9966-d17e1774d6be"},"enabled":true,"dangling_references":[],"summary":"When notes contains MRQ-229-ARBITRARY-ANSWER -> add tag MRQ-229 Runtime Tag, set level MRQ-229 Runtime Level"}}
+HTTP_STATUS=201
+
+2. Matching arbitrary answer fires both actions
+-----------------------------------------------
+
+$ curl -sS -b cookies.txt -H 'content-type: application/json' \
+    --data '{"email":"mrq229-match@example.test","answers":{"arrival_date":"2026-10-01","departure_date":"2026-10-05","notes":"MRQ-229-ARBITRARY-ANSWER matching note"}}' \
+    http://127.0.0.1:8787/api/v1/public/forms/hotel-travel/submissions
+{"state":"submitted","submitted_at":1786911212902,"confirmation":{"title":"Your abstract is in","reference_code":"SUB-1004","email":"mrq229-match@example.test","receipt_sent":false}}
+HTTP_STATUS=201
+
+$ curl -sS -b cookies.txt -G --data-urlencode 'q=mrq229-match' \
+    http://127.0.0.1:8787/api/v1/events/evt_aie-ny-2026/submissions
+{"data":[{"id":"302863a7-4036-4bde-9f9f-a9d591dfd11c","reference_code":"SUB-1004","status":"submitted","origin":"public"}],"total":1}
+HTTP_STATUS=200
+
+$ curl -sS -b cookies.txt \
+    http://127.0.0.1:8787/api/v1/events/evt_aie-ny-2026/submissions/302863a7-4036-4bde-9f9f-a9d591dfd11c
+{"id":"302863a7-4036-4bde-9f9f-a9d591dfd11c","reference_code":"SUB-1004","status":"submitted","answer":{"key":"notes","value_text":"MRQ-229-ARBITRARY-ANSWER matching note"},"tags":[{"id":"04745ad2-4cd7-4b02-82b5-0ff3f62b925e","name":"MRQ-229 Runtime Tag"}],"level":{"id":"84e5e7dd-6f8f-47dc-9966-d17e1774d6be","name":"MRQ-229 Runtime Level"},"route":{"rule_id":"0522d5df-c230-4cbc-8fe4-6864e8a4cf4f","name":"MRQ-229 notes answer routing"}}
+HTTP_STATUS=200
+
+3. Non-matching answer does not fire the action
+-----------------------------------------------
+
+$ curl -sS -b cookies.txt -H 'content-type: application/json' \
+    --data '{"email":"mrq229-nonmatch@example.test","answers":{"arrival_date":"2026-10-02","departure_date":"2026-10-06","notes":"ordinary note with no routing marker"}}' \
+    http://127.0.0.1:8787/api/v1/public/forms/hotel-travel/submissions
+{"state":"submitted","submitted_at":1786911241154,"confirmation":{"title":"Your abstract is in","reference_code":"SUB-1005","email":"mrq229-nonmatch@example.test","receipt_sent":false}}
+HTTP_STATUS=201
+
+$ curl -sS -b cookies.txt \
+    http://127.0.0.1:8787/api/v1/events/evt_aie-ny-2026/submissions/60767c19-26b2-49a4-af95-2354aa296154
+{"id":"60767c19-26b2-49a4-af95-2354aa296154","reference_code":"SUB-1005","status":"submitted","answer":{"key":"notes","value_text":"ordinary note with no routing marker"},"tags":[],"level":null,"route":null}
+HTTP_STATUS=200
+
+4. Re-arrival is idempotent
+----------------------------
+
+$ curl -sS -b cookies.txt -H 'content-type: application/json' \
+    --data '{"resumeToken":"<redacted original resume capability>","email":"mrq229-match@example.test","answers":{"arrival_date":"2026-10-01","departure_date":"2026-10-05","notes":"MRQ-229-ARBITRARY-ANSWER matching note"}}' \
+    http://127.0.0.1:8787/api/v1/public/forms/hotel-travel/submissions
+{"state":"submitted","submitted_at":1786911212902,"confirmation":{"title":"Your abstract is in","reference_code":"SUB-1004","email":"mrq229-match@example.test","receipt_sent":false}}
+HTTP_STATUS=201
+
+$ curl -sS -b cookies.txt \
+    http://127.0.0.1:8787/api/v1/events/evt_aie-ny-2026/submissions/302863a7-4036-4bde-9f9f-a9d591dfd11c
+{"id":"302863a7-4036-4bde-9f9f-a9d591dfd11c","reference_code":"SUB-1004","submitted_at":1786911212902,"tag_count":1,"tags":[{"id":"04745ad2-4cd7-4b02-82b5-0ff3f62b925e","name":"MRQ-229 Runtime Tag"}],"level":{"id":"84e5e7dd-6f8f-47dc-9966-d17e1774d6be","name":"MRQ-229 Runtime Level"},"route":{"rule_id":"0522d5df-c230-4cbc-8fe4-6864e8a4cf4f","name":"MRQ-229 notes answer routing"}}
+HTTP_STATUS=200
+
+$ curl -sS -b cookies.txt -G --data-urlencode 'q=mrq229-match' \
+    http://127.0.0.1:8787/api/v1/events/evt_aie-ny-2026/submissions
+{"total":1,"data":[{"id":"302863a7-4036-4bde-9f9f-a9d591dfd11c","reference_code":"SUB-1004"}]}
+HTTP_STATUS=200
+
+Result: the arbitrary `notes` answer matched the rule and applied one tag plus one
+level; the ordinary note applied neither; re-arrival returned the same reference,
+submission timestamp, route, tag count (1), and level, with no duplicate submission
+or duplicate action.

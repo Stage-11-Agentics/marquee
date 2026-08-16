@@ -52,7 +52,14 @@ function whereFor(table: CopyTable): string {
 }
 
 function selectFor(table: CopyTable): string {
-  return `SELECT * FROM ${table.table} WHERE ${whereFor(table)} ORDER BY ${table.orderBy}`;
+  const active = activePredicate(table.table);
+  return `SELECT * FROM ${table.table} WHERE ${whereFor(table)}${active} ORDER BY ${table.orderBy}`;
+}
+
+function activePredicate(table: string): string {
+  return ["tracks", "tags", "levels", "form_fields", "routing_rules"].includes(table)
+    ? " AND deleted_at IS NULL"
+    : "";
 }
 
 export function resolveSelection(requested: CopySelection | undefined): Record<CopySetKey, boolean> {
@@ -76,12 +83,19 @@ export function resolveSelection(requested: CopySelection | undefined): Record<C
  * batch — a 500 on a checkbox combination the screen itself offered.
  */
 export async function readPrerequisites(db: D1Database, sourceEventId: string): Promise<CopyPrerequisites> {
-  const [bound, formTasks] = await Promise.all([
+  const [bound, levelsBound, rules, formTasks] = await Promise.all([
     db.prepare(
       `SELECT COUNT(*) AS total FROM form_fields
        WHERE form_id IN (SELECT id FROM forms WHERE event_id = ?)
+         AND deleted_at IS NULL
          AND json_extract(config, '$.source') IS NOT NULL`,
     ).bind(sourceEventId).first<{ total: number }>(),
+    db.prepare(
+      `SELECT COUNT(*) AS total FROM form_fields
+       WHERE form_id IN (SELECT id FROM forms WHERE event_id = ?)
+         AND deleted_at IS NULL AND json_extract(config, '$.source') = 'levels'`,
+    ).bind(sourceEventId).first<{ total: number }>(),
+    db.prepare("SELECT when_json FROM routing_rules WHERE event_id = ? AND deleted_at IS NULL ORDER BY position, id").bind(sourceEventId).all<{ when_json: string }>(),
     db.prepare(
       "SELECT name FROM task_templates WHERE event_id = ? AND kind = 'form' AND due_at IS NULL ORDER BY position, id",
     ).bind(sourceEventId).all<{ name: string }>(),
@@ -92,6 +106,26 @@ export async function readPrerequisites(db: D1Database, sourceEventId: string): 
   if (Number(bound?.total ?? 0) > 0) {
     requires.forms = ["formats", "tracks"];
     reasons.forms = "This form's dropdowns are filled from your formats and tracks, so they travel together — a copied form over empty options cannot be submitted.";
+  }
+  if (Number(levelsBound?.total ?? 0) > 0) {
+    requires.forms = [...new Set([...(requires.forms ?? []), "routing" as CopySetKey])];
+    reasons.forms = `${reasons.forms ?? "This form uses conference-owned options."} Its Audience level is owned by routing, so routing and Levels travel with the form.`;
+  }
+  const usesFormat = rules.results.some((row) => {
+    try {
+      const parsed = JSON.parse(row.when_json) as { field?: unknown; all?: Array<{ fieldKey?: unknown; field?: unknown }> };
+      return parsed.field === "format" || parsed.all?.some((item) => item.fieldKey === "format" || item.field === "format");
+    } catch {
+      return false;
+    }
+  });
+  if (rules.results.length > 0) {
+    requires.routing = ["forms", "tracks"];
+    reasons.routing = "Routing rules need the copied forms and tracks so their conditions and landings remain in this conference.";
+    if (usesFormat) {
+      requires.routing = ["forms", "tracks", "formats"];
+      reasons.routing += " At least one rule names a format, so formats travel too.";
+    }
   }
   if (formTasks.results.length > 0) {
     requires.task_templates = ["forms"];
@@ -111,9 +145,7 @@ export async function readCopyPlan(db: D1Database, sourceEventId: string): Promi
 
   const counts: CopyCounts = {};
   for (const table of COPY_TABLES) {
-    const predicate = table.table === "task_templates"
-      ? `${whereFor(table)} AND due_at IS NULL`
-      : whereFor(table);
+    const predicate = `${whereFor(table)}${activePredicate(table.table)}${table.table === "task_templates" ? " AND due_at IS NULL" : ""}`;
     const row = await db
       .prepare(`SELECT COUNT(*) AS total FROM ${table.table} WHERE ${predicate}`)
       .bind(sourceEventId)
@@ -200,7 +232,8 @@ export async function planEventCopy(
           // forbids that are refused above, before anything is written.
           return idMaps.get(target)?.get(String(source)) ?? null;
         }
-        return row[column] as string | number | null;
+        const mapped = table.mapJson?.(column, row[column], idMaps);
+        return (mapped === undefined ? row[column] : mapped) as string | number | null;
       });
 
       const freshId = newUlid(now);

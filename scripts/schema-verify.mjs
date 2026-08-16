@@ -387,9 +387,12 @@ try {
        sha256,r2_etag,created_at,updated_at)
       VALUES ('submission-file1','event1','submission_file','submission1','submission/key',
        'submission.pdf','application/pdf',100,'ready',NULL,'etag-1',1,1);
-    INSERT INTO tracks VALUES ('track1','event1','AI','#112233',0,1,1);
-    INSERT INTO tracks VALUES ('track2','event1','Systems','#445566',1,1,1);
-    INSERT INTO tracks VALUES ('track3','event2','Other','#778899',0,1,1);
+    INSERT INTO tracks (id,event_id,name,color,position,created_at,updated_at)
+      VALUES ('track1','event1','AI','#112233',0,1,1);
+    INSERT INTO tracks (id,event_id,name,color,position,created_at,updated_at)
+      VALUES ('track2','event1','Systems','#445566',1,1,1);
+    INSERT INTO tracks (id,event_id,name,color,position,created_at,updated_at)
+      VALUES ('track3','event2','Other','#778899',0,1,1);
     INSERT INTO people
       (id,org_id,email,name,social_links,is_demo,last_write_source,created_at,updated_at)
       VALUES ('person1','org1','one@example.test','One','[]',1,'marquee',1,1);
