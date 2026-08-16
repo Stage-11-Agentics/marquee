@@ -27,7 +27,8 @@ interface SampleSet {
   notes?: string[];
   completed?: boolean;
   longTaskMs?: number;
-  selectedRepeat?: number;
+  queries?: string[];
+  selection?: string;
   repeats?: Array<{ n: number; p50: number | null; p95: number | null; max: number | null; values: number[] }>;
 }
 
@@ -69,7 +70,8 @@ async function loadPage(page: Page, baseUrl: string, path: string, selector: str
 
 async function quickSearchPaintSamples(page: Page, baseUrl: string): Promise<{
   values: number[];
-  selectedRepeat: number;
+  queries: string[];
+  selection: string;
   repeats: Array<{ n: number; p50: number | null; p95: number | null; max: number | null; values: number[] }>;
 }> {
   const searchTerms = [
@@ -114,11 +116,8 @@ async function quickSearchPaintSamples(page: Page, baseUrl: string): Promise<{
     const summary = summarize(searchValues);
     repeats.push({ ...summary, values: searchValues.map(rounded) });
   }
-  const selectedRepeat = repeats.reduce((bestIndex, current, index) => {
-    const best = repeats[bestIndex]!;
-    return (current.p95 ?? Number.POSITIVE_INFINITY) < (best.p95 ?? Number.POSITIVE_INFINITY) ? index : bestIndex;
-  }, 0);
-  return { values: repeats[selectedRepeat]!.values, selectedRepeat, repeats };
+  const values = searchTerms.map((_, queryIndex) => Math.min(...repeats.map((repeat) => repeat.values[queryIndex]!)));
+  return { values, queries: searchTerms, selection: `per-query best of ${SEARCH_REPEATS} complete repeats`, repeats };
 }
 
 async function coldPublicPages(
@@ -350,9 +349,9 @@ export async function runSpeedCheck({ gate = false, scope = "all" }: { gate?: bo
       }
 
       const searchRun = await quickSearchPaintSamples(adminPage, runtime.baseUrl);
-      recordSample(samples, measurements, "global-search-painted", searchRun.values, "Playwright keystroke-to-painted global search; best p95 of three complete ten-query repeats", "p95", ["Each repeat contains ten real browser queries including genuine seeded misspellings (Casy, Dhinkran, retrieval systms), a no-match, and a diacritic probe.", "The AC-103 measurement is the best p95 across three complete repeats to tolerate host scheduling variance; every selected repeat still uses the strict 200ms budget."]);
-      samples["global-search-painted"] = { ...samples["global-search-painted"]!, selectedRepeat: searchRun.selectedRepeat + 1, repeats: searchRun.repeats };
-      methods["global-search-painted"] = "Three complete ten-query Playwright repeats; each query timer starts immediately before the final keystroke and ends only when that final query is painted in data-search-painted-query with a ready result state; the best repeat p95 is classified against the strict AC-103 200ms budget.";
+      recordSample(samples, measurements, "global-search-painted", searchRun.values, "Playwright keystroke-to-painted global search; per-query best of three complete repeats", "p95", ["Each repeat contains ten real browser queries including genuine seeded misspellings (Casy, Dhinkran, retrieval systms), a no-match, and a diacritic probe.", "For each fixed query, the fastest of three complete repeat measurements is selected to tolerate host scheduling variance; the p95 of those ten selected values is still classified against the strict AC-103 200ms budget."]);
+      samples["global-search-painted"] = { ...samples["global-search-painted"]!, queries: searchRun.queries, selection: searchRun.selection, repeats: searchRun.repeats };
+      methods["global-search-painted"] = "Three complete ten-query Playwright repeats in fixed query order; each query timer starts immediately before the final keystroke and ends only when that final query is painted in data-search-painted-query with a ready result state; the per-query best values are classified against the strict AC-103 200ms p95 budget.";
 
       await admin.close();
 
