@@ -89,6 +89,11 @@ export function AgentsPage({ navigate, origin }: { navigate: (target: string) =>
       */}
       <div class="agents-doors">
         <div class="agents-door">
+          <strong>Machine context</strong>
+          <span>Start with the generated index, or take the complete served context in one fetch.</span>
+          <a class="button small" href="/llms.txt">Open /llms.txt →</a>
+        </div>
+        <div class="agents-door">
           <strong>Create API token</strong>
           <span>Scoped to the organization or one conference, revocable in one click.</span>
           <a class="button small" href="/org/tokens" onClick={go("/org/tokens")}>Open API tokens →</a>

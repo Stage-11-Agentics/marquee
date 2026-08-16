@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "source": "scripts/measure-latency.mjs",
+  "environment": "local-wrangler-dev",
+  "base_url": "http://127.0.0.1:8787",
+  "runs": 5,
+  "timeout_ms": 10000,
+  "measured_at": "2026-08-16T07:02:31.051Z",
+  "measurements": [
+    {
+      "path": "/health",
+      "status": 200,
+      "ttfb_median_ms": 3.73,
+      "samples": [
+        702.49,
+        5.54,
+        3.73,
+        3.33,
+        3.3
+      ]
+    },
+    {
+      "path": "/llms.txt",
+      "status": 200,
+      "ttfb_median_ms": 3.06,
+      "samples": [
+        3.59,
+        3.11,
+        2.79,
+        3.06,
+        2.95
+      ]
+    },
+    {
+      "path": "/llms-full.txt",
+      "status": 200,
+      "ttfb_median_ms": 2.36,
+      "samples": [
+        3.25,
+        2.54,
+        2.28,
+        2.36,
+        2.33
+      ]
+    },
+    {
+      "path": "/SKILL.md",
+      "status": 200,
+      "ttfb_median_ms": 2.5,
+      "samples": [
+        2.5,
+        2.14,
+        2.44,
+        2.51,
+        2.87
+      ]
+    },
+    {
+      "path": "/api/openapi.json",
+      "status": 200,
+      "ttfb_median_ms": 6.49,
+      "samples": [
+        148.9,
+        6.77,
+        6.23,
+        6.12,
+        6.49
+      ]
+    },
+    {
+      "path": "/api/docs",
+      "status": 200,
+      "ttfb_median_ms": 3.68,
+      "samples": [
+        4.29,
+        3.64,
+        11.25,
+        3.68,
+        3.52
+      ]
+    }
+  ]
+}

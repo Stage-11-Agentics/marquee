@@ -18,6 +18,7 @@
     "check:repo": "node scripts/checks/check-repo.mjs",
     "check:shell-truth": "node scripts/checks/check-shell-truth.mjs",
     "check:routes": "node scripts/checks/check-routes.mjs",
+    "check:docs": "node scripts/checks/check-docs.mjs",
     "check:locks": "node scripts/checks/check-locks.mjs",
     "check:clocks": "node scripts/checks/check-clocks.mjs",
     "check:no-op-tests": "node scripts/checks/check-no-op-tests.mjs",
