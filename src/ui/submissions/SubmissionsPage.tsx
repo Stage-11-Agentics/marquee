@@ -35,6 +35,7 @@ export interface ListEnvelope {
   per_page: number;
   total: number;
   total_pages: number;
+  published_count?: number;
 }
 
 interface Props {
@@ -312,6 +313,7 @@ export function SubmissionsPage({
   const [knownTracks, setKnownTracks] = useState<Map<string, SubmissionTrackListItem>>(new Map());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
+  const [publishedMatchingCount, setPublishedMatchingCount] = useState<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
@@ -532,6 +534,7 @@ export function SubmissionsPage({
   useEffect(() => {
     setSelectedIds(new Set());
     setAllMatching(false);
+    setPublishedMatchingCount(null);
     setBulkRequest(null);
     setBulkMessage("");
     setBulkError("");
@@ -618,7 +621,33 @@ export function SubmissionsPage({
       .catch(() => { if (!controller.signal.aborted) setAcceptedAnyTotal(null); });
     return () => controller.abort();
   }, [eventId, acceptedStageFilter, acceptedAnyQuery, reloadKey]);
+
+  // The regular list stays on the R7 path. Only the explicit "all matching"
+  // bulk selection asks for the second aggregate needed by its honest count
+  // line, and the reserved line can truthfully say unavailable while it loads.
+  useEffect(() => {
+    if (!allMatching) {
+      setPublishedMatchingCount(null);
+      return;
+    }
+    const controller = new AbortController();
+    const countQuery = buildSubmissionsQuery(params);
+    countQuery.set("include_published_count", "1");
+    countQuery.set("per_page", "1");
+    countQuery.set("page", "1");
+    apiFetch<ListEnvelope>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions?${countQuery.toString()}`, {
+      signal: controller.signal,
+      route: "/api/v1/events/{eventId}/submissions",
+    })
+      .then((body) => { if (!controller.signal.aborted) setPublishedMatchingCount(body.published_count ?? null); })
+      .catch(() => { if (!controller.signal.aborted) setPublishedMatchingCount(null); });
+    return () => controller.abort();
+  }, [eventId, allMatching, requestKey, reloadKey]);
+
   const selectedCount = selectionCount(selectedIds, allMatching, envelope?.total ?? 0);
+  const publishedSelectedCount = allMatching
+    ? publishedMatchingCount ?? envelope?.published_count ?? null
+    : rows.filter((item) => selectedIds.has(item.id) && item.slot?.is_published === true).length;
   const first = envelope && envelope.total > 0 ? (envelope.page - 1) * envelope.per_page + 1 : 0;
   const last = envelope ? Math.min(envelope.page * envelope.per_page, envelope.total) : 0;
 
@@ -732,7 +761,7 @@ export function SubmissionsPage({
     setBulkError("");
     setBulkMessage("");
     try {
-      const result = await apiFetch<{ succeeded: number; failed: number; outbox_enqueued: number }>(
+      const result = await apiFetch<{ succeeded: number; failed: number; outbox_enqueued: number; published_count?: number }>(
         `/api/v1/events/${encodeURIComponent(eventId)}/submissions/bulk`,
         {
           method: "POST",
@@ -746,7 +775,7 @@ export function SubmissionsPage({
         },
       );
       const verb = action === "waitlist" ? "waitlisted" : action === "accept" ? "accepted" : "rejected";
-      setBulkMessage(`${result.succeeded.toLocaleString()} ${verb}${result.failed ? ` · ${result.failed.toLocaleString()} could not move` : ""}${result.outbox_enqueued ? ` · ${result.outbox_enqueued.toLocaleString()} notification${result.outbox_enqueued === 1 ? "" : "s"} queued` : ""}.`);
+      setBulkMessage(`${result.succeeded.toLocaleString()} ${verb}${result.failed ? ` · ${result.failed.toLocaleString()} could not move` : ""}${result.published_count ? ` · ${result.published_count.toLocaleString()} published record${result.published_count === 1 ? "" : "s"} left unchanged` : ""}${result.outbox_enqueued ? ` · ${result.outbox_enqueued.toLocaleString()} notification${result.outbox_enqueued === 1 ? "" : "s"} queued` : ""}.`);
       setBulkRequest(null);
       setBulkFeedback("");
       setSelectedIds(new Set());
@@ -909,6 +938,7 @@ export function SubmissionsPage({
             <button type="button" aria-label="Close bulk decision dialog" onClick={() => setBulkRequest(null)}>×</button>
           </div>
           <p>{option.notifies ? "Each selected speaker will receive the feedback you add in the decision email." : "A waitlist does not send a message. Any feedback you add is saved with each decision."}</p>
+          <p class="bulk-published-count">Published records selected: {publishedSelectedCount === null ? "count unavailable" : publishedSelectedCount.toLocaleString()}. They stay unchanged unless you explicitly confirm the live write.</p>
           <label class="field"><span>Feedback for the speakers (optional)</span><textarea rows={5} value={bulkFeedback} onInput={(event) => setBulkFeedback(event.currentTarget.value)} placeholder="Share context every one of these speakers can act on." /></label>
           <div class="bulk-decision-actions">
             <Button type="button" onClick={() => setBulkRequest(null)} disabled={bulkBusy}>Cancel</Button>

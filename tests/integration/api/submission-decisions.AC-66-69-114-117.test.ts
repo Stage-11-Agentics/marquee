@@ -2,6 +2,7 @@ import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, test } from "vitest";
 
 import { sha256Hex } from "../../../src/lib/auth/random-token";
+import { publicEmbedCacheKey } from "../../../src/lib/public-site";
 import { selectSubmissionIds } from "../../../src/routes/submissions.queries";
 import { applyMigrations } from "../apply-migrations";
 
@@ -15,6 +16,7 @@ interface BulkResponse {
   selected: number;
   succeeded: number;
   failed: number;
+  published_count?: number;
   state: string;
   outbox_enqueued: number;
   failures?: Array<{ id: string; code: string; message: string }>;
@@ -238,6 +240,85 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     expect(findTarget(await listAcceptedFacts())).toMatchObject({ id: "sub-mrq19-100", status: "published" });
   }, 20_000);
 
+  test("AC-315 · a published decision refuses without confirmation and confirmed routes clear live projections", async () => {
+    const before = await env.DB.prepare(
+      `SELECT s.status, s.is_published,
+              (SELECT COUNT(*) FROM submission_decisions WHERE submission_id = s.id) AS decisions,
+              (SELECT COUNT(*) FROM outbox WHERE entity_id = s.id) AS outbox
+       FROM submissions s WHERE s.id = 'sub-mrq19-100'`,
+    ).first<{ status: string; is_published: number; decisions: number; outbox: number }>();
+    expect(before).toMatchObject({ status: "accepted", is_published: 1, decisions: 1 });
+    expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE submission_id = 'sub-mrq19-100'").first()).toEqual({ is_published: 1 });
+
+    const refused = await requestRecord("sub-mrq19-100", { recommendation: "deny" });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({
+      error: {
+        code: "conflict",
+        message: "This session is live on the conference site. Unpublish it or reverse the acceptance to change its outcome.",
+      },
+    });
+    const afterRefusal = await env.DB.prepare(
+      `SELECT s.status, s.is_published,
+              (SELECT COUNT(*) FROM submission_decisions WHERE submission_id = s.id) AS decisions,
+              (SELECT COUNT(*) FROM outbox WHERE entity_id = s.id) AS outbox
+       FROM submissions s WHERE s.id = 'sub-mrq19-100'`,
+    ).first<{ status: string; is_published: number; decisions: number; outbox: number }>();
+    expect(afterRefusal).toEqual(before);
+
+    const bulk = await requestBulk({ selector: { ids: ["sub-mrq19-100"] }, action: "reject" });
+    expect(bulk.status).toBe(200);
+    expect(await bulk.json<BulkResponse>()).toMatchObject({
+      selected: 1,
+      succeeded: 0,
+      failed: 1,
+      published_count: 1,
+    });
+    expect(await env.DB.prepare("SELECT status FROM submissions WHERE id = 'sub-mrq19-100'").first()).toEqual({ status: "accepted" });
+
+    const cacheKey = publicEmbedCacheKey(EVENT_ID, "mrq19-sessions");
+    await env.CACHE.put(cacheKey, JSON.stringify({ cached: true }), { expirationTtl: 60 });
+    expect(await env.CACHE.get(cacheKey, "json")).toEqual({ cached: true });
+    const confirmed = await requestRecord("sub-mrq19-100", { recommendation: "deny", confirm_published: true });
+    expect(confirmed.status).toBe(200);
+    expect(await confirmed.json()).toMatchObject({ resulting_status: "rejected" });
+    expect(await env.DB.prepare("SELECT status, is_published FROM submissions WHERE id = 'sub-mrq19-100'").first()).toEqual({ status: "rejected", is_published: 0 });
+    expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE submission_id = 'sub-mrq19-100'").first()).toEqual({ is_published: 0 });
+    expect((await SELF.fetch(`${ORIGIN}/s/sub-mrq19-100`)).status).toBe(404);
+    const publicationAudit = await env.DB.prepare(
+      `SELECT action, before_json, after_json
+       FROM audit_log
+       WHERE event_id = ? AND entity_id = ? AND action = 'submission.publication_unpublished_by_decision'
+       ORDER BY created_at DESC, id DESC LIMIT 1`,
+    ).bind(EVENT_ID, "sub-mrq19-100").first<{ action: string; before_json: string; after_json: string }>();
+    expect(publicationAudit?.action).toBe("submission.publication_unpublished_by_decision");
+    expect(JSON.parse(publicationAudit?.before_json ?? "{}")).toMatchObject({ agenda_is_published: true, submission_is_published: true });
+    expect(JSON.parse(publicationAudit?.after_json ?? "{}")).toMatchObject({ agenda_is_published: false, submission_is_published: false, reason: "confirmed_decision" });
+    expect(await env.CACHE.get(cacheKey, "json")).toBeNull();
+
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO submissions
+          (id, event_id, kind, title, status, origin, submitter_person_id, is_published, created_at, updated_at)
+         VALUES ('sub-mrq19-bulk-live', ?, 'session', 'Bulk live session', 'accepted', 'admin', 'person-mrq19-speaker', 1, ?, ?)`,
+      ).bind(EVENT_ID, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+         VALUES ('participation-mrq19-bulk-live', 'sub-mrq19-bulk-live', 'person-mrq19-speaker', 'speaker', 0, ?, ?)`,
+      ).bind(NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO agenda_items
+          (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
+         VALUES ('agenda-mrq19-bulk-live', ?, 'sub-mrq19-bulk-live', 'session', ?, 30, 'room-mrq19', 1, ?, ?)`,
+      ).bind(EVENT_ID, NOW, NOW, NOW),
+    ]);
+    const bulkConfirmed = await requestBulk({ selector: { ids: ["sub-mrq19-bulk-live"] }, action: "reject", confirm_published: true });
+    expect(bulkConfirmed.status).toBe(200);
+    expect(await bulkConfirmed.json<BulkResponse>()).toMatchObject({ selected: 1, succeeded: 1, failed: 0, published_count: 1 });
+    expect(await env.DB.prepare("SELECT status, is_published FROM submissions WHERE id = 'sub-mrq19-bulk-live'").first()).toEqual({ status: "rejected", is_published: 0 });
+    expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE submission_id = 'sub-mrq19-bulk-live'").first()).toEqual({ is_published: 0 });
+  }, 20_000);
+
   test("AC-114, AC-115, AC-116, AC-117 · record-owned reject shares rendered merge fields, status history, and UNIQUE outbox identity", async () => {
     const recordDecision = await requestRecord("sub-mrq19-002", {
       recommendation: "maybe",
@@ -286,8 +367,8 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     expect(repeatedBody.succeeded).toBe(0);
     expect(repeatedBody.failed).toBe(1);
     const outboxCount = await env.DB.prepare(
-      "SELECT COUNT(*) AS total FROM outbox WHERE event_id = ? AND template_key = 'rejection'",
-    ).bind(EVENT_ID).first<{ total: number }>();
+      "SELECT COUNT(*) AS total FROM outbox WHERE event_id = ? AND entity_id = ? AND template_key = 'rejection'",
+    ).bind(EVENT_ID, accepted?.id).first<{ total: number }>();
     const rejected = await env.DB.prepare(
       "SELECT status FROM submissions WHERE id = ? AND event_id = ?",
     ).bind(accepted?.id, EVENT_ID).first<{ status: string }>();

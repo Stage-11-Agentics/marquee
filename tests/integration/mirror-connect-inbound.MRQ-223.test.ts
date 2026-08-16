@@ -375,7 +375,7 @@ test("AC-226 · one signed inbound edit applies allowlisted fields and drops the
   expect(await count("SELECT COUNT(*) AS count FROM mirror_outbox WHERE drained_at IS NULL")).toBe(0);
 });
 
-test("CONTRACT · inbound accepted status stops before tasks and mail until the recovery action is clicked", async () => {
+test("AC-316 · a published inbound status edit is dropped, audited, counted, and repaired from current truth", async () => {
   const dueAt = Date.now() + 7 * 86_400_000;
   await env.DB.batch([
     env.DB.prepare(
@@ -394,14 +394,28 @@ test("CONTRACT · inbound accepted status stops before tasks and mail until the 
        VALUES ('email_mrq223_acceptance', ?, 'acceptance', 'Acceptance', 'Accepted', 'Accepted.', 1, ?, ?)`,
     ).bind(EVENT_ID, NOW, NOW),
     env.DB.prepare(
+      `INSERT INTO buildings (id, event_id, name, address, position, created_at, updated_at)
+       VALUES ('building_mrq223', ?, 'MRQ-223 Hall', '1 Mirror Way', 0, ?, ?)`,
+    ).bind(EVENT_ID, NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO rooms (id, event_id, building_id, name, capacity, position, created_at, updated_at)
+       VALUES ('room_mrq223', ?, 'building_mrq223', 'Main room', 100, 0, ?, ?)`,
+    ).bind(EVENT_ID, NOW, NOW),
+    env.DB.prepare(
       `INSERT INTO submissions
-        (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at)
-       VALUES (?, ?, 'session', 'MRQ-223 session', 'submitted', 'admin', ?, ?, ?)`,
-    ).bind(SUBMISSION_ID, EVENT_ID, PERSON_ID, NOW, NOW),
+        (id, event_id, kind, title, status, origin, submitter_person_id, is_published, created_at, updated_at)
+       VALUES (?, ?, 'session', 'MRQ-223 session', 'accepted', 'admin', ?, 1, ?, ?)`,
+    ).bind(SUBMISSION_ID, EVENT_ID, PERSON_ID, NOW - 1_000, NOW - 500),
     env.DB.prepare(
       `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
        VALUES ('participation_mrq223', ?, ?, 'speaker', 0, ?, ?)`,
     ).bind(SUBMISSION_ID, PERSON_ID, NOW, NOW),
+    // clock-check: allow — agenda starts_at is an exact schedule instant, not an event-local calendar deadline
+    env.DB.prepare(
+      `INSERT INTO agenda_items
+        (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
+       VALUES ('agenda_mrq223', ?, ?, 'session', ?, 30, 'room_mrq223', 1, ?, ?)`,
+    ).bind(EVENT_ID, SUBMISSION_ID, NOW + 86_400_000, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO submission_decisions
         (id, event_id, submission_id, decision, resulting_status, feedback_md,
@@ -414,9 +428,24 @@ test("CONTRACT · inbound accepted status stops before tasks and mail until the 
   await connectAndMap(fake);
   fake.payloads.push(submissionPayload("accepted"));
   const pulled = await pullMirrorPayloads(actionEnvironment(fake), { transport: fake, ...clockAt() });
-  expect(pulled).toMatchObject({ applied: 1, dropped: 1 });
+  expect(pulled).toMatchObject({ applied: 0, dropped: 2 });
   expect(await count("SELECT COUNT(*) AS count FROM speaker_tasks WHERE submission_id = ?", SUBMISSION_ID)).toBe(0);
   expect(await count("SELECT COUNT(*) AS count FROM outbox WHERE event_id = ?", EVENT_ID)).toBe(0);
+  const rejection = await env.DB.prepare(
+    "SELECT actor_kind, action, after_json FROM audit_log WHERE event_id = ? AND entity_id = ? AND action = 'mirror.inbound_rejected' ORDER BY created_at DESC LIMIT 1",
+  ).bind(EVENT_ID, SUBMISSION_ID).first<{ actor_kind: string; action: string; after_json: string }>();
+  expect(rejection).toMatchObject({ actor_kind: "airtable", action: "mirror.inbound_rejected" });
+  expect(JSON.parse(rejection?.after_json ?? "{}")).toMatchObject({
+    reason: "forbidden_while_published",
+    field: "status",
+    requested: "accepted",
+  });
+  expect(await count("SELECT COUNT(*) AS count FROM mirror_outbox WHERE row_id = ? AND drained_at IS NULL", SUBMISSION_ID)).toBe(1);
+  const repair = await env.DB.prepare(
+    "SELECT created_at, updated_at FROM mirror_outbox WHERE row_id = ? AND drained_at IS NULL ORDER BY id DESC LIMIT 1",
+  ).bind(SUBMISSION_ID).first<{ created_at: number; updated_at: number }>();
+  expect(repair?.created_at).toBeGreaterThan(NOW - 1_000);
+  expect(repair?.updated_at).toBe(repair?.created_at);
 
   const resumed = await runOnboardingCascade({
     db: env.DB,

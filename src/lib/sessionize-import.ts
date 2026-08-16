@@ -1,5 +1,6 @@
 import type { ImportRowRow, MembershipRow } from "../db/schema";
 
+import { isPublishedSession } from "./publication-guard";
 import { speakerMembershipStatement } from "./speaker-membership";
 
 export type SessionizeEntity = "sessions" | "speakers";
@@ -846,6 +847,9 @@ async function importSession(
   if (!status.status) throw new Error("session status is required");
   const current = await db.prepare("SELECT * FROM submissions WHERE event_id = ? AND external_ref = ?")
     .bind(event.id, externalRef).first<SubmissionRow>();
+  const published = current ? await isPublishedSession(db, event.id, current.id) : false;
+  const importedStatus = published && current ? current.status : status.status;
+  const preservedPublishedStatus = published && current !== null && current.status !== status.status;
   const relations = current ? await importedSessionRelations(db, current.id) : { tracks: [], participations: [], answers: [], evaluations: [] };
   const before: ImportSnapshot = current ? {
     kind: "session", person: null, attachment: null, submission: current,
@@ -877,7 +881,9 @@ async function importSession(
     formId,
     title,
     abstract: row.abstract.trim() || null,
-    status: status.status,
+    // A Sessionize merge is a workflow write. A live session keeps its
+    // organizer-owned status until the deliberate decision/reversal path acts.
+    status: importedStatus,
     formatId: format?.id ?? current?.format_id ?? null,
     trackId: track?.id ?? current?.primary_track_id ?? null,
     submitterId: submitter.id,
@@ -970,6 +976,7 @@ async function importSession(
   const outcome = !current ? "created" : actualChanged ? "updated" : "skipped";
   const reason = [
     status.note,
+    preservedPublishedStatus ? "published session status kept unchanged" : null,
     actualChanged ? "session, relationships, scores, or custom fields reconciled" : "same external_ref and values already present",
     evaluation ? "evaluation result imported" : null,
     ...unmatchedTaxonomyNotes({
@@ -1073,9 +1080,19 @@ async function restoreSnapshot(db: D1Database, snapshot: ImportSnapshot): Promis
   }
   if (!snapshot.submission) return;
   const submission = snapshot.submission;
+  const currentSubmission = await db
+    .prepare("SELECT status, is_published FROM submissions WHERE id = ? AND event_id = ?")
+    .bind(submission.id, submission.event_id)
+    .first<{ status: string; is_published: number }>();
+  const published = currentSubmission ? await isPublishedSession(db, submission.event_id, submission.id) : false;
+  const restoredStatus = published && currentSubmission ? currentSubmission.status : submission.status;
+  const restoredIsPublished = published && currentSubmission ? currentSubmission.is_published : submission.is_published;
+  // Undo restores imported data, but it is still a workflow write. Preserve a
+  // live session's status and legacy publication flag so undo cannot pull the
+  // public site backward behind the organizer's deliberate publication action.
   await db.prepare(
     `UPDATE submissions SET event_id = ?, form_id = ?, kind = ?, bypass_evaluation = ?, title = ?, abstract = ?, status = ?, format_id = ?, primary_track_id = ?, origin = ?, vendor_affiliation = ?, wave_id = ?, submitter_person_id = ?, decided_at = ?, decided_by_person_id = ?, submitted_at = ?, last_saved_at = ?, resume_token_hash = ?, is_published = ?, external_ref = ?, applied_rule_id = ?, last_write_source = ?, created_at = ?, updated_at = ? WHERE id = ?`,
-  ).bind(submission.event_id, submission.form_id, submission.kind, submission.bypass_evaluation, submission.title, submission.abstract, submission.status, submission.format_id, submission.primary_track_id, submission.origin, submission.vendor_affiliation, submission.wave_id, submission.submitter_person_id, submission.decided_at, submission.decided_by_person_id, submission.submitted_at, submission.last_saved_at, submission.resume_token_hash, submission.is_published, submission.external_ref, submission.applied_rule_id, submission.last_write_source, submission.created_at, submission.updated_at, submission.id).run();
+  ).bind(submission.event_id, submission.form_id, submission.kind, submission.bypass_evaluation, submission.title, submission.abstract, restoredStatus, submission.format_id, submission.primary_track_id, submission.origin, submission.vendor_affiliation, submission.wave_id, submission.submitter_person_id, submission.decided_at, submission.decided_by_person_id, submission.submitted_at, submission.last_saved_at, submission.resume_token_hash, restoredIsPublished, submission.external_ref, submission.applied_rule_id, submission.last_write_source, submission.created_at, submission.updated_at, submission.id).run();
   await db.batch([
     ...(snapshot.tracks !== undefined ? [db.prepare("DELETE FROM submission_tracks WHERE submission_id = ? AND id GLOB 'track_import_*'").bind(submission.id)] : []),
     db.prepare("DELETE FROM participations WHERE submission_id = ? AND id LIKE 'part_import_%'").bind(submission.id),

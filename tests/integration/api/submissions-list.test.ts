@@ -21,6 +21,7 @@ interface ListEnvelope {
   per_page: number;
   total: number;
   total_pages: number;
+  published_count?: number;
 }
 
 /**
@@ -193,6 +194,13 @@ describe.sequential("MRQ-9 submissions list", () => {
     const published = await request("?status=published");
     expect(published.data).toHaveLength(1);
     expect(published.data[0]?.slot).toMatchObject({ room: "Liberty 3", is_published: true });
+  });
+
+  test("CONTRACT · the live-session aggregate is opt-in rather than part of every list load", async () => {
+    const ordinary = await request("?page=1&per_page=1");
+    expect(ordinary).not.toHaveProperty("published_count");
+    const requested = await request("?include_published_count=1&page=1&per_page=1");
+    expect(requested.published_count).toBe(1);
   });
 
   test("CONTRACT · the fixed column registry is complete and Title cannot be removed", () => {

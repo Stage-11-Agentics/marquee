@@ -1,12 +1,13 @@
 import type { D1Database, Queue } from "@cloudflare/workers-types";
 
-import { runBulkByIds } from "../../api/bulk";
+import { runBulkByIds, runBulkByIdsBatch } from "../../api/bulk";
 import { newUlid } from "../../api/ids";
 import { auditStatement, writeAudit as writeAuditRow, type AuditEntry } from "../../lib/audit";
 import type { Decision, Id } from "../../db/schema";
 import { sha256Hex } from "../../lib/auth/random-token";
 import { acceptedSpeakerMembershipStatements } from "../../lib/speaker-membership";
 import { purgePublicEmbedCache, type PublicEmbedCache } from "../../lib/public-site";
+import { PUBLISHED_SESSION_REFUSAL } from "../../lib/publication-guard";
 import { cancelCalendarInvites } from "../calendar/invites";
 import { enqueueMailMessage } from "../mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../mail/idempotency";
@@ -35,6 +36,8 @@ export interface SubmissionDecisionInput {
   actor: DecisionActor;
   recommendation: Decision;
   feedbackMd?: string | null;
+  confirmPublished?: boolean;
+  cache?: PublicEmbedCache;
   waveId?: Id | null;
   operationId?: Id;
   now?: number;
@@ -59,6 +62,8 @@ export interface BulkDecisionInput {
   actor: DecisionActor;
   action: BulkAction;
   feedbackMd?: string | null;
+  confirmPublished?: boolean;
+  cache?: PublicEmbedCache;
   waveId?: Id | null;
   operationId: Id;
   now?: number;
@@ -66,6 +71,7 @@ export interface BulkDecisionInput {
 
 export interface BulkDecisionResult {
   operationId: Id;
+  publishedCount: number;
   selected: number;
   results: SubmissionDecisionResult[];
   outboxEnqueued: number;
@@ -109,6 +115,7 @@ interface SubmissionContext {
   person_id: Id;
   person_name: string;
   person_email: string;
+  agenda_published: number;
 }
 
 interface TaskCandidate {
@@ -177,6 +184,13 @@ async function loadSubmission(
   return db
     .prepare(
       `SELECT s.id, s.event_id, s.status, s.wave_id, s.title,
+              EXISTS (
+                SELECT 1 FROM agenda_items live_agenda
+                 WHERE live_agenda.event_id = s.event_id
+                   AND live_agenda.submission_id = s.id
+                   AND live_agenda.kind = 'session'
+                   AND live_agenda.is_published = 1
+              ) AS agenda_published,
               COALESCE((
                 SELECT speaker.id
                 FROM participations speaker_part
@@ -225,6 +239,13 @@ async function loadSubmissions(
   const result = await db
     .prepare(
       `SELECT s.id, s.event_id, s.status, s.wave_id, s.title,
+              EXISTS (
+                SELECT 1 FROM agenda_items live_agenda
+                 WHERE live_agenda.event_id = s.event_id
+                   AND live_agenda.submission_id = s.id
+                   AND live_agenda.kind = 'session'
+                   AND live_agenda.is_published = 1
+              ) AS agenda_published,
               COALESCE((
                 SELECT speaker.id
                 FROM participations speaker_part
@@ -797,6 +818,7 @@ async function updateSubmissionStatus(
     preserveWave: boolean;
     decision: boolean;
     stampAttribution?: boolean;
+    clearPublished?: boolean;
   },
 ): Promise<number> {
   if (input.ids.length === 0) return 0;
@@ -816,21 +838,38 @@ async function updateSubmissionStatus(
   }
   if (input.preserveWave && input.waveId !== undefined) bindings.push(input.waveId);
   bindings.push(input.eventId);
-  const result = await runBulkByIds(input.ids, (idsJson) =>
-    db
-      .prepare(
-        `UPDATE submissions
-         SET status = ?,
-             updated_at = ?,
-             last_write_source = ?,
-             ${stampAttribution ? "decided_at = ?, decided_by_person_id = ?," : ""}
-             ${updateWave}
-         WHERE event_id = ?
-           AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
-           AND status <> ?`,
-      )
-      .bind(...bindings, idsJson, input.targetStatus),
-  );
+  const statusStatement = (idsJson: string) => db
+    .prepare(
+      `UPDATE submissions
+       SET status = ?,
+           ${input.clearPublished ? "is_published = 0," : ""}
+           updated_at = ?,
+           last_write_source = ?,
+           ${stampAttribution ? "decided_at = ?, decided_by_person_id = ?," : ""}
+           ${updateWave}
+       WHERE event_id = ?
+         AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+         AND status <> ?`,
+    )
+    .bind(...bindings, idsJson, input.targetStatus);
+  if (input.clearPublished) {
+    const results = await runBulkByIdsBatch(db, input.ids, (idsJson) => [
+      statusStatement(idsJson),
+      db
+        .prepare(
+          `UPDATE agenda_items
+           SET is_published = 0,
+               updated_at = ?
+           WHERE event_id = ?
+             AND kind = 'session'
+             AND is_published = 1
+             AND submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))`,
+        )
+        .bind(input.now, input.eventId, idsJson),
+    ]);
+    return Number(results?.[0]?.meta?.changes ?? 0);
+  }
+  const result = await runBulkByIds(input.ids, statusStatement);
   return Number(result?.meta?.changes ?? 0);
 }
 
@@ -974,10 +1013,22 @@ export async function writeAcceptanceReversal(
     })
     : [];
 
-  await input.db
-    .prepare("DELETE FROM agenda_items WHERE event_id = ? AND submission_id = ?")
-    .bind(input.eventId, submission.id)
-    .run();
+  // Keep the legacy submission flag and the agenda projection in one durable
+  // reversal batch. The agenda row is the public source of truth; clearing the
+  // old flag at the same boundary prevents record/list disagreement for callers
+  // that still read the legacy column.
+  await input.db.batch([
+    input.db
+      .prepare("DELETE FROM agenda_items WHERE event_id = ? AND submission_id = ?")
+      .bind(input.eventId, submission.id),
+    input.db
+      .prepare(
+        `UPDATE submissions
+            SET is_published = 0, last_write_source = 'marquee', updated_at = ?
+          WHERE event_id = ? AND id = ?`,
+      )
+      .bind(now, input.eventId, submission.id),
+  ]);
   await purgePublicEmbedCache(input.cache, { eventId: input.eventId });
 
   if (input.outcome === "rejected") {
@@ -1087,6 +1138,9 @@ export async function writeSubmissionDecision(
   if (!submission) return failureResult(input.submissionId, "submission not found");
   const invalidState = canTransition(submission, target.status);
   if (invalidState) return failureResult(submission.id, invalidState);
+  if (submission.agenda_published === 1 && input.confirmPublished !== true) {
+    return failureResult(submission.id, PUBLISHED_SESSION_REFUSAL);
+  }
   if (target.status !== "waitlisted" && !isValidEmail(submission.person_email)) {
     return failureResult(submission.id, "speaker has no valid email address; record was left unchanged");
   }
@@ -1100,9 +1154,23 @@ export async function writeSubmissionDecision(
     waveId: input.waveId,
     preserveWave: target.status === "accepted",
     decision: true,
+    clearPublished: submission.agenda_published === 1 && input.confirmPublished === true,
   });
   if (changed !== 1) {
     return failureResult(submission.id, "submission changed during decision; retry the confirmed action");
+  }
+  if (submission.agenda_published === 1) {
+    await purgePublicEmbedCache(input.cache, { eventId: input.eventId });
+    await writeAudit(input.db, {
+      eventId: input.eventId,
+      actor: input.actor,
+      action: "submission.publication_unpublished_by_decision",
+      entityType: "submission",
+      entityId: submission.id,
+      before: { agenda_is_published: true, submission_is_published: true },
+      after: { agenda_is_published: false, submission_is_published: false, reason: "confirmed_decision" },
+      now,
+    });
   }
 
   const mail = target.status === "waitlisted"
@@ -1179,6 +1247,7 @@ export async function writeBulkSubmissionDecisions(
   const results: SubmissionDecisionResult[] = [];
   const eligible: SubmissionContext[] = [];
   const target = input.action === "withdraw" ? null : decisionTarget(input.action);
+  let publishedCount = 0;
 
   for (const id of ids) {
     const submission = byId.get(id);
@@ -1191,10 +1260,16 @@ export async function writeBulkSubmissionDecisions(
       results.push(failureResult(id, invalidState));
       continue;
     }
+    if (submission.agenda_published === 1 && input.confirmPublished !== true) {
+      publishedCount += 1;
+      results.push(failureResult(id, PUBLISHED_SESSION_REFUSAL));
+      continue;
+    }
     if (target && target.status !== "waitlisted" && !isValidEmail(submission.person_email)) {
       results.push(failureResult(id, "speaker has no valid email address; record was left unchanged"));
       continue;
     }
+    if (submission.agenda_published === 1 && input.confirmPublished === true) publishedCount += 1;
     eligible.push(submission);
   }
 
@@ -1208,7 +1283,7 @@ export async function writeBulkSubmissionDecisions(
       after: { selected: ids.length, succeeded: 0, failed: results.length, results },
       now,
     });
-    return { operationId: input.operationId, selected: ids.length, results, outboxEnqueued: 0 };
+    return { operationId: input.operationId, publishedCount, selected: ids.length, results, outboxEnqueued: 0 };
   }
 
   const targetStatus = target?.status ?? "withdrawn";
@@ -1221,7 +1296,28 @@ export async function writeBulkSubmissionDecisions(
     waveId: input.waveId,
     preserveWave: targetStatus === "accepted",
     decision: target !== null,
+    clearPublished: input.confirmPublished === true && eligible.some((submission) => submission.agenda_published === 1),
   });
+  if (eligible.some((submission) => submission.agenda_published === 1)) {
+    await purgePublicEmbedCache(input.cache, { eventId: input.eventId });
+    await input.db.batch(
+      eligible
+        .filter((submission) => submission.agenda_published === 1)
+        .map((submission) => auditStatement(
+          input.db,
+          auditEntryFor({
+            eventId: input.eventId,
+            actor: input.actor,
+            action: "submission.publication_unpublished_by_decision",
+            entityType: "submission",
+            entityId: submission.id,
+            before: { agenda_is_published: true, submission_is_published: true },
+            after: { agenda_is_published: false, submission_is_published: false, reason: "confirmed_decision" },
+            now,
+          }),
+        )),
+    );
+  }
 
   const transitions: Array<{
     id: Id;
@@ -1322,5 +1418,5 @@ export async function writeBulkSubmissionDecisions(
     },
     now,
   });
-  return { operationId: input.operationId, selected: ids.length, results, outboxEnqueued };
+  return { operationId: input.operationId, publishedCount, selected: ids.length, results, outboxEnqueued };
 }

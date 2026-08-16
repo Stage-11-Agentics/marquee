@@ -6,6 +6,7 @@
  * default here (S-3 verdict, merged at spikes/s3-d1-chunking/VERDICT.md).
  */
 import { z } from "@hono/zod-openapi";
+import type { D1Database } from "@cloudflare/workers-types";
 
 import { ApiError } from "./errors";
 import { ulidSchema } from "./ids";
@@ -109,6 +110,8 @@ export const bulkResultSchema = z
       .int()
       .min(0)
       .describe("Publication/outbox rows enqueued by the operation"),
+    /** Selected live sessions are reported even when the default is to skip them. */
+    published_count: z.number().int().min(0).optional(),
     failures: z.array(bulkItemFailureSchema).max(BULK_FAILURE_REPORT_LIMIT).optional(),
     results: z.array(bulkItemResultSchema).max(BULK_ID_LIMIT).optional(),
   })
@@ -147,4 +150,27 @@ export async function runBulkByIds<T = Record<string, unknown>>(
   if (normalized.length === 0) return null;
   const idsJson = JSON.stringify(normalized);
   return prepare(idsJson).run<T>();
+}
+
+/**
+ * The atomic companion for ID-set writes that must update more than one
+ * projection together. It keeps the same single JSON binding while allowing
+ * callers to submit the related statements as one D1 batch.
+ */
+export async function runBulkByIdsBatch<T = Record<string, unknown>>(
+  database: D1Database,
+  ids: readonly string[],
+  prepare: (idsJson: string) => readonly D1PreparedStatement[],
+): Promise<D1Result<T>[] | null> {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const id of ids) {
+    if (!seen.has(id)) {
+      seen.add(id);
+      normalized.push(id);
+    }
+  }
+  if (normalized.length === 0) return null;
+  const idsJson = JSON.stringify(normalized);
+  return database.batch<T>([...prepare(idsJson)]);
 }

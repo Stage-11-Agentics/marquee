@@ -560,7 +560,7 @@ test("CONTRACT · every named bulk family has one classified write seam", async 
     ["src/jobs/cascade/decisions.ts", "src/routes/evaluation.routes.ts"],
     "runBulkByIds call-site inventory changed; re-audit helper callers before changing this allowlist",
   );
-  assert.equal((bulkModule.source.match(/export async function runBulkByIds/g) ?? []).length, 1);
+  assert.equal((bulkModule.source.match(/export async function runBulkByIds(?:<|\()/g) ?? []).length, 1);
   assert.match(bulkModule.source, /if \(normalized\.length === 0\) return null/);
   assert.match(bulkModule.source, /return prepare\(idsJson\)\.run/);
 });

@@ -23,8 +23,10 @@
  */
 
 import { newUlid } from "../../api/ids";
+import { ApiError } from "../../api/errors";
 import { auditStatement } from "../audit";
 import { reconcileTaskSet } from "../../jobs/cascade/decisions";
+import { PUBLISHED_PARTICIPANT_REFUSAL, isPublishedSession } from "../publication-guard";
 import { SPONSOR_WRITEBACK_TEMPLATE_IDS } from "./deliverable-templates";
 
 export { SPONSOR_WRITEBACK_TEMPLATE_IDS };
@@ -162,6 +164,11 @@ async function sessionContentStatements(input: SponsorWritebackInput): Promise<D
   const title = text(answers, "session_title") ?? current.title;
   const description = text(answers, "session_description") ?? current.abstract;
   if (title === current.title && description === current.abstract) return [];
+  if (await isPublishedSession(db, task.event_id, current.id)) {
+    // Sponsor contacts cannot unpublish or reverse an acceptance; leaving the
+    // task open gives them a recoverable retry once the organizer changes state.
+    throw ApiError.conflict(PUBLISHED_PARTICIPANT_REFUSAL);
+  }
   return [
     db.prepare(
       `UPDATE submissions
