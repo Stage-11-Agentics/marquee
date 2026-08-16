@@ -67,8 +67,34 @@ async function startApi() {
     if (request.method === "POST" && url.pathname === "/api/v1/submissions/sub_test/notes") {
       return jsonResponse(response, 201, { note: { id: "note_new", submission_id: "sub_test", body: body.body, author_person_id: "person_test", author_name: "Test Organizer", created_at: 2 } });
     }
+    if (request.method === "POST" && url.pathname === "/api/v1/events/evt_test/submissions/decision-plan") {
+      return jsonResponse(response, 200, {
+        action: body.action,
+        selector: body.selector,
+        plan_fingerprint: "a".repeat(64),
+        etag: '"' + "a".repeat(64) + ":0" + '"',
+        rows: [
+          { disposition: "will_send", count: 1, records: [] },
+          { disposition: "already_notified", count: 0, records: [] },
+          { disposition: "no_valid_address", count: 0, records: [] },
+          { disposition: "cannot_move", count: 0, records: [] },
+        ],
+      });
+    }
+    if (request.method === "POST" && url.pathname === "/api/v1/events/evt_test/submissions/not-notified/plan") {
+      return jsonResponse(response, 200, {
+        action: "notify",
+        plan_fingerprint: "b".repeat(64),
+        etag: '"' + "b".repeat(64) + ":0" + '"',
+        queue_revision: 7,
+        rows: [],
+      });
+    }
     if (request.method === "POST" && url.pathname === "/api/v1/events/evt_test/submissions/bulk") {
       return jsonResponse(response, 200, { operation_id: "op_test", selected: 1, action: body.action, selector: body.selector });
+    }
+    if (request.method === "POST" && url.pathname === "/api/v1/events/evt_test/submissions/not-notified/notify") {
+      return jsonResponse(response, 202, { selected: 1, queued: 1, skipped_no_address: 0, remaining: 0, next_cursor: null, queue_revision: 8, outbox_ids: ["outbox_notify"] });
     }
     if (request.method === "GET" && url.pathname === "/api/v1/events/evt_test/onboarding") {
       return jsonResponse(response, 200, { data: [{ person_id: "person_test", tasks: [] }], filter: url.searchParams.get("filter") });
@@ -274,6 +300,31 @@ test("AC-138 + AC-139 + AC-140 · the configure, schedule, publish and search ve
     assert.equal(search.query.q, "retrieval");
     const publish = api.requests.find((request) => request.path.endsWith("/publish"));
     assert.equal(publish.method, "POST");
+  } finally {
+    await api.close();
+  }
+});
+
+test("MRQ-234 · CLI plan and apply carry the shared fingerprint, ETag, and Notify queue revision", async () => {
+  const api = await startApi();
+  try {
+    const plan = await runCli(scopedArgs(api.url, "submissions", "plan", "evt_test", "--action", "accept", "--filter", "status=submitted"), api.url);
+    assert.equal(plan.code, 0, plan.stderr);
+    assert.equal(JSON.parse(plan.stdout).plan_fingerprint, "a".repeat(64));
+
+    const apply = await runCli(scopedArgs(api.url, "submissions", "apply", "evt_test", "--action", "accept", "--filter", "status=submitted", "--plan-fingerprint", "a".repeat(64), "--if-match", '"' + "a".repeat(64) + ":0" + '"'), api.url);
+    assert.equal(apply.code, 0, apply.stderr);
+    const applyRequest = api.requests.find((request) => request.path.endsWith("/submissions/bulk") && request.body?.plan_fingerprint);
+    assert.equal(applyRequest.headers["if-match"], '"' + "a".repeat(64) + ":0" + '"');
+    assert.equal(applyRequest.body.plan_fingerprint, "a".repeat(64));
+
+    const notifyPlan = await runCli(scopedArgs(api.url, "submissions", "plan", "evt_test", "--action", "notify"), api.url);
+    assert.equal(notifyPlan.code, 0, notifyPlan.stderr);
+    assert.equal(JSON.parse(notifyPlan.stdout).queue_revision, 7);
+    const notify = await runCli(scopedArgs(api.url, "submissions", "apply", "evt_test", "--action", "notify", "--queue-revision", "7"), api.url);
+    assert.equal(notify.code, 0, notify.stderr);
+    const notifyRequest = api.requests.find((request) => request.path.endsWith("/not-notified/notify"));
+    assert.deepEqual(notifyRequest.body, { queue_revision: 7 });
   } finally {
     await api.close();
   }
