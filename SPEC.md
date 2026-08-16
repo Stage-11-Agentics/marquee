@@ -1159,14 +1159,40 @@ never rebuilt. No `is_primary` column — the primacy ladder is one exported
 function instead. Answers stay talk-level; per-person answers become the named
 known limitation in §10.
 
-**One question left open for the operator.** MRQ-224 asks that a moderator
-receive `ICS + membership + roster row`. MRQ-111 holds that the roster is the
-speaker list, not the CFP funnel, and excludes moderators — and
-`speakerRosterPersonSource` UNIONs `memberships(role = 'speaker')`, so the
-membership row that gates portal access **transitively** lists an accepted
-moderator on the roster. Both cannot be true. This amendment writes the
-membership row, because portal access is the defect the ticket names, and leaves
-`roster-source.ts` untouched. The consequence is recorded in
-`tests/integration/api/speakers-roster.MRQ-111.test.ts` with its reasoning. The
-resolution — a roster that shows roles, or a membership role that is not always
-`speaker` — is a product ruling and is not taken here.
+**A membership is a seat, not a claim to be a speaker** *(operator ruling,
+2026-08-16, resolving MRQ-224 against MRQ-111)*.
+
+Every accepted on-stage role gets a `memberships` row, because that row is what
+gates speaker-portal sign-in, headshot ownership, the onboarding person list and
+the comms audience. **Participation role is the speaker-ness authority**, and
+surfaces that mean "speaker" filter on role — never on a membership existing.
+
+The two facts could not both be told while `memberships.role` admitted only
+`speaker`: seating a moderator meant calling them one, and the roster reads this
+table, so portal access implied a roster row. Migration 0028 therefore widens
+`memberships.role` to mirror the on-stage half of `participations.role`
+(`co_speaker`, `moderator`, `chairperson`), and the acceptance cascade writes
+the role the seat was earned in. A person who speaks on one session and
+moderates another is seated as a `speaker`: declaration order in
+`WORK_HOLDING_PARTICIPATION_ROLES` is the precedence, so a second role never
+takes someone off the roster they belong on.
+
+Readers divide by what they mean, and the division is the contract:
+
+| Meaning | Predicate | Sites |
+|---|---|---|
+| has a seat here | `role IN (…on-stage…)` | portal sign-in, portal submission access, headshot ownership, task-assignee union |
+| is a speaker here | `role IN ('speaker','co_speaker')` | the roster, the comms speaker audience, the Sessionize import |
+| is staff here | `role NOT IN (…on-stage…)` | organization people, person access, organization home |
+
+The staff row is the one that was silent before: `role <> 'speaker'` admitted
+every on-stage role the moment the vocabulary widened. `scope-resolution.ts`
+seats all three new roles at exactly `speaker`'s rank with exactly `speaker`'s
+grants — a seat carries the holder's own portal and their own profile, nothing
+more.
+
+`participations.submission_id` is `NOT NULL`, so an organizer adding a speaker
+before there is a session has no participation for the roster to read. Their
+`speaker` seat is the only evidence there is, and it stands — which is why the
+roster keeps a membership half at all rather than becoming purely
+participation-derived.
