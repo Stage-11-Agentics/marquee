@@ -129,6 +129,10 @@ export type ApiVariables = {
 export interface ApiBindings {
   CACHE: KVNamespace;
   DB: D1Database;
+  AI_RUNTIME_MODE?: string;
+  AI_MODEL_API_KEY?: string;
+  AI_MODEL_ENDPOINT?: string;
+  AI_MODEL_NAME?: string;
   /** Optional virtual binding for embedders that compose the API directly. */
   AUTH?: CredentialResolver;
   MAIL_QUEUE: Queue<unknown>;

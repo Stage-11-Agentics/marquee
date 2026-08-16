@@ -31,6 +31,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   webhook_deliveries: 0,
   webhook_endpoints: 0,
   submission_notes: 0,
+  model_usage_events: 0,
   submission_decisions: 680,
   submission_answers: 4091,
   submission_tracks: 1156,

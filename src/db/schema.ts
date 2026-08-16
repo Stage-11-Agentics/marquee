@@ -587,6 +587,21 @@ export interface OutboxRow extends MutableRecord {
   to_email: string;
 }
 
+/** Counters-only evidence for a model drafting call; never prompt or prose. */
+export interface ModelUsageEventRow extends ImmutableRecord {
+  actor_person_id: Id;
+  completion_tokens: number | null;
+  event_id: Id;
+  failure_code: string | null;
+  model: string;
+  operation: "kind_feedback";
+  prompt_tokens: number | null;
+  provider: string;
+  provider_request_id: string | null;
+  status: "succeeded" | "failed";
+  total_tokens: number | null;
+}
+
 export interface RoutingRuleRow extends MutableRecord {
   deleted_at: EpochMilliseconds | null;
   enabled: 0 | 1;
@@ -1070,6 +1085,7 @@ export const CORE_TABLE_NAMES = [
   "person_merges",
   "person_aliases",
   "memberships",
+  "model_usage_events",
   "auth_sessions",
   "magic_links",
   "api_tokens",
@@ -1187,6 +1203,7 @@ export const CORE_TABLES = {
   imports: "imports",
   magic_links: "magic_links",
   memberships: "memberships",
+  model_usage_events: "model_usage_events",
   mirror_credentials: "mirror_credentials",
   mirror_outbox: "mirror_outbox",
   mirror_state: "mirror_state",
@@ -1264,6 +1281,7 @@ export interface CoreTableRows {
   imports: ImportRow;
   magic_links: MagicLinkRow;
   memberships: MembershipRow;
+  model_usage_events: ModelUsageEventRow;
   mirror_credentials: MirrorCredentialRow;
   mirror_outbox: MirrorOutboxRow;
   mirror_state: MirrorStateRow;
@@ -1352,6 +1370,7 @@ interface CoreDefaultColumns {
   imports: never;
   magic_links: never;
   memberships: "confirmation_status";
+  model_usage_events: never;
   mirror_credentials: never;
   mirror_outbox: "attempts";
   mirror_state: "local_row_count" | "remote_row_count";

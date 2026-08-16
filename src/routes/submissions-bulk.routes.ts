@@ -11,14 +11,23 @@ import {
 } from "../api/bulk";
 import { ApiError } from "../api/errors";
 import { newUlid } from "../api/ids";
+import { kindFeedbackResponseSchema } from "../api/kind-feedback";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
-import { notifyExistingDecisions, writeBulkSubmissionDecisions } from "../jobs/cascade/decisions";
+import { loadSubmissions, notifyExistingDecisions, writeBulkSubmissionDecisions } from "../jobs/cascade/decisions";
 import { buildDecisionPlan, buildNotifyPlan, refuseZeroEffect, requireCurrentDecisionPlan } from "../jobs/cascade/decision-plan-service";
+import {
+  draftKindFeedback,
+  KIND_FEEDBACK_PROVENANCE,
+  KIND_FEEDBACK_UNAVAILABLE,
+  kindFeedbackConfigured,
+  type KindFeedbackEnvironment,
+} from "../jobs/ai/kind-feedback";
 import { decisionPlanResponseSchema } from "../api/decision-plan";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { PUBLISHED_SESSION_REFUSAL } from "../lib/publication-guard";
+import { canTransitionSubmissionStatus } from "../lib/submission-transitions";
 import { selectSubmissionIds, submissionFilterSchema, summarizeNotNotifiedSubmissions } from "./submissions.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -142,11 +151,88 @@ const planBulkDecision = defineApiRoute(
         feedbackMd: body.feedback_md,
         confirmPublished: body.confirm_published === true,
         waveId: body.wave_id,
+        kindFeedbackEnabled: kindFeedbackConfigured(context.env),
       }), 200);
     } catch (error: unknown) {
       if (error instanceof Error && error.message === "event not found") throw ApiError.notFound("event not found");
       throw error;
     }
+  },
+);
+
+const bulkKindFeedbackBodySchema = z
+  .object({
+    selector: bulkSelectorWireSchema(submissionFilterSchema, submissionIdSchema),
+    action: z.enum(["accept", "reject", "waitlist", "withdraw"]),
+    internal_note: z.string().max(5_000).nullable().optional(),
+    confirm_published: z.boolean().optional(),
+    wave_id: z.string().min(1).max(200).nullable().optional(),
+  })
+  .strict();
+
+const draftBulkKindFeedback = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/submissions/decision-plan/kind-feedback",
+    operationId: "draftBulkKindFeedback",
+    summary: "Draft shared kind rejection feedback",
+    description: "Make one model call for a bulk rejection and place the shared editable paragraph in the decision dialog; confirmation still controls every send.",
+    tags: ["Submissions"],
+    request: {
+      params: eventParams,
+      body: { content: { "application/json": { schema: bulkKindFeedbackBodySchema } } },
+    },
+    policy: {
+      auth: { kind: "grants", grants: ["program:write"] },
+      rateLimit: { bucket: "write" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(kindFeedbackResponseSchema, "The shared editable kind feedback paragraph or a non-blocking unavailable notice."),
+      ...errorResponses([400, 401, 403, 404, 409, 422, 429, 500]),
+    },
+  },
+  async (context) => {
+    const { eventId } = context.req.valid("param");
+    const body = context.req.valid("json");
+    if (body.action !== "reject") {
+      throw ApiError.badRequest("kind feedback is available for rejection decisions only", "action");
+    }
+    const ids = await resolveBulkIds(context.env.DB, eventId, body.selector);
+    await assertWaveBelongsToEvent(context.env.DB, eventId, body.wave_id);
+    const submissions = await loadSubmissions(context.env.DB, eventId, ids);
+    if (submissions.length !== ids.length || submissions.length === 0) {
+      throw ApiError.conflict("Every selected submission must still exist before drafting feedback.");
+    }
+    for (const submission of submissions) {
+      const transitionError = canTransitionSubmissionStatus(submission.status, "rejected", "organizer");
+      if (transitionError) throw ApiError.conflict(transitionError);
+      if (submission.agenda_published === 1 && body.confirm_published !== true) {
+        throw ApiError.conflict(PUBLISHED_SESSION_REFUSAL);
+      }
+    }
+    const first = submissions[0]!;
+    const tracks = new Set(submissions.map((submission) => submission.track_name).filter(Boolean));
+    const track = tracks.size === 1 ? [...tracks][0]! : tracks.size > 1 ? "multiple tracks" : null;
+    const actor = await actorFor(context);
+    const result = await draftKindFeedback({
+      actorPersonId: actor.personId,
+      context: {
+        decision: "reject",
+        eventName: first.event_name,
+        internalNote: body.internal_note ?? "",
+        selectedCount: submissions.length,
+        title: submissions.length === 1 ? first.title : `${submissions.length} selected submissions`,
+        track,
+      },
+      environment: context.env as unknown as KindFeedbackEnvironment,
+      eventId,
+    });
+    return context.json({
+      paragraph: result.paragraph ?? null,
+      notice: result.ok ? null : KIND_FEEDBACK_UNAVAILABLE,
+      provenance: result.ok ? KIND_FEEDBACK_PROVENANCE : null,
+    }, 200);
   },
 );
 
@@ -360,4 +446,4 @@ const notifyNotifiedSubmissions = defineApiRoute(
   },
 );
 
-export const apiRoutes = [planBulkDecision, planNotifiedSubmissions, bulkDecideSubmissions, getNotifiedSummary, notifyNotifiedSubmissions];
+export const apiRoutes = [planBulkDecision, draftBulkKindFeedback, planNotifiedSubmissions, bulkDecideSubmissions, getNotifiedSummary, notifyNotifiedSubmissions];
