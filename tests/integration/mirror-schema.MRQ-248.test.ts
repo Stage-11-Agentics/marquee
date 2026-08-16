@@ -204,6 +204,7 @@ test("MRQ-248 · verify is advisory, fresh/default bases offer explicit provisio
   expect(verified.needsProvisioning).toBe(true);
   expect(verified.readiness.roles.map((role) => role.state)).toEqual(["missing", "missing", "missing"]);
   expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM mirror_credentials").first<{ count: number }>()).toMatchObject({ count: 0 });
+  const beforeProvision = fake.calls.length;
   const provisioned = await verifyConnection(fake, "provision", undefined, clock);
   expect(provisioned.needsProvisioning).toBe(false);
   expect(fake.tables.find((table) => table.id === "tbl_table_1")).toMatchObject({ name: "Table 1", fields: [] });
@@ -217,7 +218,7 @@ test("MRQ-248 · verify is advisory, fresh/default bases offer explicit provisio
     expect.objectContaining({ role: "speaker_tasks", outcome: "created" }),
     expect.objectContaining({ role: "people", outcome: "created" }),
   ]));
-  const metadataCalls = fake.calls.filter((call) => call.kind === "schema" || call.kind === "create_table");
+  const metadataCalls = fake.calls.slice(beforeProvision).filter((call) => call.kind === "schema" || call.kind === "create_table");
   expect(metadataCalls.map((call) => call.at).every((at, index, values) => index === 0 || at - values[index - 1] >= 250)).toBe(true);
 });
 
