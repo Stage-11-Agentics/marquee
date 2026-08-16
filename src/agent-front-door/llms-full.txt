@@ -1186,6 +1186,8 @@ The command registry is:
 - `node cli/marquee.mjs submissions note <submission-id> --set body=<text>`
 - `node cli/marquee.mjs submissions accept <event-id> --filter <key=value>`
 - `node cli/marquee.mjs submissions reject <event-id> --filter <key=value>`
+- `node cli/marquee.mjs submissions plan <event-id> --action <accept|reject|waitlist|withdraw|notify> [--filter <key=value>]`
+- `node cli/marquee.mjs submissions apply <event-id> --action <accept|reject|waitlist|withdraw|notify> [--filter <key=value>]`
 - `node cli/marquee.mjs review queue <event-id>`
 - `node cli/marquee.mjs review show <event-id> <submission-id>`
 - `node cli/marquee.mjs review submit <event-id> <submission-id> --score <n> --recommendation <approve|maybe|deny> --comment <text> [--criteria <json>]`
