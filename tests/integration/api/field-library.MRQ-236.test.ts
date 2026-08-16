@@ -79,6 +79,7 @@ async function seedFixture(): Promise<void> {
     [OPEN_FORM_ID, EVENT_ID, "Open intake", "mrq236-open", "open", now + 3 * 86_400_000],
     [CLOSED_FORM_ID, EVENT_ID, "Closed intake", "mrq236-closed", "closed", now + 3 * 86_400_000],
   ] as const) {
+    // clock-check: allow — open fixtures need an already-started window; every close time remains three days ahead.
     await env.DB.prepare(
       `INSERT INTO forms
         (id, event_id, name, slug, kind, status, opens_at, closes_at, welcome_md,
