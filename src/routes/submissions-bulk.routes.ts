@@ -368,7 +368,10 @@ const bulkDecideSubmissions = defineApiRoute(
       plan,
       planFingerprint: body.plan_fingerprint,
     });
-    if (plan.zero_effect) refuseZeroEffect(plan);
+    // The preview/apply contract refuses an unkeyed zero-effect action before
+    // mutation. A keyed request is an admitted operation, so it records and
+    // replays the durable no-op receipt instead of losing that audit seam.
+    if (plan.zero_effect && !context.req.header("Idempotency-Key")) refuseZeroEffect(plan);
 
     const operation = await claimRequestOperation({
       db: context.env.DB,
@@ -463,7 +466,8 @@ const bulkDecideSubmissions = defineApiRoute(
     });
     await linkRequestOperationOutbox(context.env.DB, operation.operationId, outboxIds);
     if (outboxIds.length > 0) {
-      await markRequestOperationDispatchPending(context.env.DB, operation.operationId, 200, pendingBody, outboxIds);
+      const dispatchAdmitted = await markRequestOperationDispatchPending(context.env.DB, operation.operationId, 200, pendingBody, outboxIds, { claimToken: operation.claimToken });
+      if (!dispatchAdmitted) throw ApiError.conflict("the operation claim was reclaimed before mail dispatch", { code: "operation_in_flight", operation_id: operation.operationId });
       await dispatchRequestOperationNow(context.env.DB, context.env.MAIL_QUEUE, operation.operationId, outboxIds);
     }
     const bodyOut = buildBulkResult({
@@ -475,10 +479,10 @@ const bulkDecideSubmissions = defineApiRoute(
     });
     if (allFailed) {
       const error = ApiError.conflict(operationResult.notice, bodyOut);
-      await completeRequestOperation(context.env.DB, operation.operationId, 409, error.toEnvelope(requestId));
+      await completeRequestOperation(context.env.DB, operation.operationId, 409, error.toEnvelope(requestId), { state: "failed", claimToken: operation.claimToken });
       throw error;
     }
-    await completeRequestOperation(context.env.DB, operation.operationId, 200, bodyOut, { outboxIds });
+    await completeRequestOperation(context.env.DB, operation.operationId, 200, bodyOut, { outboxIds, claimToken: operation.claimToken, dispatchClaimToken: operation.operationId });
     return context.json(bodyOut, 200);
   },
 );
@@ -583,7 +587,7 @@ const notifyNotifiedSubmissions = defineApiRoute(
     };
     if (noDecisionsRemain) {
       const error = ApiError.conflict(operationResponse.notice!, { operation: operationResponse });
-      await completeRequestOperation(context.env.DB, operation.operationId, 409, error.toEnvelope(requestId), { state: "failed" });
+      await completeRequestOperation(context.env.DB, operation.operationId, 409, error.toEnvelope(requestId), { state: "failed", claimToken: operation.claimToken });
       throw error;
     }
     const pendingResponse = {
@@ -598,7 +602,8 @@ const notifyNotifiedSubmissions = defineApiRoute(
     };
     await linkRequestOperationOutbox(context.env.DB, operation.operationId, result.outboxIds);
     if (result.outboxIds.length > 0) {
-      await markRequestOperationDispatchPending(context.env.DB, operation.operationId, 202, pendingResponse, result.outboxIds);
+      const dispatchAdmitted = await markRequestOperationDispatchPending(context.env.DB, operation.operationId, 202, pendingResponse, result.outboxIds, { claimToken: operation.claimToken });
+      if (!dispatchAdmitted) throw ApiError.conflict("the operation claim was reclaimed before mail dispatch", { code: "operation_in_flight", operation_id: operation.operationId });
       await dispatchRequestOperationNow(context.env.DB, context.env.MAIL_QUEUE, operation.operationId, result.outboxIds);
     }
     const response = {
@@ -608,7 +613,7 @@ const notifyNotifiedSubmissions = defineApiRoute(
         dispatch_state: result.outboxIds.length > 0 ? "dispatched" as const : "not_required" as const,
       },
     };
-    await completeRequestOperation(context.env.DB, operation.operationId, 202, response, { outboxIds: result.outboxIds });
+    await completeRequestOperation(context.env.DB, operation.operationId, 202, response, { outboxIds: result.outboxIds, claimToken: operation.claimToken, dispatchClaimToken: operation.operationId });
     return context.json(response, 202);
   },
 );

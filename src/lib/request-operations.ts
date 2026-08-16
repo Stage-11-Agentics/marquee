@@ -25,6 +25,8 @@ export interface RequestOperationHandle {
   operationId: string;
   fingerprint: string;
   canonicalRequestJson: string;
+  /** The lease token owned by this worker; null only for a completed replay. */
+  claimToken: string | null;
   replay: { status: number; body: unknown } | null;
 }
 
@@ -39,11 +41,10 @@ interface ExistingRequestOperation {
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) {
-    const normalized = value.map(canonicalize);
-    const unique = new Map(normalized.map((item) => [JSON.stringify(item), item]));
-    return [...unique.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([, item]) => item);
+    // Arrays retain order and multiplicity. Request-operation callers must
+    // normalize unordered selectors before claiming; the registry must never
+    // collapse two materially different request bodies into one fingerprint.
+    return value.map(canonicalize);
   }
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value as Record<string, unknown>)
@@ -98,6 +99,7 @@ export async function claimRequestOperation(input: RequestOperationInput): Promi
         operationId: existing.operation_id,
         fingerprint,
         canonicalRequestJson: canonical,
+        claimToken: null,
         replay: { status: Number(existing.response_status ?? 200), body: JSON.parse(existing.response_json) },
       };
     }
@@ -110,7 +112,7 @@ export async function claimRequestOperation(input: RequestOperationInput): Promi
         WHERE operation_id = ? AND state = 'in_flight' AND lease_expires_at < ?
       `).bind(claimToken, now + 60_000, input.requestId, now, existing.operation_id, now).run();
       if (Number(reclaimed.meta.changes ?? 0) === 1) {
-        return { operationId: existing.operation_id, fingerprint, canonicalRequestJson: canonical, replay: null };
+        return { operationId: existing.operation_id, fingerprint, canonicalRequestJson: canonical, claimToken, replay: null };
       }
     }
     throw ApiError.conflict("the earlier request is still being completed", {
@@ -158,7 +160,7 @@ export async function claimRequestOperation(input: RequestOperationInput): Promi
     }
     throw error;
   }
-  return { operationId, fingerprint, canonicalRequestJson: canonical, replay: null };
+  return { operationId, fingerprint, canonicalRequestJson: canonical, claimToken: operationId, replay: null };
 }
 
 export async function completeRequestOperation(
@@ -166,25 +168,59 @@ export async function completeRequestOperation(
   operationId: string,
   status: number,
   body: unknown,
-  options: { outboxIds?: readonly string[]; state?: "completed" | "failed"; now?: number } = {},
-): Promise<void> {
+  options: {
+    outboxIds?: readonly string[];
+    state?: "completed" | "failed";
+    now?: number;
+    claimToken?: string | null;
+    dispatchClaimToken?: string | null;
+  } = {},
+): Promise<boolean> {
   const now = options.now ?? Date.now();
-  await db.prepare(`
-    UPDATE request_operations
-    SET state = ?, response_status = ?, response_headers_json = '{}', response_json = ?,
-        outbox_ids_json = ?, claim_token = NULL, lease_expires_at = NULL,
-        dispatch_claim_token = NULL, dispatch_lease_expires_at = NULL,
-        updated_at = ?, completed_at = ?
-    WHERE operation_id = ?
-  `).bind(
-    options.state ?? "completed",
-    status,
-    JSON.stringify(body),
-    JSON.stringify(options.outboxIds ?? []),
-    now,
-    now,
-    operationId,
-  ).run();
+  const outboxIds = options.outboxIds ?? [];
+  const dispatchClaimToken = options.dispatchClaimToken ?? (outboxIds.length > 0 ? operationId : null);
+  const claimToken = options.claimToken ?? null;
+  const result = outboxIds.length > 0
+    ? await db.prepare(`
+        UPDATE request_operations
+        SET state = ?, response_status = ?, response_headers_json = '{}', response_json = ?,
+            outbox_ids_json = ?, claim_token = NULL, lease_expires_at = NULL,
+            dispatch_claim_token = NULL, dispatch_lease_expires_at = NULL,
+            updated_at = ?, completed_at = ?
+        WHERE operation_id = ? AND state = 'dispatch_pending' AND dispatch_claim_token = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM request_operation_outbox
+            WHERE operation_id = ? AND dispatch_state = 'pending'
+          )
+      `).bind(
+        options.state ?? "completed",
+        status,
+        JSON.stringify(body),
+        JSON.stringify(outboxIds),
+        now,
+        now,
+        operationId,
+        dispatchClaimToken,
+        operationId,
+      ).run()
+    : await db.prepare(`
+        UPDATE request_operations
+        SET state = ?, response_status = ?, response_headers_json = '{}', response_json = ?,
+            outbox_ids_json = ?, claim_token = NULL, lease_expires_at = NULL,
+            dispatch_claim_token = NULL, dispatch_lease_expires_at = NULL,
+            updated_at = ?, completed_at = ?
+        WHERE operation_id = ? AND state = 'in_flight' AND claim_token = ?
+      `).bind(
+        options.state ?? "completed",
+        status,
+        JSON.stringify(body),
+        JSON.stringify(outboxIds),
+        now,
+        now,
+        operationId,
+        claimToken,
+      ).run();
+  return Number(result.meta.changes ?? 0) === 1;
 }
 
 export async function linkRequestOperationOutbox(
@@ -207,9 +243,9 @@ export async function markRequestOperationOutboxDispatched(
   outboxIds: readonly string[],
   now = Date.now(),
   dispatchToken = operationId,
-): Promise<void> {
-  if (outboxIds.length === 0) return;
-  await db.prepare(`
+): Promise<boolean> {
+  if (outboxIds.length === 0) return true;
+  const result = await db.prepare(`
     UPDATE request_operation_outbox
     SET dispatch_state = 'dispatched', dispatch_attempt_count = dispatch_attempt_count + 1,
         dispatched_at = ?, last_dispatch_error = NULL
@@ -220,6 +256,7 @@ export async function markRequestOperationOutboxDispatched(
         WHERE operation_id = ? AND state = 'dispatch_pending' AND dispatch_claim_token = ?
       )
   `).bind(now, operationId, JSON.stringify([...new Set(outboxIds)]), operationId, dispatchToken).run();
+  return Number(result.meta.changes ?? 0) === 1;
 }
 
 export async function markRequestOperationDispatchPending(
@@ -228,17 +265,19 @@ export async function markRequestOperationDispatchPending(
   status: number,
   body: unknown,
   outboxIds: readonly string[],
-  now = Date.now(),
-): Promise<void> {
-  await db.prepare(`
+  options: { now?: number; claimToken?: string | null } = {},
+): Promise<boolean> {
+  const now = options.now ?? Date.now();
+  const result = await db.prepare(`
     UPDATE request_operations
     SET state = 'dispatch_pending', response_status = ?, response_headers_json = '{}',
         response_json = ?, outbox_ids_json = ?, claim_token = NULL, lease_expires_at = NULL,
         dispatch_claim_token = ?, dispatch_lease_expires_at = ?,
         dispatch_attempt_count = dispatch_attempt_count + 1,
         dispatch_next_attempt_at = ?, updated_at = ?
-    WHERE operation_id = ?
-  `).bind(status, JSON.stringify(body), JSON.stringify(outboxIds), operationId, now + 60_000, now, now, operationId).run();
+    WHERE operation_id = ? AND state = 'in_flight' AND claim_token = ?
+  `).bind(status, JSON.stringify(body), JSON.stringify(outboxIds), operationId, now + 60_000, now, now, operationId, options.claimToken).run();
+  return Number(result.meta.changes ?? 0) === 1;
 }
 
 async function markRequestOperationDispatchFailure(
@@ -246,14 +285,15 @@ async function markRequestOperationDispatchFailure(
   operationId: string,
   error: unknown,
   now: number,
+  dispatchToken = operationId,
 ): Promise<void> {
   const message = error instanceof Error ? error.message : String(error);
   await db.prepare(`
     UPDATE request_operations
     SET dispatch_claim_token = NULL, dispatch_lease_expires_at = NULL,
         dispatch_last_error = ?, dispatch_next_attempt_at = ?, updated_at = ?
-    WHERE operation_id = ? AND state = 'dispatch_pending'
-  `).bind(message, now + 60_000, now, operationId).run();
+    WHERE operation_id = ? AND state = 'dispatch_pending' AND dispatch_claim_token = ?
+  `).bind(message, now + 60_000, now, operationId, dispatchToken).run();
 }
 
 /** Send an admitted operation's outbox IDs while its response remains pending until Queue accepts all of them. */
@@ -270,10 +310,11 @@ export async function dispatchRequestOperationNow(
     // genuinely pending link instead of replaying an already accepted one.
     for (const outboxId of outboxIds) {
       await enqueueMailMessage(queue, outboxId);
-      await markRequestOperationOutboxDispatched(db, operationId, [outboxId], now, operationId);
+      const marked = await markRequestOperationOutboxDispatched(db, operationId, [outboxId], now, operationId);
+      if (!marked) throw new Error("the operation dispatch lease was reclaimed before acknowledgement");
     }
   } catch (error: unknown) {
-    await markRequestOperationDispatchFailure(db, operationId, error, now);
+    await markRequestOperationDispatchFailure(db, operationId, error, now, operationId);
     throw ApiError.serviceUnavailable("the operation was admitted but mail dispatch is pending", {
       code: "operation_dispatch_pending",
       operation_id: operationId,
@@ -317,7 +358,7 @@ export async function dispatchPendingRequestOperations(
     try {
       for (const link of pending.results) {
         await enqueueMailMessage(queue, link.outbox_id);
-        await db.prepare(`
+        const marked = await db.prepare(`
           UPDATE request_operation_outbox
           SET dispatch_state = 'dispatched', dispatch_attempt_count = dispatch_attempt_count + 1,
               dispatched_at = ?, last_dispatch_error = NULL
@@ -327,11 +368,24 @@ export async function dispatchPendingRequestOperations(
               WHERE operation_id = ? AND state = 'dispatch_pending' AND dispatch_claim_token = ?
             )
         `).bind(now, row.operation_id, link.outbox_id, row.operation_id, token).run();
+        if (Number(marked.meta.changes ?? 0) !== 1) throw new Error("the operation dispatch lease was reclaimed before acknowledgement");
       }
       await db.prepare(`
         UPDATE request_operations
         SET state = 'completed',
-            response_json = json_set(response_json, '$.operation.dispatch_state', 'dispatched'),
+            response_json = json_patch(
+              response_json,
+              json_object(
+                'operation',
+                json_patch(
+                  CASE
+                    WHEN json_type(response_json, '$.operation') = 'object' THEN json_extract(response_json, '$.operation')
+                    ELSE json('{}')
+                  END,
+                  json_object('dispatch_state', 'dispatched')
+                )
+              )
+            ),
             completed_at = ?, dispatch_claim_token = NULL,
             dispatch_lease_expires_at = NULL, dispatch_next_attempt_at = NULL,
             updated_at = ?

@@ -989,7 +989,7 @@ const sendComms = defineApiRoute(
         details: { operation: operationResponse },
       });
       const errorBody = error.toEnvelope(requestId);
-      await completeRequestOperation(context.env.DB, operation.operationId, 404, errorBody);
+      await completeRequestOperation(context.env.DB, operation.operationId, 404, errorBody, { claimToken: operation.claimToken });
       throw error;
     }
     if (recipients.length === 0) {
@@ -1010,7 +1010,7 @@ const sendComms = defineApiRoute(
           dispatch_state: "not_required" as const,
         },
       };
-      await completeRequestOperation(context.env.DB, operation.operationId, 202, response);
+      await completeRequestOperation(context.env.DB, operation.operationId, 202, response, { claimToken: operation.claimToken });
       return context.json(response, 202);
     }
     const queued = await enqueueBulkReminder({
@@ -1077,7 +1077,8 @@ const sendComms = defineApiRoute(
     });
     if (auditRows.length > 0) await context.env.DB.batch(auditRows);
     if (outboxIds.length > 0) {
-      await markRequestOperationDispatchPending(context.env.DB, operation.operationId, 202, pendingResponse, outboxIds);
+      const dispatchAdmitted = await markRequestOperationDispatchPending(context.env.DB, operation.operationId, 202, pendingResponse, outboxIds, { claimToken: operation.claimToken });
+      if (!dispatchAdmitted) throw ApiError.conflict("the operation claim was reclaimed before mail dispatch", { code: "operation_in_flight", operation_id: operation.operationId });
       await dispatchRequestOperationNow(context.env.DB, context.env.MAIL_QUEUE, operation.operationId, outboxIds);
     }
     const response = {
@@ -1087,7 +1088,7 @@ const sendComms = defineApiRoute(
         dispatch_state: outboxIds.length > 0 ? "dispatched" as const : "not_required" as const,
       },
     };
-    await completeRequestOperation(context.env.DB, operation.operationId, 202, response, { outboxIds });
+    await completeRequestOperation(context.env.DB, operation.operationId, 202, response, { outboxIds, claimToken: operation.claimToken, dispatchClaimToken: operation.operationId });
     return context.json(response, 202);
   },
 );

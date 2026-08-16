@@ -1746,14 +1746,14 @@ const publishSubmission = defineApiRoute(
           requestOperation.operationId,
           error,
         );
-        await completeRequestOperation(context.env.DB, requestOperation.operationId, failure.status, failure.toEnvelope(requestId), { state: "failed" });
+        await completeRequestOperation(context.env.DB, requestOperation.operationId, failure.status, failure.toEnvelope(requestId), { state: "failed", claimToken: requestOperation.claimToken });
         throw failure;
       }
       throw error;
     }
     if (operation.effect === "changed") await purgePublicEmbedCache(context.env.CACHE, { eventId });
     const response = { ...(await loadRecord(context.env.DB, eventId, submissionId)), operation };
-    await completeRequestOperation(context.env.DB, requestOperation.operationId, 200, response);
+    await completeRequestOperation(context.env.DB, requestOperation.operationId, 200, response, { claimToken: requestOperation.claimToken });
     return context.json(response, 200);
   },
 );
@@ -1797,14 +1797,14 @@ const unpublishSubmission = defineApiRoute(
           requestOperation.operationId,
           error,
         );
-        await completeRequestOperation(context.env.DB, requestOperation.operationId, failure.status, failure.toEnvelope(requestId), { state: "failed" });
+        await completeRequestOperation(context.env.DB, requestOperation.operationId, failure.status, failure.toEnvelope(requestId), { state: "failed", claimToken: requestOperation.claimToken });
         throw failure;
       }
       throw error;
     }
     if (operation.effect === "changed") await purgePublicEmbedCache(context.env.CACHE, { eventId });
     const response = { ...(await loadRecord(context.env.DB, eventId, submissionId)), operation };
-    await completeRequestOperation(context.env.DB, requestOperation.operationId, 200, response);
+    await completeRequestOperation(context.env.DB, requestOperation.operationId, 200, response, { claimToken: requestOperation.claimToken });
     return context.json(response, 200);
   },
 );

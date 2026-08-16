@@ -329,7 +329,7 @@ const batchPublishRoute = defineApiRoute(
         },
         ...explanation,
       });
-      await completeRequestOperation(context.env.DB, operation.operationId, 409, error.toEnvelope(requestId));
+      await completeRequestOperation(context.env.DB, operation.operationId, 409, error.toEnvelope(requestId), { claimToken: operation.claimToken });
       throw error;
     }
     const candidates = new Map(current.publication.candidates.map((candidate) => [candidate.submission_id, candidate]));
@@ -451,7 +451,7 @@ const batchPublishRoute = defineApiRoute(
         },
         ...observed,
       });
-      await completeRequestOperation(database, operation.operationId, 409, error.toEnvelope(requestId));
+      await completeRequestOperation(database, operation.operationId, 409, error.toEnvelope(requestId), { claimToken: operation.claimToken });
       throw error;
     }
     await purgePublicEmbedCache(context.env.CACHE, { eventId });
@@ -470,7 +470,7 @@ const batchPublishRoute = defineApiRoute(
         dispatch_state: "not_required" as const,
       },
     };
-    await completeRequestOperation(database, operation.operationId, 200, response);
+    await completeRequestOperation(database, operation.operationId, 200, response, { claimToken: operation.claimToken });
     return context.json(response, 200);
   },
 );

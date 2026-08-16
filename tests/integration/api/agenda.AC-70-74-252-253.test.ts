@@ -93,6 +93,26 @@ describe.sequential("MRQ-20 agenda API", () => {
       body: JSON.stringify({ submission_ids: ["sub-agenda-placed", "sub-agenda-accepted"] }),
     });
     expect(mixed.status).toBe(409);
+    const mixedBody = await mixed.json<{
+      error: {
+        details: {
+          operation: { effect: string; reason_code: string; operation_id: string };
+          rows: Array<{ submissionId: string; classification: string; primaryReasonCode: string; reasonCodes: string[] }>;
+          all_or_nothing: boolean;
+        };
+      };
+    }>();
+    expect(mixedBody.error.details.operation).toMatchObject({ effect: "no_op", reason_code: "MISSING_AGENDA_ITEM" });
+    expect(mixedBody.error.details.all_or_nothing).toBe(true);
+    expect(mixedBody.error.details.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ submissionId: "sub-agenda-placed", classification: "READY_TO_PUBLISH" }),
+      expect.objectContaining({
+        submissionId: "sub-agenda-accepted",
+        classification: "ACCEPTED_UNSCHEDULED",
+        primaryReasonCode: "MISSING_AGENDA_ITEM",
+        reasonCodes: expect.arrayContaining(["MISSING_AGENDA_ITEM"]),
+      }),
+    ]));
     expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE submission_id = ?").bind("sub-agenda-placed").first<{ is_published: number }>()).toMatchObject({ is_published: 0 });
 
     const published = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/publish`, {
@@ -108,6 +128,18 @@ describe.sequential("MRQ-20 agenda API", () => {
     });
     expect(await env.DB.prepare("SELECT is_published FROM submissions WHERE id = ?").bind("sub-agenda-placed").first<{ is_published: number }>()).toMatchObject({ is_published: 1 });
     expect(await env.DB.prepare("SELECT action, entity_type FROM audit_log WHERE entity_id = ? AND action = 'published'").bind("sub-agenda-placed").first<{ action: string; entity_type: string }>()).toMatchObject({ action: "published", entity_type: "submission" });
+
+    const auditCountBeforeNoOp = await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ? AND action = 'published'").bind("sub-agenda-placed").first<{ count: number }>();
+    const alreadyLive = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/publish`, {
+      method: "POST",
+      body: JSON.stringify({ submission_ids: ["sub-agenda-placed"] }),
+    });
+    expect(alreadyLive.status).toBe(409);
+    expect(await alreadyLive.json()).toMatchObject({
+      error: { details: { operation: { effect: "no_op", reason_code: "ALREADY_PUBLISHED", notice: expect.stringContaining("Nothing changed") } } },
+    });
+    const auditCountAfterNoOp = await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ? AND action = 'published'").bind("sub-agenda-placed").first<{ count: number }>();
+    expect(auditCountAfterNoOp).toEqual(auditCountBeforeNoOp);
 
     const publicResponse = await SELF.fetch(`${ORIGIN}/api/v1/public/agenda?event=aie-nyc-2026`);
     expect(publicResponse.status).toBe(200);

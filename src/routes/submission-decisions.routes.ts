@@ -318,16 +318,16 @@ const resendDecision = defineApiRoute(
     if (result.outcome === "failed") {
       if (result.error === "submission not found") {
         const error = ApiError.notFound("submission not found");
-        await completeRequestOperation(context.env.DB, requestOperation.operationId, error.status, error.toEnvelope(requestId), { state: "failed" });
+        await completeRequestOperation(context.env.DB, requestOperation.operationId, error.status, error.toEnvelope(requestId), { state: "failed", claimToken: requestOperation.claimToken });
         throw error;
       }
       if (result.error === "only accepted or rejected decisions can be resent" || result.error === "no accepted or rejected decision exists to resend") {
         const error = ApiError.conflict(result.error);
-        await completeRequestOperation(context.env.DB, requestOperation.operationId, error.status, error.toEnvelope(requestId), { state: "failed" });
+        await completeRequestOperation(context.env.DB, requestOperation.operationId, error.status, error.toEnvelope(requestId), { state: "failed", claimToken: requestOperation.claimToken });
         throw error;
       }
       const error = ApiError.unprocessable(result.error ?? "the decision could not be resent");
-      await completeRequestOperation(context.env.DB, requestOperation.operationId, error.status, error.toEnvelope(requestId), { state: "failed" });
+      await completeRequestOperation(context.env.DB, requestOperation.operationId, error.status, error.toEnvelope(requestId), { state: "failed", claimToken: requestOperation.claimToken });
       throw error;
     }
     if (!result.decisionId || !result.resultingStatus) {
@@ -351,7 +351,8 @@ const resendDecision = defineApiRoute(
     };
     await linkRequestOperationOutbox(context.env.DB, requestOperation.operationId, outboxIds);
     if (outboxIds.length > 0) {
-      await markRequestOperationDispatchPending(context.env.DB, requestOperation.operationId, 202, pendingResponse, outboxIds);
+      const dispatchAdmitted = await markRequestOperationDispatchPending(context.env.DB, requestOperation.operationId, 202, pendingResponse, outboxIds, { claimToken: requestOperation.claimToken });
+      if (!dispatchAdmitted) throw ApiError.conflict("the operation claim was reclaimed before mail dispatch", { code: "operation_in_flight", operation_id: requestOperation.operationId });
       await dispatchRequestOperationNow(context.env.DB, context.env.MAIL_QUEUE, requestOperation.operationId, outboxIds);
     }
     const response = {
@@ -361,7 +362,7 @@ const resendDecision = defineApiRoute(
         dispatch_state: outboxIds.length > 0 ? "dispatched" as const : "not_required" as const,
       },
     };
-    await completeRequestOperation(context.env.DB, requestOperation.operationId, 202, response, { outboxIds });
+    await completeRequestOperation(context.env.DB, requestOperation.operationId, 202, response, { outboxIds, claimToken: requestOperation.claimToken, dispatchClaimToken: requestOperation.operationId });
     return context.json(response, 202);
   },
 );

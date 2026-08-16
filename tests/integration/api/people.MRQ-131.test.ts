@@ -518,7 +518,8 @@ test("CONTRACT · MRQ-226 · an org nudge retries by compose id but a new nudge 
     body: JSON.stringify(body),
   });
   expect(first.status).toBe(202);
-  expect(await first.json()).toMatchObject({ selected: 1, queued: 1, duplicate: 0 });
+  const firstBody = await first.json();
+  expect(firstBody).toMatchObject({ selected: 1, queued: 1, duplicate: 0 });
 
   const retry = await request("/api/v1/org/comms/send", {
     method: "POST",
@@ -526,7 +527,7 @@ test("CONTRACT · MRQ-226 · an org nudge retries by compose id but a new nudge 
     body: JSON.stringify(body),
   });
   expect(retry.status).toBe(202);
-  expect(await retry.json()).toMatchObject({ selected: 1, queued: 0, duplicate: 1 });
+  expect(await retry.json()).toEqual(firstBody);
 
   const newNudge = await request("/api/v1/org/comms/send", {
     method: "POST",
@@ -540,6 +541,28 @@ test("CONTRACT · MRQ-226 · an org nudge retries by compose id but a new nudge 
     .bind(SPEAKER)
     .first<{ total: number }>();
   expect(rows?.total).toBe(2);
+});
+
+test("CONTRACT · MRQ-237 · organization communication with no valid address is an honest keyed no-op", async () => {
+  await env.DB.prepare("UPDATE people SET email = '' WHERE id = ? AND org_id = ?").bind(SPEAKER, ORG_ID).run();
+  const input = { person_ids: [SPEAKER], subject: "MRQ-237 no address", body: "Hello {{speaker.first_name}}" };
+  const headers = { "content-type": "application/json", "Idempotency-Key": "mrq237-org-no-address" };
+  const first = await request("/api/v1/org/comms/send", { method: "POST", headers, body: JSON.stringify(input) });
+  expect(first.status).toBe(202);
+  const firstBody = await first.json<{ selected: number; queued: number; outbox_ids: string[]; operation: { effect: string; reason_code: string; notice: string } }>();
+  expect(firstBody).toMatchObject({
+    selected: 1,
+    queued: 0,
+    outbox_ids: [],
+    operation: { effect: "no_op", reason_code: "NO_VALID_RECIPIENT", notice: expect.stringContaining("no selected person") },
+  });
+  const replay = await request("/api/v1/org/comms/send", { method: "POST", headers, body: JSON.stringify(input) });
+  expect(replay.status).toBe(202);
+  expect(await replay.json()).toEqual(firstBody);
+  expect(await env.DB.prepare(
+    "SELECT COUNT(*) AS count FROM request_operations WHERE organization_id = ? AND route = 'org.comms.send'",
+  ).bind(ORG_ID).first<{ count: number }>()).toEqual({ count: 1 });
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM outbox WHERE event_id = ?").bind(EVENT_ID).first<{ count: number }>()).toEqual({ count: 0 });
 });
 
 test("CONTRACT · MRQ-131 · CRM-05 · a CSV import creates, updates, and reports what it could not map", async () => {
