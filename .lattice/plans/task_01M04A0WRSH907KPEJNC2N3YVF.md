@@ -223,3 +223,64 @@ The implementation plan's file surface now explicitly includes:
 No magic_links schema/type migration is part of the binding design. The direct non-session auth test, submitter-only recipient test, second-speaker one-row test, known editable draft.resume_link round-trip, SELECT/mint/insert race behavior, prospective exclusivity transitions, absolute-date conflict, and 9-to-10/7-to-8 assertion updates are required before implementation can claim the plan's corresponding invariants.
 
 MRQ-247 remains a plan-only hold after this amendment: keep Lattice backlog, do not write feature code, do not launch or auto-fire Cycle 2 review from this turn, and wait for the queued sole-slot review to consume this pushed amendment.
+
+## Plan-Review Cycle 2 Resolutions (AUTHORITATIVE)
+
+Source review: art_01M04V384Z5BH89Z66MJ7E3PHB, reviewed at plan-only head c58b059e8f093e8a57d0397c9c0662552d0c47bf, verdict FAIL (plan-level). These resolutions are binding for implementation and supersede earlier plan text wherever they conflict. This is a plan amendment only; it does not authorize feature code, a status transition, or a reviewer launch.
+
+### A. Unconditional identity binding on reads; state gates only on writes
+
+The redirect-bound credential keeps the existing server-minted identity checks on every read: purpose exactly draft_resume, an unexpired/live magic-link row, a canonical server-owned redirect_to yielding one submission ID, and agreement among the redirect target, requested public-form form/event, magic-link event_id, magic-link person_id, and submissions.submitter_person_id. The identity binding is unconditional regardless of the submission's current lifecycle state.
+
+A valid bound reminder token must continue to resolve its target submission for the draft, submitted, outcome, and closed-form states. Read resolution must not require status = draft or form open/actionable. This preserves the existing public-form behavior in which the same capability renders submitted/outcome/receipt state and can be followed after a call closes. A closed-form read through the reminder token renders the honest closed state and retained answers, not resumeMissed.
+
+Status and form-open/actionable checks are write gates only:
+
+- autosave requires the target submission to remain draft and the form to be open/actionable;
+- public upload authorization requires the target submission to remain draft and the form to be open/actionable;
+- submit requires the target submission to remain draft and the form to be open/actionable.
+
+After a successful submit through the reminder token, the same token must resolve the submitted state, the post-submit success screen, and the confirmation email's follow-up link. Add an integration test that submits through the reminder URL and follows that confirmation link to a live submitted/receipt page. Add a closed-form-after-reminder test that reads the token and sees the honest closed state while write attempts are rejected.
+
+Add src/routes/uploads.routes.ts to the binding surface. Route public upload authorization through the same shared resume resolver used by the public form, while retaining support for the original raw submissions.resume_token_hash token. Add an upload-through-reminder-token test covering the presign/sign authorization path. Uploads must not compare the reminder magic token directly to resume_token_hash.
+
+Keep draft_resume removed from the session-producing auth exchange tuple and retain the direct non-session test. The reminder token is a public-form capability only; it never creates a portal/session credential.
+
+### B. Explicitly superseded design text and the valid idempotency sequence
+
+The following earlier proposals are struck and must not be implemented:
+
+- ~~Add a nullable target-submission column to magic_links, rebuild the CHECK-constrained table, or add any schema binding migration.~~ SUPERSEDED. The binding is encoded only in the existing server-minted redirect_to; no new column, table, migration, or rebuild.
+- ~~Reserve a placeholder outbox row, mint later, then UPDATE/complete the rendered row.~~ SUPERSEDED. There is no claim/mint/complete outbox mutation or mid-flight placeholder state.
+
+The only valid reminder admission sequence is: check the fully-derived stable outbox idempotency key with SELECT; if absent, mint the bound redirect_to draft_resume token; insert the fully rendered outbox row and catch the unique-key race. A true losing race may leave one expiring, never-mailed orphan token, but it must never create a second durable mail row or require an outbox UPDATE.
+
+### C. Draft queue persistence and intentional complete-draft divergence
+
+Add src/lib/saved-views.ts to the implementation surface. Append the stable close/deadline column ID to the built-in Drafts needing attention view; never rename existing persisted column IDs. Round-trip an existing saved view created before the new column was introduced and prove that its stored columns remain valid while the built-in view gains the new stable ID.
+
+The reminder and queue intentionally have different populations: the mail selector qualifies every status=draft row meeting the open-form, close-date, offset, and time-window rule, even when its applicable missing-field list is empty; the Drafts needing attention queue continues to show only rows with missing_fields.length > 0. A complete-but-unsubmitted draft therefore receives one specific reminder and contributes zero rows to the attention queue. Record and test this as intentional behavior, not a query mismatch.
+
+### D. Editable validator field, palette exclusion, and manual-send refusal
+
+draft.resume_link remains a known communication validator field in MERGE_FIELDS and COMMUNICATION_MERGE_FIELDS so an organizer can edit and save the draft_close_reminder trigger template. The generated value is populated only for the scheduler's draft_close_reminder context and is the server-minted, submission-bound public-form URL.
+
+Exclude draft.resume_link from the general CommsScreen composer palette. It is a context-bound field, not a token an organizer should insert into arbitrary messages. The trigger editor still accepts and round-trips it because the validator set includes it.
+
+Reject ad-hoc and bulk/manual sends whose template_key is draft_close_reminder before rendering or enqueueing: those paths have no draft-bound submission context and must never send literal {{draft.resume_link}} text or a link belonging to another recipient. Add tests for trigger editor save/round-trip, palette exclusion, and manual/bulk rejection. The trigger scheduler remains the only path that can populate and send this link-bearing template.
+
+### E. Access revocation and idempotency inventory
+
+Access revocation intentionally consumes the reminder magic-link row by setting used_at when the person loses event access. That invalidates the reminder capability, and the result is correct. The original raw resume_token_hash capability remains stored and is not rewritten by this feature; assert both the revoked reminder failure and the preserved original-token behavior in tests.
+
+Add IDEMPOTENCY_REGISTRY.draftCloseReminder(submissionId) to tests/unit/mail-idempotency-registry.test.ts's hand-maintained inventory. Document that its entity value may equal draftResume or formConfirmation entity values; buildIdempotencyKey separates them by templateKey, so the distinct template keys preserve the intended grain without inventing another entity ID.
+
+### F. Creation-time copy and named assertion updates
+
+The creation-time close-date copy is composed by the inline text/html strings in src/routes/public-form.routes.ts, not solely by src/lib/auth/draft-resume-copy.ts. Update those inline strings using the conference timezone already returned by the public-form load path; retain the subject constant module only for the subject.
+
+The implementation must name and update the existing mail manifest count 9 to 10, automated-trigger assertion seven to eight, CommsScreen trigger classification/count, and the idempotency inventory. The SPEC.md shipped-trigger enumeration remains deferred contract drift for consolidation; do not edit SPEC.md in this ticket.
+
+The focused validation set now also includes: submit-through-reminder then confirmation-follow; closed-form read versus write rejection; upload-through-reminder; old saved-view round-trip; complete-draft mail with zero queue row; trigger editor round-trip; palette exclusion; manual/bulk trigger refusal; reminder access revocation with original-token survival; and the idempotency template-key separation assertion.
+
+MRQ-247 remains a plan-only hold after this amendment: keep Lattice backlog, do not write feature code, do not launch Cycle 3 review from this turn, and wait for the queued sole-slot review to consume this pushed amendment.
