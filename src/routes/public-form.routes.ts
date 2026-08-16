@@ -26,6 +26,7 @@ import {
   formCollectsParticipants,
   legacyParticipantsFromAnswers,
   readOnBehalfOf,
+  readParticipantSlots,
   readParticipantList,
   readParticipantRoster,
   writeParticipantRoster,
@@ -254,10 +255,20 @@ function rosterFromBody(
   // A client that names nobody has not necessarily named nobody: a form still
   // carrying the old `co_speaker_*` pair sends that person as two answers, and
   // reading them here is what keeps those forms working unchanged.
-  const carried = current.participants.length > 0 ? current.participants : legacyParticipantsFromAnswers(answers);
+  //
+  // The fallback is gated on `stored`, not on the list being empty. Those are
+  // different facts: a submission that has never had a roster written may read
+  // the legacy answers, but one whose stored roster is empty has had its
+  // participants deliberately removed, and falling back there would resurrect
+  // them from answers that are still on the row and no longer rendered.
+  const typed = body.participants === undefined
+    ? (current.stored ? current.typed : readParticipantSlots(legacyParticipantsFromAnswers(answers)))
+    : readParticipantSlots(body.participants);
   return {
-    participants: body.participants === undefined ? carried : readParticipantList(body.participants),
+    participants: readParticipantList(typed),
     onBehalfOf: body.on_behalf_of === undefined ? current.onBehalfOf : readOnBehalfOf(body.on_behalf_of),
+    typed,
+    stored: true,
   };
 }
 
@@ -276,14 +287,16 @@ function isHalfTyped(value: unknown): boolean {
     && fields.some((field) => typeof field !== "string" || field.trim() === "");
 }
 
-function incompleteParticipantSlots(value: unknown): number {
-  if (!Array.isArray(value)) return 0;
-  const complete = readParticipantList(value).length;
-  const nonEmpty = value.filter((entry) =>
-    typeof entry === "object" && entry !== null
-    && Object.values(entry as Record<string, unknown>).some((field) => typeof field === "string" && field.trim() !== ""),
-  ).length;
-  return nonEmpty - complete;
+/**
+ * Slots the submitter started and did not finish.
+ *
+ * Read from the resolved roster rather than the request body, so a resumed
+ * draft carrying a half-typed slot is refused at Submit even when the client
+ * omits the key. Autosave is never blocked — the submitter is mid-sentence, and
+ * the slot is stored as typed so it survives a save.
+ */
+function incompleteParticipantSlots(slots: readonly { name: string; email: string }[]): number {
+  return slots.filter((slot) => !slot.name.trim() || !normalisePublicEmail(slot.email)).length;
 }
 
 function requiredSubmissionIssues(
@@ -307,7 +320,7 @@ function requiredSubmissionIssues(
   if (isHalfTyped(raw.on_behalf_of) || (raw.on_behalf_of !== undefined && raw.on_behalf_of !== null && roster.onBehalfOf === null)) {
     return [{ fieldKey: "on_behalf_of", message: "Add your own name and a contact address the conference team can reply to, then try again." }];
   }
-  if (incompleteParticipantSlots(raw.participants) > 0) {
+  if (incompleteParticipantSlots(roster.typed) > 0) {
     return [{ fieldKey: "participants", message: "Give every added participant a name and a contact address, then try again." }];
   }
   return [];
@@ -743,7 +756,14 @@ async function createDraft(
 
   const raw = rawAnswersFromBody(answerMap(body), body.email);
   const projected = projectPublicAnswers(base.fields, raw);
-  const email = emailFromAnswers(projected.projected.answers) ?? normalisePublicEmail(body.email);
+  const roster = rosterFromBody(body, base.roster, raw);
+  // The draft's owner is the person the resume link belongs to, and the
+  // disclosure is what says who that is. Deriving it from `speaker_email`
+  // instead — as this did — mailed the private resume link to a third party the
+  // submitter had merely named, and set `submitter_person_id` to them, which
+  // every AC-270/AC-271 guarantee downstream then inherited.
+  const speakerEmail = emailFromAnswers(projected.projected.answers) ?? normalisePublicEmail(body.email);
+  const email = roster.onBehalfOf?.email ?? speakerEmail;
   if (!email) throw ApiError.unprocessable("Enter an address where the conference team can reach you, then choose Save draft.", "email");
   const event = await findEventContext(context.env.DB, base.form.event_id);
   if (!event) throw ApiError.notFound("This conference is no longer available.");
@@ -752,14 +772,19 @@ async function createDraft(
   if (base.form.per_submitter_limit > 0 && knownPerson && await countFormForPerson(context.env.DB, base.form.id, knownPerson.id) >= Number(base.form.per_submitter_limit)) {
     throw ApiError.conflict("Your abstract limit is full. Use a saved resume link to continue an existing draft.");
   }
-  const person = await upsertPublicPerson({
+  // `knownPerson ??`, never an unconditional upsert. This route is the one
+  // unauthenticated write door to `people`: a stranger POSTing a draft that
+  // names an existing contact's address must not rewrite that contact's name
+  // and profile. From here the resume token is the credential, and autosave —
+  // which holds it — may update the owner's own record.
+  const person = knownPerson ?? await upsertPublicPerson({
     db: context.env.DB,
     orgId: event.org_id,
     email,
-    name: answerText(projected.projected.answers, "speaker_name") ?? email,
-    company: answerText(projected.projected.answers, "speaker_company"),
-    title: answerText(projected.projected.answers, "speaker_role"),
-    bio: answerText(projected.projected.answers, "biography"),
+    name: roster.onBehalfOf?.name ?? answerText(projected.projected.answers, "speaker_name") ?? email,
+    company: roster.onBehalfOf ? null : answerText(projected.projected.answers, "speaker_company"),
+    title: roster.onBehalfOf ? null : answerText(projected.projected.answers, "speaker_role"),
+    bio: roster.onBehalfOf ? null : answerText(projected.projected.answers, "biography"),
     now,
   });
   const submissionId = crypto.randomUUID();
@@ -782,7 +807,7 @@ async function createDraft(
     orgId: event.org_id,
     submitter: person,
     answers: projected.projected.answers,
-    roster: rosterFromBody(body, base.roster, projected.projected.answers),
+    roster,
     now,
   });
 
@@ -818,11 +843,25 @@ async function autosaveDraft(
   const now = Date.now();
   const event = await findEventContext(context.env.DB, base.form.event_id);
   if (!event) throw ApiError.notFound("This conference is no longer available.");
-  const person = await upsertPublicPerson({
+  // The draft's own owner, by id. Re-deriving them from an address in the
+  // request let a changed `speaker_email` walk the write onto a different
+  // person's record; the resume token names exactly one submission, and that
+  // submission names exactly one submitter. Holding the token is what makes
+  // this an authorized profile write rather than a stranger's.
+  const person = await context.env.DB
+    .prepare("SELECT * FROM people WHERE id = ?")
+    .bind(base.submission.submitter_person_id)
+    .first<PersonRow>();
+  if (!person) throw ApiError.notFound("This draft is no longer available.");
+  const roster = rosterFromBody(body, base.roster, raw);
+  // The disclosure is recorded on the draft and applied at submit, where the
+  // record's submitter is set. Moving it here would rewrite the owner of a
+  // draft on a timer, mid-typing.
+  await upsertPublicPerson({
     db: context.env.DB,
     orgId: event.org_id,
-    email: (await findPersonByEmail(context.env.DB, event.org_id, base.email ?? ""))?.email ?? base.email ?? "draft@local.test",
-    name: answerText(projected.projected.answers, "speaker_name") ?? base.email ?? "Conference participant",
+    email: person.email,
+    name: answerText(projected.projected.answers, "speaker_name") ?? person.name,
     company: answerText(projected.projected.answers, "speaker_company"),
     title: answerText(projected.projected.answers, "speaker_role"),
     bio: answerText(projected.projected.answers, "biography"),
@@ -834,7 +873,7 @@ async function autosaveDraft(
     orgId: event.org_id,
     submitter: person,
     answers: projected.projected.answers,
-    roster: rosterFromBody(body, base.roster, projected.projected.answers),
+    roster,
     now,
   });
   await context.env.DB.prepare(
@@ -957,7 +996,11 @@ async function handlePublicSubmission(
 
   const raw = rawAnswersFromBody(answerMap(body), body.email);
   const projected = projectPublicAnswers(base.fields, raw);
-  const roster = rosterFromBody(body, base.roster, projected.projected.answers);
+  // `raw`, not the projected answers: the legacy `co_speaker_*` pair is no
+  // longer part of the served field set, so projection drops it. A form still
+  // carrying those fields sends its co-speaker as two answers, and this is the
+  // one read that turns them into a roster entry.
+  const roster = rosterFromBody(body, base.roster, raw);
   const domainIssues = [
     ...projected.issues,
     ...requiredSubmissionIssues(base.fields, projected.projected.answers, base.form, roster, body),
@@ -984,9 +1027,22 @@ async function handlePublicSubmission(
   });
   const now = Date.now();
   const existing = base.submission;
-  const existingPerson = existing
-    ? await context.env.DB.prepare("SELECT * FROM people WHERE id = ?").bind(existing.submitter_person_id).first<PersonRow>()
-    : await findPersonByEmail(context.env.DB, event.org_id, email!);
+  // Who the record's submitter is: whoever `email` names, which the disclosure
+  // decides. Resolving from the draft's owner instead — as this did — made the
+  // record permanently disagree with the mail: a submitter who ticks "on behalf
+  // of someone else" at Submit having saved a draft without it filed the
+  // abstract under the speaker, and one who UNTICKS it kept the discloser as
+  // submitter while the confirmation went to the speaker. Both directions have
+  // to follow the box, so both read the same address.
+  //
+  // The draft's owner remains the fallback for the one case the address cannot
+  // answer: a person row that no longer exists behind an address nobody has
+  // used yet, where creating one below is the right answer and this returns
+  // null to let it.
+  const existingPerson = (email ? await findPersonByEmail(context.env.DB, event.org_id, email) : null)
+    ?? (existing && !roster.onBehalfOf && !speakerEmail
+      ? await context.env.DB.prepare("SELECT * FROM people WHERE id = ?").bind(existing.submitter_person_id).first<PersonRow>()
+      : null);
   if (!existing && base.form.per_submitter_limit > 0 && existingPerson && await countFormForPerson(context.env.DB, base.form.id, existingPerson.id) >= Number(base.form.per_submitter_limit)) {
     throw ApiError.conflict("Your abstract limit is full. Use a saved resume link to continue an existing draft.");
   }
@@ -1047,11 +1103,11 @@ async function handlePublicSubmission(
     await context.env.DB.prepare(
       `UPDATE submissions SET title = ?, abstract = ?, status = 'submitted', origin = 'public',
        format_id = ?, primary_track_id = ?, vendor_affiliation = ?, submitted_at = ?,
-       last_saved_at = ?, search_blob = ?, applied_rule_id = ?, updated_at = ?
+       last_saved_at = ?, search_blob = ?, applied_rule_id = ?, submitter_person_id = ?, updated_at = ?
        WHERE id = ? AND status = 'draft'`,
     ).bind(
       title, abstract, references.formatId, references.trackIds[0] ?? null, vendor, now,
-      now, JSON.stringify(projected.projected.answers), routing.ruleId, now, submissionId,
+      now, JSON.stringify(projected.projected.answers), routing.ruleId, person.id, now, submissionId,
     ).run();
   } else {
     await context.env.DB.prepare(

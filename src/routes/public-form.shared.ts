@@ -129,6 +129,24 @@ export function formCollectsParticipants(fields: readonly FormFieldView[]): bool
 }
 
 /**
+ * The fields the page will actually ask for.
+ *
+ * The legacy `co_speaker_*` pair is owned by the participant section now, so it
+ * is not rendered — and a field that is never rendered must not be validated
+ * either. An organizer who had marked `co_speaker_name` required would
+ * otherwise have created an unsatisfiable form: a required answer with no
+ * control to type it into, refusing every submission forever. That is a dead
+ * end in the walkthrough loop, which is a defect whoever finds it.
+ *
+ * Their stored answers stay on the row and are still read once, by
+ * `readParticipantRoster`, to seed the roster of a submission that predates it.
+ */
+export function collectableFields(fields: readonly FormFieldView[]): FormFieldView[] {
+  if (!formCollectsParticipants(fields)) return [...fields];
+  return fields.filter((field) => !LEGACY_PARTICIPANT_FIELD_KEYS.includes(field.key as never));
+}
+
+/**
  * What the form may promise.
  *
  * `max_speakers` used to be clamped against the shape below it, because that
@@ -138,11 +156,18 @@ export function formCollectsParticipants(fields: readonly FormFieldView[]): bool
  * hold two is a contract nobody can satisfy, so it was clamped honestly.
  *
  * The shape is a list now, so the clamp is gone and the organizer's number is
- * the answer. The floor of one is the primary speaker: a form that collects
- * participants at all collects at least the person filling it in.
+ * the answer — for every value of it, including the nonsensical ones. A form
+ * configured for zero speakers advertised zero before this and still does: an
+ * organizer who types zero has made a mistake worth showing them, and quietly
+ * flooring it at one would hide the mistake behind a form that half works.
+ *
+ * The function survives its clamp because two callers need the same number and
+ * must not drift: the state the page renders, and the ceiling the submit route
+ * enforces. It is also where a future clamp would go if the shape ever grows a
+ * limit of its own again.
  */
-export function advertisedMaxSpeakers(configured: number, fields: readonly FormFieldView[]): number {
-  return formCollectsParticipants(fields) ? Math.max(1, configured) : configured;
+export function advertisedMaxSpeakers(configured: number, _fields: readonly FormFieldView[]): number {
+  return configured;
 }
 
 function participantRole(value: unknown): PublicFormParticipant["role"] | null {
@@ -182,8 +207,47 @@ export function readOnBehalfOf(value: unknown): PublicFormOnBehalfOf | null {
 }
 
 export interface PublicParticipantRoster {
+  /** Complete entries only: everyone the submission actually carries. */
   participants: PublicFormParticipant[];
   onBehalfOf: PublicFormOnBehalfOf | null;
+  /**
+   * The slots as the submitter typed them, half-filled ones included.
+   *
+   * Kept so a saved draft restores what was on the screen rather than what the
+   * record could make of it. Under the old shape a co-speaker's name lived in
+   * `submission_answers` and survived a draft save with the address still
+   * blank; losing that on the way to a list would be a silent regression paid
+   * for by the one submitter who saved and came back.
+   */
+  typed: PublicFormParticipantSlot[];
+  /**
+   * Whether a roster was ever written for this submission.
+   *
+   * "No roster stored" and "a roster stored as empty" are different facts, and
+   * only the first may fall back to the legacy `co_speaker_*` answers. Fusing
+   * them would let a participant the submitter deleted be resurrected by
+   * answers that are still on the row and no longer rendered.
+   */
+  stored: boolean;
+}
+
+/** One slot exactly as typed. Any part may be blank while it is being filled in. */
+export interface PublicFormParticipantSlot {
+  name: string;
+  email: string;
+  role: PublicFormParticipant["role"];
+}
+
+export function readParticipantSlots(value: unknown): PublicFormParticipantSlot[] {
+  const raw = typeof value === "string" ? parseJson<unknown>(value, null) : value;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    const role = participantRole(entry.role) ?? "co_speaker";
+    const name = typeof entry.name === "string" ? entry.name.trim() : "";
+    const email = typeof entry.email === "string" ? entry.email.trim() : "";
+    return name || email ? [{ name, email, role }] : [];
+  });
 }
 
 /**
@@ -212,18 +276,27 @@ export function readParticipantRoster(
   participantsJson: unknown,
   answers: Record<string, unknown>,
 ): PublicParticipantRoster {
-  const stored = typeof participantsJson === "string" ? parseJson<Record<string, unknown>>(participantsJson, {}) : null;
-  if (stored !== null && (Array.isArray(stored.participants) || isRecord(stored.on_behalf_of))) {
+  const row = typeof participantsJson === "string" ? parseJson<Record<string, unknown>>(participantsJson, {}) : null;
+  if (row !== null && (Array.isArray(row.participants) || isRecord(row.on_behalf_of))) {
+    const typed = readParticipantSlots(row.participants);
     return {
-      participants: readParticipantList(stored.participants),
-      onBehalfOf: readOnBehalfOf(stored.on_behalf_of),
+      participants: readParticipantList(row.participants),
+      onBehalfOf: readOnBehalfOf(row.on_behalf_of),
+      typed,
+      stored: true,
     };
   }
-  return { participants: legacyParticipantsFromAnswers(answers), onBehalfOf: null };
+  const legacy = legacyParticipantsFromAnswers(answers);
+  return { participants: legacy, onBehalfOf: null, typed: legacy.map((entry) => ({ ...entry })), stored: false };
 }
 
+/**
+ * The roster as stored: the slots as typed, so a resumed draft is what the
+ * submitter left rather than what the record kept of it. Reading it back
+ * narrows to the complete entries again, so no consumer has to know.
+ */
 export function writeParticipantRoster(roster: PublicParticipantRoster): string {
-  return JSON.stringify({ on_behalf_of: roster.onBehalfOf, participants: roster.participants });
+  return JSON.stringify({ on_behalf_of: roster.onBehalfOf, participants: roster.typed });
 }
 
 function answerValue(valueJson: string | null, valueText: string | null): unknown {
@@ -430,7 +503,10 @@ export async function loadPublicForm(
   if (!row || row.status === "draft") return null;
 
   const form: FormRow = row;
-  const fields = await listFormFields(db, form.id);
+  // Narrowed once, here, so rendering, validation, persistence and the client
+  // all see the same field set. Filtering only at the render layer would leave
+  // a required legacy field enforced by a control nobody can see.
+  const fields = collectableFields(await listFormFields(db, form.id));
   const submission = await findResumeSubmission(db, form.id, options.resumeToken);
   const answers = submission ? await readAnswers(db, submission.id) : {};
   const files = await readFiles(db, submission);
@@ -582,7 +658,9 @@ export function toPublicFormState(
     message: record.resumeMissed
       ? resumeMissMessage(record.state)
       : messageForState(record.state, record.submissionEditable, receipt),
-    participants: record.roster.participants,
+    // The slots as typed, so a resumed draft is what the submitter left on the
+    // screen rather than what the record could make of it.
+    participants: record.roster.typed,
     on_behalf_of: record.roster.onBehalfOf,
   };
 }

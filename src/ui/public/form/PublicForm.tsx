@@ -154,9 +154,6 @@ function publicValidationIssues(error: unknown): Array<{ fieldKey?: string; mess
   });
 }
 
-/** Field keys the participant section owns; the generic list skips them. */
-const PARTICIPANT_OWNED_FIELD_KEYS = ["co_speaker_name", "co_speaker_email"] as const;
-
 /** A slot is a participant being typed, so every part of it is optional until it is not. */
 type ParticipantSlot = { name: string; email: string; role: PublicFormParticipant["role"] };
 type OnBehalfOfSlot = { name: string; email: string };
@@ -262,11 +259,11 @@ export function PublicForm({ initial }: PublicFormProps) {
   }
 
   const visibleFields = useMemo(
-    // The old fixed co-speaker pair is not drawn as two more text boxes beside
-    // a list that already collects the same people. `participants` carries
-    // whatever those answers held, so nothing a submitter typed is lost.
-    () => state.fields.filter((field) =>
-      !PARTICIPANT_OWNED_FIELD_KEYS.includes(field.key as never) && isFieldApplicable(field, answers)),
+    // The old fixed co-speaker pair never arrives: the server narrows the field
+    // set before it is served, so the page cannot render a field the server
+    // will not validate — nor the reverse, which is how a required field with
+    // no control refuses every submission forever.
+    () => state.fields.filter((field) => isFieldApplicable(field, answers)),
     [state.fields, answers],
   );
 
@@ -773,7 +770,7 @@ export function PublicForm({ initial }: PublicFormProps) {
           />
           <span>I'm submitting on behalf of someone else</span>
         </label>
-        <div class={`public-behalf-fields${onBehalfOf ? " is-open" : ""}`} aria-hidden={onBehalfOf === null}>
+        <div class="public-behalf-fields" aria-hidden={onBehalfOf === null}>
           {onBehalfOf && <>
             <label class="public-participant-field"><span>Your name</span><input type="text" value={onBehalfOf.name} disabled={closed} onInput={(event) => writeOnBehalfOf({ ...onBehalfOf, name: (event.currentTarget as HTMLInputElement).value })} /></label>
             <label class="public-participant-field"><span>Your contact address</span><input type="email" value={onBehalfOf.email} disabled={closed} onInput={(event) => writeOnBehalfOf({ ...onBehalfOf, email: (event.currentTarget as HTMLInputElement).value })} /></label>

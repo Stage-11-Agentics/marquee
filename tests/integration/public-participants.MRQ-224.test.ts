@@ -220,3 +220,167 @@ test("AC-329 · one address in two slots is one person, not two rows", async () 
     .first<{ total: number }>();
   expect(Number(invites?.total)).toBe(1);
 });
+
+async function createDraft(body: Record<string, unknown>): Promise<{ resume_token: string }> {
+  const response = await request(`/api/v1/public/forms/${SLUG}/drafts`, { method: "POST", body: JSON.stringify(body) });
+  expect(response.status).toBe(201);
+  return response.json<{ resume_token: string }>();
+}
+
+test("AC-270, AC-271 · the disclosure survives a saved draft, and the resume link goes to the discloser", async () => {
+  // The draft path used to resolve its owner from `speaker_email` and ignore
+  // the disclosure entirely. Two things went wrong at once and neither was
+  // visible: `submitter_person_id` was set to the SPEAKER, so every AC-270/271
+  // guarantee downstream inherited the wrong person; and the private resume
+  // link was emailed to a third party the submitter had merely named, while the
+  // person who filled the form in could not get back into her own draft.
+  const draft = await createDraft({
+    answers: { title: "The keynote", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
+    on_behalf_of: { name: "Sam Chen", email: "sam@example.com" },
+  });
+
+  const resume = await env.DB
+    .prepare("SELECT to_email FROM outbox WHERE template_key = 'draft_resume' LIMIT 1")
+    .first<{ to_email: string }>();
+  expect(resume?.to_email).toBe("sam@example.com");
+
+  const drafted = await latestSubmission();
+  const draftOwner = await env.DB.prepare("SELECT email FROM people WHERE id = ?").bind(drafted.submitter_person_id).first<{ email: string }>();
+  expect(draftOwner?.email).toBe("sam@example.com");
+
+  const submitted = await submit({
+    answers: { title: "The keynote", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
+    resumeToken: draft.resume_token,
+    on_behalf_of: { name: "Sam Chen", email: "sam@example.com" },
+  });
+  expect(submitted.status).toBe(201);
+  const submission = await latestSubmission();
+  const submitter = await env.DB.prepare("SELECT email FROM people WHERE id = ?").bind(submission.submitter_person_id).first<{ email: string }>();
+  expect(submitter?.email).toBe("sam@example.com");
+  expect((await participationsFor(submission.id)).map((row) => `${row.role}:${row.name}`).sort())
+    .toEqual(["speaker:Robin Alvarez", "submitter:Sam Chen"]);
+});
+
+test("AC-270 · ticking the disclosure at Submit moves the record's submitter off the draft owner", async () => {
+  // A submitter can save a draft as themselves and only then realise they are
+  // filing on someone else's behalf. Keeping the draft's owner would file the
+  // abstract under the speaker and send them the decision.
+  const draft = await createDraft({
+    answers: { title: "The keynote", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
+  });
+  const submitted = await submit({
+    answers: { title: "The keynote", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
+    resumeToken: draft.resume_token,
+    on_behalf_of: { name: "Sam Chen", email: "sam@example.com" },
+  });
+  expect(submitted.status).toBe(201);
+  const submission = await latestSubmission();
+  const submitter = await env.DB.prepare("SELECT email FROM people WHERE id = ?").bind(submission.submitter_person_id).first<{ email: string }>();
+  expect(submitter?.email).toBe("sam@example.com");
+});
+
+test("AC-332 · an unauthenticated draft cannot rewrite an existing contact", async () => {
+  // The trust guard covered the people a submitter NAMES and left the door it
+  // was written for open: this route is the one unauthenticated write path to
+  // `people`, and a stranger who types an existing contact's address into the
+  // primary speaker card renamed them.
+  await createDraft({
+    answers: {
+      title: "The keynote",
+      speaker_name: "ana",
+      speaker_email: "ana@example.com",
+      biography: "typed by a stranger",
+    },
+  });
+  const ana = await env.DB.prepare("SELECT name, title, bio FROM people WHERE id = ?").bind(EXISTING_CONTACT).first<{ name: string; title: string; bio: string }>();
+  expect(ana?.name).toBe("Dr. Ana Reyes");
+  expect(ana?.title).toBe("Principal Engineer");
+  expect(ana?.bio).toBe("Ana works on schedulers.");
+});
+
+test("AC-329 · a half-typed slot survives a saved draft and is refused at Submit", async () => {
+  // Autosave must not block a submitter mid-sentence, and Submit must not
+  // silently drop what they started. Both halves are asserted here because
+  // storing only complete entries made the first half a silent loss: close the
+  // tab with a name typed and no address, come back, and the name was gone.
+  const draft = await createDraft({
+    answers: { title: "A half panel", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
+    participants: [{ name: "Ana R.", email: "", role: "moderator" }],
+  });
+
+  const resumed = await request(`/api/v1/public/forms/${SLUG}?resume=${encodeURIComponent(draft.resume_token)}`);
+  const state = await resumed.json<{ participants: Array<{ name: string; email: string; role: string }> }>();
+  expect(state.participants).toEqual([{ name: "Ana R.", email: "", role: "moderator" }]);
+
+  // And it is still refused at Submit even though this request omits the key,
+  // because the refusal reads the roster the submission is carrying.
+  const submitted = await submit({
+    answers: { title: "A half panel", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
+    resumeToken: draft.resume_token,
+  });
+  expect(submitted.status).toBe(422);
+  expect(JSON.stringify(await submitted.json())).toContain("participants");
+});
+
+test("AC-329 · a removed participant is not resurrected by the legacy answers", async () => {
+  // `co_speaker_*` answers stay on the row forever and are no longer rendered.
+  // "No roster stored" and "a roster stored as empty" are different facts, and
+  // only the first may read those answers; fusing them would put a participant
+  // the submitter deleted back on the record.
+  const draft = await createDraft({
+    answers: {
+      title: "A shrinking panel",
+      speaker_name: "Robin Alvarez",
+      speaker_email: "robin@example.com",
+      co_speaker_name: "Dana Kowalski",
+      co_speaker_email: "dana@example.com",
+    },
+  });
+  const first = await latestSubmission();
+  expect((await participationsFor(first.id)).map((row) => row.role).sort()).toEqual(["co_speaker", "speaker", "submitter"]);
+
+  // The submitter removes them, then a later write omits the key entirely.
+  // Autosave rewrites answers from the request rather than merging into the
+  // stored set, so both calls carry the full answer map — that is pre-existing
+  // behaviour of this route and not what this test is about.
+  const answers = {
+    title: "A shrinking panel",
+    speaker_name: "Robin Alvarez",
+    speaker_email: "robin@example.com",
+    co_speaker_name: "Dana Kowalski",
+    co_speaker_email: "dana@example.com",
+  };
+  await request(`/api/v1/public/forms/${SLUG}/drafts/${encodeURIComponent(draft.resume_token)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ answers, participants: [] }),
+  });
+  await request(`/api/v1/public/forms/${SLUG}/drafts/${encodeURIComponent(draft.resume_token)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ answers }),
+  });
+  expect((await participationsFor(first.id)).map((row) => row.role).sort()).toEqual(["speaker", "submitter"]);
+});
+
+test("AC-270 · unticking the disclosure at Submit moves the submitter back to the speaker", async () => {
+  // The other direction, and the one a fix aimed only at ticking would leave
+  // broken: the record would keep the discloser as submitter while the
+  // confirmation went to the speaker, so the row and the mail would disagree
+  // permanently and nothing on any screen would say which was right.
+  const draft = await createDraft({
+    answers: { title: "The keynote", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
+    on_behalf_of: { name: "Sam Chen", email: "sam@example.com" },
+  });
+  const submitted = await submit({
+    answers: { title: "The keynote", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
+    resumeToken: draft.resume_token,
+    on_behalf_of: null,
+  });
+  expect(submitted.status).toBe(201);
+  const submission = await latestSubmission();
+  const submitter = await env.DB.prepare("SELECT email FROM people WHERE id = ?").bind(submission.submitter_person_id).first<{ email: string }>();
+  expect(submitter?.email).toBe("robin@example.com");
+  expect((await participationsFor(submission.id)).map((row) => `${row.role}:${row.name}`).sort())
+    .toEqual(["speaker:Robin Alvarez", "submitter:Robin Alvarez"]);
+  const receipt = await env.DB.prepare("SELECT to_email FROM outbox WHERE template_key = 'submission_confirmation' LIMIT 1").first<{ to_email: string }>();
+  expect(receipt?.to_email).toBe("robin@example.com");
+});

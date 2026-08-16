@@ -144,7 +144,11 @@ const ON_STAGE_ROLES = ["speaker", "co_speaker", "moderator", "chairperson"] as 
 function roleTargetLabel(roles: readonly string[]): string {
   const targeted = ON_STAGE_ROLES.filter((role) => roles.includes(role));
   if (targeted.length === 0 || targeted.length === ON_STAGE_ROLES.length) return "Everyone on stage";
-  return targeted.map((role) => participationRoleLabel(role)).join(" · ");
+  if (targeted.length === 1) return participationRoleLabel(targeted[0]!);
+  // Three names do not fit the chip, so the count leads and the names follow.
+  // A label that ellipsised mid-name would tell the organizer less than the
+  // number does, and the full list is on the row's `title`.
+  return `${targeted.length} roles · ${targeted.map((role) => participationRoleLabel(role)).join(", ")}`;
 }
 
 /**
@@ -175,7 +179,7 @@ function RoleTargetPicker({ idPrefix, selected, onChange }: {
         >{participationRoleLabel(role)}</button>;
       })}
     </div>
-    <small class="task-kind-hint">{roleTargetLabel(selected)} is assigned this task when a session is accepted.</small>
+    <small class="task-kind-hint">{roleTargetLabel(selected)} is assigned this task when a session is accepted. Changing this does not withdraw the task from anyone who already holds it.</small>
   </div>;
 }
 
@@ -757,7 +761,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
                 <strong>{template.name}</strong>
                 <span class="task-heading-meta">
                   <span class="task-kind-badge">{kindLabel(template.kind)}</span>
-                  <span class="task-role-badge" title="Who this task is assigned to">{roleTargetLabel(template.applies_to_roles)}</span>
+                  <span class="task-role-badge" title={`Assigned to: ${roleTargetLabel(template.applies_to_roles)}`}>{roleTargetLabel(template.applies_to_roles)}</span>
                   <span class="subtle tabular">{deadlineLabel(template)}</span>
                 </span>
               </div>

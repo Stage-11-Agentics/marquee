@@ -24,18 +24,26 @@ export const PUBLIC_FORM_STYLES = `
 .public-form-card-head h2 { font: 600 11px/1.2 var(--mono); letter-spacing: .15em; margin: 0; text-transform: uppercase; }
 .public-participant-limit { background: var(--accent-soft); border-bottom: 1px solid var(--line-strong); color: var(--accent-ink); font-size: 12px; line-height: 1.5; margin: 0; padding: 12px 20px; }
 
-/* Who is presenting. Every slot is one height and the add control sits below a
-   list that only grows downwards, so adding or removing a person never moves a
-   control the submitter is reaching for. The on-behalf-of panel reserves its
-   own height for the same reason. */
+/* Who is presenting. Every slot is one height and both the add control and the
+   on-behalf-of panel sit BELOW the control that opens them, so the thing the
+   submitter just clicked never moves out from under the cursor.
+
+   The page does get taller when a slot or the disclosure opens, and that is the
+   point of the interaction rather than a violation of it: the "elements never
+   jump" rule is about a control changing size or position while its meaning
+   stays the same — a relabelled toggle, a swapped status line — not about a
+   section the submitter deliberately asked to appear. What is reserved is
+   everything that changes without being asked for: the role select is a fixed
+   width so choosing Moderator does not resize it, the participant count is
+   tabular so it does not reflow its heading row, and the error line under the
+   section holds its height whether or not it has a message. */
 .public-participants { border-bottom: 1px solid var(--line-strong); display: grid; gap: 12px; padding: 16px 20px; }
 .public-participants-head { align-items: center; display: flex; justify-content: space-between; }
 .public-participants-head h2 { font: 600 11px/1.2 var(--mono); letter-spacing: .15em; margin: 0; text-transform: uppercase; }
 /* Tabular, so the count does not reflow the heading row as people are added. */
 .public-participant-count { font-variant-numeric: tabular-nums; }
 .public-behalf-toggle { align-items: center; display: flex; font-size: 12.5px; gap: 8px; line-height: 1.5; }
-.public-behalf-fields { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); min-height: 0; }
-.public-behalf-fields.is-open { min-height: 96px; }
+.public-behalf-fields { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .public-participant-card { align-items: end; border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 10px; grid-template-columns: 148px minmax(160px, 1fr) minmax(180px, 1fr) 92px; min-height: 74px; padding: 12px; }
 .public-participant-card.is-primary { align-items: center; background: var(--sunk); grid-template-columns: 148px 1fr; }
 .public-participant-role-static { color: var(--muted); font: 600 10px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }

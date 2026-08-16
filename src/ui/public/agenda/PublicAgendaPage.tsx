@@ -86,7 +86,11 @@ export const PUBLIC_SITE_STYLES = `
 .public-session-title a:hover, .public-session-title a:focus-visible { color: var(--public-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .public-speakers { min-height: 20px; margin: 8px 0 0; color: var(--public-muted); font-size: 12px; }
 .public-speaker-empty { display: inline-block; min-height: 20px; line-height: 20px; white-space: nowrap; }
-.public-speaker-role { color: var(--public-muted); white-space: nowrap; }
+/* The participation role, set apart from the job title beside it. Both used to
+   render through the same class, which made 'Moderator - Ana Reyes - Principal
+   Engineer, Northwind' three identical spans and told a reader nothing about
+   which of them was the seat on this stage. */
+.public-participation-role { color: var(--public-ink); font-weight: 600; white-space: nowrap; }
 .public-speakers a { text-decoration: underline; text-decoration-color: var(--public-rule); text-underline-offset: 3px; }
 .public-speakers a:hover, .public-speakers a:focus-visible { color: var(--public-accent); }
 .public-speaker-role { color: var(--public-soft); }
@@ -640,7 +644,7 @@ function SpeakerLine({ session }: { session: PublicSession }): JSX.Element {
       {session.speakers.length > 0 ? session.speakers.map((speaker, index) => (
         <span key={speaker.id}>
           {index > 0 ? " · " : ""}
-          {participationLabel(speaker) ? <span class="public-speaker-role">{participationLabel(speaker)} — </span> : null}
+          {participationLabel(speaker) ? <span class="public-participation-role">{participationLabel(speaker)} — </span> : null}
           <a href={speakerHref(speaker.slug)}>{speaker.name}</a>
           {speakerRole(speaker) ? <span class="public-speaker-role"> — {speakerRole(speaker)}</span> : null}
         </span>

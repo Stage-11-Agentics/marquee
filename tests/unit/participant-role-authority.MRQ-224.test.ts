@@ -27,6 +27,7 @@ import {
   SPEAKING_PARTICIPATION_ROLES,
   WORK_HOLDING_PARTICIPATION_ROLES,
 } from "../../src/lib/participants";
+import { PARTICIPATION_ROLES } from "../../src/db/schema";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 
@@ -42,24 +43,27 @@ function sourceOf(file: string): string {
 }
 
 describe("MRQ-224 · the participant role authority", () => {
-  test("AC-333 · being on stage and holding the work are the same population", () => {
-    expect([...WORK_HOLDING_PARTICIPATION_ROLES]).toEqual([...SPEAKING_PARTICIPATION_ROLES]);
-    expect([...WORK_HOLDING_PARTICIPATION_ROLES]).toEqual([
-      "speaker",
-      "co_speaker",
-      "moderator",
-      "chairperson",
-    ]);
-  });
-
-  test("AC-333 · the calendar adds the submitter to the stage, and nothing else", () => {
+  test("AC-333 · every declared set is the on-stage population, spelled out once", () => {
+    // Against literals, not against each other. Asserting
+    // `WORK_HOLDING === SPEAKING` where one is assigned from the other cannot
+    // fail; what can fail — and is worth catching — is somebody widening
+    // `PARTICIPATION_ROLES` and expecting every fan-out to follow, or narrowing
+    // the stage and leaving a role holding work it can no longer be given.
+    const stage = ["speaker", "co_speaker", "moderator", "chairperson"];
+    expect([...WORK_HOLDING_PARTICIPATION_ROLES]).toEqual(stage);
+    expect([...SPEAKING_PARTICIPATION_ROLES]).toEqual(stage);
     // AC-328 binds a calendar-recipient `submitter` by name: a cancellation has
-    // to reach them when their participation is removed. Derived rather than
-    // typed out, so widening the stage widens the invite list with it.
-    expect([...CALENDAR_PARTICIPATION_ROLES]).toEqual([
-      ...WORK_HOLDING_PARTICIPATION_ROLES,
-      "submitter",
-    ]);
+    // to reach them when their participation is removed.
+    expect([...CALENDAR_PARTICIPATION_ROLES]).toEqual([...stage, "submitter"]);
+    expect([...PROGRAM_PRIMACY_ROLES]).toEqual([...stage, "submitter"]);
+    expect([...DECISION_RECIPIENT_ROLES]).toEqual(["submitter", ...stage]);
+    // The submitter holds no stage work: they are in the calendar and decision
+    // sets and in neither of the two that mint tasks and portal seats.
+    expect(WORK_HOLDING_PARTICIPATION_ROLES).not.toContain("submitter");
+    // And every declared role is a real column value.
+    for (const role of new Set([...CALENDAR_PARTICIPATION_ROLES, ...DECISION_RECIPIENT_ROLES])) {
+      expect(PARTICIPATION_ROLES).toContain(role);
+    }
   });
 
   test("AC-334 · the decision ladder is the program ladder inverted", () => {
@@ -76,8 +80,12 @@ describe("MRQ-224 · the participant role authority", () => {
       expect(source, `${file} should read ${set}`).toContain(set);
       // A literal `role IN ('…')` over participations is exactly the drift this
       // ticket removed. `roleInSql` renders the same SQL from the named set.
+      // Alias-agnostic on purpose: naming the three aliases in use today would
+      // pass the moment somebody introduces a fourth.
       expect(source, `${file} still carries a literal participation role list`)
-        .not.toMatch(/(?:part|participation|speaker_part)\.role IN \('/);
+        .not.toMatch(/\w+\.role IN \('/);
+      expect(source, `${file} still carries a bare literal role list`)
+        .not.toMatch(/\brole IN \('/);
     }
   });
 
