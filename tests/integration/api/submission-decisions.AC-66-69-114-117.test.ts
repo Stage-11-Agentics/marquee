@@ -402,6 +402,41 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     expect(row?.status).toBe("in_review");
   });
 
+  test("CONTRACT · MRQ-237 · an effectful keyed bulk decision replays its stored 200 after the state changes", async () => {
+    const accepted = await env.DB.prepare(
+      "SELECT id FROM submissions WHERE event_id = ? AND status = 'accepted' ORDER BY id LIMIT 1",
+    ).bind(EVENT_ID).first<{ id: string }>();
+    expect(accepted?.id).toBeTruthy();
+    const requestBody = { selector: { ids: [accepted!.id] }, action: "reject" };
+    const key = "mrq237-bulk-effectful-replay";
+    const first = await requestBulk(requestBody, key);
+    expect(first.status).toBe(200);
+    const firstPayload = await first.json<BulkResponse>();
+    expect(firstPayload).toMatchObject({
+      selected: 1,
+      succeeded: 1,
+      already_in_state: 0,
+      failed: 0,
+      state: "completed",
+      operation: { effect: "changed", reason_code: null },
+    });
+    const afterFirst = await env.DB.prepare(
+      "SELECT status, (SELECT COUNT(*) FROM submission_decisions WHERE submission_id = ?) AS decisions, (SELECT COUNT(*) FROM outbox WHERE entity_id = ?) AS outbox FROM submissions WHERE id = ?",
+    ).bind(accepted!.id, accepted!.id, accepted!.id).first<{ status: string; decisions: number; outbox: number }>();
+    expect(afterFirst?.status).toBe("rejected");
+
+    // requestBulk deliberately re-plans before sending the retry. The new
+    // plan fingerprint must not turn a successful keyed operation into a
+    // stale-plan or key-conflict response.
+    const replay = await requestBulk(requestBody, key);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual(firstPayload);
+    const afterReplay = await env.DB.prepare(
+      "SELECT status, (SELECT COUNT(*) FROM submission_decisions WHERE submission_id = ?) AS decisions, (SELECT COUNT(*) FROM outbox WHERE entity_id = ?) AS outbox FROM submissions WHERE id = ?",
+    ).bind(accepted!.id, accepted!.id, accepted!.id).first<{ status: string; decisions: number; outbox: number }>();
+    expect(afterReplay).toEqual(afterFirst);
+  });
+
   test("CONTRACT · MRQ-237 · an all-already bulk decision is a keyed, reasoned zero-effect replay", async () => {
     const accepted = await env.DB.prepare(
       "SELECT id FROM submissions WHERE event_id = ? AND status = 'accepted' ORDER BY id LIMIT 1",

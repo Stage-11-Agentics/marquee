@@ -335,6 +335,10 @@ const bulkDecideSubmissions = defineApiRoute(
     const selector = normalizeBulkSelector(body.selector, (id) => submissionIdSchema.safeParse(id).success);
     const actor = await actorFor(context);
     const requestId = context.get("requestId") ?? crypto.randomUUID();
+    const idempotencyKey = context.req.header("Idempotency-Key")?.trim() || undefined;
+    // The plan fingerprint is a changing precondition, not the operation's
+    // identity. A retry may re-plan after the first write has changed it.
+    const { plan_fingerprint: planFingerprint, ...operationRequest } = body;
     const duplicateSkipped = selector.kind === "ids" ? selector.ids.length - new Set(selector.ids).size : 0;
     const scope = await eventOperationScope(context.env.DB, eventId);
     let ids: string[];
@@ -354,36 +358,63 @@ const bulkDecideSubmissions = defineApiRoute(
     }
     await assertWaveBelongsToEvent(context.env.DB, eventId, body.wave_id);
 
-    const plan = await buildDecisionPlan({
-      db: context.env.DB,
-      eventId,
-      ids,
-      action: body.action,
-      feedbackMd: body.feedback_md,
-      confirmPublished: body.confirm_published === true,
-      waveId: body.wave_id,
-    });
-    requireCurrentDecisionPlan({
-      request: context.req.raw,
-      plan,
-      planFingerprint: body.plan_fingerprint,
-    });
+    let operation: Awaited<ReturnType<typeof claimRequestOperation>> | null = null;
+    if (idempotencyKey) {
+      operation = await claimRequestOperation({
+        db: context.env.DB,
+        scope,
+        route: "events.submissions.bulk",
+        idempotencyKey,
+        requestId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        request: operationRequest,
+      });
+      if (operation.replay) return context.json(operation.replay.body, operation.replay.status as 200);
+    }
+
+    let plan;
+    try {
+      plan = await buildDecisionPlan({
+        db: context.env.DB,
+        eventId,
+        ids,
+        action: body.action,
+        feedbackMd: body.feedback_md,
+        confirmPublished: body.confirm_published === true,
+        waveId: body.wave_id,
+      });
+      requireCurrentDecisionPlan({
+        request: context.req.raw,
+        plan,
+        planFingerprint,
+      });
+    } catch (error: unknown) {
+      if (operation && error instanceof ApiError) {
+        await completeRequestOperation(context.env.DB, operation.operationId, error.status, error.toEnvelope(requestId), {
+          state: "failed",
+          claimToken: operation.claimToken,
+        });
+      }
+      throw error;
+    }
     // The preview/apply contract refuses an unkeyed zero-effect action before
     // mutation. A keyed request is an admitted operation, so it records and
     // replays the durable no-op receipt instead of losing that audit seam.
-    if (plan.zero_effect && !context.req.header("Idempotency-Key")) refuseZeroEffect(plan);
+    if (plan.zero_effect && !idempotencyKey) refuseZeroEffect(plan);
 
-    const operation = await claimRequestOperation({
-      db: context.env.DB,
-      scope,
-      route: "events.submissions.bulk",
-      idempotencyKey: context.req.header("Idempotency-Key"),
-      requestId,
-      actorKind: actor.kind,
-      actorPersonId: actor.personId,
-      request: body,
-    });
-    if (operation.replay) return context.json(operation.replay.body, operation.replay.status as 200);
+    if (!operation) {
+      operation = await claimRequestOperation({
+        db: context.env.DB,
+        scope,
+        route: "events.submissions.bulk",
+        requestId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        request: operationRequest,
+      });
+      if (operation.replay) return context.json(operation.replay.body, operation.replay.status as 200);
+    }
     const foreignIds = new Set<string>();
     if (selector.kind === "ids") {
       const existing = await context.env.DB.prepare(
