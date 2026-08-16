@@ -938,16 +938,30 @@ function calendarSpeakerDetail(speaker: AgendaCalendarSpeaker): string {
   ].filter(Boolean).join(" · ");
 }
 
+function calendarPreviewDate(value: number, timezone: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+    timeZoneName: "short",
+  }).format(new Date(value));
+}
+
 export function CalendarBatchModal({
   calendar,
   busy,
   error,
+  timezone,
   onClose,
   onConfirm,
 }: {
   calendar: AgendaCalendarDebt;
   busy: boolean;
   error: string;
+  timezone: string;
   onClose: () => void;
   onConfirm: () => void;
 }): JSX.Element {
@@ -976,9 +990,9 @@ export function CalendarBatchModal({
           <strong>Preview · {preview.title}</strong> <span class="subtle">— brand voice, event timezone</span>
           <div class="divider" />
           The schedule for your session has been updated.<br /><br />
-          <strong>When</strong> — {preview.previous_starts_at !== null ? `${new Date(preview.previous_starts_at).toLocaleString()} → ` : ""}{new Date(preview.starts_at).toLocaleString()}<br />
+          <strong>When</strong> — {preview.previous_starts_at !== null ? `${calendarPreviewDate(preview.previous_starts_at, timezone)} → ` : ""}{calendarPreviewDate(preview.starts_at, timezone)}<br />
           <strong>Where</strong> — {preview.previous_location && preview.previous_location !== preview.location ? `${preview.previous_location} → ` : ""}{preview.location}<br />
-          <span class="subtle">The attached invite updates your existing calendar entry in place.</span>
+          <span class="subtle">Event timezone: {timezone}. The attached invite updates your existing calendar entry in place.</span>
         </div>}
         {error && <div class="agenda-publication-error" role="alert">{error}</div>}
       </div>
@@ -1396,7 +1410,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
     <DemandPanel eventId={eventId} timezone={snapshot.event.timezone} />
     {activeRoom && <RoomPanel room={activeRoom} showBuildingComparison={showBuildingComparison} onClose={() => setRoomPanelId(null)} />}
     {conflictsOpen && <ConflictPanel conflicts={snapshot.conflicts} sessions={snapshot.sessions} showBuildingComparison={showBuildingComparison} onClose={() => setConflictsOpen(false)} onJump={jumpToSession} />}
-    {calendarModalOpen && <CalendarBatchModal calendar={snapshot.calendar ?? EMPTY_CALENDAR_DEBT} busy={calendarBusy} error={calendarError} onClose={() => setCalendarModalOpen(false)} onConfirm={() => void sendCalendarBatch()} />}
+    {calendarModalOpen && <CalendarBatchModal calendar={snapshot.calendar ?? EMPTY_CALENDAR_DEBT} timezone={snapshot.event.timezone} busy={calendarBusy} error={calendarError} onClose={() => setCalendarModalOpen(false)} onConfirm={() => void sendCalendarBatch()} />}
   </div>;
 }
 
