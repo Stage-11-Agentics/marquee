@@ -348,6 +348,24 @@ An allowlisted edit applies within one webhook cycle; **an edit to any other fie
 
 **Published-session exception:** a status edit for a submission whose session is live is rejected by the shared submission-apply seam with reason `forbidden_while_published`. It is dropped and counted, written to the sync audit, and the current D1 truth is queued for the next outbound pass; it never changes public visibility or runs a cascade. The rejection reason set is extensible so later transition-specific refusals share this same drop, count, log, and write-back machinery.
 
+**Transition guard and decision record:** for a non-published submission, an
+inbound status value that is not in the submission vocabulary, or a status
+transition the shared submission-transition policy refuses, is ignored rather
+than applied. The mirror records the refusal in the same audit/count/rejection
+log and queues current Marquee truth for the next outbound pass, so the
+provider cell visibly returns to the value Marquee owns. A legal inbound
+transition into `accepted`, `waitlisted`, or `rejected` writes the corresponding
+`submission_decisions` row with `feedback_md = NULL` and no human
+`decided_by_person_id`, plus an audit row with `actor_kind = 'airtable'`.
+That write stops at the record boundary: it does not enqueue mail, assign
+onboarding tasks, or run the acceptance cascade; the existing
+"changed in Airtable · cascade not run" recovery action remains the explicit
+operator door. A replay whose status already equals Marquee's status is an
+idempotent no-op: it creates no rejection, audit row, counter increment,
+decision row, or write-back. Drafts are private incomplete form state, so the
+mirror deliberately refuses `draft → submitted`; only Marquee's submission
+writer can promote a draft after its required fields have been validated.
+
 ### 3.10 Operations and provenance
 
 **`submission_tracks`** (Amendment 2, AC-234) — `submission_id`, `track_id`, `is_primary` (exactly one per submission). Writer: public form multi-select, admin edit, import. Reader: routing rules, reviewer track scoping, list filters (a submission appears under every track it carries), track chips on records; the swimlane places a session by its primary track (or the schedule item's override). Source: Discord ruling 2026-08-08 — *"talks are submitted to one or more tracks, and reviewers review one or more tracks."*

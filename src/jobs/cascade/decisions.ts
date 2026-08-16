@@ -12,6 +12,7 @@ import {
   drainCalendarCancellations,
   prepareCalendarCancellationBatch,
 } from "../calendar/invites";
+import { canTransitionSubmissionStatus } from "../../lib/submission-transitions";
 import { enqueueMailMessage } from "../mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../mail/idempotency";
 import { enqueueTrigger } from "../mail/triggers";
@@ -145,23 +146,6 @@ const DECISION_TARGETS = {
   waitlist: { decision: "maybe", status: "waitlisted" },
   reject: { decision: "deny", status: "rejected" },
 } as const;
-
-/**
- * Every status an organizer can still decide from. `withdrawn` and `rejected`
- * are both outcomes the ORGANISER selects in the reversal dialog, not states a
- * speaker puts themselves into, so neither is terminal: reversing a decision by
- * mistake, or reconsidering later, has to have a way back. Re-acceptance is
- * safe to re-run because it reconciles the task set idempotently rather than
- * reassigning it.
- */
-const ACTIONABLE_STATUSES = new Set([
-  "submitted",
-  "in_review",
-  "accepted",
-  "waitlisted",
-  "rejected",
-  "withdrawn",
-]);
 
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -1134,11 +1118,7 @@ function failureResult(id: Id, error: string): SubmissionDecisionResult {
 }
 
 function canTransition(submission: SubmissionContext, targetStatus: string): string | null {
-  if (!ACTIONABLE_STATUSES.has(submission.status)) {
-    return `submission is ${submission.status} and cannot be decided`;
-  }
-  if (submission.status === targetStatus) return `submission is already ${targetStatus}`;
-  return null;
+  return canTransitionSubmissionStatus(submission.status, targetStatus, "organizer");
 }
 
 /**

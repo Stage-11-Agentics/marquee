@@ -11,7 +11,7 @@
 .airtable-empty-mapping { align-items: baseline; background: var(--sunk); border: 1px dashed var(--line-strong); border-radius: 7px; color: var(--muted); display: flex; gap: 10px; min-height: 45px; padding: 12px; }
 .airtable-empty-mapping strong { color: var(--ink-soft); }
 .airtable-health-actions { display: flex; gap: 8px; }
-.airtable-counts { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 18px; }
+.airtable-counts { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 18px; }
 .airtable-counts > div { background: var(--sunk); border: 1px solid var(--line); border-radius: 7px; display: grid; gap: 4px; min-height: 88px; padding: 12px; }
 .airtable-counts span { color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .airtable-counts strong { color: var(--ink); font: 600 24px/1 var(--mono); }

@@ -12,6 +12,7 @@ import {
   type MirrorActionEnvironment,
   type MirrorMappingInput,
 } from "../jobs/mirror/actions";
+import { MIRROR_REJECTION_REASONS } from "../jobs/mirror/rejections";
 
 const errors = errorResponses([400, 401, 403, 422, 429, 500]);
 
@@ -61,6 +62,17 @@ const statusTable = z.object({
   remote_row_count: z.number().int().nonnegative(),
 });
 
+const rejectionLogEntry = z.object({
+  before: z.string().nullable(),
+  created_at: z.number(),
+  field: z.string(),
+  id: z.string(),
+  message: z.string(),
+  reason: z.enum(MIRROR_REJECTION_REASONS),
+  requested: z.string().nullable(),
+  title: z.string(),
+});
+
 const statusResponse = z.object({
   data: z.object({
     base_id: z.string().nullable(),
@@ -70,6 +82,8 @@ const statusResponse = z.object({
     last_sync_at: z.number().nullable(),
     last_verified_at: z.number().nullable(),
     mapped: z.boolean(),
+    rejected_edits: z.number().int().nonnegative(),
+    recent_rejections: z.array(rejectionLogEntry),
     queued: z.number().int().nonnegative(),
     set_at: z.number().nullable(),
     stuck: z.number().int().nonnegative(),
@@ -192,6 +206,17 @@ const status = defineApiRoute(
         last_sync_at: value.lastSyncAt,
         last_verified_at: value.lastVerifiedAt,
         mapped: value.mapped,
+        rejected_edits: value.rejectedEdits,
+        recent_rejections: value.recentRejections.map((rejection) => ({
+          before: rejection.before,
+          created_at: rejection.createdAt,
+          field: rejection.field,
+          id: rejection.id,
+          message: rejection.message,
+          reason: rejection.reason,
+          requested: rejection.requested,
+          title: rejection.title,
+        })),
         queued: value.queued,
         set_at: value.setAt,
         stuck: value.stuck,

@@ -592,7 +592,16 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
     `).bind(submissionId).all<Record<string, unknown>>(),
     db.prepare(`
       SELECT decision.id, decision.decision, decision.resulting_status, decision.feedback_md,
-        decision.decided_at, decision.decided_by_person_id, person.name AS decided_by_name
+        decision.decided_at, decision.decided_by_person_id,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM audit_log decision_audit
+           WHERE decision_audit.event_id = decision.event_id
+             AND decision_audit.entity_type = 'submission'
+             AND decision_audit.entity_id = decision.submission_id
+             AND decision_audit.actor_kind = 'airtable'
+             AND decision_audit.action IN ('submission.approve', 'submission.maybe', 'submission.deny')
+             AND json_extract(decision_audit.after_json, '$.decision_id') = decision.id
+        ) THEN 'Airtable' ELSE person.name END AS decided_by_name
       FROM submission_decisions decision
       LEFT JOIN people person ON person.id = decision.decided_by_person_id
       WHERE decision.submission_id = ?

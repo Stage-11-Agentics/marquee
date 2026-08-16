@@ -20,6 +20,7 @@ import {
 } from "./transport";
 import { MIRROR_RECONCILE_MESSAGE_TYPE } from "./messages";
 import type { MirrorEnvironment } from "./config";
+import type { MirrorRejectionReason } from "./rejections";
 
 export interface MirrorActionEnvironment extends MirrorEnvironment {
   MIRROR_QUEUE?: Queue<unknown>;
@@ -52,6 +53,8 @@ export interface MirrorStatus {
   lastSyncAt: number | null;
   lastVerifiedAt: number | null;
   mapped: boolean;
+  rejectedEdits: number;
+  recentRejections: MirrorRejectionLogEntry[];
   queued: number;
   setAt: number | null;
   stuck: number;
@@ -67,6 +70,17 @@ export interface MirrorStatus {
   webhookExpiresAt: number | null;
 }
 
+export interface MirrorRejectionLogEntry {
+  before: string | null;
+  createdAt: number;
+  field: string;
+  id: string;
+  message: string;
+  reason: MirrorRejectionReason;
+  requested: string | null;
+  title: string;
+}
+
 export interface MirrorClockOptions {
   now?: () => number;
   sleep?: (milliseconds: number) => Promise<void>;
@@ -78,6 +92,40 @@ const DEFAULT_WEBHOOK_URL = "https://marquee.stage11.dev/mirror/webhook";
 function nonEmpty(value: string | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function mirrorLogValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function rejectionLogEntry(row: {
+  after_requested: unknown;
+  before_status: unknown;
+  created_at: number;
+  field: string;
+  id: string;
+  reason: MirrorRejectionReason;
+  title: string | null;
+}): MirrorRejectionLogEntry {
+  const before = mirrorLogValue(row.before_status);
+  const requested = mirrorLogValue(row.after_requested);
+  const title = row.title?.trim() || "Untitled session";
+  return {
+    before,
+    createdAt: row.created_at,
+    field: row.field,
+    id: row.id,
+    message: `Airtable tried ${before ?? "blank"} → ${requested ?? "blank"} on ${title}; not applied.`,
+    reason: row.reason,
+    requested,
+    title,
+  };
 }
 
 function providerFor(
@@ -308,6 +356,38 @@ export async function readMirrorStatus(
   const stuck = await db.prepare(
     "SELECT COUNT(*) AS count FROM mirror_outbox WHERE drained_at IS NULL AND attempts >= ?",
   ).bind(MAX_MIRROR_ATTEMPTS).first<{ count: number }>();
+  const rejectedEdits = orgId
+    ? await db.prepare(
+      `SELECT COUNT(*) AS count
+         FROM audit_log rejection
+         JOIN events event ON event.id = rejection.event_id
+        WHERE event.org_id = ? AND rejection.action = 'mirror.inbound_rejected'`,
+    ).bind(orgId).first<{ count: number }>()
+    : null;
+  const recentRejections = orgId
+    ? await db.prepare(
+      `SELECT rejection.id,
+              json_extract(rejection.before_json, '$.status') AS before_status,
+              json_extract(rejection.after_json, '$.field') AS field,
+              json_extract(rejection.after_json, '$.reason') AS reason,
+              json_extract(rejection.after_json, '$.requested') AS after_requested,
+              json_extract(rejection.after_json, '$.title') AS title,
+              rejection.created_at
+         FROM audit_log rejection
+         JOIN events event ON event.id = rejection.event_id
+        WHERE event.org_id = ? AND rejection.action = 'mirror.inbound_rejected'
+        ORDER BY rejection.created_at DESC, rejection.id DESC
+        LIMIT 8`,
+    ).bind(orgId).all<{
+      after_requested: unknown;
+      before_status: unknown;
+      created_at: number;
+      field: string;
+      id: string;
+      reason: MirrorRejectionReason;
+      title: string | null;
+    }>()
+    : { results: [] };
   const lastSyncAt = tables.reduce<number | null>((latest, row) =>
     row.lastSyncAt !== null && (latest === null || row.lastSyncAt > latest) ? row.lastSyncAt : latest, null);
   const webhookExpiresAt = states.results.reduce<number | null>((latest, row) =>
@@ -321,6 +401,8 @@ export async function readMirrorStatus(
     lastSyncAt,
     lastVerifiedAt: credential?.lastVerifiedAt ?? null,
     mapped,
+    rejectedEdits: Number(rejectedEdits?.count ?? 0),
+    recentRejections: recentRejections.results.map(rejectionLogEntry),
     queued: Number(queued?.count ?? 0),
     setAt: credential?.setAt ?? null,
     stuck: Number(stuck?.count ?? 0),

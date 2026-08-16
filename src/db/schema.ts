@@ -560,7 +560,8 @@ export interface SubmissionTrackRow extends MutableRecord {
 
 export interface SubmissionDecisionRow extends MutableRecord {
   decided_at: EpochMilliseconds;
-  decided_by_person_id: Id;
+  /** Null for provider-originated decisions; audit_log carries actor_kind=airtable. */
+  decided_by_person_id: Id | null;
   decision: Decision;
   event_id: Id;
   feedback_md: string | null;

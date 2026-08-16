@@ -2,7 +2,7 @@ import { h } from "preact";
 import { renderToString } from "preact-render-to-string";
 import { expect, test } from "vitest";
 
-import { AirtableConnectionFacts, AirtableHealthCard, type MirrorStatus } from "../../src/ui/settings/AirtablePage";
+import { AirtableConnectionFacts, AirtableHealthCard, AirtableLiveLog, type MirrorStatus } from "../../src/ui/settings/AirtablePage";
 
 const status: MirrorStatus = {
   base_id: "app_mrq223",
@@ -12,6 +12,17 @@ const status: MirrorStatus = {
   last_sync_at: Date.UTC(2026, 7, 15, 12),
   last_verified_at: Date.UTC(2026, 7, 15, 11),
   mapped: true,
+  rejected_edits: 2,
+  recent_rejections: [{
+    before: "submitted",
+    created_at: Date.UTC(2026, 7, 15, 11, 30),
+    field: "status",
+    id: "rejection_mrq239",
+    message: "Airtable tried submitted → published on MRQ-239 session; not applied.",
+    reason: "unrecognized_value",
+    requested: "published",
+    title: "MRQ-239 session",
+  }],
   queued: 7,
   set_at: Date.UTC(2026, 7, 15, 10),
   stuck: 2,
@@ -36,14 +47,23 @@ test("AC-228 · Airtable settings renders the base link, both row counts, last s
       onDisconnect: () => undefined,
     })),
   ].join(" ");
+  const liveLog = renderToString(h(AirtableLiveLog, {
+    log: [{ created_at: Date.UTC(2026, 7, 15, 12), id: "local_log", message: "Connection verified" }],
+    status,
+  }));
 
   expect(html).toContain('href="https://airtable.com/app_mrq223"');
   expect(html).toContain("Open base");
   expect(html).toContain(">7<");
   expect(html).toContain(">2<");
+  expect(html).toContain("Rejected edits");
+  expect(html).toContain("Airtable edits Marquee wrote back");
   expect(html).toContain("Marquee rows");
   expect(html).toContain("Airtable rows");
   expect(html).toContain("As of last sync");
-  expect(html).toContain("Both counts are as of last sync");
+  expect(html).toContain("All row counts are as of last sync");
   expect(html).toContain("Webhook renewal");
+  expect(liveLog).toContain("Live log");
+  expect(liveLog).toContain("Airtable tried submitted → published on MRQ-239 session; not applied.");
+  expect(liveLog.indexOf("Connection verified")).toBeLessThan(liveLog.indexOf("Airtable tried submitted"));
 });

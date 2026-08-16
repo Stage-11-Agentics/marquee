@@ -1,5 +1,9 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
+import { newUlid } from "../../api/ids";
+import { auditStatement } from "../../lib/audit";
+import { DECISION_STATUSES, SUBMISSION_STATUSES } from "../../db/schema";
+import { canTransitionSubmissionStatus } from "../../lib/submission-transitions";
 import { readMirrorCredential } from "./credentials";
 import type { MirrorActionEnvironment, MirrorClockOptions } from "./actions";
 import { MIRRORED_TABLES, type MirroredTable } from "./records";
@@ -14,7 +18,6 @@ import {
 import { MIRROR_INBOUND_MESSAGE_TYPE } from "./messages";
 import { recordMirrorSubmissionRejection } from "./rejections";
 
-const SUBMISSION_STATUS = new Set(["draft", "submitted", "in_review", "accepted", "waitlisted", "rejected", "withdrawn"]);
 const VENDOR_AFFILIATION = new Set(["none", "vendor_to_fi", "vendor_with_champion"]);
 const TASK_STATUS = new Set(["open", "done"]);
 
@@ -183,7 +186,7 @@ async function applySubmissionRecord(
   now: number,
 ): Promise<{ applied: boolean; dropped: number }> {
   const row = await db.prepare(
-    `SELECT submission.event_id, submission.primary_track_id, submission.status,
+    `SELECT submission.event_id, submission.primary_track_id, submission.status, submission.title,
             EXISTS (
               SELECT 1 FROM agenda_items live_agenda
                WHERE live_agenda.event_id = submission.event_id
@@ -197,6 +200,7 @@ async function applySubmissionRecord(
     event_id: string;
     primary_track_id: string | null;
     status: string;
+    title: string;
     agenda_published: number;
   }>();
   if (!row) return { applied: false, dropped: 0 };
@@ -205,6 +209,9 @@ async function applySubmissionRecord(
   const assignments: string[] = [];
   const values: (string | number | null)[] = [];
   let changed = false;
+  let decisionId: string | null = null;
+  let decision: "approve" | "maybe" | "deny" | null = null;
+  let decisionResultingStatus: (typeof DECISION_STATUSES)[number] | null = null;
   if (Object.hasOwn(fields, "status") && row.agenda_published === 1) {
     await recordMirrorSubmissionRejection({
       db,
@@ -214,11 +221,50 @@ async function applySubmissionRecord(
       reason: "forbidden_while_published",
       before: row.status,
       requested: fields.status,
+      title: row.title,
       now,
     });
     dropped += 1;
-  } else if (Object.hasOwn(fields, "status") && typeof fields.status === "string" && SUBMISSION_STATUS.has(fields.status)) {
-    assignments.push("status = ?"); values.push(fields.status); changed = true;
+  } else if (Object.hasOwn(fields, "status")) {
+    const requestedStatus = fields.status;
+    if (typeof requestedStatus !== "string" || !SUBMISSION_STATUSES.includes(requestedStatus as (typeof SUBMISSION_STATUSES)[number])) {
+      await recordMirrorSubmissionRejection({
+        db,
+        eventId: row.event_id,
+        rowId,
+        field: "status",
+        reason: "unrecognized_value",
+        before: row.status,
+        requested: requestedStatus,
+        title: row.title,
+        now,
+      });
+      dropped += 1;
+    } else {
+      const invalidTransition = canTransitionSubmissionStatus(row.status, requestedStatus, "airtable");
+      if (invalidTransition) {
+        await recordMirrorSubmissionRejection({
+          db,
+          eventId: row.event_id,
+          rowId,
+          field: "status",
+          reason: "illegal_transition",
+          before: row.status,
+          requested: requestedStatus,
+          title: row.title,
+          now,
+        });
+        dropped += 1;
+      } else if (row.status !== requestedStatus) {
+        assignments.push("status = ?"); values.push(requestedStatus); changed = true;
+        if (DECISION_STATUSES.includes(requestedStatus as (typeof DECISION_STATUSES)[number])) {
+          decisionId = newUlid(now);
+          decision = requestedStatus === "accepted" ? "approve" : requestedStatus === "waitlisted" ? "maybe" : "deny";
+          decisionResultingStatus = requestedStatus as (typeof DECISION_STATUSES)[number];
+          assignments.push("decided_at = ?", "decided_by_person_id = ?"); values.push(now, null);
+        }
+      }
+    }
   }
   if (Object.hasOwn(fields, "format_id")) {
     const formatId = stringValue(fields.format_id);
@@ -258,6 +304,26 @@ async function applySubmissionRecord(
       `INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     ).bind(crypto.randomUUID(), rowId, trackId, trackId === primary || (primary === null && index === 0) ? 1 : 0, now, now)));
+  }
+  if (decisionId !== null && decision !== null && decisionResultingStatus !== null) {
+    statements.push(db.prepare(
+      `INSERT INTO submission_decisions
+        (id, event_id, submission_id, decision, resulting_status, feedback_md,
+         decided_by_person_id, decided_at, outbox_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, NULL, ?, ?)`,
+    ).bind(decisionId, row.event_id, rowId, decision, decisionResultingStatus, now, now, now));
+    statements.push(auditStatement(db, {
+      eventId: row.event_id,
+      actorKind: "airtable",
+      actorPersonId: null,
+      action: `submission.${decision}`,
+      entityType: "submission",
+      entityId: rowId,
+      before: { status: row.status },
+      after: { status: decisionResultingStatus, decision_id: decisionId, source: "airtable" },
+      now,
+      requestId: null,
+    }));
   }
   await db.batch(statements);
   return { applied: true, dropped };
