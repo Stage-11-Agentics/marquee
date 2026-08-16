@@ -19,249 +19,235 @@ ai-agenda (area weight 10) and a 2-point item in call-for-papers (area weight 20
 are worth materially different amounts. Grading rules and area weights:
 [`EVAL-KIT.md`](EVAL-KIT.md). How rounds are run: [`../EVAL.md`](../EVAL.md).
 
-**Last refreshed:** round 13 (`runs/2026-08-15T23-25-57`, build `f7fd5beed6fb`) —
-**VOID as a headline**, five of seven areas judged before the Claude account on
-Atlas hit its weekly limit. Those five graded one build with no drift and are used
-here as real measurements. Only **public-widgets** still reads from round 11 (marked
-`*`); it has not been measured since its rubric was resynced, so those three rows
-are the least trustworthy numbers on this page. See the update log at the bottom.
+**Last refreshed:** **round 14** (`runs/2026-08-16T03-03-56`, build `bbb8e21e3ae3`) —
+**the first complete round since round 11**: 20/20 scenarios, 7/7 areas, cleanup
+verified. **94.0% at 97.9% coverage**, automated. Every number below is from one
+build with `built_at` constant at every area boundary. No fallback rows.
+
+---
+
+## Where it stands
+
+| Area | weight | round 14 | coverage | previous |
+|---|---:|---|---|---|
+| call-for-papers | 20 | 90.5% | 97.4% | 93.2% (r13) |
+| abstract-management | 20 | 94.6% | 100% | 100% (r13) |
+| speaker-management | 15 | 92.2% | 97.0% | 96.9% (r13) |
+| content-management | 15 | 91.9% | 100% | 91.9% (r13) |
+| ai-agenda | 10 | 93.8% | 88.9% | 100% (r13) |
+| **public-widgets** | 20 | **100%** | **100%** | *never measured on this rubric* |
+| speaker-crm *(extra credit)* | — | 89.5% | 100% | *never measured at all* |
+| **Overall (required)** | 100 | **94.0%** | **97.9%** | 89.2% (r11, last complete) |
+
+**+4.8 on the last complete round.** The headline is carried by **public-widgets at
+100%** — on the *harder* resynced rubric, with EMB-15 at its new weight 3. All three
+public-widgets items this document had been carrying as stale round-11 rows
+converted, and Story 3 below closed with them.
+
+By problem type, the shape of what is left: `exists` and `handoff` are at 100%,
+`crud` 93.9%, `roundtrip` 97.0% — while **`bulk` (81.8%)** and **`rule` (87.5%)** are
+the weak bands, which is exactly where the remaining defects sit.
 
 ---
 
 ## Is 100% actually reachable?
 
-**Yes for the automated headline**, and the older `CEILING.md` claim of a "~95–96%
-ceiling for an automated run against the product as designed" no longer holds. Two
-things were checked directly rather than assumed:
-
-- **Only 2 of the 86 required items are `manual`-testability** — CFP-08 (a
-  confirmation email reaching the submitter) and SPK-16 (automated task-reminder
-  emails), weight 1 each. `scoreArea` pushes manual items to `pendingManual` and
-  never adds them to `judgeable`, so they are **excluded from the denominator, not
-  scored zero**. They cannot hold the automated headline below 100%.
-- **`auto-partial` is not a cap.** The judge does award `pass` to auto-partial items:
-  CFP-14, ABS-07, ABS-09, ABS-13, SPK-07, SPK-13 and ABS-14 have all passed.
+**Yes for the automated headline.** Only 2 of the 86 required items are
+`manual`-testability — CFP-08 and SPK-16, weight 1 each — and `scoreArea` pushes
+those to `pendingManual` without ever adding them to `judgeable`, so they are
+**excluded from the denominator, not scored zero**. `auto-partial` is not a cap
+either: seven such items have now passed across rounds. The older `CEILING.md` claim
+of a "~95–96% ceiling" is superseded — round 14 is already at 94.0.
 
 **A *finalized* 100% additionally needs a human** to verify CFP-08 and SPK-16 as
-`pass` in `manual-results.json` — that is real mail arriving in a real inbox, which
-is deliverability (SPF/DKIM/DMARC alignment on the sending domain), not product
-code. Round 11's ledger already recorded spam placement as an open infrastructure
-question. Until that is settled, treat **automated 100%** as the target and the
-finalized number as gated on an operator errand.
+`pass` in `manual-results.json` — real mail arriving in a real inbox, which is
+deliverability (SPF/DKIM/DMARC), not product code. Round 14 has **18 manual items
+pending**. Until deliverability is settled, treat **automated 100%** as the target.
 
 ---
 
-## The one thing to understand before planning any of it
+## The two lanes
 
-**Most of the distance was never product work — and this is now proved rather than
-argued.** Round 13 changed no application code (`src/` and `migrations/` byte-identical
-to round 12) and converted **ten items to `pass` with zero regressions**, purely by
-instructing the browsing agent to finish flows it had been stopping one action short
-of. That is **5.2 points recovered from an editing session on a mission file.**
+Round 13 proved the distinction empirically: it changed no application code and
+converted **ten items** purely by instructing the browsing agent to finish the flows
+it was stopping one action short of. That lane is mission text, not tickets — and
+the gains are lost the moment an instruction is dropped, which is exactly what
+happened to CFP-17/18 between rounds 10 and 12.
+
+Round 14 shifts the balance. With the run-reach lane mostly harvested, **what remains
+is now majority product work — including three defects this build introduced.**
 
 | lane | points | what it costs |
 |---|---:|---|
-| **Run reach** — mission instructions and turn budget | **1.81** | more of the same; two of the four are unmeasured |
-| **Product stories** — one live, one ruling, one unknown | **2.94** | one real ticket, one decision, one to confirm |
-| **Total** | **4.75** | → 100% automated |
-
-Keeping these lanes separate is the whole discipline. A round that scores lower
-because the agent ran out of turns is not a product regression, and a story written
-from that misreading is waste. The corollary now has evidence behind it: **the
-cheapest points on this board are written in the mission file, not in `src/`** — and
-they are lost again the moment the instruction is dropped, which is exactly what
-happened to CFP-17/18 between rounds 10 and 12.
-
-### Where the five judged areas stand
-
-| Area | round 13 | round 12 | round 11 (finalized) |
-|---|---|---|---|
-| call-for-papers | **93.2%** cov 97% | 87.8% cov 97% | 82.9% cov 92% |
-| abstract-management | **100%** cov 100% | 91.1% cov 100% | 88.9% cov 96% |
-| speaker-management | **96.9%** cov 97% | 93.3% cov 91% | 95.3% cov 97% |
-| content-management | **91.9%** cov 100% | — | 85.5% cov 100% |
-| ai-agenda | **100%** cov 100% | — | 94.4% cov 100% |
-| public-widgets | *not measured* | *not measured* | 91.4% cov 100% |
-
-Area-weighted across the five that ran, round 13 reads **96.2%**. Do not quote that
-as a headline: public-widgets carries 20 of the 100 area weight, is the one area
-whose rubric got materially harder, and has not been measured since. A full round
-will very likely land below it.
+| **Product defects** — three, all new in round 14 | **1.77** | real fixes; one is data loss |
+| **Product stories** — two, long-standing | **2.08** | one ticket, one ruling |
+| **Run reach** — four | **1.64** | mission text and turn budget |
+| **Judge strictness** — one | **0.54** | watch, do not ticket on one sighting |
+| **Total** | **6.03** | → 100% automated |
 
 ---
 
-## Lane 1 — Product stories (2.94 points)
+## Lane 1a — Defects this build introduced (1.77 points)
 
-Ranked by points. Each carries the judge's own evidence, because the judge's wording
-is what has to change for the item to convert.
+**All three were `pass` in round 13 and are `partial` in round 14.** Round 14 grades
+a newer build (`bbb8e21e3ae3` vs `f7fd5beed6fb`) carrying the eight-ticket plumbing
+batch, so unlike round 12's regressions these are **not** attributable to the run.
+They are ranked first because two of them are wrong regardless of any rubric.
 
-### Story 1 — The submitter's own home · CFP-05 + CFP-13 · **1.35 pts** · the only large one left
+### SPK-15 — Logistics fields silently discard data · 0.23 pts · **fix this whatever the score says**
+
+> *"the first attempt filled Arrival + Travel preferences + Dietary and pressed 'Save
+> speaker', the button showed 'Saving…' and reported success, yet after reload all
+> three fields were empty. So logistics data persists only when saved one field at a
+> time."*
+
+A multi-field save that **reports success and drops the data**. Lowest point value on
+this page and the most serious entry on it: silent data loss on a speaker's dietary
+and accessibility needs is the kind of defect that hurts a real person at a real
+conference, not a score.
+
+### ABS-05 — Reviewer assignment silently no-ops · 1.07 pts · largest single item
+
+> *"assigning Sam Whitfield to 'Your AI Pair Programmer Is Lying to You' (Evals
+> track) silently did nothing — no error, no toast."*
+
+Per-submission assignment otherwise works and the reviewer queue is correctly
+restricted. One assignment path fails with no feedback at all. Note round 13
+recorded the *inverse* behaviour as a strength — a refusal explained inline
+(*"Sam Whitfield reviews Infra; this abstract carries Evals…"*). A guard that used to
+explain itself and now fails silently is a strong regression signal.
+
+### SPK-13 — Bulk send never returns · 0.47 pts
+
+> *"the QUEUE MESSAGE button entered 'QUEUEING…' and never returned any in-page
+> success or summary state (screenshots before and after a 4s wait are identical)."*
+
+The per-recipient rows do reach the outbox, so the work happens; the UI never
+confirms it. An operator sending to 1,030 recipients cannot tell whether it worked.
+
+---
+
+## Lane 1b — Long-standing product stories (2.08 points)
+
+### Story 1 — The submitter's own home · CFP-05 + CFP-13 · **1.35 pts**
 
 > *As someone who submitted proposals, I can open one page that lists every proposal
 > I have sent this conference and its current status, without creating a password.*
 
-The largest single item on the board, the only weight-3 product gap, and a
-**recurring** finding across rounds 11, 12 and 13 rather than judge variance — filed
-as a `major` defect each time, and unmoved by round 13's instruction sweep, which is
-exactly what distinguishes it from the run-reach lane.
+**Unmoved across rounds 11, 12, 13 and 14**, filed `major` each time, and untouched
+by round 13's instruction sweep — which is precisely what separates it from the
+run-reach lane. A public submission is anonymous; the only handle is one private
+token link *per abstract*. `/portal` exists but binds to a seeded demo speaker, not
+the submitting identity. CFP-13 falls out of the same story for free: decisions
+already reach the submitter in clear words on the private link, just not on a
+dashboard. Magic-link auth ships and `people` rows are org-scoped, so this is
+assembly rather than invention.
 
-Today a public submission is anonymous and the only handle is one private token link
-*per abstract*. The judge:
+### Story 2 — An explicit content-approval state · CNT-12 · **0.73 pts** · *needs a ruling*
 
-> *"What is missing is the submitter's own dashboard: a public submitter has no
-> account and no page listing their proposals with a status label — only one private
-> token link per abstract. `/portal` is a different surface bound to a seeded demo
-> speaker, not reachable as the submitting identity."*
+Marquee gates publication on **scheduling** (*"Needs a room and time before it can go
+public"*); the rubric expects a content approval status the organizer sets, with
+unapproved content excluded from public output. Confirmed as a genuine design
+divergence, not thin evidence. Only a story if the answer is "adopt an approval
+state" — otherwise a deliberate 0.73 declined. **An operator ruling, not a ticket.**
 
-CFP-13 falls out of the same story for free — decisions already reach the submitter
-in unambiguous wording on the private link (*"Your abstract was accepted"*), they
-simply do not arrive on a dashboard.
+### Closed
 
-The pieces exist: magic-link auth ships, `people` rows are org-scoped, and the portal
-already renders a task-and-status surface. This is assembly rather than invention.
-Note the related `minor` defect filed alongside it — the speaker portal binds to a
-fixed seeded identity rather than to the person who submitted, which is the
-submitter/speaker split `SPEC.md` §10 already names as a known limitation. Story 1 is
-the honest resolution of that limitation.
-
-### Story 3 — Public speaker attribution · EMB-16 · **0.86 pts** · *unverified, do not ticket yet*
-
-A session created during round 11 printed **"Speaker to be announced"** on the public
-agenda and carried an empty `speakers[]` in the public JSON feed, while the
-organizer's own record named a speaker. The public surface understating the program
-is a real bug independent of any rubric.
-
-**Hold:** `6a247826 fix: attribute builder sessions to speakers (#262)` landed after
-round 11's build, and **public-widgets has not been judged since**. This may already
-be closed. It needs one completed round before anyone writes a ticket.
-
-### Story 2 — An explicit content-approval state · CNT-12 · **0.73 pts** · *needs a ruling first*
-
-Marquee gates publication on **scheduling** — every record reads *"Not yet public —
-Needs a room and time before it can go public"*. The rubric expects a content
-approval/review status the organizer sets, with unapproved content excluded from
-public output. Round 13 reached the item properly and recorded the divergence
-explicitly (*"approval-gate finding recorded"*), so this is now a confirmed design
-difference rather than thin evidence.
-
-It is only a story if the answer is "adopt an explicit approval state". The
-alternative is a deliberate 0.73 declined on the grounds that scheduling-as-gate is
-the better product. **That is an operator ruling, and nobody should build it until
-it is made.**
-
-### Closed by round 13
-
-- **CNT-09 — save reliability.** Round 11 read *"succeeded on the second attempt"*;
-  round 13 passed it outright. 84 commits separate those builds, so this may have
-  been fixed by one of them or may have been a flake — it cannot be attributed, and
-  it does not need to be. Watch for a recurrence rather than chasing it.
-- **ABS-14 — agent evaluation.** Passed once the run overrode the *agent's* score
-  rather than a human reviewer's. That makes it a run instruction, not the product
-  gap it looked like. Keep the instruction in the mission.
+- **Story 3 — public speaker attribution (EMB-16).** Closed. public-widgets scored
+  **100%** in round 14; `#262` had indeed fixed it, which is why this document said
+  not to ticket it until a round confirmed.
+- **CNT-09 (save reliability)** and **ABS-14 (agent evaluation)** — both passing
+  since round 13.
 
 ---
 
-## Lane 2 — Run reach (1.81 points, no product code)
-
-Four items where the capability is present and the last step was not taken:
+## Lane 2 — Run reach (1.64 points, no product code)
 
 | item | pts | what the run did not do |
 |---|---:|---|
-| EMB-08 | 0.57 | detail view satisfies every field; the Back/close half never evidenced *(unmeasured since round 11)* |
-| CNT-10 | 0.48 | organizer-originated bio + headshot save-and-reload skipped, twice now |
-| SPK-03 | 0.47 | CSV import opened at last (`cannot_judge` → `partial`), still not carried to the roster |
-| EMB-13 | 0.29 | gallery drill-in complete; close/back half not evidenced *(unmeasured since round 11)* |
+| AIA-05 | 0.62 | proved room-conflict blocking only *indirectly* (occupied cells offer no target); never placed two sessions in one slot and screenshotted the flag |
+| CNT-10 | 0.48 | organizer-originated bio + headshot save-and-reload skipped — **third round running** |
+| SPK-03 | 0.47 | CSV import still not carried through to the roster — **third round running** |
+| AIA-06 | 0.07 | no session move was ever attempted; AIA-S1 spent its budget on room/track creation |
 
-**Ten of the original fourteen converted in one round**, all by naming the exact
-missing action in the mission: create the second conference *and open its empty
-list*; create a second differently-scoped reviewer pool; fire Distribute instead of
-cancelling it; add a room and a track and use them; actually send the portal invite;
-actually click Download; select rows and start the bulk download; override the
-agent's score.
+CNT-10 and SPK-03 have now survived three missions that named them explicitly. The
+instruction is not the problem any more — **these two need their own scenario budget,
+not another sentence.** ai-agenda's coverage fell to 88.9% because of AIA-06, which
+is the coverage trap in miniature: an item nobody reached, costing nothing until a
+round arrives.
 
-The two levers, both now demonstrated:
+---
 
-**Mission instructions that name the exact last step.** Proved in both directions.
-Round 10 won CFP-17/18 with an explicit block; round 12 dropped it and lost them the
-same night with the capability unchanged; round 13 restored it and won them back.
-**These instructions are load-bearing and must survive every mission rewrite.**
+## Lane 3 — Judge strictness (0.54, watch, do not ticket)
 
-**Turn budget.** Raised 70 → 85 for round 13, which is when SPK-03 finally got
-opened. CNT-10 has now been skipped twice with the same stated reason — that the
-capability was covered in another area's scenarios — so it needs an instruction that
-forbids the substitution, not more turns.
+**CFP-14** moved pass → partial with the judge stating the item is *"capped at partial
+because actual delivery and body personalization cannot be auto-verified"* — while
+describing a fully working decision-mail flow with a delivery panel and an outbox.
+That is the auto-partial ceiling being applied this round and not last. Per the
+loop's own rule, one sighting with no matching code change is a watch item.
 
 ---
 
 ## The derived table
 
-Regenerate with `python3 sequence/auto-eval/weigh.py`. Rows marked `*` fall back to
-an earlier run because the current round has not judged that area — they describe a
-build that is no longer deployed.
-
 ```
-run 2026-08-15T23-25-57  —  4.75 headline points recoverable across 8 non-pass items
-  rows marked * fall back to an earlier run (2026-08-14T14-46-26)
+run 2026-08-16T03-03-56  —  6.03 headline points recoverable across 11 non-pass items
 
   item     area                  verdict       testability    wt   gain
-* EMB-16   public-widgets        partial       auto-partial    3   0.86
+  ABS-05   abstract-management   partial       auto            3   1.07
   CFP-05   call-for-papers       partial       auto            3   0.81
   CNT-12   content-management    partial       auto            3   0.73
-* EMB-08   public-widgets        partial       auto            2   0.57
+  AIA-05   ai-agenda             partial       auto            2   0.62
   CFP-13   call-for-papers       partial       auto            2   0.54
+  CFP-14   call-for-papers       partial       auto-partial    2   0.54
   CNT-10   content-management    partial       auto            2   0.48
   SPK-03   speaker-management    partial       auto            2   0.47
-* EMB-13   public-widgets        partial       auto            1   0.29
+  SPK-13   speaker-management    partial       auto-partial    2   0.47
+  SPK-15   speaker-management    partial       auto            1   0.23
+  AIA-06   ai-agenda             cannot_judge  auto            2   0.07
 ```
-
-**Three of the eight are public-widgets rows nobody has measured on a current
-build.** That area is both the heaviest (20) and the only one whose rubric changed,
-so the single most valuable thing a next round can do is simply *reach it*.
 
 ### Reading `cannot_judge` correctly
 
-`cannot_judge` sits **outside** the denominator, so converting one to `pass` adds the
-item to the numerator *and* the denominator. In an area already scoring near its own
-average the net movement is small — and in an area scoring below 100% a newly reached
-item that turns out to be **weak scores worse than leaving it unreached**. This is
-the coverage trap: an unreached item costs nothing today and costs real points the
-moment a round arrives and finds nothing there. Build the capability before letting a
-round reach it.
+AIA-06 is worth only 0.07 despite weight 2, and that is not rounding. `cannot_judge`
+sits **outside** the denominator, so converting one to `pass` adds the item to the
+numerator *and* the denominator. In an area already scoring near its own average the
+net movement is small — and in an area scoring below 100% a newly reached item that
+turns out to be **weak scores worse than leaving it unreached**. Build the capability
+before letting a round reach it.
 
 ---
 
 ## Update log
 
-- **2026-08-16, round 13 — VOID as a headline, five areas kept, and the Lane-2
-  hypothesis confirmed.** The Claude account driving the eval on Atlas hit its
-  **weekly limit** at 16 of 20 scenarios, after five areas were judged. Not a host
-  failure — Atlas was healthy throughout, and `built_at` was constant at every area
-  boundary.
+- **2026-08-16, round 14 — COMPLETE. 94.0% at 97.9% coverage.** First clean round
+  since 11: 20/20 scenarios, 7/7 areas, cleanup verified. **public-widgets 100%** on
+  the resynced rubric; **speaker-crm 89.5%**, its first measurement ever. Recoverable
+  4.75 → 6.03, and the composition inverted: the run-reach lane is mostly harvested
+  and what remains is majority product work.
 
-  **Ten items converted to `pass` with zero regressions, on byte-identical
-  application code**: CFP-17, CFP-18, ABS-02, ABS-06, ABS-14, SPK-06, SPK-10,
-  CNT-09, CNT-14, AIA-02. SPK-03 moved `cannot_judge`→`partial`. Recoverable fell
-  **9.72 → 4.75**. abstract-management and ai-agenda reached **100%**. This is the
-  clearest evidence the document has: the run-reach lane was mission text all along.
+  **Six items moved backward against round 13, and this time it is not the run** —
+  round 14 grades a newer build carrying the eight-ticket plumbing batch. Three are
+  real defects (ABS-05 silent no-op, SPK-13 stuck bulk send, **SPK-15 silent data
+  loss**), two are evidence/strictness (AIA-05, CFP-14), one is a run shortfall
+  (AIA-06).
 
-  The new `RUN-DIED` guard shipped hours earlier caught this death correctly rather
-  than announcing completion — its first live outing, on the second consecutive
-  round to die.
+  **Deploy incident, recorded because the loop should have caught it:** the barrier
+  that deployed this build shipped `migrations/0026_calendar_truth.sql`'s code
+  without its migration, and live D1 now answers
+  `no such table: calendar_cancellations`. `reset-demo` fails in production as a
+  result. `barrier` deploys whatever `github/main` holds and **never checks whether
+  the commit range touched `migrations/`** — the loop's rules gate migrations on the
+  operator but nothing enforces the gate at the moment of deploy.
 
-- **2026-08-15, round 12 — VOID as a headline, three areas kept.** Document created.
-  Atlas hung from ~22:55Z and rebooted at 19:07 ET, killing the job at 14 of 20
-  scenarios with no `report.json`. **CFP-06, CFP-10, CFP-11 converted partial→pass
-  and CFP-15 converted `cannot_judge`→pass** — the coverage item converted cleanly
-  rather than exposing a weak capability. CFP-17/18 moved pass→partial, attributed by
-  the judge's own reasoning to the run rather than the product; the mission
-  instruction that had won them was missing, and restoring it in round 13 won them
-  back.
+- **2026-08-16, round 13 — VOID as a headline, five areas kept, Lane-2 hypothesis
+  confirmed.** Account hit a weekly limit at 16 of 20 scenarios. **Ten items
+  converted to `pass` with zero regressions on byte-identical application code.**
+  Recoverable 9.72 → 4.75.
 
-  **Harness defect this exposed:** `loop.sh watch` treated a `stopped` job as
-  RUN-COMPLETE. The README already recorded that *a dead watch looks exactly like a
-  quiet one*; this was the inverse — **a dead job looks exactly like a finished
-  one**. Fixed in `f7fd5bee`: completion now requires `report.json`, anything else
-  prints `RUN-DIED` and exits non-zero.
+- **2026-08-15, round 12 — VOID as a headline, three areas kept.** Atlas rebooted at
+  14 of 20 scenarios. CFP-15 converted `cannot_judge`→pass. Exposed the harness
+  defect where a dead job read as a finished one; fixed in `f7fd5bee` — completion
+  now requires `report.json`.
 
-- **2026-08-14, round 11.** Original baseline: 87.5% finalized at 100% coverage
-  (89.2% automated at 97.3%), 18 `partial` and 2 `cannot_judge`.
+- **2026-08-14, round 11.** Original baseline: 89.2% automated at 97.3% coverage.
