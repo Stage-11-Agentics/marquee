@@ -18,7 +18,7 @@ export interface DecryptedMirrorCredential {
   lastVerifiedAt: number | null;
   orgId: string;
   setAt: number;
-  setByPersonId: string;
+  setByPersonId: string | null;
   token: string;
   tokenFingerprint: string;
   webhookSecret: string | null;

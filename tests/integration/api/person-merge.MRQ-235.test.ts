@@ -83,11 +83,11 @@ async function seedFixture(): Promise<void> {
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'speaker', ?, ?)")
       .bind("membership_mrq235_retired", ORG_ID, EVENT_ID, RETIRED_ID, NOW + 1, NOW + 1),
     env.DB.prepare("INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, created_at, updated_at) VALUES (?, ?, 'speaker', ?, 'fixture', ?, ?)")
-      .bind("session_mrq235", RETIRED_ID, Date.now() + 86_400_000, NOW, NOW),
+      .bind("session_mrq235", RETIRED_ID, Date.now() + 3 * 86_400_000, NOW, NOW),
     env.DB.prepare(`INSERT INTO magic_links
       (id, token_hash, person_id, event_id, purpose, redirect_to, expires_at, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'login', '/portal', ?, ?, ?)`)
-      .bind("magic_mrq235", "hash_mrq235", RETIRED_ID, EVENT_ID, Date.now() + 86_400_000, NOW, NOW),
+      .bind("magic_mrq235", "hash_mrq235", RETIRED_ID, EVENT_ID, Date.now() + 3 * 86_400_000, NOW, NOW),
     env.DB.prepare(`INSERT INTO forms
       (id, event_id, name, slug, kind, admin_notify_person_ids, created_at, updated_at)
       VALUES (?, ?, 'Merge form', 'merge-form', 'abstract', ?, ?, ?)`)
@@ -130,7 +130,7 @@ async function seedFixture(): Promise<void> {
 
 beforeEach(seedFixture);
 
-test("MRQ-235 · preview and execute retain identity continuity across references", async () => {
+test("CONTRACT · MRQ-235 · preview and execute retain identity continuity across references", async () => {
   const input = { firstPersonId: SURVIVOR_ID, secondPersonId: RETIRED_ID, survivorPersonId: SURVIVOR_ID };
   const preview = await previewPersonMerge(env.DB, ORG_ID, input, NOW + 10);
   expect(preview.default_survivor_id).toBe(SURVIVOR_ID);
@@ -171,7 +171,7 @@ test("MRQ-235 · preview and execute retain identity continuity across reference
   expect(aliasResolution).toMatchObject({ kind: "found", person: { id: SURVIVOR_ID } });
 });
 
-test("MRQ-235 · clean undo restores the retired row and moved references without overwriting later edits", async () => {
+test("CONTRACT · MRQ-235 · clean undo restores the retired row and moved references without overwriting later edits", async () => {
   const merge = await executePersonMerge(
     env.DB,
     ORG_ID,
@@ -191,7 +191,7 @@ test("MRQ-235 · clean undo restores the retired row and moved references withou
   expect(await env.DB.prepare("SELECT status FROM person_merges WHERE id = ?").bind(merge.merge_id).first()).toEqual({ status: "undone" });
 });
 
-test("MRQ-235 · alias continuity flattens across a chained merge and blocks the old undo boundary", async () => {
+test("CONTRACT · MRQ-235 · alias continuity flattens across a chained merge and blocks the old undo boundary", async () => {
   await env.DB.prepare(
     `INSERT INTO people
       (id, org_id, email, name, title, company, bio, company_id, social_links, custom_fields, do_not_contact, is_demo, kind, last_write_source, created_at, updated_at)

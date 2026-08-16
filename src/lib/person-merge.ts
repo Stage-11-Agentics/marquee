@@ -778,8 +778,8 @@ async function buildPlan(
   const survivorAfter = clone(survivorBefore);
   for (const field of fields) {
     if (field.field === "email" || field.field === "headshot_attachment_id") continue;
-    if (field.field === "custom_fields" || field.field === "social_links") (survivorAfter as Row)[field.field] = jsonText(field.result);
-    else (survivorAfter as Row)[field.field] = field.result;
+    if (field.field === "custom_fields" || field.field === "social_links") (survivorAfter as unknown as Row)[field.field] = jsonText(field.result);
+    else (survivorAfter as unknown as Row)[field.field] = field.result;
   }
   survivorAfter.last_write_source = "marquee";
   survivorAfter.updated_at = now;
@@ -815,11 +815,11 @@ async function buildPlan(
 
   // Update the survivor only after all decisions have been computed. The
   // retired pointer is cleared before any dropped attachment is removed.
-  const survivorChanged = changedColumns(survivorBefore as Row, survivorAfter as Row).filter((column) => column !== "id" && column !== "org_id" && column !== "created_at");
+  const survivorChanged = changedColumns(survivorBefore as unknown as Row, survivorAfter as unknown as Row).filter((column) => column !== "id" && column !== "org_id" && column !== "created_at");
   if (survivorChanged.length > 0) {
     operations.unshift(operation(
       `UPDATE people SET ${survivorChanged.map((column) => `${column} = ?`).join(", ")} WHERE id = ? AND org_id = ?`,
-      ...survivorChanged.map((column) => (survivorAfter as Row)[column]), survivorId, orgId,
+      ...survivorChanged.map((column) => (survivorAfter as unknown as Row)[column]), survivorId, orgId,
     ));
   }
   if (retired.headshot_attachment_id) {
