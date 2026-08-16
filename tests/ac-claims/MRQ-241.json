@@ -1,0 +1,13 @@
+{
+  "ticket": "MRQ-241",
+  "owns": [
+    "AC-343",
+    "AC-344",
+    "AC-345",
+    "AC-346",
+    "AC-347",
+    "AC-348"
+  ],
+  "exercises": [],
+  "notes": "MRQ-241 owns the post-deadline submission-reference band in EVALUATION §2.14: event-scoped SUB-n allocation across public draft/final, routing-stage draft, organizer, Sessionize, and seed paths; durable high-water provenance across deletion/reset and concurrency; normalized quick/list/board search; record/list/board/confirmation/CSV/outbound projections with inbound exclusion; and deterministic idempotent backfill. Migration 0030 is the sole schema change. Existing creation, search, confirmation, import, and board criteria retain their original owners; MRQ-241's exercises array is empty because its new AC coverage is ticket-owned rather than cross-ticket coverage."
+}
