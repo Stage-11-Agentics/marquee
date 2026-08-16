@@ -1,5 +1,7 @@
 import { z } from "@hono/zod-openapi";
 
+import type { DecisionPlan } from "../jobs/cascade/decision-plan";
+
 export const decisionPlanActionSchema = z.enum(["accept", "reject", "waitlist", "withdraw", "notify"]);
 
 export const decisionPlanRecordSchema = z.object({
@@ -49,4 +51,16 @@ export const decisionPlanResponseSchema = z.object({
   zero_effect: decisionPlanZeroEffectSchema,
 }).openapi("DecisionPlanResponse");
 
-export type DecisionPlanResponse = z.infer<typeof decisionPlanResponseSchema>;
+/** Keep the wire schema and client-facing type aligned with the shared planner invariants. */
+export type DecisionPlanResponse = DecisionPlan & {
+  recipient_preview: {
+    to_email: string;
+    subject: string;
+    text: string;
+    html: string;
+  } | null;
+  plan_fingerprint: string;
+  etag: string;
+  queue_revision: number;
+  selected: number;
+};

@@ -6,7 +6,7 @@
  * default here (S-3 verdict, merged at spikes/s3-d1-chunking/VERDICT.md).
  */
 import { z } from "@hono/zod-openapi";
-import type { D1Database } from "@cloudflare/workers-types";
+import type { D1Database, D1PreparedStatement, D1Result } from "@cloudflare/workers-types";
 
 import { ApiError } from "./errors";
 import { ulidSchema } from "./ids";

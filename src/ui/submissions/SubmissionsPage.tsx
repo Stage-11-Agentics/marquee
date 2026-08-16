@@ -912,8 +912,15 @@ export function SubmissionsPage({
       let skippedNoAddress = 0;
       let remaining = 0;
       do {
-        const cursorQuery = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-        const result = await apiFetch<{ selected: number; queued: number; skipped_no_address: number; remaining: number; next_cursor: string | null; queue_revision: number }>(
+        const cursorQuery: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+        const result: { selected: number; queued: number; skipped_no_address: number; remaining: number; next_cursor: string | null; queue_revision: number } = await apiFetch<{
+          selected: number;
+          queued: number;
+          skipped_no_address: number;
+          remaining: number;
+          next_cursor: string | null;
+          queue_revision: number;
+        }>(
           `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/notify${cursorQuery}`,
           {
             method: "POST",
