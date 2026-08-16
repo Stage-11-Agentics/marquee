@@ -4,6 +4,7 @@ import { seed as ugliness } from "../../../scripts/seed/ugliness.ts";
 import { seed as outreach } from "../../../scripts/seed/outreach.ts";
 import { seed as evaluations } from "../../../scripts/seed/evaluations.ts";
 import { seed as event } from "../../../scripts/seed/event.ts";
+import { seed as fieldLibrary } from "../../../scripts/seed/field-library.ts";
 import { FROZEN_NOW } from "../../../scripts/seed/event.ts";
 import { seed as pool } from "../../../scripts/seed/pool.ts";
 import { seed as sponsors } from "../../../scripts/seed/sponsors.ts";
@@ -25,6 +26,7 @@ export const DEMO_SEED_MODULES: readonly SeedModule[] = [
   ugliness,
   outreach,
   sponsors,
+  fieldLibrary,
 ].sort((left, right) =>
   left.order === right.order ? left.name.localeCompare(right.name) : left.order - right.order,
 );

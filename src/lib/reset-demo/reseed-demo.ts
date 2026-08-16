@@ -63,6 +63,7 @@ export const WIPE_ORDER = [
   "sponsor_tiers",
   "form_admins",
   "form_fields",
+  "field_library",
   "forms",
   "email_templates",
   "outbox",
@@ -301,6 +302,10 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   },
   form_fields: {
     sql: `DELETE FROM form_fields WHERE form_id IN (SELECT id FROM forms WHERE event_id IN (${ORG_EVENTS}))`,
+    bindings: ORG,
+  },
+  field_library: {
+    sql: `DELETE FROM field_library WHERE event_id IN (${ORG_EVENTS})`,
     bindings: ORG,
   },
   forms: {

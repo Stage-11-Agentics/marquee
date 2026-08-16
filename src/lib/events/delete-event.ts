@@ -220,6 +220,7 @@ export async function deleteEventCascade(
     prepared(db, `DELETE FROM sponsor_tiers WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM form_admins WHERE form_id IN ${formsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM form_fields WHERE form_id IN ${formsSql}`, ...eventBindings),
+    prepared(db, `DELETE FROM field_library WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM forms WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM email_templates WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     // Every auth link created for an event is carried by its outbox row.

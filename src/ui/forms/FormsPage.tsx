@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { BOUND_SOURCE_LABELS, BOUND_SOURCES, boundSourceOf, isBoundSourceCompatible, type BoundSource } from "../../lib/bound-options";
 import { eventTimeLabel, instantToLocalDateTime, localDateTimeToInstant } from "../../lib/event-time";
@@ -50,8 +50,33 @@ interface FormField {
   position: number;
   config: Record<string, unknown>;
   condition: FormCondition | null;
+  library_field_id?: string;
+  library_field_version?: number;
   created_at: number;
   updated_at: number;
+}
+
+interface LibraryQuestion {
+  id: string;
+  event_id: string;
+  key: string;
+  label: string;
+  help_text: string | null;
+  type: FieldType;
+  required: boolean;
+  config: Record<string, unknown>;
+  condition: FormCondition | null;
+  condition_note: string | null;
+  version: number;
+  used_on_forms: number;
+  stale_copy_count: number;
+  on_destination_form: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+interface LibraryCopyResult extends FormField {
+  warning: { code: string; missing_keys: string[]; message: string } | null;
 }
 
 interface FormAdmin {
@@ -283,6 +308,18 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
   const [newFieldRequired, setNewFieldRequired] = useState(false);
   const [newFieldOptions, setNewFieldOptions] = useState("");
   const [newFieldSource, setNewFieldSource] = useState<"" | BoundSource>("");
+  const [newFieldSaveToLibrary, setNewFieldSaveToLibrary] = useState(false);
+  const [libraryRows, setLibraryRows] = useState<LibraryQuestion[]>([]);
+  const [librarySearch, setLibrarySearch] = useState("");
+  const [libraryPickerOpen, setLibraryPickerOpen] = useState(false);
+  const [libraryPanelOpen, setLibraryPanelOpen] = useState(false);
+  const [libraryEditorId, setLibraryEditorId] = useState<string | null>(null);
+  const [libraryKey, setLibraryKey] = useState("");
+  const [libraryLabel, setLibraryLabel] = useState("");
+  const [libraryHelp, setLibraryHelp] = useState("");
+  const [libraryType, setLibraryType] = useState<FieldType>("short_text");
+  const [libraryRequired, setLibraryRequired] = useState(false);
+  const [libraryOptions, setLibraryOptions] = useState("");
   const [conditionTrigger, setConditionTrigger] = useState("");
   const [conditionValue, setConditionValue] = useState("Yes");
   const [adminPersonId, setAdminPersonId] = useState("");
@@ -293,6 +330,7 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
   // guess, in either direction.
   const [mailConfigured, setMailConfigured] = useState<boolean | null>(null);
   const [mailWarning, setMailWarning] = useState(false);
+  const libraryButtonRef = useRef<HTMLButtonElement>(null);
   const requestedFormId = new URLSearchParams(search).get("form");
   const selectedField = form?.fields.find((field) => field.id === selectedFieldId) ?? null;
 
@@ -325,6 +363,26 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
     }
   };
 
+  const loadLibrary = async (destinationFormId: string | null = form?.id ?? null, search = librarySearch) => {
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      if (destinationFormId) params.set("form_id", destinationFormId);
+      const result = await request<{ data: LibraryQuestion[] }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/field-library?${params.toString()}`,
+        "/api/v1/events/{eventId}/field-library",
+      );
+      setLibraryRows(result.data);
+    } catch (error) {
+      setMessage(errorSummary(error));
+    }
+  };
+
+  const closeLibraryPicker = () => {
+    setLibraryPickerOpen(false);
+    requestAnimationFrame(() => libraryButtonRef.current?.focus());
+  };
+
   useEffect(() => { void loadCatalog(); }, [eventId, requestedFormId]);
   // Read once per mount: whether this instance can send mail decides whether
   // opening intake needs the acknowledgment. A failed read leaves it null, and
@@ -339,7 +397,12 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
-  useEffect(() => { if (selectedId) void loadForm(selectedId); else setForm(null); }, [selectedId, eventId]);
+  useEffect(() => {
+    if (selectedId) {
+      void loadForm(selectedId);
+      void loadLibrary(selectedId, "");
+    } else setForm(null);
+  }, [selectedId, eventId]);
   useEffect(() => {
     const condition = selectedField?.condition?.all[0];
     setConditionTrigger(condition?.fieldKey ?? "");
@@ -417,6 +480,69 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
     setMailWarning(true);
   };
 
+  const editLibraryQuestion = (question: LibraryQuestion) => {
+    setLibraryEditorId(question.id);
+    setLibraryKey(question.key);
+    setLibraryLabel(question.label);
+    setLibraryHelp(question.help_text ?? "");
+    setLibraryType(question.type);
+    setLibraryRequired(question.required);
+    setLibraryOptions(Array.isArray(question.config.options) ? question.config.options.filter((item): item is string => typeof item === "string").join(", ") : "");
+  };
+
+  const resetLibraryEditor = () => {
+    setLibraryEditorId(null);
+    setLibraryKey("");
+    setLibraryLabel("");
+    setLibraryHelp("");
+    setLibraryType("short_text");
+    setLibraryRequired(false);
+    setLibraryOptions("");
+  };
+
+  const saveLibraryQuestion = () => {
+    const label = libraryLabel.trim();
+    const key = libraryKey.trim() || fieldKeyFromLabel(label, libraryRows.map((question) => question.key));
+    if (!label || !key) return;
+    const config = isSelectType(libraryType) ? { options: parseOptionList(libraryOptions) } : {};
+    void mutate("library", async () => {
+      const path = libraryEditorId
+        ? `/api/v1/events/${eventId}/field-library/${libraryEditorId}`
+        : `/api/v1/events/${eventId}/field-library`;
+      const route = libraryEditorId ? "/api/v1/events/{eventId}/field-library/{libraryFieldId}" : "/api/v1/events/{eventId}/field-library";
+      await request<LibraryQuestion>(path, route, {
+        method: libraryEditorId ? "PATCH" : "POST",
+        body: JSON.stringify({ key, label, help_text: libraryHelp.trim() || null, type: libraryType, required: libraryRequired, config, condition: null }),
+      });
+      resetLibraryEditor();
+      await loadLibrary(form?.id ?? null, librarySearch);
+    });
+  };
+
+  const deleteLibraryQuestion = (question: LibraryQuestion) => {
+    if (question.used_on_forms > 0) return;
+    void mutate("library", async () => {
+      await request<{ deleted: boolean }>(`/api/v1/events/${eventId}/field-library/${question.id}`, "/api/v1/events/{eventId}/field-library/{libraryFieldId}", { method: "DELETE" });
+      await loadLibrary(form?.id ?? null, librarySearch);
+      if (libraryEditorId === question.id) resetLibraryEditor();
+    });
+  };
+
+  const copyLibraryQuestion = (question: LibraryQuestion) => {
+    if (!form || question.on_destination_form) return;
+    void mutate("library-copy", async () => {
+      const result = await request<LibraryCopyResult>(
+        `/api/v1/events/${eventId}/forms/${form.id}/fields/from-library`,
+        "/api/v1/events/{eventId}/forms/{formId}/fields/from-library",
+        { method: "POST", body: JSON.stringify({ library_field_id: question.id, position: form.fields.length }) },
+      );
+      setForm((current) => current ? { ...current, fields: [...current.fields, result] } : current);
+      await loadLibrary(form.id, librarySearch);
+      closeLibraryPicker();
+      setMessage(result.warning?.message ?? `Added ${result.label} as a self-contained copy.`);
+    });
+  };
+
   /**
    * One request creates a field the organizer can actually use. The builder
    * used to post a placeholder and then require the row to be selected and
@@ -433,7 +559,7 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
     const options = isSelectType(type) && !bound ? parseOptionList(newFieldOptions) : [];
     const config: Record<string, unknown> = bound ? { source: bound } : options.length ? { options } : {};
     void mutate("field", async () => {
-      const created = await request<FormField>(`/api/v1/events/${eventId}/forms/${form.id}/fields`, "/api/v1/events/{eventId}/forms/{formId}/fields", { method: "POST", body: JSON.stringify({ key, label, type, required: newFieldRequired, config }) });
+      const created = await request<FormField>(`/api/v1/events/${eventId}/forms/${form.id}/fields`, "/api/v1/events/{eventId}/forms/{formId}/fields", { method: "POST", body: JSON.stringify({ key, label, type, required: newFieldRequired, config, save_to_library: newFieldSaveToLibrary }) });
       setForm((current) => current ? { ...current, fields: [...current.fields, created] } : current);
       // The add row keeps focus and its own identity; stealing the detail
       // editor here is what invalidated the element a caller had just
@@ -442,6 +568,8 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
       setNewFieldOptions("");
       setNewFieldSource("");
       setNewFieldRequired(false);
+      setNewFieldSaveToLibrary(false);
+      if (newFieldSaveToLibrary) await loadLibrary(form.id, librarySearch);
     });
   };
 
@@ -483,11 +611,11 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
 
   if (state === "loading") return <div class="forms-page"><PageHeader title="CFP forms" copy="Reading the conference form catalog and its builder contract." /><div class="forms-loading" aria-busy="true"><span>Loading conference forms</span><strong>—</strong><span>Reading D1</span></div></div>;
   if (state === "error") return <div class="forms-page"><PageHeader title="CFP forms" copy="The form catalog is event-scoped and authoring access is protected." actions={<Button onClick={() => void loadCatalog()}>Retry</Button>} /><div class="forms-error" role="alert"><strong>Forms could not be loaded</strong><span>{message}</span></div></div>;
-  if (!form) return <div class="forms-page"><PageHeader title="CFP forms" copy="Build the conference intake once; the public form follows its schema." actions={<><AgentBriefLauncher surface="cfp" eventId={eventId} /><Button variant="primary" onClick={addForm} disabled={busy !== null}>+ New form</Button></>} />{catalog.length === 0 ? <EmptyState title="Your conference has no forms yet" copy="Create the first Abstract or Session form to start collecting the program." action={<Button onClick={addForm}>+ New form</Button>} /> : <section class="forms-catalog">{catalog.map((item) => <button key={item.id} class="forms-catalog-card" onClick={() => setSelectedId(item.id)}><Chip tone={formStatusTone(item.status)}>{item.status}</Chip><strong>{item.name}</strong><span>{item.kind === "abstract" ? "Abstracts" : "Sessions"} · {item.visibility}</span><small>{item.response_count.toLocaleString()} responses</small></button>)}</section>}</div>;
+  if (!form) return <div class="forms-page"><PageHeader title="CFP forms" copy="Build the conference intake once; the public form follows its schema." actions={<><AgentBriefLauncher surface="cfp" eventId={eventId} /><Button variant="primary" onClick={addForm} disabled={busy !== null}>+ New form</Button></>} />{catalog.length === 0 ? <EmptyState title="Your conference has no forms yet" copy="Create the first Abstract or Session form to start collecting the program." action={<Button onClick={addForm}>+ New form</Button>} /> : <section class="forms-catalog">{catalog.map((item) => <button key={item.id} class="forms-catalog-card" onClick={() => setSelectedId(item.id)}><Chip tone={formStatusTone(item.status)}>{item.status}</Chip><strong>{item.name}</strong><span>{item.kind === "abstract" ? "Abstracts" : "Sessions"} · {item.visibility}</span><small>{item.response_count.toLocaleString()} responses</small></button>)}<button type="button" class="forms-catalog-card forms-library-tile" onClick={() => { setLibraryPanelOpen(true); void loadLibrary(null, ""); }}><span class="eyebrow">Library</span><strong>Question library</strong><span>Reusable questions for this conference.</span><small>Open library management →</small></button></section>}</div>;
 
   return <div class="forms-page">
     <PageHeader title="CFP forms" copy={`${catalog.length} conference form${catalog.length === 1 ? "" : "s"} · each audience, field list, rules, and response state stays isolated.`} actions={<><AgentBriefLauncher surface="cfp" eventId={eventId} /><Button onClick={duplicateForm} disabled={busy !== null}>Duplicate</Button><Button onClick={addForm} disabled={busy !== null}>+ New form</Button>{form.status === "open" ? <Button variant="primary" onClick={() => setLifecycle("close")} disabled={busy !== null}>Close form</Button> : <Button variant="primary" onClick={() => setLifecycle(form.status === "closed" ? "reopen" : "publish")} disabled={busy !== null}>{form.status === "closed" ? "Reopen form" : "Publish changes"}</Button>}</>} />
-    <section class="forms-catalog" aria-label="Conference forms">{catalog.map((item) => <button key={item.id} class={`forms-catalog-card ${item.id === form.id ? "active" : ""}`} onClick={() => setSelectedId(item.id)}><Chip tone={formStatusTone(item.status)}>{item.status}</Chip><strong>{item.name}</strong><span>{item.kind === "abstract" ? "Abstracts" : "Sessions"} · {item.visibility}</span><small>{item.response_count.toLocaleString()} responses · {item.public_url ?? "private until published"}</small></button>)}</section>
+    <section class="forms-catalog" aria-label="Conference forms">{catalog.map((item) => <button key={item.id} class={`forms-catalog-card ${item.id === form.id ? "active" : ""}`} onClick={() => setSelectedId(item.id)}><Chip tone={formStatusTone(item.status)}>{item.status}</Chip><strong>{item.name}</strong><span>{item.kind === "abstract" ? "Abstracts" : "Sessions"} · {item.visibility}</span><small>{item.response_count.toLocaleString()} responses · {item.public_url ?? "private until published"}</small></button>)}<button type="button" class="forms-catalog-card forms-library-tile" onClick={() => { setLibraryPanelOpen(true); void loadLibrary(form.id, ""); }}><span class="eyebrow">Library</span><strong>Question library</strong><span>Reusable questions for this conference.</span><small>Open library management →</small></button></section>
     {message && <div class="forms-error" role="status"><strong>Form update needs attention</strong><span>{message}</span></div>}
     {mailWarning && <div class="forms-mail-warning" role="alertdialog" aria-modal="true" aria-labelledby="mail-warning-title">
       <div class="forms-mail-warning-card">
@@ -506,6 +634,14 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
         </div>
       </div>
     </div>}
+    {libraryPanelOpen && <section class="card forms-library-panel" aria-label="Question library">
+      <div class="forms-library-heading"><div><span class="eyebrow">Event-scoped definitions</span><h2>Question library</h2><p>Save a question once, then place self-contained copies into draft forms. Editing this library never changes an existing form.</p></div><Button small onClick={() => setLibraryPanelOpen(false)}>Close library</Button></div>
+      <form class="forms-library-search" onSubmit={(event) => { event.preventDefault(); void loadLibrary(form?.id ?? null, librarySearch); }}><label for="library-search">Search questions</label><input id="library-search" value={librarySearch} placeholder="Search by name or key" onInput={(event) => setLibrarySearch((event.currentTarget as HTMLInputElement).value)} /><Button type="submit">Search</Button></form>
+      <div class="forms-library-layout">
+        <div class="forms-library-list" aria-label="Reusable questions">{libraryRows.length ? libraryRows.map((question) => <article class="forms-library-row" key={question.id}><button type="button" onClick={() => editLibraryQuestion(question)}><strong>{question.label}</strong><span>{fieldTypeLabel(question.type)} · Used on {question.used_on_forms} form{question.used_on_forms === 1 ? "" : "s"} · v{question.version}</span>{question.condition_note && <small>When {question.condition_note}</small>}{question.stale_copy_count > 0 && <small>{question.stale_copy_count} form{question.stale_copy_count === 1 ? " uses" : "s use"} an older version</small>}</button><Button small variant="danger" onClick={() => deleteLibraryQuestion(question)} disabled={question.used_on_forms > 0 || busy !== null}>Delete</Button></article>) : <div class="forms-library-empty">No reusable questions yet. Save an ordinary question from the builder or create one here.</div>}</div>
+        <div class="forms-library-editor"><span class="eyebrow">{libraryEditorId ? "Edit question" : "New library question"}</span><div class="field"><label for="library-key">Stable key</label><input id="library-key" value={libraryKey} disabled={libraryEditorId !== null} placeholder="audience_focus" onInput={(event) => setLibraryKey((event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label for="library-label">Question label</label><input id="library-label" value={libraryLabel} placeholder="What should attendees learn?" onInput={(event) => setLibraryLabel((event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label for="library-type">Type</label><select id="library-type" value={libraryType} onChange={(event) => setLibraryType((event.currentTarget as HTMLSelectElement).value as FieldType)}>{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div>{isSelectType(libraryType) && <div class="field"><label for="library-options">Options · comma separated</label><input id="library-options" value={libraryOptions} onInput={(event) => setLibraryOptions((event.currentTarget as HTMLInputElement).value)} /></div>}<div class="field"><label for="library-help">Help text</label><textarea id="library-help" value={libraryHelp} onInput={(event) => setLibraryHelp((event.currentTarget as HTMLTextAreaElement).value)} /></div><label class="forms-check"><input type="checkbox" checked={libraryRequired} onChange={(event) => setLibraryRequired((event.currentTarget as HTMLInputElement).checked)} /> Required</label><div class="forms-library-editor-actions"><Button variant="primary" onClick={saveLibraryQuestion} disabled={busy !== null || !libraryLabel.trim()}>{busy === "library" ? "Saving…" : libraryEditorId ? "Save library edit" : "Add to library"}</Button>{libraryEditorId && <Button onClick={resetLibraryEditor}>New question</Button>}</div><p class="subtle">Participant machinery such as speaker email, co-speakers, and moderator fields is structural and never appears here because a second participant placement cannot survive the submit path.</p></div>
+      </div>
+    </section>}
     <div class="forms-builder">
       <aside class="card forms-steps" aria-label="Form builder steps">
         <CardHeader title="Build steps" />
@@ -514,15 +650,17 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
       <section class="card forms-editor" aria-label="Form editor">
         <CardHeader title={STEP_NAMES[step] ?? "Form fields"}><Chip tone={formStatusTone(form.status)}>{form.status}</Chip></CardHeader>
         <CardBody>{step === 2 ? <>
-          <div class="forms-editor-intro"><div><strong>Fields in public order</strong><span>Drag is optional; the arrows are keyboard-safe and persist the same order.</span></div></div>
+          <div class="forms-editor-intro"><div><strong>Fields in public order</strong><span>Drag is optional; the arrows are keyboard-safe and persist the same order.</span></div><div class="forms-add-modes"><Button type="button" variant="primary" onClick={() => document.getElementById("new-field-label")?.focus()}>＋ New question</Button><Button type="button" ref={libraryButtonRef} onClick={() => { setLibrarySearch(""); setLibraryPickerOpen(true); void loadLibrary(form.id, ""); }}>From library · {libraryRows.length}</Button></div></div>
           <form class="forms-add-row" data-field-add="row" aria-label="Add a field" onSubmit={(event) => { event.preventDefault(); addField(); }}>
             <div class="field"><label for="new-field-label">New field label</label><input id="new-field-label" name="new-field-label" data-field-add="label" value={newFieldLabel} placeholder="Key takeaway" onInput={(event) => setNewFieldLabel((event.currentTarget as HTMLInputElement).value)} /></div>
             <div class="field"><label for="new-field-type">Type</label><select id="new-field-type" name="new-field-type" data-field-add="type" value={newFieldType} onChange={(event) => { const type = (event.currentTarget as HTMLSelectElement).value as FieldType; setNewFieldType(type); if (newFieldSource && !isBoundSourceCompatible(newFieldSource, type)) setNewFieldSource(""); }}>{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div>
             <div class="field"><label for="new-field-source">Options come from</label><select id="new-field-source" name="new-field-source" data-field-add="source" value={newFieldSource} disabled={!isSelectType(newFieldType)} onChange={(event) => setNewFieldSource((event.currentTarget as HTMLSelectElement).value as "" | BoundSource)}>{sourceChoicesFor(newFieldType).map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select></div>
             <div class="field"><label for="new-field-options">Options · comma separated</label><input id="new-field-options" name="new-field-options" data-field-add="options" value={newFieldSource && isSelectType(newFieldType) ? "" : newFieldOptions} disabled={!isSelectType(newFieldType) || Boolean(newFieldSource)} placeholder={!isSelectType(newFieldType) ? "Select fields only" : newFieldSource ? `From Conference settings → ${BOUND_SOURCE_LABELS[newFieldSource]}` : "Beginner, Intermediate, Advanced"} onInput={(event) => setNewFieldOptions((event.currentTarget as HTMLInputElement).value)} /></div>
             <label class="forms-check forms-add-required" for="new-field-required"><input id="new-field-required" name="new-field-required" data-field-add="required" type="checkbox" checked={newFieldRequired} onChange={(event) => setNewFieldRequired((event.currentTarget as HTMLInputElement).checked)} /> Required</label>
+            <label class="forms-check forms-add-save" for="new-field-save-library"><input id="new-field-save-library" name="new-field-save-library" type="checkbox" checked={newFieldSaveToLibrary} onChange={(event) => setNewFieldSaveToLibrary((event.currentTarget as HTMLInputElement).checked)} /> Save to library</label>
             <Button id="new-field-submit" data-field-add="submit" type="submit" variant="primary" disabled={busy !== null}>{busy === "field" ? "Adding…" : "Add field"}</Button>
           </form>
+          {libraryPickerOpen && <div class="forms-library-picker" role="dialog" aria-modal="true" aria-label="From library"><div class="forms-library-picker-heading"><div><span class="eyebrow">From library</span><h3>Reuse a question</h3></div><Button small onClick={closeLibraryPicker}>Close</Button></div><form class="forms-library-search" onSubmit={(event) => { event.preventDefault(); void loadLibrary(form.id, librarySearch); }}><label for="library-picker-search">Search questions</label><input id="library-picker-search" autoFocus value={librarySearch} placeholder="Search by name or key" onInput={(event) => setLibrarySearch((event.currentTarget as HTMLInputElement).value)} /><Button type="submit">Search</Button></form><div class="forms-library-picker-list">{libraryRows.length ? libraryRows.map((question) => <button type="button" class="forms-library-picker-row" key={question.id} disabled={question.on_destination_form || busy !== null} onClick={() => copyLibraryQuestion(question)}><span><strong>{question.label}</strong><small>{fieldTypeLabel(question.type)} · Used on {question.used_on_forms} form{question.used_on_forms === 1 ? "" : "s"}{question.condition_note ? ` · When ${question.condition_note}` : ""}</small></span><em>{question.on_destination_form ? "On this form" : "Add copy"}</em></button>) : <div class="forms-library-empty">No questions match that search.</div>}</div><p class="forms-library-footer">Participant machinery such as speaker email, co-speakers, and moderator fields is structural and never appears here because a second participant placement cannot survive the submit path.</p></div>}
           <div class="forms-field-list">{form.fields.length ? [...form.fields].sort((left, right) => left.position - right.position).map((field, index) => { const summary = field.condition ? conditionSummary(field.condition) : ""; return <button key={field.id} class={`forms-field-row ${field.id === selectedFieldId ? "active" : ""}`} data-builder-field={field.key} onClick={() => setSelectedFieldId(field.id)}><span class="forms-drag-handle" aria-hidden="true">⋮⋮</span><span class="forms-field-order">{String(index + 1).padStart(2, "0")}</span><span class="forms-field-copy"><strong data-field-label={field.label}>{field.label}{field.required ? " *" : ""}</strong><small data-condition-summary={summary}>{fieldTypeLabel(field.type)} · {field.required ? "Required" : "Optional"}{summary ? ` · When ${summary}` : ""}</small></span><span class="forms-field-actions"><span class="chip">{field.type}</span><span class="forms-arrow" aria-hidden="true">→</span></span></button>; }) : <div class="forms-field-empty"><strong>No fields yet</strong><span>Add the first question to give the public form a place to start.</span><Button small variant="primary" onClick={() => addField()}>＋ Add first field</Button></div>}</div>
           {selectedField && <div class="forms-field-editor"><div class="forms-editor-heading"><div><span class="eyebrow">Editing field</span><h3>{selectedField.label}</h3></div><div class="forms-reorder-actions"><Button small onClick={() => moveField(-1)}>↑</Button><Button small onClick={() => moveField(1)}>↓</Button><Button small variant="danger" onClick={deleteField}>Delete</Button></div></div><div class="grid-2"><div class="field"><label>Field key</label><input value={selectedField.key} onInput={(event) => setFieldValue("key", (event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label>Field type</label><select value={selectedField.type} onChange={(event) => setFieldValue("type", (event.currentTarget as HTMLSelectElement).value)}>{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div></div><div class="field"><label>Label</label><input value={selectedField.label} onInput={(event) => setFieldValue("label", (event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label>Help text</label><textarea value={selectedField.help_text ?? ""} onInput={(event) => setFieldValue("help_text", (event.currentTarget as HTMLTextAreaElement).value)} /></div><label class="forms-check"><input type="checkbox" checked={selectedField.required} onChange={(event) => setFieldValue("required", (event.currentTarget as HTMLInputElement).checked)} /> Required when this field applies</label><FieldValidationEditor field={selectedField} onConfig={setFieldConfig} /><div class="forms-condition-box"><div><strong>Conditional visibility</strong><span>Persisted as <code>{"{ all: [{ fieldKey, op, value }] }"}</code>; hidden values are never written.</span></div><div class="grid-2"><div class="field"><label>Show when this field</label><select value={conditionTrigger} onChange={(event) => setConditionTrigger((event.currentTarget as HTMLSelectElement).value)}><option value="">Always show</option>{form.fields.filter((field) => field.id !== selectedField.id).map((field) => <option key={field.id} value={field.key}>{field.label}</option>)}</select></div><div class="field"><label>Equals</label><input value={conditionValue} onInput={(event) => setConditionValue((event.currentTarget as HTMLInputElement).value)} disabled={!conditionTrigger} /></div></div></div><Button variant="primary" onClick={saveField} disabled={busy !== null}>{busy === "field" ? "Saving…" : "Save field"}</Button></div>}
         </> : <StepPanel step={step} form={form} setForm={setForm} saveForm={saveForm} setLifecycle={setLifecycle} busy={busy} adminPersonId={adminPersonId} setAdminPersonId={setAdminPersonId} addAdmin={addAdmin} removeAdmin={removeAdmin} />}</CardBody>
