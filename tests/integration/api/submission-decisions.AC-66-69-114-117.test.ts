@@ -99,7 +99,7 @@ async function seedFixture(): Promise<void> {
         (id, event_id, key, name, subject, body_md, enabled, created_at, updated_at)
        VALUES
         ('template-mrq19-accept', ?, 'acceptance', 'Acceptance', 'Accepted: {{submission.title}}', 'Hi {{speaker.first_name}}, {{submission.title}} is accepted.', 1, ?, ?),
-        ('template-mrq19-reject', ?, 'rejection', 'Rejection', 'Update: {{submission.title}}', 'Hi {{speaker.first_name}}, an update for {{submission.title}}.', 1, ?, ?)`,
+        ('template-mrq19-reject', ?, 'rejection', 'Rejection', 'Update: {{submission.title}}', 'Hi {{speaker.first_name}}, an update for {{submission.title}}. Share {{speaker.public_link}}.', 1, ?, ?)`,
     ).bind(EVENT_ID, NOW, NOW, EVENT_ID, NOW, NOW),
   ]);
 
@@ -353,9 +353,36 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
       resulting_status: "waitlisted",
     });
 
+    const publicMailSubmissionId = "sub-mrq19-public-mail";
+    const publicAnchorSubmissionId = "sub-mrq19-public-anchor";
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO submissions
+          (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at)
+         VALUES (?, ?, 'session', 'Talk public mail', 'accepted', 'public', 'person-mrq19-speaker', ?, ?)`,
+      ).bind(publicMailSubmissionId, EVENT_ID, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+         VALUES ('participation-mrq19-public-mail', ?, 'person-mrq19-speaker', 'speaker', 0, ?, ?)`,
+      ).bind(publicMailSubmissionId, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO submissions
+          (id, event_id, kind, title, status, origin, submitter_person_id, is_published, created_at, updated_at)
+         VALUES (?, ?, 'session', 'Public anchor session', 'accepted', 'public', 'person-mrq19-speaker', 1, ?, ?)`,
+      ).bind(publicAnchorSubmissionId, EVENT_ID, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+         VALUES ('participation-mrq19-public-anchor', ?, 'person-mrq19-speaker', 'speaker', 0, ?, ?)`,
+      ).bind(publicAnchorSubmissionId, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO agenda_items
+          (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
+         VALUES ('agenda-mrq19-public-anchor', ?, ?, 'session', ?, 30, 'room-mrq19', 1, ?, ?)`,
+      ).bind(EVENT_ID, publicAnchorSubmissionId, NOW, NOW, NOW),
+    ]);
     const accepted = await env.DB.prepare(
-      "SELECT id FROM submissions WHERE event_id = ? AND status = 'accepted' ORDER BY id LIMIT 1",
-    ).bind(EVENT_ID).first<{ id: string }>();
+      "SELECT id FROM submissions WHERE id = ? AND event_id = ? AND status = 'accepted'",
+    ).bind(publicMailSubmissionId, EVENT_ID).first<{ id: string }>();
     expect(accepted?.id).toBeTruthy();
 
     const first = await requestBulk({
@@ -366,11 +393,12 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     const firstBody = await first.json<BulkResponse>();
     expect(firstBody.succeeded).toBe(1);
     const outbox = await env.DB.prepare(
-      "SELECT subject, text, idempotency_key FROM outbox WHERE event_id = ? AND template_key = 'rejection' ORDER BY created_at DESC LIMIT 1",
-    ).bind(EVENT_ID).first<{ subject: string; text: string; idempotency_key: string }>();
+      "SELECT subject, text, idempotency_key FROM outbox WHERE event_id = ? AND entity_id = ? AND template_key = 'rejection' LIMIT 1",
+    ).bind(EVENT_ID, accepted?.id ?? "").first<{ subject: string; text: string; idempotency_key: string }>();
     expect(outbox?.subject).toContain("Talk");
     expect(outbox?.text).toContain("Ada");
     expect(outbox?.text).toContain("Talk");
+    expect(outbox?.text).toContain(`${ORIGIN}/p/ada-lovelace?event=mrq-19`);
     expect(outbox?.idempotency_key).toHaveLength(64);
 
     const repeated = await requestBulk({

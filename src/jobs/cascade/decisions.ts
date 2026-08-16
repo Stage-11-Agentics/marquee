@@ -512,12 +512,13 @@ async function enqueueDecisionMail(
   });
   const origin = (input.origin?.trim() || "https://marquee.stage11.dev").replace(/\/+$/, "");
   const portalLink = `${origin}/api/v1/auth/exchange?token=${encodeURIComponent(portalInvite.token)}`;
-  const publicLink = await publicSpeakerPathForPerson(
+  const publicLinkPath = await publicSpeakerPathForPerson(
     input.db,
     input.eventId,
     input.submission.person_name,
     input.submission.person_id,
   );
+  const publicLink = publicLinkPath ? `${origin}${publicLinkPath}` : null;
   const data: MergeData = {
     "speaker.first_name": input.submission.person_name.trim().split(/\s+/)[0] ?? input.submission.person_name,
     "speaker.name": input.submission.person_name,
