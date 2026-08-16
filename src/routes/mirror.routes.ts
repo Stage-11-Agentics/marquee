@@ -163,7 +163,7 @@ function environment(context: Parameters<typeof requireOrgAdmin>[0]): MirrorActi
   return context.env as unknown as MirrorActionEnvironment;
 }
 
-function tableSummaries(tables: readonly { id: string; name: string; fields?: readonly { id: string; name: string; type?: string; options?: Record<string, unknown> }[] }[]) {
+export function mirrorTableSummaries(tables: readonly { id: string; name: string; fields?: readonly { id: string; name: string; type?: string; options?: Record<string, unknown> }[] }[]) {
   return tables.map((table) => ({
     id: table.id,
     name: table.name,
@@ -235,7 +235,7 @@ const connect = defineApiRoute(
     return context.json({
       data: {
         base_id: body.base_id,
-        tables: tableSummaries(result.tables),
+        tables: mirrorTableSummaries(result.tables),
         needs_provisioning: result.needsProvisioning,
         readiness: result.readiness,
         ...(result.progress === undefined ? {} : { progress: result.progress }),
@@ -281,7 +281,7 @@ const mapping = defineApiRoute(
       data: {
         base_id: status.baseId ?? body.base_id ?? "",
         mapped: status.mapped,
-        tables: tableSummaries(result.tables),
+        tables: mirrorTableSummaries(result.tables),
         needs_provisioning: result.needsProvisioning,
         readiness: result.readiness,
         ...(result.progress === undefined ? {} : { progress: result.progress }),
