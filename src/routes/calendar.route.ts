@@ -39,7 +39,10 @@ calendarRoutes.get("/s/:submissionId", async (context) => {
        JOIN agenda_items agenda ON agenda.submission_id = submission.id AND agenda.kind = 'session'
        JOIN rooms room ON room.id = agenda.room_id
        LEFT JOIN buildings building ON building.id = room.building_id
-       WHERE submission.id = ? AND submission.is_published = 1 AND agenda.is_published = 1
+       WHERE submission.id = ?
+         AND submission.is_published = 1
+         AND agenda.is_published = 1
+         AND submission.status NOT IN ('rejected', 'withdrawn')
        LIMIT 1`,
     )
     .bind(context.req.param("submissionId"))

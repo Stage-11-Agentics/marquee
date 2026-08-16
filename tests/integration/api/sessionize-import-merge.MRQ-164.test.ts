@@ -207,7 +207,7 @@ describe.sequential("MRQ-164 Sessionize import merge", () => {
       "speaker-newcomer,Dana Kowalski,dana@mrq164.test,Researcher,Cloudreach,Writes about evaluation.,",
     ].join("\n");
     const sessions = [
-      "Session ID,Title,Description,Status,Speaker Ids,Session format,Track",
+      "Session ID,Title,Description,Status,Speaker Emails,Session format,Track",
       "sess-mrq164-two,Evaluating agents,An import fixture.,Accepted,speaker-newcomer,Talk,Platform",
     ].join("\n");
     const uploaded = await request(`/api/v1/events/${EVENT_ID}/imports`, {
@@ -221,5 +221,46 @@ describe.sequential("MRQ-164 Sessionize import merge", () => {
     const speakerRow = result.rows.find((row) => row.entity === "speaker");
     expect(speakerRow?.outcome).toBe("created");
     expect(speakerRow?.reason).not.toContain("matched");
+  });
+
+test("SPEC §7 · Sessionize merge and undo preserve a live session's workflow status and publication", async () => {
+    const now = Date.parse("2026-08-14T12:00:00.000Z");
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO buildings (id, event_id, name, address, position, created_at, updated_at) VALUES ('building_mrq164_live', ?, 'Live Hall', '1 Live Way', 0, ?, ?)").bind(EVENT_ID, now, now),
+      env.DB.prepare("INSERT INTO rooms (id, event_id, building_id, name, capacity, position, created_at, updated_at) VALUES ('room_mrq164_live', ?, 'building_mrq164_live', 'Live Room', 100, 0, ?, ?)").bind(EVENT_ID, now, now),
+      env.DB.prepare(
+        `INSERT INTO submissions
+          (id, event_id, kind, title, abstract, status, origin, submitter_person_id, is_published, external_ref, created_at, updated_at)
+         VALUES ('sub_mrq164_live', ?, 'session', 'Original live title', 'Original live abstract', 'accepted', 'admin', ?, 1, 'live-mrq164', ?, ?)`,
+      ).bind(EVENT_ID, EXISTING_ID, now, now),
+      // clock-check: allow — this is a fixed published agenda instant used only to establish the live-session guard.
+      env.DB.prepare(
+        `INSERT INTO agenda_items
+          (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
+         VALUES ('agenda_mrq164_live', ?, 'sub_mrq164_live', 'session', ?, 30, 'room_mrq164_live', 1, ?, ?)`,
+      ).bind(EVENT_ID, now + 86_400_000, now, now),
+    ]);
+
+    const sessions = [
+      "Session ID,Title,Description,Status,Speaker Emails,Session format,Track",
+      "live-mrq164,Imported live title,Imported live abstract,Rejected,priya@mrq164.test,Talk,Platform",
+    ].join("\n");
+    const uploaded = await request(`/api/v1/events/${EVENT_ID}/imports`, {
+      method: "POST",
+      body: JSON.stringify({ source: "sessionize", sessions_csv: sessions, speakers_csv: SPEAKERS_CSV }),
+    });
+    const uploadBody = await uploaded.json<{ id: string; mapping: Record<string, Record<string, string | null>> }>();
+    await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/mapping`, { method: "POST", body: JSON.stringify(uploadBody.mapping) });
+    const run = await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/run`, { method: "POST" });
+    expect(run.status).toBe(200);
+    const runBody = await run.json<{ rows: Array<{ entity: string; reason: string | null }> }>();
+    expect(runBody.rows.find((row) => row.entity === "session")?.reason).toContain("published session status kept unchanged");
+    expect(await env.DB.prepare("SELECT title, status, is_published FROM submissions WHERE id = 'sub_mrq164_live'").first()).toEqual({ title: "Imported live title", status: "accepted", is_published: 1 });
+    expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE id = 'agenda_mrq164_live'").first()).toEqual({ is_published: 1 });
+
+    const undone = await request(`/api/v1/events/${EVENT_ID}/imports/${uploadBody.id}/undo`, { method: "POST" });
+    expect(undone.status).toBe(200);
+    expect(await env.DB.prepare("SELECT title, status, is_published FROM submissions WHERE id = 'sub_mrq164_live'").first()).toEqual({ title: "Original live title", status: "accepted", is_published: 1 });
+    expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE id = 'agenda_mrq164_live'").first()).toEqual({ is_published: 1 });
   });
 });

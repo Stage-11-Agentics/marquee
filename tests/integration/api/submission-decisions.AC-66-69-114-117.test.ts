@@ -240,7 +240,7 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     expect(findTarget(await listAcceptedFacts())).toMatchObject({ id: "sub-mrq19-100", status: "published" });
   }, 20_000);
 
-  test("CONTRACT · MRQ-230 · a published decision refuses without confirmation and bulk reports the skipped live record", async () => {
+  test("AC-315 · a published decision refuses without confirmation and confirmed routes clear live projections", async () => {
     const before = await env.DB.prepare(
       `SELECT s.status, s.is_published,
               (SELECT COUNT(*) FROM submission_decisions WHERE submission_id = s.id) AS decisions,
@@ -282,7 +282,41 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     const confirmed = await requestRecord("sub-mrq19-100", { recommendation: "deny", confirm_published: true });
     expect(confirmed.status).toBe(200);
     expect(await confirmed.json()).toMatchObject({ resulting_status: "rejected" });
+    expect(await env.DB.prepare("SELECT status, is_published FROM submissions WHERE id = 'sub-mrq19-100'").first()).toEqual({ status: "rejected", is_published: 0 });
+    expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE submission_id = 'sub-mrq19-100'").first()).toEqual({ is_published: 0 });
+    expect((await SELF.fetch(`${ORIGIN}/s/sub-mrq19-100`)).status).toBe(404);
+    const publicationAudit = await env.DB.prepare(
+      `SELECT action, before_json, after_json
+       FROM audit_log
+       WHERE event_id = ? AND entity_id = ? AND action = 'submission.publication_unpublished_by_decision'
+       ORDER BY created_at DESC, id DESC LIMIT 1`,
+    ).bind(EVENT_ID, "sub-mrq19-100").first<{ action: string; before_json: string; after_json: string }>();
+    expect(publicationAudit?.action).toBe("submission.publication_unpublished_by_decision");
+    expect(JSON.parse(publicationAudit?.before_json ?? "{}")).toMatchObject({ agenda_is_published: true, submission_is_published: true });
+    expect(JSON.parse(publicationAudit?.after_json ?? "{}")).toMatchObject({ agenda_is_published: false, submission_is_published: false, reason: "confirmed_decision" });
     expect(await env.CACHE.get(cacheKey, "json")).toBeNull();
+
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO submissions
+          (id, event_id, kind, title, status, origin, submitter_person_id, is_published, created_at, updated_at)
+         VALUES ('sub-mrq19-bulk-live', ?, 'session', 'Bulk live session', 'accepted', 'admin', 'person-mrq19-speaker', 1, ?, ?)`,
+      ).bind(EVENT_ID, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+         VALUES ('participation-mrq19-bulk-live', 'sub-mrq19-bulk-live', 'person-mrq19-speaker', 'speaker', 0, ?, ?)`,
+      ).bind(NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO agenda_items
+          (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
+         VALUES ('agenda-mrq19-bulk-live', ?, 'sub-mrq19-bulk-live', 'session', ?, 30, 'room-mrq19', 1, ?, ?)`,
+      ).bind(EVENT_ID, NOW + 86_400_000, NOW, NOW),
+    ]);
+    const bulkConfirmed = await requestBulk({ selector: { ids: ["sub-mrq19-bulk-live"] }, action: "reject", confirm_published: true });
+    expect(bulkConfirmed.status).toBe(200);
+    expect(await bulkConfirmed.json<BulkResponse>()).toMatchObject({ selected: 1, succeeded: 1, failed: 0, published_count: 1 });
+    expect(await env.DB.prepare("SELECT status, is_published FROM submissions WHERE id = 'sub-mrq19-bulk-live'").first()).toEqual({ status: "rejected", is_published: 0 });
+    expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE submission_id = 'sub-mrq19-bulk-live'").first()).toEqual({ is_published: 0 });
   }, 20_000);
 
   test("AC-114, AC-115, AC-116, AC-117 · record-owned reject shares rendered merge fields, status history, and UNIQUE outbox identity", async () => {

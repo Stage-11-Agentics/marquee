@@ -60,7 +60,7 @@ export async function recordMirrorSubmissionRejection(
                 json_object('marquee_id', submission.id,
                             'event_id', submission.event_id,
                             'last_write_source', 'marquee'),
-                'queued', 0, NULL, NULL, submission.created_at, submission.updated_at
+                'queued', 0, NULL, NULL, ?, ?
            FROM submissions submission
           WHERE submission.id = ?
             AND submission.event_id = ?
@@ -79,6 +79,6 @@ export async function recordMirrorSubmissionRejection(
                  AND pending.status IN ('queued', 'failed')
             )`,
       )
-      .bind(input.rowId, input.eventId),
+      .bind(input.now, input.now, input.rowId, input.eventId),
   ]);
 }

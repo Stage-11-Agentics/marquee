@@ -44,7 +44,7 @@ import {
 import { auditStatement, writeAudit } from "../lib/audit";
 import { contentHistoryFor } from "../lib/history";
 import { submitterEditability } from "../lib/submission-editing";
-import { requirePublishedConfirmation } from "../lib/publication-guard";
+import { PUBLISHED_PARTICIPANT_REFUSAL, requirePublishedConfirmation } from "../lib/publication-guard";
 import {
   parseSocialLinks,
   personProfilePatchShape,
@@ -1554,7 +1554,7 @@ const updateSpeakerTalk = defineApiRoute(
     }
     // Speakers have no unpublish or acceptance-reversal authority, so their
     // live-session write is a refusal rather than a second confirmation path.
-    await requirePublishedConfirmation(context.env.DB, current.eventId, submissionId, false);
+    await requirePublishedConfirmation(context.env.DB, current.eventId, submissionId, false, PUBLISHED_PARTICIPANT_REFUSAL);
     const now = Date.now();
     await context.env.DB.batch([
       context.env.DB.prepare(

@@ -121,7 +121,7 @@ async function seedFixture(): Promise<void> {
 
 beforeAll(seedFixture);
 
-test("AC-121, AC-122, AC-123 · cancel choices mutate task, email, calendar, and agenda rows", async () => {
+test("AC-121, AC-122, AC-123, AC-317 · cancel choices mutate task, email, calendar, and publication rows", async () => {
   const taskCountBefore = await env.DB.prepare("SELECT COUNT(*) AS count FROM speaker_tasks WHERE submission_id = 'sub-cancel'").first<{ count: number }>();
   const result = await writeAcceptanceReversal({
     cache: env.CACHE,
@@ -263,7 +263,7 @@ test("AC-121, AC-122, AC-123 · cancel choices mutate task, email, calendar, and
   expect(reconciliationAudits?.count).toBe(2);
 });
 
-test("AC-121, AC-122, AC-123 · retain choices leave every selected row active while removing placement", async () => {
+test("AC-121, AC-122, AC-123, AC-317 · retain choices leave every selected row active while removing placement", async () => {
   await purgePublicEmbedCache(env.CACHE, { eventId: "evt-reversal" });
   const before = await SELF.fetch("https://marquee.stage11.dev/api/v1/public/embeds/reversal-agenda?event=reversal");
   expect(before.status).toBe(200);

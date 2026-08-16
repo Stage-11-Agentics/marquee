@@ -1,6 +1,6 @@
 import type { D1Database, Queue } from "@cloudflare/workers-types";
 
-import { runBulkByIds } from "../../api/bulk";
+import { runBulkByIds, runBulkByIdsBatch } from "../../api/bulk";
 import { newUlid } from "../../api/ids";
 import { auditStatement, writeAudit as writeAuditRow, type AuditEntry } from "../../lib/audit";
 import type { Decision, Id } from "../../db/schema";
@@ -818,6 +818,7 @@ async function updateSubmissionStatus(
     preserveWave: boolean;
     decision: boolean;
     stampAttribution?: boolean;
+    clearPublished?: boolean;
   },
 ): Promise<number> {
   if (input.ids.length === 0) return 0;
@@ -837,21 +838,38 @@ async function updateSubmissionStatus(
   }
   if (input.preserveWave && input.waveId !== undefined) bindings.push(input.waveId);
   bindings.push(input.eventId);
-  const result = await runBulkByIds(input.ids, (idsJson) =>
-    db
-      .prepare(
-        `UPDATE submissions
-         SET status = ?,
-             updated_at = ?,
-             last_write_source = ?,
-             ${stampAttribution ? "decided_at = ?, decided_by_person_id = ?," : ""}
-             ${updateWave}
-         WHERE event_id = ?
-           AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
-           AND status <> ?`,
-      )
-      .bind(...bindings, idsJson, input.targetStatus),
-  );
+  const statusStatement = (idsJson: string) => db
+    .prepare(
+      `UPDATE submissions
+       SET status = ?,
+           ${input.clearPublished ? "is_published = 0," : ""}
+           updated_at = ?,
+           last_write_source = ?,
+           ${stampAttribution ? "decided_at = ?, decided_by_person_id = ?," : ""}
+           ${updateWave}
+       WHERE event_id = ?
+         AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+         AND status <> ?`,
+    )
+    .bind(...bindings, idsJson, input.targetStatus);
+  if (input.clearPublished) {
+    const results = await runBulkByIdsBatch(db, input.ids, (idsJson) => [
+      statusStatement(idsJson),
+      db
+        .prepare(
+          `UPDATE agenda_items
+           SET is_published = 0,
+               updated_at = ?
+           WHERE event_id = ?
+             AND kind = 'session'
+             AND is_published = 1
+             AND submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))`,
+        )
+        .bind(input.now, input.eventId, idsJson),
+    ]);
+    return Number(results?.[0]?.meta?.changes ?? 0);
+  }
+  const result = await runBulkByIds(input.ids, statusStatement);
   return Number(result?.meta?.changes ?? 0);
 }
 
@@ -1136,12 +1154,23 @@ export async function writeSubmissionDecision(
     waveId: input.waveId,
     preserveWave: target.status === "accepted",
     decision: true,
+    clearPublished: submission.agenda_published === 1 && input.confirmPublished === true,
   });
   if (changed !== 1) {
     return failureResult(submission.id, "submission changed during decision; retry the confirmed action");
   }
   if (submission.agenda_published === 1) {
     await purgePublicEmbedCache(input.cache, { eventId: input.eventId });
+    await writeAudit(input.db, {
+      eventId: input.eventId,
+      actor: input.actor,
+      action: "submission.publication_unpublished_by_decision",
+      entityType: "submission",
+      entityId: submission.id,
+      before: { agenda_is_published: true, submission_is_published: true },
+      after: { agenda_is_published: false, submission_is_published: false, reason: "confirmed_decision" },
+      now,
+    });
   }
 
   const mail = target.status === "waitlisted"
@@ -1218,9 +1247,7 @@ export async function writeBulkSubmissionDecisions(
   const results: SubmissionDecisionResult[] = [];
   const eligible: SubmissionContext[] = [];
   const target = input.action === "withdraw" ? null : decisionTarget(input.action);
-  const publishedCount = input.confirmPublished === true
-    ? 0
-    : submissions.filter((submission) => submission.agenda_published === 1).length;
+  let publishedCount = 0;
 
   for (const id of ids) {
     const submission = byId.get(id);
@@ -1234,6 +1261,7 @@ export async function writeBulkSubmissionDecisions(
       continue;
     }
     if (submission.agenda_published === 1 && input.confirmPublished !== true) {
+      publishedCount += 1;
       results.push(failureResult(id, PUBLISHED_SESSION_REFUSAL));
       continue;
     }
@@ -1241,6 +1269,7 @@ export async function writeBulkSubmissionDecisions(
       results.push(failureResult(id, "speaker has no valid email address; record was left unchanged"));
       continue;
     }
+    if (submission.agenda_published === 1 && input.confirmPublished === true) publishedCount += 1;
     eligible.push(submission);
   }
 
@@ -1267,9 +1296,27 @@ export async function writeBulkSubmissionDecisions(
     waveId: input.waveId,
     preserveWave: targetStatus === "accepted",
     decision: target !== null,
+    clearPublished: input.confirmPublished === true && eligible.some((submission) => submission.agenda_published === 1),
   });
   if (eligible.some((submission) => submission.agenda_published === 1)) {
     await purgePublicEmbedCache(input.cache, { eventId: input.eventId });
+    await input.db.batch(
+      eligible
+        .filter((submission) => submission.agenda_published === 1)
+        .map((submission) => auditStatement(
+          input.db,
+          auditEntryFor({
+            eventId: input.eventId,
+            actor: input.actor,
+            action: "submission.publication_unpublished_by_decision",
+            entityType: "submission",
+            entityId: submission.id,
+            before: { agenda_is_published: true, submission_is_published: true },
+            after: { agenda_is_published: false, submission_is_published: false, reason: "confirmed_decision" },
+            now,
+          }),
+        )),
+    );
   }
 
   const transitions: Array<{

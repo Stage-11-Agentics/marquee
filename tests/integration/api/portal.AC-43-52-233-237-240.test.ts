@@ -440,7 +440,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect((await unchanged.json<{ submission: { title: string } }>()).submission.title).not.toBe("Speaker B must not edit speaker A");
   });
 
-  test("CONTRACT · MRQ-230 · a speaker cannot rewrite a live session's public content", async () => {
+  test("AC-318 · a speaker cannot rewrite a live session's public content", async () => {
     const response = await request(`/api/v1/me/submissions/sub-portal-public/talk`, {
       method: "PATCH",
       body: JSON.stringify({ title: "A speaker cannot silently replace this live title" }),
@@ -449,7 +449,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(await response.json()).toMatchObject({
       error: {
         code: "conflict",
-        message: "This session is live on the conference site. Unpublish it or reverse the acceptance to change its outcome.",
+        message: "This session is live on the conference site. Ask the conference organizer to unpublish it or reverse the acceptance before changing its public content.",
       },
     });
     expect(await env.DB.prepare("SELECT title FROM submissions WHERE id = 'sub-portal-public'").first()).toEqual({ title: "Public profile session" });

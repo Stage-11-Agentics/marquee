@@ -80,7 +80,9 @@ export const submissionListQuerySchema = createListQuerySchema(
   submissionFilterSchema.shape,
   Object.keys(SUBMISSION_SORTS) as [keyof typeof SUBMISSION_SORTS, ...(keyof typeof SUBMISSION_SORTS)[]],
   { defaultSort: "newest" },
-);
+).extend({
+  include_published_count: z.enum(["1"]).optional().openapi({ description: "Include the live-session aggregate for bulk selection." }),
+});
 
 const listEventSubmissions = defineApiRoute(
   {
@@ -100,7 +102,7 @@ const listEventSubmissions = defineApiRoute(
       query: submissionListQuerySchema,
     },
     responses: {
-      200: jsonResponse(createListResponseSchema(submissionListItemSchema, "Submission"), "Matching submissions"),
+      200: jsonResponse(createListResponseSchema(submissionListItemSchema, "Submission", { includePublishedCount: true }), "Matching submissions"),
       ...errorResponses([400, 401, 403, 429, 500]),
     },
   },

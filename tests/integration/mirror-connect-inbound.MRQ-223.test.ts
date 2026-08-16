@@ -375,7 +375,7 @@ test("AC-226 · one signed inbound edit applies allowlisted fields and drops the
   expect(await count("SELECT COUNT(*) AS count FROM mirror_outbox WHERE drained_at IS NULL")).toBe(0);
 });
 
-test("CONTRACT · inbound accepted status stops before tasks and mail until the recovery action is clicked", async () => {
+test("AC-316 · a published inbound status edit is dropped, audited, counted, and repaired from current truth", async () => {
   const dueAt = Date.now() + 7 * 86_400_000;
   await env.DB.batch([
     env.DB.prepare(
@@ -405,7 +405,7 @@ test("CONTRACT · inbound accepted status stops before tasks and mail until the 
       `INSERT INTO submissions
         (id, event_id, kind, title, status, origin, submitter_person_id, is_published, created_at, updated_at)
        VALUES (?, ?, 'session', 'MRQ-223 session', 'accepted', 'admin', ?, 1, ?, ?)`,
-    ).bind(SUBMISSION_ID, EVENT_ID, PERSON_ID, NOW, NOW),
+    ).bind(SUBMISSION_ID, EVENT_ID, PERSON_ID, NOW - 1_000, NOW - 500),
     env.DB.prepare(
       `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
        VALUES ('participation_mrq223', ?, ?, 'speaker', 0, ?, ?)`,
@@ -441,6 +441,11 @@ test("CONTRACT · inbound accepted status stops before tasks and mail until the 
     requested: "accepted",
   });
   expect(await count("SELECT COUNT(*) AS count FROM mirror_outbox WHERE row_id = ? AND drained_at IS NULL", SUBMISSION_ID)).toBe(1);
+  const repair = await env.DB.prepare(
+    "SELECT created_at, updated_at FROM mirror_outbox WHERE row_id = ? AND drained_at IS NULL ORDER BY id DESC LIMIT 1",
+  ).bind(SUBMISSION_ID).first<{ created_at: number; updated_at: number }>();
+  expect(repair?.created_at).toBeGreaterThan(NOW - 1_000);
+  expect(repair?.updated_at).toBe(repair?.created_at);
 
   const resumed = await runOnboardingCascade({
     db: env.DB,

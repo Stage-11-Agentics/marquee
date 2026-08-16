@@ -186,6 +186,12 @@ export interface SubmissionListFilters {
   wave?: string;
   task?: SubmissionTaskFilter;
   placement?: SubmissionPlacementFilter;
+  /** Only the bulk-selection UI requests this extra aggregate. */
+  include_published_count?: "1";
+}
+
+export interface SubmissionListEnvelope<T> extends ListEnvelope<T> {
+  published_count?: number;
 }
 
 interface SubmissionQueryRow {
@@ -740,7 +746,7 @@ async function listDraftsNeedingAttention(
 export async function listSubmissions(
   database: D1Database,
   filters: SubmissionListFilters,
-): Promise<ListEnvelope<SubmissionListItem>> {
+): Promise<SubmissionListEnvelope<SubmissionListItem>> {
   const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
   if (filters.status === "not_notified") return listNotNotifiedSubmissions(database, filters);
   if (filters.status === "draft" && await hasColumns(database, "submissions", ["form_id", "last_saved_at", "submitter_person_id"])) {
@@ -757,9 +763,6 @@ export async function listSubmissions(
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
   const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${FROM} WHERE ${where}`).bind(...bindings);
-  const publishedCount = database
-    .prepare(`SELECT COUNT(DISTINCT CASE WHEN ai.is_published = 1 THEN s.id END) AS published_count ${FROM} WHERE ${where}`)
-    .bind(...bindings);
   const data = database.prepare(`
     SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities)}
     ${FROM}
@@ -767,10 +770,14 @@ export async function listSubmissions(
     ORDER BY ${stableOrder}
     LIMIT ? OFFSET ?
   `).bind(...bindings, page.limit, page.offset);
-  const [envelope, published] = await Promise.all([
-    executeListPage<SubmissionQueryRow>({ count, data, page }),
-    publishedCount.first<{ published_count: number }>(),
-  ]);
+  const envelope = await executeListPage<SubmissionQueryRow>({ count, data, page });
+  if (filters.include_published_count !== "1") {
+    return { ...envelope, data: envelope.data.map(toItem) };
+  }
+  const published = await database
+    .prepare(`SELECT COUNT(DISTINCT CASE WHEN ai.is_published = 1 THEN s.id END) AS published_count ${FROM} WHERE ${where}`)
+    .bind(...bindings)
+    .first<{ published_count: number }>();
   return {
     ...envelope,
     published_count: Number(published?.published_count ?? 0),

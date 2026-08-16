@@ -6,6 +6,14 @@ import { ApiError } from "../api/errors";
 export const PUBLISHED_SESSION_REFUSAL =
   "This session is live on the conference site. Unpublish it or reverse the acceptance to change its outcome.";
 
+/** Content-edit callers have an explicit API confirmation route forward. */
+export const PUBLISHED_CONTENT_REFUSAL =
+  "This session is live on the conference site. Resend with confirm_published to change what attendees see.";
+
+/** Portal participants cannot change publication state themselves. */
+export const PUBLISHED_PARTICIPANT_REFUSAL =
+  "This session is live on the conference site. Ask the conference organizer to unpublish it or reverse the acceptance before changing its public content.";
+
 export async function isPublishedSession(
   db: D1Database,
   eventId: string,
@@ -32,7 +40,8 @@ export async function requirePublishedConfirmation(
   eventId: string,
   submissionId: string,
   confirmed: boolean,
+  refusal = PUBLISHED_SESSION_REFUSAL,
 ): Promise<void> {
   if (confirmed || !(await isPublishedSession(db, eventId, submissionId))) return;
-  throw ApiError.conflict(PUBLISHED_SESSION_REFUSAL);
+  throw ApiError.conflict(refusal);
 }

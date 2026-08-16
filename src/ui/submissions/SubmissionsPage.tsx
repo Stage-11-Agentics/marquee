@@ -313,6 +313,7 @@ export function SubmissionsPage({
   const [knownTracks, setKnownTracks] = useState<Map<string, SubmissionTrackListItem>>(new Map());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
+  const [publishedMatchingCount, setPublishedMatchingCount] = useState<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
@@ -533,6 +534,7 @@ export function SubmissionsPage({
   useEffect(() => {
     setSelectedIds(new Set());
     setAllMatching(false);
+    setPublishedMatchingCount(null);
     setBulkRequest(null);
     setBulkMessage("");
     setBulkError("");
@@ -619,9 +621,32 @@ export function SubmissionsPage({
       .catch(() => { if (!controller.signal.aborted) setAcceptedAnyTotal(null); });
     return () => controller.abort();
   }, [eventId, acceptedStageFilter, acceptedAnyQuery, reloadKey]);
+
+  // The regular list stays on the R7 path. Only the explicit "all matching"
+  // bulk selection asks for the second aggregate needed by its honest count
+  // line, and the reserved line can truthfully say unavailable while it loads.
+  useEffect(() => {
+    if (!allMatching) {
+      setPublishedMatchingCount(null);
+      return;
+    }
+    const controller = new AbortController();
+    const countQuery = buildSubmissionsQuery(params);
+    countQuery.set("include_published_count", "1");
+    countQuery.set("per_page", "1");
+    countQuery.set("page", "1");
+    apiFetch<ListEnvelope>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions?${countQuery.toString()}`, {
+      signal: controller.signal,
+      route: "/api/v1/events/{eventId}/submissions",
+    })
+      .then((body) => { if (!controller.signal.aborted) setPublishedMatchingCount(body.published_count ?? null); })
+      .catch(() => { if (!controller.signal.aborted) setPublishedMatchingCount(null); });
+    return () => controller.abort();
+  }, [eventId, allMatching, requestKey, reloadKey]);
+
   const selectedCount = selectionCount(selectedIds, allMatching, envelope?.total ?? 0);
   const publishedSelectedCount = allMatching
-    ? envelope?.published_count ?? null
+    ? publishedMatchingCount ?? envelope?.published_count ?? null
     : rows.filter((item) => selectedIds.has(item.id) && item.slot?.is_published === true).length;
   const first = envelope && envelope.total > 0 ? (envelope.page - 1) * envelope.per_page + 1 : 0;
   const last = envelope ? Math.min(envelope.page * envelope.per_page, envelope.total) : 0;

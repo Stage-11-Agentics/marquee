@@ -385,7 +385,7 @@ test("CONTRACT · completing 'Name your speaker' fills the Session and seats the
   expect(Number(participations?.n)).toBe(1);
 });
 
-test("CONTRACT · MRQ-230 · a sponsor content write-back refuses a live Session before completion", async () => {
+test("AC-318 · a sponsor content write-back refuses a live Session before completion", async () => {
   await env.DB.batch([
     env.DB.prepare("INSERT INTO rooms (id, event_id, building_id, name, capacity, position, created_at, updated_at) VALUES ('room_mrq214_live', ?, 'bld_mrq214', 'Live room', 100, 0, ?, ?)")
       .bind(EVENT_ID, NOW, NOW),
@@ -401,7 +401,7 @@ test("CONTRACT · MRQ-230 · a sponsor content write-back refuses a live Session
   expect(await completion.json()).toMatchObject({
     error: {
       code: "conflict",
-      message: "This session is live on the conference site. Unpublish it or reverse the acceptance to change its outcome.",
+      message: "This session is live on the conference site. Ask the conference organizer to unpublish it or reverse the acceptance before changing its public content.",
     },
   });
   expect(await env.DB.prepare("SELECT abstract FROM submissions WHERE id = ?").bind(SILVER_SESSION).first()).toEqual({ abstract: null });

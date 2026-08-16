@@ -622,7 +622,7 @@ The seeded demo *is* the product a judge sees. Generator lives at `scripts/seed/
 
 Each carries an enforcement criterion and **a demanded audit ticket** — a ticket the orchestrator must schedule and an auditor must sign, not a hope.
 
-**Publication invariant:** Pipeline and workflow writes never change public visibility and never fire mail; publication changes only through deliberate publish, unpublish, or acceptance-reversal actions.
+**Publication invariant:** Pipeline and workflow writes never change public visibility and never fire mail; publication changes only through deliberate publish, unpublish, or acceptance-reversal actions. Sessionize import merge and undo are included: when a Session is live, they preserve its current workflow status and both publication projections while applying or restoring the remaining import data.
 
 | # | Guardrail | Enforcement criterion | Audit ticket |
 |---|---|---|---|

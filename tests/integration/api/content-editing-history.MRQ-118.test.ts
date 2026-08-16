@@ -251,6 +251,11 @@ test("CONTRACT · a live Session refuses a silent edit and accepts a confirmed o
 
   const blocked = await editContent("sub-118-live", { title: "Changed under attendees" });
   expect(blocked.status).toBe(409);
+  expect(await blocked.json()).toMatchObject({
+    error: {
+      message: "This session is live on the conference site. Resend with confirm_published to change what attendees see.",
+    },
+  });
   expect(await auditRows("sub-118-live")).toHaveLength(0);
 
   const confirmed = await editContent("sub-118-live", { title: "Changed on purpose", confirm_published: true });

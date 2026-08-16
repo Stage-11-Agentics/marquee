@@ -717,10 +717,10 @@ published-session guard and one extensible mirror-rejection seam.
 
 | AC | Tier | Tag | How verified |
 |---|---|---|---|
-| AC-315 | PD | `auto` | `test + e2e:` publish a session, call the single decision route without confirmation and assert the exact 409 refusal plus no status, decision, mail, or cache mutation; repeat through bulk selection and assert published count, then confirm the live write and assert success plus cache purge. The submissions dialog shows the honest count with reserved space before its confirm action. |
-| AC-316 | PD | `auto` | `test:` pull an inbound Airtable status change for a published row and assert it is dropped and counted, the `mirror.inbound_rejected` audit records `forbidden_while_published`, and one outbound repair is queued from current D1 truth; assert no status or cascade mutation. |
-| AC-317 | PD | `auto` | `test:` reverse an accepted published session and assert the agenda row is gone, `submissions.is_published=0`, and both the record and list projections report `is_published=false`. |
-| AC-318 | PD | `auto` | `test:` edit a live talk through the speaker portal and complete sponsor session-content write-back; both return the exact refusal before changing content or completing the task. Assert the public-read predicate remains independent of `confirmation_status`. |
+| AC-315 | PD | `auto` | `test:` publish a session, call the single decision route without confirmation and assert the exact 409 refusal plus no status, decision, mail, or cache mutation; repeat through bulk selection and assert the refused published count, then confirm the single and bulk live writes and assert success, both publication flags cleared, audit rows, and cache purge. A node contract test asserts the shipped bulk dialog's minimal honest count line and reserved height; the explicit confirmation affordance belongs to a later confirmation redesign, so this row makes no e2e claim. |
+| AC-316 | PD | `auto` | `test:` pull an inbound Airtable status change for a published row and assert it is dropped and counted, the `mirror.inbound_rejected` audit records `forbidden_while_published`, one outbound repair is queued from current D1 truth with the rejection time, and no status or cascade mutation occurs. |
+| AC-317 | PD | `auto` | `test:` reverse an accepted published session and assert the agenda row is gone, `submissions.is_published=0`, the public permalink is 404, and the public embed no longer contains the session. |
+| AC-318 | PD | `auto` | `test:` edit a live talk through the speaker portal and complete sponsor session-content write-back; both return their reader-appropriate refusal before changing content or completing the task. `confirmation_status` remains a documented not-changed rule, not an unverified assertion in this row. |
 
 ---
 

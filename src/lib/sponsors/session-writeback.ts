@@ -26,7 +26,7 @@ import { newUlid } from "../../api/ids";
 import { ApiError } from "../../api/errors";
 import { auditStatement } from "../audit";
 import { reconcileTaskSet } from "../../jobs/cascade/decisions";
-import { PUBLISHED_SESSION_REFUSAL, isPublishedSession } from "../publication-guard";
+import { PUBLISHED_PARTICIPANT_REFUSAL, isPublishedSession } from "../publication-guard";
 import { SPONSOR_WRITEBACK_TEMPLATE_IDS } from "./deliverable-templates";
 
 export { SPONSOR_WRITEBACK_TEMPLATE_IDS };
@@ -167,7 +167,7 @@ async function sessionContentStatements(input: SponsorWritebackInput): Promise<D
   if (await isPublishedSession(db, task.event_id, current.id)) {
     // Sponsor contacts cannot unpublish or reverse an acceptance; leaving the
     // task open gives them a recoverable retry once the organizer changes state.
-    throw ApiError.conflict(PUBLISHED_SESSION_REFUSAL);
+    throw ApiError.conflict(PUBLISHED_PARTICIPANT_REFUSAL);
   }
   return [
     db.prepare(

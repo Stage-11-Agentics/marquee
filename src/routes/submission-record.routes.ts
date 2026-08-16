@@ -29,7 +29,7 @@ import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-acc
 import { auditStatement, auditStatementFromSelect, writeAudit } from "../lib/audit";
 import { contentOf, isContentAction, recordTimelinePage } from "../lib/history";
 import { purgePublicEmbedCache } from "../lib/public-site";
-import { requirePublishedConfirmation } from "../lib/publication-guard";
+import { PUBLISHED_CONTENT_REFUSAL, requirePublishedConfirmation } from "../lib/publication-guard";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const submissionParams = eventParams.extend({ submissionId: z.string().min(1) });
@@ -1301,7 +1301,7 @@ const updateSubmissionContent = defineApiRoute(
     if (after.title === before.title && after.abstract === before.abstract) {
       return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
     }
-    await requirePublishedConfirmation(context.env.DB, eventId, submissionId, body.confirm_published === true);
+    await requirePublishedConfirmation(context.env.DB, eventId, submissionId, body.confirm_published === true, PUBLISHED_CONTENT_REFUSAL);
     const actor = await actorFor(context);
     await context.env.DB.batch(
       contentWriteStatements(context.env.DB, eventId, submissionId, before, after, actor, "content_updated", Date.now()),
@@ -1355,7 +1355,7 @@ const restoreSubmissionContent = defineApiRoute(
     if (after.title === before.title && after.abstract === before.abstract) {
       return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
     }
-    await requirePublishedConfirmation(context.env.DB, eventId, submissionId, body.confirm_published === true);
+    await requirePublishedConfirmation(context.env.DB, eventId, submissionId, body.confirm_published === true, PUBLISHED_CONTENT_REFUSAL);
     const actor = await actorFor(context);
     // The restore's own before/after describes what the restore changed — not
     // what the original edit changed. That is what makes the row honest when
