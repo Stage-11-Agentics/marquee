@@ -62,6 +62,15 @@ export interface PublicSpeakerSummary {
   bio: string | null;
   headshotUrl: string | null;
   socialLinks: string[];
+  /**
+   * The participation role, where it is not `speaker`.
+   *
+   * A session card that reads "Ana Reyes" beside three other names does not say
+   * that Ana is moderating it, and a panel is exactly the session where that
+   * matters most. Null for a speaker, so the ordinary card is unchanged and
+   * every renderer can treat the label as optional rather than conditional.
+   */
+  role: string | null;
 }
 
 export interface PublicSession {
@@ -457,6 +466,7 @@ export function parseSpeakers(value: string): PublicSpeakerSummary[] {
         speaker.is_demo === 1 || speaker.is_demo === true,
       ),
       socialLinks: parseSocialLinks(typeof speaker.social_links === "string" ? speaker.social_links : undefined),
+      role: typeof speaker.role === "string" && speaker.role !== "speaker" ? speaker.role : null,
     }];
   });
 }
@@ -570,6 +580,7 @@ function sessionRowsQuery(
             bio: "speaker.bio",
             is_demo: "speaker.is_demo",
             social_links: "speaker.social_links",
+            role: "participation.role",
           },
         })} AS speakers_json,
         COALESCE((

@@ -166,6 +166,18 @@ describe.sequential("MRQ-164 co-speaker double-booking", () => {
     );
     expect(pair.map((conflict) => conflict.person_id).sort())
       .toEqual(["person-marcus-164", "person-priya-164"].sort());
+
+    // And the audience is told which of them is running the room. The public
+    // projection carries participation.role, so a panel stops reading as four
+    // equal names; a plain speaker's card is unchanged because role is null.
+    const published = await request(`/api/v1/events/${DEMO_EVENT_ID}/submissions/sub-164-lightning/publish`, { method: "POST" });
+    expect(published.status).toBe(200);
+    const payload = await (await request("/api/v1/public/agenda?event=aie-nyc-2026")).json<{
+      sessions: Array<{ title: string; speakers: Array<{ name: string; role: string | null }> }>;
+    }>();
+    const session = payload.sessions.find((entry) => entry.title === "Lightning: Agents in Production Q&A")!;
+    expect(session.speakers.find((speaker) => speaker.name === "Priya Raman")?.role).toBe("moderator");
+    expect(session.speakers.find((speaker) => speaker.name === "Marcus Okafor")?.role).toBe(null);
   });
 
   test("CONTRACT · a sponsor contact is not auto-published when a distinct speaker is supplied", async () => {
