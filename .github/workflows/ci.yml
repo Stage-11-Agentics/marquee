@@ -37,6 +37,7 @@ jobs:
       - run: npm run check:design
       - run: npm run check:clocks
       - run: npm run check:schema
+      - run: npx playwright install chromium
       - run: npm run check:speed -- --scope=acceptance
         env:
           MARQUEE_GATE: "1"

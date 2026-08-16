@@ -24,6 +24,7 @@ if (args.ticket !== undefined && !/^MRQ-\d+$/.test(String(args.ticket))) {
 }
 const tsc = resolve(REPOSITORY_ROOT, "node_modules/.bin/tsc");
 const vite = resolve(REPOSITORY_ROOT, "node_modules/.bin/vite");
+const playwright = resolve(REPOSITORY_ROOT, "node_modules/.bin/playwright");
 
 const checks = [
   ["git lock report", "npm", ["run", "check:locks"]],
@@ -41,6 +42,7 @@ const checks = [
   ["route map", "npm", ["run", "check:routes"]],
   ["fixture clocks", "npm", ["run", "check:clocks"]],
   ["schema shape", "npm", ["run", "check:schema"]],
+  ["Playwright Chromium", playwright, ["install", "chromium"]],
   ["AC speed budgets", "npm", ["run", "check:speed", "--", "--scope=acceptance"], { MARQUEE_GATE: "1" }],
   ["hermetic fast suite", "npm", ["test"]],
   ["merged AC trace", "npm", ["run", "trace:ac", "--", "--scope=merged", ...(args.ticket ? [`--ticket=${args.ticket}`] : [])]],
