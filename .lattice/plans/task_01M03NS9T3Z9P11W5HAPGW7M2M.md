@@ -343,12 +343,23 @@ Individual question and taxonomy deletion is a tombstone, not a physical delete:
 
 - `form_fields.deleted_at` makes a question disappear from active form/API
   projections while retaining `submission_answers` and its historical label.
+  The implementation migration adds this nullable tombstone column while
+  retaining the existing non-partial `uq_form_fields_form_key(form_id, key)`
+  unique index; that global per-form key invariant is not relaxed or replaced.
   The event field universe is computed across active forms. Deleting a question
   from one form therefore leaves an event rule valid if another form still
   carries the same key; this form reports skip-not-evaluate. When no active form
-  carries the key, the rule reports a dangling reference. Re-adding that key
-  restores validity without changing the rule ID. Historical record queries may
-  still paint the tombstoned field as deleted.
+  carries the key, the rule reports a dangling reference. A same-form re-add is
+  an in-place revival of the tombstone, never a fresh row: `POST
+  /api/v1/events/{eventId}/forms/{formId}/fields/{fieldId}/restore` clears
+  `deleted_at` on that exact row, preserves its `fieldId` and all
+  `submission_answers` FKs, and is idempotent. The ordinary create route checks
+  for a tombstoned matching key before generating a UUID or inserting; it returns
+  a conflict carrying the existing field/restore target rather than attempting
+  an insert that the global unique index must reject. An active duplicate remains
+  a conflict. Restoring the row makes the key active again and revalidates the
+  rule without changing its rule ID; historical record queries may still paint
+  the field as deleted in the pre-restore history.
 - Track, tag, and level DELETE APIs set `deleted_at` and hide the row from new
   option lists. They do not break `submission_tracks`, `submission_tags`, or
   `submissions.level_id`; records and reviewer scope retain the applied row and
@@ -390,22 +401,36 @@ never accepts a public resume token, and requires the full projection payload:
 }
 ```
 
-The server deduplicates IDs, requires the primary to be in `track_ids` (or
-requires both to be empty/null), rejects deleted/cross-event options, and
-replaces the joins/level in one D1 batch. It never calls the routing evaluator
-and never changes `applied_rule_id`. The batch writes one
-`submission.routing_updated` audit row with actor person, request ID, and
-before/after `{track_ids, primary_track_id, tag_ids, level_id, applied_rule_id}`
-so an organizer change is visibly distinct from a system `submission.routed`
-row.
+The server deduplicates IDs and validates the full replacement against the
+current projection before the D1 batch. Unknown or cross-event IDs always return
+422. Active options are accepted; a deleted track, tag, or level is accepted
+only when that exact ID is already present in the submission's current
+projection, solely to preserve an applied historical value. A deleted ID that
+was not already present is refused with 422, while omitting a currently deleted
+ID is the organizer's explicit removal. The primary must remain in
+`track_ids`—including when it is a preserved deleted track—or both must be empty
+and null. The replacement batch therefore has one unambiguous outcome: active
+additions/replacements are allowed, deleted current values are echoed to retain
+them or omitted to remove them, and no new deleted value can enter history. It
+never calls the routing evaluator and never changes `applied_rule_id`. An exact
+normalized no-op returns 200 with no mutation or audit; any real change replaces
+the joins/level in one D1 batch and writes one `submission.routing_updated` audit
+row with actor person, request ID, and before/after
+`{track_ids, primary_track_id, tag_ids, level_id, applied_rule_id}` so an
+organizer change is visibly distinct from a system `submission.routed` row.
 
 `src/ui/submissions/SubmissionRecordPage.tsx` adds an editable Routing card
 beside the existing read-only Tracks card. Its track multi-select, primary
 choice, tag multi-select, level select, save/cancel states, and copy state
 “Applied once at arrival; manual changes do not re-run rules” use the PUT seam.
-The same card shows the archived/deleted labels needed for history. No public
-submitter UI gains this capability. Tests cover program-write authorization,
-cross-event refusal, atomic replacement, audit before/after, and unchanged
+The card preselects and round-trips current deleted values as read-only
+“Deleted — retained” options, prevents adding deleted values from its active
+selectors, and makes deselection the explicit removal action. The record API
+includes the deleted state/name metadata needed to render that projection. No
+public submitter UI gains this capability. Tests cover program-write
+authorization, cross-event and new-deleted-option refusal, a no-op/full-payload
+round trip after a current option is tombstoned, explicit removal, active
+replacement, atomic replacement, audit before/after, and unchanged
 `applied_rule_id` under repeated edits.
 
 ### F. Concrete public-submit atomicity and compensation boundary
@@ -465,12 +490,18 @@ organizer does not select `routing`, forms may still copy but the receipt says
 that taxonomy/rules did not travel.
 
 For event delete, extend the existing children-before-parents batch in this
-order: `submission_answers`, `submission_tracks`, `submission_tags`, arrival
-claims, assignments/participations, submissions, form fields/forms, routing
-rules, tags, levels, tracks, formats, then the remaining existing event-owned
-tables. Applied-rule FKs are therefore valid until submissions are gone; no
-organization/person `person_events` tags are touched. Tombstones are physically
-removed only in this event cascade.
+explicit order: `submission_answers`, `submission_tracks`, `submission_tags`,
+arrival claims, assignments/participations, `reviewer_track_scopes`,
+submissions, form fields/forms, routing rules, tags, levels, tracks, formats,
+then the remaining existing event-owned tables. `reviewer_track_scopes` is an
+event-scoped child with a composite FK to `(tracks.id, tracks.event_id)` and is
+therefore deleted explicitly before `tracks`, never hidden in “remaining” and
+never left for an FK failure to reveal. The delete integration seam seeds a
+  scope for the event's track, proves the cascade succeeds, asserts the
+  `reviewer_track_scopes` statement precedes the `tracks` statement, and asserts
+  both rows are gone. Applied-rule FKs are therefore valid until
+submissions are gone; no organization/person `person_events` tags are touched.
+Tombstones are physically removed only in this event cascade.
 
 For `reset:demo`, add `submission_tags` and arrival claims immediately beside
 the submission child tables in `WIPE_ORDER` and `DELETE_PLANS`, then add routing
@@ -546,5 +577,79 @@ the answers resemble a public arrival. A second admin create with no asserted
 rule proves the field/answer data alone never invokes routing. This positive
 control sits beside the Sessionize-unrouted test and protects the admin/public,
 import/public, and tenant boundaries while the shared routing seam changes.
+
+## Cycle 2 amendment 2026-08-16 — residual blocker closure
+
+This amendment is limited to the three findings in canonical artifact
+`art_01M05A7D2EB527MT5XW1WJX71Y` at the reviewed head. It supersedes only the
+earlier shorthand that left these seams ambiguous; the previously cleared
+truth-table, precedence, taxonomy, retry/idempotency, applied-history,
+public-submit atomicity, copy/reset/seed, preview, admin-positive-control,
+Sessionize, audit, tenant, apply-once, reviewer-scope, and signed-v1.17
+contracts remain binding.
+
+### 1. Form-field tombstone re-add under the existing unique key
+
+`form_fields` gains nullable `deleted_at` in the implementation migration, but
+the existing global per-form `uq_form_fields_form_key(form_id, key)` remains a
+single non-partial unique index. `DELETE /fields/{fieldId}` sets the tombstone
+and retains the row and its `submission_answers` FK. Re-adding that same key is
+therefore defined as restoring that same row, not inserting a second row:
+
+- `POST /api/v1/events/{eventId}/forms/{formId}/fields/{fieldId}/restore`
+  clears `deleted_at`, preserves the original `fieldId`, key, answer linkage,
+  and historical record identity, and is idempotent. The active form projection
+  and event field universe see the key again, so a rule that was dangling solely
+  because this key had no active occurrence becomes valid without a new rule ID.
+- `POST /api/v1/events/{eventId}/forms/{formId}/fields` checks both active and
+  tombstoned rows before allocating a UUID. An active key returns the existing
+  duplicate-key 409; a tombstoned key returns a conflict that includes its
+  `fieldId`/restore target and never attempts an INSERT. A caller must restore
+  that row (then use the normal PATCH seam if it needs an allowed edit) or choose
+  a different key. This makes the re-add path implementable without changing
+  the existing uniqueness rule.
+- Active lists, positions, and evaluator field universes exclude tombstones;
+  answer/history joins retain them and mark them deleted. Tests must delete a
+  same-form field, prove a same-key create does not create a second row, restore
+  the original row, prove the key is active and the rule revalidates, retain its
+  answer FK, and still reject an active duplicate. A same key on another form
+  remains an independent event-universe occurrence.
+
+### 2. Manual full routing payload: preserve-current / refuse-new deleted IDs
+
+The full PUT payload is a replacement projection, but the server first loads
+the current track/tag/level projection and applies one policy to every option:
+unknown and cross-event IDs are always refused; active IDs may be added; a
+deleted ID is accepted only if already present in that submission's current
+projection and is then preserved only when the payload echoes it; a deleted ID
+not already present is refused. Omitting a current deleted ID is an explicit
+organizer removal, not an accidental consequence of an unrelated edit. The
+primary-in-set invariant applies to preserved deleted tracks too, and
+`level_id: null`/empty tracks remain the explicit clear state.
+
+The record read supplies `deleted_at`/deleted state and names for current
+options. The signed-panel-compatible Routing card preselects preserved deleted
+options with a read-only “Deleted — retained” label, serializes them back into
+the full payload, and exposes removal only by deselection; active selectors
+cannot introduce a deleted option. An exact no-op (including an echoed deleted
+value) returns success without a write or audit. A real replacement is one D1
+batch and one before/after `submission.routing_updated` audit row, leaves
+`applied_rule_id` untouched, and never invokes routing. Tests cover no-op
+round-trip, another-field edit retaining a deleted value, explicit deletion,
+active replacement, new-deleted-option refusal, cross-event refusal, and
+atomic rollback.
+
+### 3. Event-delete FK order for reviewer track scopes
+
+The event cascade explicitly deletes `reviewer_track_scopes` while dependent
+reviewer rows are being removed and before the parent `tracks` delete. The
+scope predicate remains `event_id`-scoped; its composite
+`(track_id, event_id) -> tracks(id, event_id)` FK is the reason this step is
+named in the plan rather than grouped as a residual event table. The deletion
+test seeds the scope and its track, executes the event cascade, and asserts both
+rows are removed with no FK-aborted partial batch, and the source-order test
+keeps the scope delete ahead of the track delete. Reset/copy behavior remains
+as already specified; this amendment changes only the event-delete ordering
+contract.
 
 ## Reset 2026-08-16 by agent:delegator-mrq-229
