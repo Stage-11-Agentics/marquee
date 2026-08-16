@@ -19,6 +19,7 @@ Open-source speaker/session-management platform for conference organizers, built
 - **Stack:** Hono + Preact + Zod on Cloudflare Workers; Vite builds it, TypeScript throughout. Node ≥ 22.18. App code lives in `src/` (`api/`, `routes/`, `ui/`, `db/`, `jobs/`), schema in `migrations/`, tests in `tests/`.
 - **Dev server:** `npx vite dev` — the Cloudflare plugin runs the real Worker locally.
 - **Tests:** `npm test` (Vitest, workers pool). `npm run e2e` for Playwright.
+- **Before every push:** run `npm run prepush` for the mandatory type, docs, clock, no-op, AC-trace, schema, and registry battery.
 - **PR gate:** `npm run pr-gate` before opening a PR.
 - **Live site:** `https://marquee.stage11.dev` — `curl /health` reports the deployed sha. See `DEPLOY.md` before shipping anything.
 
