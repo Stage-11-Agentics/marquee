@@ -2,13 +2,14 @@ import { z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
 import type { Env } from "../index";
+import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { EventRow } from "../db/schema";
 import { forbidden, getAuth, unauthorized } from "../lib/auth/auth-middleware";
 import { authHasRole } from "../lib/auth/scope-resolution";
 import { requireOrgOwner } from "../lib/auth/org-admin";
-import { deletionActorForAuth } from "../lib/events/delete-event";
+import { DemoPeopleRemovalRefusedError, deletionActorForAuth } from "../lib/events/delete-event";
 import { SHIPPED_DEMO_EVENT_ID } from "../lib/reset-demo/demo-fixture";
 import { removeDemoData } from "../lib/reset-demo/remove-demo";
 import { createResetJob, readResetJob } from "../lib/reset-demo/reset-jobs";
@@ -142,7 +143,7 @@ const removeDemoConference = defineApiRoute(
         }),
         "The demo is gone; a second call reports zero.",
       ),
-      ...errorResponses([401, 403, 429, 500]),
+      ...errorResponses([401, 403, 409, 429, 500]),
     },
   },
   (async (context: Context<ApiEnv>) => {
@@ -153,7 +154,15 @@ const removeDemoConference = defineApiRoute(
       auth,
       context.get("requestId") ?? null,
     );
-    const result = await removeDemoData(context.env.DB, environment.MEDIA, actor);
+    let result: Awaited<ReturnType<typeof removeDemoData>>;
+    try {
+      result = await removeDemoData(context.env.DB, environment.MEDIA, actor);
+    } catch (error) {
+      if (error instanceof DemoPeopleRemovalRefusedError) {
+        throw ApiError.conflict(error.message, { reason: error.reason, blockers: error.blockers });
+      }
+      throw error;
+    }
     context.header("Cache-Control", "no-store");
     return context.json(
       {

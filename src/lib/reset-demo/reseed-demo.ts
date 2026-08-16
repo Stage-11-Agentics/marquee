@@ -78,15 +78,17 @@ export const WIPE_ORDER = [
   "auth_sessions",
   "api_tokens",
   "memberships",
+  "person_aliases",
+  "person_merges",
   "person_list_members",
   "person_lists",
   "person_events",
   "mirror_credentials",
+  "mirror_outbox",
   "people",
   "companies",
   "attachments",
   "event_settings",
-  "mirror_outbox",
   "mirror_state",
   "events",
   "organizations",
@@ -131,8 +133,12 @@ const ORG = [DEMO_ORGANIZATION_ID] as const;
  * a broken reset nobody notices until the demo will not reset.
  */
 const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
-  // Global control-plane state: it must survive a demo reset (see above).
-  mirror_credentials: null,
+  // Global control-plane state survives. The actor pointer is nullable after
+  // MRQ-235, so preserve the encrypted credential while removing a demo seat.
+  mirror_credentials: {
+    sql: "UPDATE mirror_credentials SET set_by_person_id = NULL, updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000 WHERE org_id = ? AND set_by_person_id IN (SELECT id FROM people WHERE org_id = ?)",
+    bindings: [DEMO_ORGANIZATION_ID, DEMO_ORGANIZATION_ID],
+  },
   mirror_state: null,
   calendar_sequence_ledger: null,
   outbox_calendar_parts: {
@@ -239,8 +245,8 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
     bindings: ORG,
   },
   audit_log: {
-    sql: `DELETE FROM audit_log WHERE event_id IN (${ORG_EVENTS})`,
-    bindings: ORG,
+    sql: `DELETE FROM audit_log WHERE org_id = ? OR event_id IN (${ORG_EVENTS})`,
+    bindings: [DEMO_ORGANIZATION_ID, DEMO_ORGANIZATION_ID],
   },
   file_comments: {
     sql: `DELETE FROM file_comments WHERE event_id IN (${ORG_EVENTS})`,
@@ -368,6 +374,14 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
     sql: `DELETE FROM memberships WHERE org_id = ? OR event_id IN (${ORG_EVENTS})`,
     bindings: [DEMO_ORGANIZATION_ID, DEMO_ORGANIZATION_ID],
   },
+  person_aliases: {
+    sql: "DELETE FROM person_aliases WHERE org_id = ?",
+    bindings: ORG,
+  },
+  person_merges: {
+    sql: "DELETE FROM person_merges WHERE org_id = ?",
+    bindings: ORG,
+  },
   // People annotations and Lists are org-scoped, so a reset that wipes the demo
   // organization's people has to take their notes, tags, stages, and saved lists
   // with them — a surviving `person_events` row would reference a person the
@@ -406,8 +420,11 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   // Neither event- nor org-columned: the scope lives inside the JSON payload,
   // which is why the org rewrite has to reach in through json_extract.
   mirror_outbox: {
-    sql: `DELETE FROM mirror_outbox WHERE json_extract(payload, '$.event_id') IN (${ORG_EVENTS}) OR json_extract(payload, '$.org_id') = ?`,
-    bindings: [DEMO_ORGANIZATION_ID, DEMO_ORGANIZATION_ID],
+    sql: `DELETE FROM mirror_outbox
+           WHERE json_extract(payload, '$.event_id') IN (${ORG_EVENTS})
+              OR json_extract(payload, '$.org_id') = ?
+              OR (table_name IN ('people', 'person') AND row_id IN (SELECT id FROM people WHERE org_id = ?))`,
+    bindings: [DEMO_ORGANIZATION_ID, DEMO_ORGANIZATION_ID, DEMO_ORGANIZATION_ID],
   },
   events: {
     sql: "DELETE FROM events WHERE org_id = ?",
@@ -435,29 +452,39 @@ function scopedWipeStatements(db: D1Database): D1PreparedStatement[] {
   });
 }
 
-/** Remove only the demo event's opaque upload partition; unrelated objects stay. */
-export async function deleteDemoObjects(media: R2Bucket, eventId = DEMO_EVENT_ID): Promise<number> {
+/**
+ * Person headshots are polymorphic attachment rows, not schema tables of their
+ * own. Sever their people pointers before deleting the attachment rows so the
+ * migration-derived WIPE_ORDER remains a physical-table inventory.
+ */
+function personHeadshotCleanupStatements(db: D1Database): D1PreparedStatement[] {
+  return [
+    db.prepare("UPDATE people SET headshot_attachment_id = NULL WHERE org_id = ?").bind(...ORG),
+    db.prepare("DELETE FROM attachments WHERE owner_type = 'person_headshot' AND owner_id IN (SELECT id FROM people WHERE org_id = ?)").bind(...ORG),
+  ];
+}
+
+/** Enumerate one opaque upload partition without mutating R2. */
+async function listPartitionKeys(media: R2Bucket, eventId: string): Promise<string[]> {
   const prefix = "uploads/" + eventId + "/";
   let cursor: string | undefined;
-  let deleted = 0;
+  const keys: string[] = [];
 
   do {
     const page = cursor
       ? await media.list({ prefix, cursor })
       : await media.list({ prefix });
-    const keys = page.objects.map((object) => object.key);
-    if (keys.length > 0) {
-      await media.delete(keys);
-      deleted += keys.length;
-    }
-    if (!page.truncated) return deleted;
+    keys.push(...page.objects.map((object) => object.key));
+    if (!page.truncated) return keys;
     if (!page.cursor) throw new Error("R2 listed a truncated page without a cursor");
     cursor = page.cursor;
   } while (true);
 }
 
 /**
- * The upload partitions of every conference in the demo organization.
+ * Capture the exact object set that belongs to the org-wide reset before its
+ * D1 batch. Listing is intentionally side-effect free; deletion happens only
+ * after the database commit succeeds.
  *
  * The D1 sweep is org-wide, so this has to be too: deleting a created
  * conference's `attachments` rows while leaving `uploads/<its id>/` in the
@@ -468,21 +495,43 @@ export async function deleteDemoObjects(media: R2Bucket, eventId = DEMO_EVENT_ID
  * objects behind; the nightly upload orphan sweep is the backstop. Stating that
  * is the honest version of a guarantee this layer cannot give.
  */
-export async function deleteDemoOrgObjects(
+async function listDemoOrgObjectKeys(
   db: D1Database,
   media: R2Bucket,
   orgId = DEMO_ORGANIZATION_ID,
-): Promise<number> {
+): Promise<string[]> {
   const events = await db
     .prepare("SELECT id FROM events WHERE org_id = ? ORDER BY created_at ASC")
     .bind(orgId)
     .all<{ id: string }>();
+  const eventIds = events.results.map((event) => event.id);
+  if (!eventIds.includes(DEMO_EVENT_ID)) eventIds.push(DEMO_EVENT_ID);
+  const partitions = await Promise.all(eventIds.map((eventId) => listPartitionKeys(media, eventId)));
+  return [...new Set(partitions.flat())];
+}
+
+/** Delete only keys captured before a successful D1 commit. */
+async function deleteExactObjectKeys(
+  db: D1Database,
+  media: R2Bucket,
+  keys: readonly string[],
+): Promise<number> {
+  const uniqueKeys = [...new Set(keys)];
+  const stillReferenced = new Set<string>();
+  for (let offset = 0; offset < uniqueKeys.length; offset += 90) {
+    const chunk = uniqueKeys.slice(offset, offset + 90);
+    const rows = await db.prepare(
+      "SELECT r2_key FROM attachments WHERE r2_key IN (" + chunk.map(() => "?").join(", ") + ")",
+    ).bind(...chunk).all<{ r2_key: string }>();
+    for (const row of rows.results) stillReferenced.add(row.r2_key);
+  }
+  const deletable = uniqueKeys.filter((key) => !stillReferenced.has(key));
   let deleted = 0;
-  for (const event of events.results) deleted += await deleteDemoObjects(media, event.id);
-  // The seeded partition is swept even when its row is already gone, so a reset
-  // after a manual delete still clears the objects it left.
-  if (!events.results.some((event) => event.id === DEMO_EVENT_ID)) {
-    deleted += await deleteDemoObjects(media, DEMO_EVENT_ID);
+  for (let offset = 0; offset < deletable.length; offset += 1_000) {
+    const chunk = deletable.slice(offset, offset + 1_000);
+    if (chunk.length === 0) continue;
+    await media.delete(chunk);
+    deleted += chunk.length;
   }
   return deleted;
 }
@@ -490,7 +539,8 @@ export async function deleteDemoOrgObjects(
 /**
  * AC-230: the owned D1 wipe and full shipped-seed insert run in ONE D1 batch.
  * A concurrent visitor observes the old state or the new state, never a
- * partially reseeded demo. R2 cleanup is performed first and fails closed.
+ * partially reseeded demo. R2 cleanup is enumerated first but performed only
+ * after the D1 commit, with a second attachment-reference check before delete.
  *
  * suppress_mirror: these writes enqueue zero mirror_outbox rows; the queue
  * consumer enqueues exactly one mirror reconcile job after this batch commits.
@@ -501,7 +551,7 @@ export async function reseedDemo(
   media?: R2Bucket,
 ): Promise<ReseedResult> {
   if (!media) throw new Error("MEDIA binding is required for demo reset");
-  const deletedObjects = await deleteDemoOrgObjects(db, media);
+  const objectKeys = await listDemoOrgObjectKeys(db, media);
   const existingReferenceFloors = await db.prepare(
     "SELECT event_id, last_sequence FROM submission_reference_ledger WHERE event_id IN (SELECT id FROM events WHERE org_id = ?)",
   ).bind(DEMO_ORGANIZATION_ID).all<{ event_id: string; last_sequence: number }>();
@@ -521,11 +571,13 @@ export async function reseedDemo(
   );
   await db.batch([
     suppressMirror,
+    ...personHeadshotCleanupStatements(db),
     ...scopedWipeStatements(db),
     ...fixture.rows.map((row) => db.prepare(row.statement).bind(...row.bindings)),
     ...referenceLedgerStatements,
     releaseMirror,
   ]);
+  const deletedObjects = await deleteExactObjectKeys(db, media, objectKeys);
   return {
     wipedTables: WIPE_ORDER.length,
     insertedRows: fixture.rows.length,

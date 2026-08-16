@@ -146,6 +146,7 @@ const activitySchema = z.object({
   detail: z.string().nullable(),
   actor_name: z.string().nullable(),
   created_at: z.number().int(),
+  undo_merge_id: z.string().optional(),
 });
 const activityListResponse = z.object({
   data: z.array(activitySchema),

@@ -102,6 +102,8 @@ const SEEDED_COUNTS: Record<string, number> = {
   person_lists: 0,
   person_events: 2,
   people: 1109,
+  person_aliases: 0,
+  person_merges: 0,
   // Org-scoped like people, and swept after them: `people.company_id` points here.
   companies: 2,
   attachments: 40,

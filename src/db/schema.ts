@@ -317,6 +317,31 @@ export interface PersonRow extends MutableRecord {
   title: string | null;
 }
 
+export interface PersonMergeRow extends MutableRecord {
+  activity_id: Id | null;
+  alias_changes_json: JsonText;
+  event_scope_json: JsonText;
+  idempotency_key: string;
+  movement_receipts_json: JsonText;
+  org_id: Id;
+  retired_person_id: Id;
+  retired_snapshot_json: JsonText;
+  status: "clean" | "undone" | "undo_blocked";
+  summary_json: JsonText;
+  survivor_after_json: JsonText;
+  survivor_before_json: JsonText;
+  survivor_person_id: Id;
+  undo_reason: string | null;
+  undo_result_json: JsonText | null;
+}
+
+export interface PersonAliasRow extends MutableRecord {
+  email: string;
+  merge_id: Id;
+  org_id: Id;
+  person_id: Id;
+}
+
 export interface PersonEventRow extends ImmutableRecord {
   actor_person_id: Id | null;
   kind: "note" | "tag" | "stage";
@@ -855,7 +880,7 @@ export interface MirrorCredentialRow extends MutableRecord {
   last_verified_at: EpochMilliseconds | null;
   org_id: Id;
   set_at: EpochMilliseconds;
-  set_by_person_id: Id;
+  set_by_person_id: Id | null;
   token_ciphertext: string;
   token_fingerprint: string;
   webhook_secret_ciphertext: string | null;
@@ -1008,6 +1033,8 @@ export const CORE_TABLE_NAMES = [
   "waves",
   "attachments",
   "people",
+  "person_merges",
+  "person_aliases",
   "memberships",
   "auth_sessions",
   "magic_links",
@@ -1070,7 +1097,7 @@ export const CORE_TABLE_NAMES = [
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 68 as const;
+export const CORE_TABLE_COUNT = 70 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -1088,7 +1115,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 68>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 70>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -1130,9 +1157,11 @@ export const CORE_TABLES = {
   outbox_calendar_parts: "outbox_calendar_parts",
   participations: "participations",
   people: "people",
+  person_aliases: "person_aliases",
   person_events: "person_events",
   person_list_members: "person_list_members",
   person_lists: "person_lists",
+  person_merges: "person_merges",
   public_schedules: "public_schedules",
   schedule_claims: "schedule_claims",
   session_star_beacons: "session_star_beacons",
@@ -1201,9 +1230,11 @@ export interface CoreTableRows {
   outbox_calendar_parts: OutboxCalendarPartRow;
   participations: ParticipationRow;
   people: PersonRow;
+  person_aliases: PersonAliasRow;
   person_events: PersonEventRow;
   person_list_members: PersonListMemberRow;
   person_lists: PersonListRow;
+  person_merges: PersonMergeRow;
   public_schedules: PublicScheduleRow;
   schedule_claims: ScheduleClaimRow;
   session_star_beacons: SessionStarBeaconRow;
@@ -1283,9 +1314,11 @@ interface CoreDefaultColumns {
   outbox_calendar_parts: never;
   participations: "confirmation_status";
   people: "custom_fields" | "is_demo" | "last_write_source" | "social_links";
+  person_aliases: never;
   person_events: never;
   person_list_members: never;
   person_lists: "config_json";
+  person_merges: never;
   public_schedules: never;
   schedule_claims: "minted_person";
   session_star_beacons: never;
@@ -1343,6 +1376,8 @@ export type RoomInsert = CoreInsert<"rooms">;
 export type WaveInsert = CoreInsert<"waves">;
 export type AttachmentInsert = CoreInsert<"attachments">;
 export type PersonInsert = CoreInsert<"people">;
+export type PersonAliasInsert = CoreInsert<"person_aliases">;
+export type PersonMergeInsert = CoreInsert<"person_merges">;
 export type PersonEventInsert = CoreInsert<"person_events">;
 export type PersonListInsert = CoreInsert<"person_lists">;
 export type PersonListMemberInsert = CoreInsert<"person_list_members">;
