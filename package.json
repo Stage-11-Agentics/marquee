@@ -35,6 +35,7 @@
     "smoke:ics": "node scripts/checks/smoke-ics.mjs",
     "check:skill-agent": "node scripts/checks/stub-command.mjs check:skill-agent MRQ-44 \"SKILL, CLI, and isolated agent runner are not implemented\"",
     "check:design": "node scripts/checks/verify-design-contract.mjs",
+    "prepush": "node scripts/prepush.mjs",
     "pr-gate": "node scripts/checks/pr-gate.mjs"
   },
   "engines": {
