@@ -2,7 +2,7 @@
 
 **Status:** v1.4 contract revision for client prototype review · updated 2026-08-09; not yet signed for orchestration.
 **Authority once signed:** this file defines what "done" means for the Marquee build and *how an agent proves each criterion without a human in the loop*. The build fleet writes against it; the terminal auditor — who did not write the spec — runs it.
-**Upstream:** `sequence/USER_STORIES.md` (269 live criteria through AC-274 — AC-270–272 reserved, unminted; AC-239 struck) · `sequence/research/seams-feasibility.md` · `PHILOSOPHY.md` · `sequence/research/competition-requirements.md` §3 · `prototypes/PROTOTYPE-CONTRACT.md` + `prototypes/pipeline-v1.1/DIRECTION.md`.
+**Upstream:** `sequence/USER_STORIES.md` (269 live criteria through AC-274 — AC-270–272 minted by Amendment 29 into the post-deadline band, §2.12; AC-239 struck) · `sequence/research/seams-feasibility.md` · `PHILOSOPHY.md` · `sequence/research/competition-requirements.md` §3 · `prototypes/PROTOTYPE-CONTRACT.md` + `prototypes/pipeline-v1.1/DIRECTION.md`.
 
 **Build scope: 207 live criteria — read the tier, not the number.** Amendments allocate IDs without implying tier; AC-239 is struck and deliberately has no test. **`sequence/USER_STORIES.md` §"Scope at a glance" is the authority on tier membership**; this file follows it and never re-derives it from ID arithmetic.
 
@@ -745,6 +745,28 @@ reconciliation form one calendar truth seam.
 | AC-327 | PD | `auto` | `test:` simulate a REQUEST whose idempotent outbox row exists but invite/ledger and queue admission do not; assert the resumed request requeues that row with no second revision. |
 | AC-328 | PD | `auto` | `test:` remove an invited participant through the same batch fence used by person removal, including the `submitter` recipient role, and assert its cancellation commits with participation deletion. Conference delete and import undo remain explicit no-CANCEL paths. |
 
+### 2.12 Post-deadline participant-model band — AC-270 – AC-272, AC-329 – AC-336 *(Amendment 29, 2026-08-16)*
+
+**Outside the Wednesday terminal gate, on the same terms as §2.4–§2.11.** Not
+folded into the 210 live in-scope count or tier arithmetic. Stories: US-82
+(promoted from reserve) and US-95 (`sequence/USER_STORIES.md` Amendment 29).
+The role authority, the task-template targeting, the public participant list and
+the recipient split form one participant seam.
+
+| AC | Tier | Tag | How verified |
+|---|---|---|---|
+| AC-270 | PD | `auto` | `test:` submit with the on-behalf-of disclosure on and assert two `people` rows, a `submitter` participation for the discloser and a `speaker` participation for the named speaker, with the speaker card's profile fields filed against the speaker. A second submission with the disclosure off asserts one person in both roles — the assertion is that nothing changed, not a reading of the diff. |
+| AC-271 | PD | `auto` | `test:` assert the confirmation is addressed to the submitter while the scoped profile request goes to the speaker; assert the decision cascade resolves the submitter as its single recipient and sends exactly one decision email per submission whatever the participant count; assert the record projection labels both roles. |
+| AC-272 | PD | `auto` | **Satisfied by MRQ-160/MRQ-162 before this amendment; recorded, not rebuilt.** Its portal seat is covered by `submitter-seat.MRQ-154` and `submitter-portal.MRQ-150`; the fan-out half is re-asserted here, where an off-stage submitter is shown to be assigned no tasks. |
+| AC-329 | PD | `auto` | `test:` submit with three participants and a role each; assert three participations with the right roles plus the submitter row, positions in the submitter's order, and the advertised `max_speakers` equal to the configured number rather than clamped. A form still carrying `co_speaker_*` fields submits unchanged, and a resumed draft restores its roster. |
+| AC-330 | PD | `auto` | `test:` accept a session with a speaker, a co-speaker and a moderator against one template targeting all four on-stage roles and one narrowed to `speaker`; assert the fan-out matches the targeting, that reconciling twice assigns once per template/submission/person even when a person holds two roles, and that a malformed `applies_to_roles` reaches everyone rather than nobody. |
+| AC-331 | PD | `auto` | `test:` the MRQ-129 copy-manifest drift guard, which compares the declared column set against the live `PRAGMA table_info`. Verified by experiment to fail when `applies_to_roles` is omitted from the manifest, so this row asserts a guard that can still fail rather than a fix that has already been made. |
+| AC-332 | PD | `auto` | `test:` seed an organization contact with a full profile, then submit publicly naming a different name against that address; assert the contact's name, title and bio are untouched and no new duplicate row appears, while an unknown address does create a person. |
+| AC-333 | PD | `auto` | `test:` enumeration — assert the declared role sets and that the three fan-out modules read them rather than carrying a literal `role IN ('…')` list. Behaviourally, `test:` an accepted moderator holding tasks, a calendar invite, and the membership row that gates portal sign-in. |
+| AC-334 | PD | `auto` | `test:` a submission whose submitter and speaker differ resolves the submitter as the decision recipient in the cascade, in the Decided · not notified view, and in the delivery-health read; assert one decision email. |
+| AC-335 | PD | `auto` | `test:` two people shared across one overlapping pair produce two person-conflicts naming both. Verified to fail against the truncated behaviour before the fix, so the row asserts the defect and not merely the result. |
+| AC-336 | PD | `auto` | `test:` publish a session with a moderator and assert the public agenda payload carries `role: "moderator"` for them and `null` for a plain speaker; the card renders the label through the existing `participationRoleLabel`. |
+
 ---
 
 ## 3. Felt checkpoints
@@ -789,7 +811,7 @@ Run in order by the final auditor, who did not write the spec. Every item is pas
 | 17 | Felt checkpoints signed | C1, C2, C3, C5, C6, C7 verdicts | All recorded with dates; C7 run after the last functional change |
 | 18 | Tier A complete, no waivers | Coverage report | **AC-1 – AC-90 plus AC-231, AC-234, AC-240, and AC-244–246** all green. AC-239 is struck; AC-233 is cuttable — read §"Build scope", not the ID range |
 | 19 | Cut line stated | Gate report, against **`BUILDPLAN.md` §5's ranks** (the single rank authority) | Every cut Tier B story named with its rank, its ACs, and the reason. The 🔒 gate-backing tickets (M-45, M-38, M-39, M-56) are outside the cut band and may never appear here — **explicitly including AC-233 (Speaker Handbook) if it was cut**, since it is the one cuttable criterion sitting on a Tier A story and is the easiest to lose silently. Silently missing is a failure; deliberately cut is not |
-| 19b | **Known limitations named, not discovered** | Gate report | The report carries a *Known limitations* section, and it names at minimum the **submitter/speaker fusion**: the public form collects one address, so an assistant submitting for their director receives the confirmation, the portal link, the tasks, and the calendar invite. Cite **AC-223 / AC-224** (already specified, post-competition band) and `SPEC.md` §10. Ruled extra credit 2026-08-10. A limitation a judge meets on screen with no prior mention is a failure of this gate even though the behaviour itself is out of scope |
+| 19b | **Known limitations named, not discovered** | Gate report | The report carries a *Known limitations* section, and it names at minimum **per-person answers**: form answers are talk-level, so a form asking "what is your dietary requirement?" collects one answer for a panel of four and the organizer chases the other three by hand. Per-person *properties* (bio, headshot, title, company, socials, dietary/accessibility) do reach each person, through the scoped profile link every participant now receives; per-person *answers to this form's questions* are the gap, and the direction is a `person_field_values` table rather than a `participant_id` on `submission_answers`. Cite `SPEC.md` §10. **The submitter/speaker fusion this gate previously named is closed** by AC-270 – AC-272 (Amendment 29) and must not be reported as a limitation. A limitation a judge meets on screen with no prior mention is a failure of this gate even though the behaviour itself is out of scope |
 
 ---
 
@@ -844,6 +866,8 @@ Two carry enforcement obligations even though their UI is deferred, because retr
 ---
 
 ## Amendment log
+
+**Amendment 29 — the participant model, finished, 2026-08-16 (MRQ-224).** §2.12 adds the participant-model band: AC-329 – AC-336 minted, and the reserved AC-270 – AC-272 promoted out of reserve because the build now exists (AC-272 recorded as already satisfied by MRQ-160/162 rather than rebuilt). Gate 19b's named limitation changes from the submitter/speaker fusion — closed by this band — to per-person answers, which is what actually remains. Post-deadline; the live in-scope count and tier arithmetic are unchanged.
 
 **Amendment 26 — one named mail-idempotency seam, 2026-08-15, plumbing fold.** Folds `USER_STORIES.md` Amendment 26 and `SPEC.md` §3.8. AC-117's verification now includes the full pre-fix registry byte-identity inventory; **AC-314** is the post-deadline lock for durable manual-nudge retries and fresh new nudges. The live count, tier arithmetic, and terminal gate remain unchanged.
 

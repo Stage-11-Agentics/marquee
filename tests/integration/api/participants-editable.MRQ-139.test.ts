@@ -185,14 +185,23 @@ describe.sequential("MRQ-139 · a submission's participants are editable after i
   });
 
   test("CONTRACT · MRQ-139 · the public form advertises the number of people it can actually collect", async () => {
-    // The form is configured for four speakers; its fields hold a primary and
-    // one co-speaker. Four was a number no applicant could ever satisfy.
+    // This form is configured for four speakers. MRQ-139 clamped that to two
+    // and was right to: the shape underneath was a fixed pair of slots — a
+    // primary plus one co-speaker — so four was a number no applicant could
+    // ever satisfy, and an applicant reads the shortfall as a bug in the form
+    // rather than a limit of it.
+    //
+    // MRQ-224 removed the clamp by removing its cause. Participants are a list,
+    // so the organizer's number is now the honest one and the assertion is that
+    // the two agree rather than that one is trimmed to fit the other. The
+    // criterion has not changed — the form still advertises only what it can
+    // collect — only the number it can collect has.
     const response = await SELF.fetch(`${ORIGIN}/api/v1/public/forms/mrq-139-cfp`);
     expect(response.status).toBe(200);
     const state = await response.json() as { form: { max_speakers: number; min_speakers: number } };
-    expect(state.form.max_speakers).toBe(2);
-    expect(state.form.min_speakers).toBe(1);
     const configured = await env.DB.prepare("SELECT max_speakers FROM forms WHERE id = ?").bind(FORM_ID).first<{ max_speakers: number }>();
     expect(Number(configured?.max_speakers)).toBe(4);
+    expect(state.form.max_speakers).toBe(Number(configured?.max_speakers));
+    expect(state.form.min_speakers).toBe(1);
   });
 });

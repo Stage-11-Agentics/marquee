@@ -81,7 +81,7 @@ async function latestSubmission(): Promise<{ id: string; submitter_person_id: st
     .first<{ id: string; submitter_person_id: string; participants_json: string | null }>())!;
 }
 
-test("CONTRACT · MRQ-224 · a submission with three participants lands three roles and does not rename a contact", async () => {
+test("AC-329, AC-332 · a submission with three participants lands three roles and does not rename a contact", async () => {
   const response = await submit({
     answers: { title: "The panel", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
     participants: [
@@ -119,7 +119,7 @@ test("CONTRACT · MRQ-224 · a submission with three participants lands three ro
   expect(invites.results.map((row) => row.to_email)).toEqual(["ana@example.com", "dana@example.com"]);
 });
 
-test("CONTRACT · MRQ-224 · the on-behalf-of disclosure splits the submitter from the speaker (AC-270/271)", async () => {
+test("AC-270, AC-271 · the on-behalf-of disclosure splits the submitter from the speaker", async () => {
   const response = await submit({
     answers: { title: "The keynote", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
     on_behalf_of: { name: "Sam Chen", email: "sam@example.com" },
@@ -146,7 +146,7 @@ test("CONTRACT · MRQ-224 · the on-behalf-of disclosure splits the submitter fr
   expect(invite?.to_email).toBe("robin@example.com");
 });
 
-test("CONTRACT · MRQ-224 · the disclosure off is exactly what shipped before", async () => {
+test("AC-270 · the disclosure off is exactly what shipped before", async () => {
   const response = await submit({
     answers: { title: "A plain talk", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
     participants: [],
@@ -163,7 +163,7 @@ test("CONTRACT · MRQ-224 · the disclosure off is exactly what shipped before",
   expect(Number(invites?.total)).toBe(0);
 });
 
-test("CONTRACT · MRQ-224 · max_speakers finally means what it says", async () => {
+test("AC-329 · max_speakers finally means what it says", async () => {
   const form = await (await request(`/api/v1/public/forms/${SLUG}`)).json<{ form: { max_speakers: number } }>();
   // The old shape held two people whatever the organizer typed, so the number
   // was clamped honestly to two. The shape is a list now, so four means four.
@@ -181,7 +181,7 @@ test("CONTRACT · MRQ-224 · max_speakers finally means what it says", async () 
   expect(tooMany.status).toBe(422);
 });
 
-test("CONTRACT · MRQ-224 · a participant with a name and no address is refused, not dropped", async () => {
+test("AC-329 · a participant with a name and no address is refused, not dropped", async () => {
   const response = await submit({
     answers: { title: "Half a panel", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
     participants: [{ name: "Ana R.", email: "", role: "moderator" }],

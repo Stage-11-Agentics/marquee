@@ -42,7 +42,7 @@ function sourceOf(file: string): string {
 }
 
 describe("MRQ-224 · the participant role authority", () => {
-  test("CONTRACT · being on stage and holding the work are the same population", () => {
+  test("AC-333 · being on stage and holding the work are the same population", () => {
     expect([...WORK_HOLDING_PARTICIPATION_ROLES]).toEqual([...SPEAKING_PARTICIPATION_ROLES]);
     expect([...WORK_HOLDING_PARTICIPATION_ROLES]).toEqual([
       "speaker",
@@ -52,7 +52,7 @@ describe("MRQ-224 · the participant role authority", () => {
     ]);
   });
 
-  test("CONTRACT · the calendar adds the submitter to the stage, and nothing else", () => {
+  test("AC-333 · the calendar adds the submitter to the stage, and nothing else", () => {
     // AC-328 binds a calendar-recipient `submitter` by name: a cancellation has
     // to reach them when their participation is removed. Derived rather than
     // typed out, so widening the stage widens the invite list with it.
@@ -62,7 +62,7 @@ describe("MRQ-224 · the participant role authority", () => {
     ]);
   });
 
-  test("CONTRACT · the decision ladder is the program ladder inverted (AC-223)", () => {
+  test("AC-334 · the decision ladder is the program ladder inverted", () => {
     // Same people, opposite ends. A decision answers whoever submitted the
     // abstract; the program names whoever will deliver it.
     expect(DECISION_RECIPIENT_ROLES[0]).toBe("submitter");
@@ -70,12 +70,15 @@ describe("MRQ-224 · the participant role authority", () => {
     expect([...DECISION_RECIPIENT_ROLES].sort()).toEqual([...PROGRAM_PRIMACY_ROLES].sort());
   });
 
-  test.each(CONSUMERS)("CONTRACT · $file reads the authority instead of restating it", ({ file, set }) => {
-    const source = sourceOf(file);
-    expect(source).toContain(set);
-    // A literal `role IN ('…')` over participations is exactly the drift this
-    // ticket removed. `roleInSql` renders the same SQL from the named set.
-    expect(source).not.toMatch(/(?:part|participation|speaker_part)\.role IN \('/);
+  test("AC-333 · all three fan-outs read the authority instead of restating it", () => {
+    for (const { file, set } of CONSUMERS) {
+      const source = sourceOf(file);
+      expect(source, `${file} should read ${set}`).toContain(set);
+      // A literal `role IN ('…')` over participations is exactly the drift this
+      // ticket removed. `roleInSql` renders the same SQL from the named set.
+      expect(source, `${file} still carries a literal participation role list`)
+        .not.toMatch(/(?:part|participation|speaker_part)\.role IN \('/);
+    }
   });
 
   test("CONTRACT · roleInSql renders a bound-free IN list over the named set", () => {
@@ -84,7 +87,7 @@ describe("MRQ-224 · the participant role authority", () => {
     );
   });
 
-  test("CONTRACT · the primacy ladder ranks every role it admits, in order", () => {
+  test("AC-334 · the primacy ladder ranks every role it admits, in order", () => {
     const sql = primaryParticipantSql({
       submissionId: "s.id",
       column: "email",

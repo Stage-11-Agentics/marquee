@@ -9,8 +9,9 @@
 import { beforeEach, expect, test } from "vitest";
 
 import { applyMigrations, env } from "./apply-migrations";
-import { reconcileTaskSet } from "../../src/jobs/cascade/decisions";
+import { reconcileTaskSet, writeSubmissionDecision } from "../../src/jobs/cascade/decisions";
 import { WORK_HOLDING_PARTICIPATION_ROLES } from "../../src/lib/participants";
+import { COPY_TABLES } from "../../src/lib/events/copy-manifest";
 
 const NOW = Date.now();
 const ORG_ID = "org_mrq224";
@@ -89,7 +90,7 @@ async function assignees(templateId: string): Promise<string[]> {
   return rows.results.map((row) => row.person_id).sort();
 }
 
-test("CONTRACT · MRQ-224 · a task goes to the roles its template names, and no further", async () => {
+test("AC-330, AC-272 · a task goes to the roles its template names, and no further", async () => {
   await reconcileTaskSet(env.DB, EVENT_ID, [SUBMISSION_ID], NOW);
 
   // "Upload your slides" is everyone on stage — including the moderator, who
@@ -105,7 +106,7 @@ test("CONTRACT · MRQ-224 · a task goes to the roles its template names, and no
   expect(await assignees(EVERYONE_TEMPLATE)).not.toContain(OFF_STAGE_SUBMITTER);
 });
 
-test("CONTRACT · MRQ-224 · reconciling twice assigns once, per template and person", async () => {
+test("AC-330 · reconciling twice assigns once, per template and person", async () => {
   await reconcileTaskSet(env.DB, EVENT_ID, [SUBMISSION_ID], NOW);
   const first = await assignees(EVERYONE_TEMPLATE);
   await reconcileTaskSet(env.DB, EVENT_ID, [SUBMISSION_ID], NOW + 1_000);
@@ -126,7 +127,7 @@ test("CONTRACT · MRQ-224 · reconciling twice assigns once, per template and pe
   expect(await assignees(EVERYONE_TEMPLATE)).toEqual(first);
 });
 
-test("CONTRACT · MRQ-224 · a template with unreadable targeting reaches everyone, never nobody", async () => {
+test("AC-330 · a template with unreadable targeting reaches everyone, never nobody", async () => {
   // No CHECK stands behind this column, so an import, a hand-run statement, or
   // a future migration can leave it malformed. Reaching everyone is the
   // behaviour that predates the column and is obvious the moment it is wrong; a
@@ -139,7 +140,7 @@ test("CONTRACT · MRQ-224 · a template with unreadable targeting reaches everyo
   expect(await assignees(EVERYONE_TEMPLATE)).toEqual([CO_SPEAKER, MODERATOR, SPEAKER].sort());
 });
 
-test("CONTRACT · MRQ-224 · acceptance seats every on-stage participant in the event", async () => {
+test("AC-333 · acceptance seats every on-stage participant in the event", async () => {
   await reconcileTaskSet(env.DB, EVENT_ID, [SUBMISSION_ID], NOW);
   const rows = await env.DB
     .prepare("SELECT person_id FROM memberships WHERE event_id = ? AND role = 'speaker'")
@@ -149,4 +150,45 @@ test("CONTRACT · MRQ-224 · acceptance seats every on-stage participant in the 
   // comms audience read. The moderator is the person this ticket exists for.
   expect(rows.results.map((row) => row.person_id).sort()).toEqual([CO_SPEAKER, MODERATOR, SPEAKER].sort());
   expect(rows.results.map((row) => row.person_id)).not.toContain(OFF_STAGE_SUBMITTER);
+});
+
+test("AC-334 · the decision answers the submitter, once, whoever is on stage", async () => {
+  // Sam submitted for Robin and never steps on stage. Before this ticket the
+  // recipient ladder preferred the speaker and fell back to the submitter — the
+  // exact inverse of AC-223 — so Sam never learned the abstract was decided,
+  // and Robin was answered about a submission they did not send.
+  await env.DB.prepare("UPDATE submissions SET status = 'submitted' WHERE id = ?").bind(SUBMISSION_ID).run();
+  const decided = await writeSubmissionDecision({
+    db: env.DB,
+    queue: env.MAIL_QUEUE,
+    eventId: EVENT_ID,
+    submissionId: SUBMISSION_ID,
+    actor: { kind: "user", personId: SPEAKER, requestId: null },
+    recommendation: "approve",
+    now: NOW + 1_000,
+  });
+  expect(decided.outcome).toBe("succeeded");
+
+  const mail = await env.DB
+    .prepare("SELECT to_email, template_key FROM outbox WHERE event_id = ?")
+    .bind(EVENT_ID)
+    .all<{ to_email: string; template_key: string }>();
+  // Exactly one row in the whole event's outbox, addressed to the submitter.
+  // The count is the assertion as much as the address is: fanning a decision
+  // across four participants turns one decision into four emails nobody asked
+  // for, and the Decided · not notified view stays per-submission because of it.
+  expect(mail.results.map((row) => row.to_email)).toEqual(["sam@example.com"]);
+  expect(mail.results[0]?.template_key).toBe("acceptance");
+});
+
+test("AC-331 · the copy manifest carries the targeting a clone would otherwise reset", async () => {
+  // The MRQ-129 drift guard proves the manifest matches the live table. This
+  // asserts the narrower thing that matters: `applies_to_roles` copies
+  // VERBATIM. Landing it under `nulls` or `constants` would satisfy that guard
+  // and still reset every narrowed template to the default, inside an operation
+  // that reports success.
+  const templates = COPY_TABLES.find((entry) => entry.table === "task_templates")!;
+  expect(templates.verbatim).toContain("applies_to_roles");
+  expect(templates.nulls).not.toContain("applies_to_roles");
+  expect(Object.keys(templates.constants)).not.toContain("applies_to_roles");
 });

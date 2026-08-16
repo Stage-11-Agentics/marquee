@@ -137,7 +137,7 @@ describe.sequential("MRQ-164 co-speaker double-booking", () => {
     }
   });
 
-  test("AC-77 · MRQ-224 · two people shared across one overlapping pair raise two flags, not one", async () => {
+  test("AC-335, AC-336 · MRQ-224 · two people shared across one overlapping pair raise two flags, not one", async () => {
     // The panel case. Marcus already co-speaks on the CI talk and speaks on the
     // lightning talk; Priya now moderates the lightning talk while speaking on
     // the CI talk. One overlapping pair, two double-booked people.
