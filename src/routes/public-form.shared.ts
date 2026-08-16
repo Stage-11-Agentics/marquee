@@ -1,8 +1,9 @@
-import type { FormFieldView } from "./forms.queries";
-import { findFormBySlug, listFormFields } from "./forms.queries";
+import type { FormFieldView, FormLengthRuleView } from "./forms.queries";
+import { findFormBySlug, listFormFields, listFormLengthRules } from "./forms.queries";
 import type { FormRow, PersonRow, SubmissionRow } from "../db/schema";
 import {
   projectApplicableAnswers,
+  type FormLengthRule,
   type FormAnswerValue,
   type FormValidationIssue,
   type ProjectedFormAnswers,
@@ -45,6 +46,7 @@ export interface PublicFormRecord {
   form: FormRow;
   conference: { name: string; slug: string; timezone: string };
   fields: FormFieldView[];
+  lengthRules: FormLengthRuleView[];
   state: PublicFormStateName;
   submission: SubmissionRow | null;
   answers: Record<string, unknown>;
@@ -601,6 +603,7 @@ export async function loadPublicForm(
   // all see the same field set. Filtering only at the render layer would leave
   // a required legacy field enforced by a control nobody can see.
   const fields = collectableFields(await listFormFields(db, form.id));
+  const lengthRules = await listFormLengthRules(db, form.id, fields);
   const resume = await resolvePublicFormResume(db, form, slug, options.resumeToken, options.now ?? Date.now());
   const submission = resume.submission;
   const answers = submission ? await readAnswers(db, submission.id) : {};
@@ -633,6 +636,7 @@ export async function loadPublicForm(
     form,
     conference: { name: row.conference_name, slug: row.conference_slug, timezone: row.conference_timezone },
     fields,
+    lengthRules,
     state,
     submission,
     answers,
@@ -741,6 +745,15 @@ export function toPublicFormState(
       min_speakers: Number(record.form.min_speakers),
       max_speakers: advertisedMaxSpeakers(Number(record.form.max_speakers), record.fields),
       max_sponsors: Number(record.form.max_sponsors),
+      length_rules: record.lengthRules.map((rule) => ({
+        id: rule.id,
+        label: rule.label,
+        field_keys: rule.field_keys,
+        max_chars: rule.max_chars,
+        sort_order: rule.sort_order,
+        disabled: rule.disabled,
+        missing_field_keys: rule.missing_field_keys,
+      })),
     },
     state: record.state,
     outcome: record.submissionOutcome,
@@ -769,31 +782,51 @@ export function toPublicFormState(
   };
 }
 
+type PublicIssueField = Pick<FormFieldView, "key" | "type">;
+
 /** Convert evaluator language into a sentence with a visible remedy. */
-export function publicIssueMessage(issue: FormValidationIssue): string {
+export function publicIssueMessage(issue: FormValidationIssue, field?: PublicIssueField): string {
   const message = issue.message.toLowerCase();
-  if (message.includes("required")) return "Add an answer so the conference team can review this abstract.";
-  if (message.includes("email")) return "Enter an address where the conference team can reach you, then try again.";
-  if (message.includes("url")) return "Add a web address beginning with https://, then try again.";
-  if (message.includes("number")) return "Enter a number in the range shown, then try again.";
-  if (message.includes("date")) return "Choose a valid date, then try again.";
-  if (message.includes("option")) return "Choose an option from the list, then try again.";
-  if (message.includes("file")) return "Choose a file of the accepted size and format, then try again.";
-  if (message.includes("characters")) return `${issue.message} Then try again.`;
-  if (message.includes("format")) return "Use the format shown beneath this answer, then try again.";
+  if (issue.kind === "form_length_rule") return `${issue.message} Then try again.`;
+  if (message === "this field is required.") return "Add an answer so the conference team can review this abstract.";
+  switch (field?.type) {
+    case "email": return "Enter an address where the conference team can reach you, then try again.";
+    case "url": return "Add a web address beginning with https://, then try again.";
+    case "number": return "Enter a number in the range shown, then try again.";
+    case "date": return "Choose a valid date, then try again.";
+    case "single_select":
+    case "multi_select": return "Choose an option from the list, then try again.";
+    case "file": return "Choose a file of the accepted size and format, then try again.";
+    default: break;
+  }
+  // These domain checks already carry public-facing copy and are keyed by
+  // stable API fields. Never infer their kind from an organizer-authored label.
+  if (issue.fieldKey === "format" || issue.fieldKey === "tracks") return issue.message;
+  if (message === "use the requested format.") return "Use the format shown beneath this answer, then try again.";
   return "Add the requested detail, then try again.";
 }
 
-export function publicIssues(issues: FormValidationIssue[]): FormValidationIssue[] {
-  return issues.map((issue) => ({ ...issue, message: publicIssueMessage(issue) }));
+export function publicIssues(
+  issues: readonly FormValidationIssue[],
+  fields: readonly PublicIssueField[] = [],
+): FormValidationIssue[] {
+  const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
+  // Keep internal group metadata out of the public error envelope. The public
+  // contract is still the stable fieldKey/message pair; the local client has
+  // the evaluator's kind while server responses already contain public copy.
+  return issues.map((issue) => ({
+    fieldKey: issue.fieldKey,
+    message: publicIssueMessage(issue, fieldsByKey.get(issue.fieldKey)),
+  }));
 }
 
 export function projectPublicAnswers(
   fields: readonly FormFieldView[],
   rawAnswers: Record<string, unknown>,
+  lengthRules: readonly FormLengthRule[] = [],
 ): PublicFormWriteResult {
-  const projected = projectApplicableAnswers(fields, rawAnswers);
-  return { projected, issues: publicIssues(projected.issues) };
+  const projected = projectApplicableAnswers(fields, rawAnswers, lengthRules);
+  return { projected, issues: publicIssues(projected.issues, fields) };
 }
 
 function asText(value: unknown): string | null {

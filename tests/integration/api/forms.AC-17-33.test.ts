@@ -206,6 +206,31 @@ describe.sequential("MRQ-13 form builder API", () => {
     });
   });
 
+  test("CONTRACT · MRQ-246 · combined limits are authored through the form API and soft-disable after a field is deleted", async () => {
+    const created = await request(`/api/v1/events/${EVENT_ID}/forms/${MAIN_FORM_ID}/length-rules`, {
+      method: "POST",
+      body: JSON.stringify({ label: "Printed programme block", field_keys: ["vendor_product"], max_chars: 120 }),
+    });
+    expect(created.status).toBe(201);
+    const rule = await json<{ id: string; label: string; field_keys: string[]; max_chars: number; disabled: boolean }>(created);
+    expect(rule).toMatchObject({ label: "Printed programme block", field_keys: ["vendor_product"], max_chars: 120, disabled: false });
+
+    const invalid = await request(`/api/v1/events/${EVENT_ID}/forms/${MAIN_FORM_ID}/length-rules`, {
+      method: "POST",
+      body: JSON.stringify({ label: "Invalid", field_keys: ["vendor_content"], max_chars: 120 }),
+    });
+    expect(invalid.status).toBe(422);
+
+    const deleted = await request(`/api/v1/events/${EVENT_ID}/forms/${MAIN_FORM_ID}/fields/field_product`, { method: "DELETE" });
+    expect(deleted.status).toBe(200);
+    const detail = await request(`/api/v1/events/${EVENT_ID}/forms/${MAIN_FORM_ID}`);
+    const body = await json<{ length_rules: Array<{ id: string; disabled: boolean; missing_field_keys: string[] }> }>(detail);
+    expect(body.length_rules.find((entry) => entry.id === rule.id)).toMatchObject({
+      disabled: true,
+      missing_field_keys: ["vendor_product"],
+    });
+  });
+
   test("AC-27 · participant minimum defaults to one and min/max are configurable", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/forms`, {
       method: "POST",

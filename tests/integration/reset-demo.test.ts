@@ -80,6 +80,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   form_admins: 0,
   form_fields: 33,
   field_library: 2,
+  form_length_rules: 0,
   forms: 7,
   email_templates: 0,
   outbox: 0,

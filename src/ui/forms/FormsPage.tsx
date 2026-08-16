@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { BOUND_SOURCE_LABELS, BOUND_SOURCES, boundSourceOf, isBoundSourceCompatible, type BoundSource } from "../../lib/bound-options";
 import { eventTimeLabel, instantToLocalDateTime, localDateTimeToInstant } from "../../lib/event-time";
-import { fieldPreviewProjection, isFieldApplicable, type FormAnswerValue, type FormCondition } from "../../lib/form-conditions";
+import { evaluateFormLengthRules, fieldPreviewProjection, isCombinedLengthField, isFieldApplicable, projectApplicableAnswers, type FormAnswerValue, type FormCondition, type FormLengthRule } from "../../lib/form-conditions";
 import { disambiguatedNames } from "../../lib/duplicate-names";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
@@ -86,12 +86,23 @@ interface FormAdmin {
   email: string;
 }
 
+interface FormLengthRuleView extends FormLengthRule {
+  id: string;
+  form_id: string;
+  sort_order: number;
+  disabled: boolean;
+  missing_field_keys: string[];
+  created_at: number;
+  updated_at: number;
+}
+
 interface FormDetail extends FormSummary {
   reminder_offset_hours: number | null;
   thankyou_template_key: string | null;
   admin_notify_person_ids: string[];
   turnstile_required: boolean;
   fields: FormField[];
+  length_rules?: FormLengthRuleView[];
   admins: FormAdmin[];
   preview_fields: Array<{ key: string; label: string; type: string; position: number; required: boolean; condition: FormCondition | null }>;
 }
@@ -262,6 +273,61 @@ function FieldValidationEditor({ field, onConfig }: { field: FormField; onConfig
   </div>;
 }
 
+function CombinedLimitsEditor({
+  fields,
+  rules,
+  newLabel,
+  newMaxChars,
+  newFieldKeys,
+  onNewLabel,
+  onNewMaxChars,
+  onNewFieldKeys,
+  onRuleChange,
+  onCreate,
+  onSave,
+  onDelete,
+  busy,
+}: {
+  fields: FormField[];
+  rules: FormLengthRuleView[];
+  newLabel: string;
+  newMaxChars: number;
+  newFieldKeys: string[];
+  onNewLabel: (value: string) => void;
+  onNewMaxChars: (value: number) => void;
+  onNewFieldKeys: (value: string[]) => void;
+  onRuleChange: (id: string, patch: Partial<FormLengthRuleView>) => void;
+  onCreate: () => void;
+  onSave: (rule: FormLengthRuleView) => void;
+  onDelete: (rule: FormLengthRuleView) => void;
+  busy: string | null;
+}): JSX.Element {
+  const textFields = fields.filter(isCombinedLengthField);
+  const toggle = (keys: string[], key: string): string[] => keys.includes(key) ? keys.filter((entry) => entry !== key) : [...keys, key];
+  const fieldPicker = (keys: string[], onChange: (value: string[]) => void) => textFields.length
+    ? <div class="forms-length-fields" aria-label="Text fields in combined limit">{textFields.map((field) => <label key={field.id} class="forms-check"><input type="checkbox" checked={keys.includes(field.key)} onChange={() => onChange(toggle(keys, field.key))} /> {field.label}</label>)}</div>
+    : <span class="subtle">Add a short or long text field before creating a combined limit.</span>;
+  return <div class="forms-combined-limits" data-combined-limits>
+    <div class="forms-validation-heading"><strong>Combined limits</strong><span>Cap the printed programme block across several text fields.</span></div>
+    {rules.map((rule) => <div class={`forms-length-rule${rule.disabled ? " is-disabled" : ""}`} key={rule.id}>
+      <div class="grid-2">
+        <div class="field"><label for={`length-rule-label-${rule.id}`}>Rule label</label><input id={`length-rule-label-${rule.id}`} value={rule.label} onInput={(event) => onRuleChange(rule.id, { label: (event.currentTarget as HTMLInputElement).value })} /></div>
+        <div class="field"><label for={`length-rule-max-${rule.id}`}>Maximum characters</label><input id={`length-rule-max-${rule.id}`} type="number" min="1" value={rule.max_chars} onInput={(event) => onRuleChange(rule.id, { max_chars: Math.max(1, Number((event.currentTarget as HTMLInputElement).value) || 1) })} /></div>
+      </div>
+      <div class="field"><span class="forms-field-label">Included text fields</span>{fieldPicker(rule.field_keys, (field_keys) => onRuleChange(rule.id, { field_keys }))}</div>
+      {rule.disabled && <div class="forms-length-fix" role="status"><strong>Fix rule</strong> {rule.missing_field_keys.length ? `Choose a replacement for ${rule.missing_field_keys.join(", ")}.` : "Choose at least one text field."}</div>}
+      <div class="forms-length-actions"><Button small variant="primary" onClick={() => onSave(rule)} disabled={busy !== null}>{busy === `length-rule-${rule.id}` ? "Saving…" : "Save limit"}</Button><Button small variant="danger" onClick={() => onDelete(rule)} disabled={busy !== null}>Delete</Button></div>
+    </div>)}
+    {rules.length === 0 && <p class="subtle">Use one cap for the title, abstract, and bio that appear together in the printed programme.</p>}
+    <div class="forms-length-new">
+      <div class="forms-validation-heading"><strong>Add a combined limit</strong><span>Each rule is evaluated after hidden fields are removed.</span></div>
+      <div class="grid-2"><div class="field"><label for="new-length-rule-label">Rule label</label><input id="new-length-rule-label" value={newLabel} onInput={(event) => onNewLabel((event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label for="new-length-rule-max">Maximum characters</label><input id="new-length-rule-max" type="number" min="1" value={newMaxChars} onInput={(event) => onNewMaxChars(Math.max(1, Number((event.currentTarget as HTMLInputElement).value) || 1))} /></div></div>
+      <div class="field"><span class="forms-field-label">Included text fields</span>{fieldPicker(newFieldKeys, onNewFieldKeys)}</div>
+      <Button small variant="primary" onClick={onCreate} disabled={busy !== null || newFieldKeys.length === 0}>{busy === "length-rule-new" ? "Adding…" : "Add combined limit"}</Button>
+    </div>
+  </div>;
+}
+
 function PreviewControl({ field, value, onChange }: { field: FormField; value: FormAnswerValue | undefined; onChange: (value: FormAnswerValue) => void }): JSX.Element {
   if (field.type === "long_text") return <textarea class="forms-preview-input" aria-label={field.label} value={typeof value === "string" ? value : ""} onInput={(event) => onChange((event.currentTarget as HTMLTextAreaElement).value)} />;
   if (field.type === "single_select") return <select class="forms-preview-input" aria-label={field.label} value={typeof value === "string" ? value : ""} onChange={(event) => onChange((event.currentTarget as HTMLSelectElement).value)}><option value="">Choose an option</option>{selectOptions(field).map((option) => <option key={option} value={option}>{option}</option>)}</select>;
@@ -270,10 +336,21 @@ function PreviewControl({ field, value, onChange }: { field: FormField; value: F
   return <input class="forms-preview-input" aria-label={field.label} type={field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "url" ? "url" : field.type === "date" ? "date" : "text"} value={typeof value === "string" || typeof value === "number" ? String(value) : ""} onInput={(event) => onChange((event.currentTarget as HTMLInputElement).value)} />;
 }
 
-function Preview({ fields, answers, onAnswer }: { fields: FormField[]; answers: Record<string, FormAnswerValue>; onAnswer: (key: string, value: FormAnswerValue) => void }): JSX.Element {
+function refreshLengthRuleStatus(fields: FormField[], rules: readonly FormLengthRuleView[]): FormLengthRuleView[] {
+  const evaluations = evaluateFormLengthRules(rules, fields, {});
+  const byId = new Map(evaluations.map((evaluation) => [evaluation.id, evaluation]));
+  return rules.map((rule) => {
+    const evaluation = byId.get(rule.id);
+    return evaluation ? { ...rule, disabled: evaluation.disabled, missing_field_keys: evaluation.missing_field_keys } : rule;
+  });
+}
+
+function Preview({ fields, answers, lengthRules, onAnswer }: { fields: FormField[]; answers: Record<string, FormAnswerValue>; lengthRules: FormLengthRuleView[]; onAnswer: (key: string, value: FormAnswerValue) => void }): JSX.Element {
   const ordered = [...fields].sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
   const conditionalTriggers = ordered.filter((field) => ordered.some((candidate) => candidate.condition?.all.some((clause) => clause.fieldKey === field.key)));
   const visible = ordered.filter((field) => isFieldApplicable(field, answers));
+  const projected = lengthRules.length > 0 ? projectApplicableAnswers(ordered, answers, lengthRules) : { answers: {}, issues: [] };
+  const lengthEvaluations = evaluateFormLengthRules(lengthRules, ordered, projected.answers);
   return <div class="forms-preview-window">
     <div class="forms-preview-top" aria-hidden="true"><i /><i /><i /><span>public / f / preview</span></div>
     <div class="forms-preview-body">
@@ -289,6 +366,7 @@ function Preview({ fields, answers, onAnswer }: { fields: FormField[]; answers: 
         </div>)}
         {visible.length === 0 && <span class="subtle">No fields yet — add one in the editor.</span>}
       </div>
+      {lengthEvaluations.length > 0 && <div class="forms-preview-limits" aria-label="Combined character limits">{lengthEvaluations.map((rule) => <div class="forms-preview-limit" data-preview-length-rule={rule.id} key={rule.id}><span>{rule.label}</span><strong>{rule.disabled ? "Fix rule" : `${rule.character_count}/${rule.max_chars}`}</strong></div>)}</div>}
       <div class="forms-preview-footer"><span>Draft saved locally · just now</span><Button small variant="primary">Submit abstract</Button></div>
     </div>
   </div>;
@@ -303,6 +381,9 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
   const [step, setStep] = useState(2);
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, FormAnswerValue>>({});
+  const [newLengthRuleLabel, setNewLengthRuleLabel] = useState("Printed programme block");
+  const [newLengthRuleMaxChars, setNewLengthRuleMaxChars] = useState(900);
+  const [newLengthRuleFieldKeys, setNewLengthRuleFieldKeys] = useState<string[]>([]);
   const [newFieldType, setNewFieldType] = useState<FieldType>("short_text");
   const [newFieldLabel, setNewFieldLabel] = useState("");
   const [newFieldRequired, setNewFieldRequired] = useState(false);
@@ -355,6 +436,7 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
       setForm(detail);
       setSelectedFieldId((current) => current && detail.fields.some((field) => field.id === current) ? current : detail.fields[0]?.id ?? null);
       setPreviewAnswers(initialPreviewAnswers(detail.fields));
+      setNewLengthRuleFieldKeys(detail.fields.filter(isCombinedLengthField).slice(0, 3).map((field) => field.key));
       setConditionTrigger("");
       setAdminPersonId("");
       setMessage("");
@@ -560,7 +642,11 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
     const config: Record<string, unknown> = bound ? { source: bound } : options.length ? { options } : {};
     void mutate("field", async () => {
       const created = await request<FormField>(`/api/v1/events/${eventId}/forms/${form.id}/fields`, "/api/v1/events/{eventId}/forms/{formId}/fields", { method: "POST", body: JSON.stringify({ key, label, type, required: newFieldRequired, config, save_to_library: newFieldSaveToLibrary }) });
-      setForm((current) => current ? { ...current, fields: [...current.fields, created] } : current);
+      setForm((current) => {
+        if (!current) return current;
+        const fields = [...current.fields, created];
+        return { ...current, fields, length_rules: refreshLengthRuleStatus(fields, current.length_rules ?? []) };
+      });
       // The add row keeps focus and its own identity; stealing the detail
       // editor here is what invalidated the element a caller had just
       // addressed, costing a re-query per field.
@@ -578,13 +664,17 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
     void mutate("field", async () => {
       const condition = conditionTrigger ? { all: [{ fieldKey: conditionTrigger, op: "equals", value: conditionValue }] } : null;
       const updated = await request<FormField>(`/api/v1/events/${eventId}/forms/${form.id}/fields/${selectedField.id}`, "/api/v1/events/{eventId}/forms/{formId}/fields/{fieldId}", { method: "PATCH", body: JSON.stringify({ key: selectedField.key, label: selectedField.label, help_text: selectedField.help_text, type: selectedField.type, required: selectedField.required, config: selectedField.config, condition }) });
-      setForm((current) => current ? { ...current, fields: current.fields.map((field) => field.id === updated.id ? updated : field) } : current);
+      setForm((current) => {
+        if (!current) return current;
+        const fields = current.fields.map((field) => field.id === updated.id ? updated : field);
+        return { ...current, fields, length_rules: refreshLengthRuleStatus(fields, current.length_rules ?? []) };
+      });
     });
   };
 
   const deleteField = () => {
     if (!form || !selectedField) return;
-    void mutate("field", async () => { await request<{ deleted: boolean }>(`/api/v1/events/${eventId}/forms/${form.id}/fields/${selectedField.id}`, "/api/v1/events/{eventId}/forms/{formId}/fields/{fieldId}", { method: "DELETE" }); setForm((current) => current ? { ...current, fields: current.fields.filter((field) => field.id !== selectedField.id) } : current); setSelectedFieldId(form.fields.find((field) => field.id !== selectedField.id)?.id ?? null); });
+    void mutate("field", async () => { await request<{ deleted: boolean }>(`/api/v1/events/${eventId}/forms/${form.id}/fields/${selectedField.id}`, "/api/v1/events/{eventId}/forms/{formId}/fields/{fieldId}", { method: "DELETE" }); setForm((current) => { if (!current) return current; const fields = current.fields.filter((field) => field.id !== selectedField.id); return { ...current, fields, length_rules: refreshLengthRuleStatus(fields, current.length_rules ?? []) }; }); setSelectedFieldId(form.fields.find((field) => field.id !== selectedField.id)?.id ?? null); });
   };
 
   const moveField = (direction: -1 | 1) => {
@@ -597,7 +687,47 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
     void mutate("field", async () => { const result = await request<{ data: FormField[] }>(`/api/v1/events/${eventId}/forms/${form.id}/fields/reorder`, "/api/v1/events/{eventId}/forms/{formId}/fields/reorder", { method: "PATCH", body: JSON.stringify({ field_ids: fields.map((field) => field.id) }) }); setForm((current) => current ? { ...current, fields: result.data } : current); });
   };
 
-  const setFieldValue = (key: keyof FormField, value: unknown) => { setForm((current) => current && selectedField ? { ...current, fields: current.fields.map((field) => field.id === selectedField.id ? { ...field, [key]: value } : field) } : current); };
+  const setLengthRuleValue = (id: string, patch: Partial<FormLengthRuleView>) => {
+    setForm((current) => {
+      if (!current) return current;
+      const rules = (current.length_rules ?? []).map((rule) => rule.id === id ? { ...rule, ...patch } : rule);
+      return { ...current, length_rules: refreshLengthRuleStatus(current.fields, rules) };
+    });
+  };
+
+  const createLengthRule = () => {
+    if (!form || newLengthRuleFieldKeys.length === 0) return;
+    void mutate("length-rule-new", async () => {
+      const created = await request<FormLengthRuleView>(`/api/v1/events/${eventId}/forms/${form.id}/length-rules`, "/api/v1/events/{eventId}/forms/{formId}/length-rules", {
+        method: "POST",
+        body: JSON.stringify({ label: newLengthRuleLabel.trim() || "Printed programme block", field_keys: newLengthRuleFieldKeys, max_chars: newLengthRuleMaxChars, sort_order: (form.length_rules ?? []).length }),
+      });
+      setForm((current) => current ? { ...current, length_rules: [...(current.length_rules ?? []), created] } : current);
+      setNewLengthRuleLabel("Printed programme block");
+      setNewLengthRuleMaxChars(900);
+    });
+  };
+
+  const saveLengthRule = (rule: FormLengthRuleView) => {
+    if (!form) return;
+    void mutate(`length-rule-${rule.id}`, async () => {
+      const updated = await request<FormLengthRuleView>(`/api/v1/events/${eventId}/forms/${form.id}/length-rules/${rule.id}`, "/api/v1/events/{eventId}/forms/{formId}/length-rules/{ruleId}", {
+        method: "PATCH",
+        body: JSON.stringify({ label: rule.label, field_keys: rule.field_keys, max_chars: rule.max_chars, sort_order: rule.sort_order }),
+      });
+      setForm((current) => current ? { ...current, length_rules: (current.length_rules ?? []).map((entry) => entry.id === updated.id ? updated : entry) } : current);
+    });
+  };
+
+  const deleteLengthRule = (rule: FormLengthRuleView) => {
+    if (!form) return;
+    void mutate(`length-rule-${rule.id}`, async () => {
+      await request<{ deleted: boolean }>(`/api/v1/events/${eventId}/forms/${form.id}/length-rules/${rule.id}`, "/api/v1/events/{eventId}/forms/{formId}/length-rules/{ruleId}", { method: "DELETE" });
+      setForm((current) => current ? { ...current, length_rules: (current.length_rules ?? []).filter((entry) => entry.id !== rule.id) } : current);
+    });
+  };
+
+  const setFieldValue = (key: keyof FormField, value: unknown) => { setForm((current) => { if (!current || !selectedField) return current; const fields = current.fields.map((field) => field.id === selectedField.id ? { ...field, [key]: value } : field); return { ...current, fields, length_rules: refreshLengthRuleStatus(fields, current.length_rules ?? []) }; }); };
   const setFieldConfig = (key: string, value: unknown) => { setForm((current) => current && selectedField ? { ...current, fields: current.fields.map((field) => { if (field.id !== selectedField.id) return field; const config = { ...field.config }; if (value === undefined || value === "") delete config[key]; else config[key] = value; return { ...field, config }; }) } : current); };
   const addAdmin = () => {
     if (!form || !adminPersonId.trim()) return;
@@ -662,10 +792,11 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
           </form>
           {libraryPickerOpen && <div class="forms-library-picker" role="dialog" aria-modal="true" aria-label="From library"><div class="forms-library-picker-heading"><div><span class="eyebrow">From library</span><h3>Reuse a question</h3></div><Button small onClick={closeLibraryPicker}>Close</Button></div><form class="forms-library-search" onSubmit={(event) => { event.preventDefault(); void loadLibrary(form.id, librarySearch); }}><label for="library-picker-search">Search questions</label><input id="library-picker-search" autoFocus value={librarySearch} placeholder="Search by name or key" onInput={(event) => setLibrarySearch((event.currentTarget as HTMLInputElement).value)} /><Button type="submit">Search</Button></form><div class="forms-library-picker-list">{libraryRows.length ? libraryRows.map((question) => <button type="button" class="forms-library-picker-row" key={question.id} disabled={question.on_destination_form || busy !== null} onClick={() => copyLibraryQuestion(question)}><span><strong>{question.label}</strong><small>{fieldTypeLabel(question.type)} · Used on {question.used_on_forms} form{question.used_on_forms === 1 ? "" : "s"}{question.condition_note ? ` · When ${question.condition_note}` : ""}</small></span><em>{question.on_destination_form ? "On this form" : "Add copy"}</em></button>) : <div class="forms-library-empty">No questions match that search.</div>}</div><p class="forms-library-footer">Participant machinery such as speaker email, co-speakers, and moderator fields is structural and never appears here because a second participant placement cannot survive the submit path.</p></div>}
           <div class="forms-field-list">{form.fields.length ? [...form.fields].sort((left, right) => left.position - right.position).map((field, index) => { const summary = field.condition ? conditionSummary(field.condition) : ""; return <button key={field.id} class={`forms-field-row ${field.id === selectedFieldId ? "active" : ""}`} data-builder-field={field.key} onClick={() => setSelectedFieldId(field.id)}><span class="forms-drag-handle" aria-hidden="true">⋮⋮</span><span class="forms-field-order">{String(index + 1).padStart(2, "0")}</span><span class="forms-field-copy"><strong data-field-label={field.label}>{field.label}{field.required ? " *" : ""}</strong><small data-condition-summary={summary}>{fieldTypeLabel(field.type)} · {field.required ? "Required" : "Optional"}{summary ? ` · When ${summary}` : ""}</small></span><span class="forms-field-actions"><span class="chip">{field.type}</span><span class="forms-arrow" aria-hidden="true">→</span></span></button>; }) : <div class="forms-field-empty"><strong>No fields yet</strong><span>Add the first question to give the public form a place to start.</span><Button small variant="primary" onClick={() => addField()}>＋ Add first field</Button></div>}</div>
-          {selectedField && <div class="forms-field-editor"><div class="forms-editor-heading"><div><span class="eyebrow">Editing field</span><h3>{selectedField.label}</h3></div><div class="forms-reorder-actions"><Button small onClick={() => moveField(-1)}>↑</Button><Button small onClick={() => moveField(1)}>↓</Button><Button small variant="danger" onClick={deleteField}>Delete</Button></div></div><div class="grid-2"><div class="field"><label>Field key</label><input value={selectedField.key} onInput={(event) => setFieldValue("key", (event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label>Field type</label><select value={selectedField.type} onChange={(event) => setFieldValue("type", (event.currentTarget as HTMLSelectElement).value)}>{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div></div><div class="field"><label>Label</label><input value={selectedField.label} onInput={(event) => setFieldValue("label", (event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label>Help text</label><textarea value={selectedField.help_text ?? ""} onInput={(event) => setFieldValue("help_text", (event.currentTarget as HTMLTextAreaElement).value)} /></div><label class="forms-check"><input type="checkbox" checked={selectedField.required} onChange={(event) => setFieldValue("required", (event.currentTarget as HTMLInputElement).checked)} /> Required when this field applies</label><FieldValidationEditor field={selectedField} onConfig={setFieldConfig} /><div class="forms-condition-box"><div><strong>Conditional visibility</strong><span>Persisted as <code>{"{ all: [{ fieldKey, op, value }] }"}</code>; hidden values are never written.</span></div><div class="grid-2"><div class="field"><label>Show when this field</label><select value={conditionTrigger} onChange={(event) => setConditionTrigger((event.currentTarget as HTMLSelectElement).value)}><option value="">Always show</option>{form.fields.filter((field) => field.id !== selectedField.id).map((field) => <option key={field.id} value={field.key}>{field.label}</option>)}</select></div><div class="field"><label>Equals</label><input value={conditionValue} onInput={(event) => setConditionValue((event.currentTarget as HTMLInputElement).value)} disabled={!conditionTrigger} /></div></div></div><Button variant="primary" onClick={saveField} disabled={busy !== null}>{busy === "field" ? "Saving…" : "Save field"}</Button></div>}
+          {selectedField && <div class="forms-field-editor"><div class="forms-editor-heading"><div><span class="eyebrow">Editing field</span><h3>{selectedField.label}</h3></div><div class="forms-reorder-actions"><Button small onClick={() => moveField(-1)}>↑</Button><Button small onClick={() => moveField(1)}>↓</Button><Button small variant="danger" onClick={deleteField}>Delete</Button></div></div><div class="grid-2"><div class="field"><label>Field key</label><input value={selectedField.key} onInput={(event) => setFieldValue("key", (event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label>Field type</label><select value={selectedField.type} onChange={(event) => setFieldValue("type", (event.currentTarget as HTMLSelectElement).value)}>{FIELD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div></div><div class="field"><label>Label</label><input value={selectedField.label} onInput={(event) => setFieldValue("label", (event.currentTarget as HTMLInputElement).value)} /></div><div class="field"><label>Help text</label><textarea value={selectedField.help_text ?? ""} onInput={(event) => setFieldValue("help_text", (event.currentTarget as HTMLTextAreaElement).value)} /></div><label class="forms-check"><input type="checkbox" checked={selectedField.required} onChange={(event) => setFieldValue("required", (event.currentTarget as HTMLInputElement).checked)} /> Required when this field applies</label><FieldValidationEditor field={selectedField} onConfig={setFieldConfig} /><CombinedLimitsEditor fields={form.fields} rules={form.length_rules ?? []} newLabel={newLengthRuleLabel} newMaxChars={newLengthRuleMaxChars} newFieldKeys={newLengthRuleFieldKeys} onNewLabel={setNewLengthRuleLabel} onNewMaxChars={setNewLengthRuleMaxChars} onNewFieldKeys={setNewLengthRuleFieldKeys} onRuleChange={setLengthRuleValue} onCreate={createLengthRule} onSave={saveLengthRule} onDelete={deleteLengthRule} busy={busy} /><div class="forms-condition-box"><div><strong>Conditional visibility</strong><span>Persisted as <code>{"{ all: [{ fieldKey, op, value }] }"}</code>; hidden values are never written.</span></div><div class="grid-2"><div class="field"><label>Show when this field</label><select value={conditionTrigger} onChange={(event) => setConditionTrigger((event.currentTarget as HTMLSelectElement).value)}><option value="">Always show</option>{form.fields.filter((field) => field.id !== selectedField.id).map((field) => <option key={field.id} value={field.key}>{field.label}</option>)}</select></div><div class="field"><label>Equals</label><input value={conditionValue} onInput={(event) => setConditionValue((event.currentTarget as HTMLInputElement).value)} disabled={!conditionTrigger} /></div></div></div><Button variant="primary" onClick={saveField} disabled={busy !== null}>{busy === "field" ? "Saving…" : "Save field"}</Button></div>}
+          {!selectedField && <CombinedLimitsEditor fields={form.fields} rules={form.length_rules ?? []} newLabel={newLengthRuleLabel} newMaxChars={newLengthRuleMaxChars} newFieldKeys={newLengthRuleFieldKeys} onNewLabel={setNewLengthRuleLabel} onNewMaxChars={setNewLengthRuleMaxChars} onNewFieldKeys={setNewLengthRuleFieldKeys} onRuleChange={setLengthRuleValue} onCreate={createLengthRule} onSave={saveLengthRule} onDelete={deleteLengthRule} busy={busy} />}
         </> : <StepPanel step={step} form={form} setForm={setForm} saveForm={saveForm} setLifecycle={setLifecycle} busy={busy} adminPersonId={adminPersonId} setAdminPersonId={setAdminPersonId} addAdmin={addAdmin} removeAdmin={removeAdmin} />}</CardBody>
       </section>
-      <section class="card forms-preview-card" aria-label="Live preview"><CardHeader title="Live preview"><Chip>Same field schema</Chip></CardHeader><div class="forms-preview-reservation"><span>Reserved preview column</span><small>Fields change inside this frame; the editor stays put.</small></div><Preview fields={form.fields} answers={previewAnswers} onAnswer={(key, value) => setPreviewAnswers((current) => ({ ...current, [key]: value }))} /><div class="forms-projection" aria-label="Preview projection"><span class="eyebrow">Deep-equal projection</span><code>{JSON.stringify(projection.map((field) => ({ label: field.label, type: field.type, position: field.position, required: field.required })))}</code></div></section>
+      <section class="card forms-preview-card" aria-label="Live preview"><CardHeader title="Live preview"><Chip>Same field schema</Chip></CardHeader><div class="forms-preview-reservation"><span>Reserved preview column</span><small>Fields change inside this frame; the editor stays put.</small></div><Preview fields={form.fields} lengthRules={form.length_rules ?? []} answers={previewAnswers} onAnswer={(key, value) => setPreviewAnswers((current) => ({ ...current, [key]: value }))} /><div class="forms-projection" aria-label="Preview projection"><span class="eyebrow">Deep-equal projection</span><code>{JSON.stringify(projection.map((field) => ({ label: field.label, type: field.type, position: field.position, required: field.required })))}</code></div></section>
     </div>
   </div>;
 }

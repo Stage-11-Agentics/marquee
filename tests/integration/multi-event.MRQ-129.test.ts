@@ -90,6 +90,7 @@ async function seedOrganization(): Promise<void> {
 
   await env.DB.batch([
     insert("INSERT INTO form_fields (id, form_id, key, label, type, required, position, config, created_at, updated_at) VALUES (?, ?, ?, ?, 'short_text', 1, 0, '{}', ?, ?)", "ff_multi_title", FORM_ID, "title", "Title", NOW, NOW),
+    insert("INSERT INTO form_length_rules (id, form_id, label, field_keys, max_chars, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", "rule_multi_programme", FORM_ID, "Printed programme block", JSON.stringify(["title"]), 120, 0, NOW, NOW),
     insert("INSERT INTO form_admins (id, form_id, person_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", "fa_multi", FORM_ID, OWNER_ID, NOW, NOW),
     insert("INSERT INTO evaluation_rounds (id, plan_id, position, name, mode, anonymized, target_reviews_per_submission, opens_at, closes_at, committee_id, created_at, updated_at) VALUES (?, ?, 0, ?, 'scorecard', 0, 3, ?, ?, ?, ?, ?)", ROUND_ID, PLAN_ID, "Round one", NOW - 1_000, NOW + 1_000, COMMITTEE_ID, NOW, NOW),
     insert("INSERT INTO task_templates (id, event_id, name, kind, description, due_at, due_offset_days, form_id, position, auto_assign, created_at, updated_at) VALUES (?, ?, ?, 'form', '', NULL, 14, ?, 0, 1, ?, ?)", "tt_multi_form", SOURCE_EVENT_ID, "Speaker details", FORM_ID, NOW, NOW),
@@ -194,6 +195,9 @@ test("CONTRACT · MRQ-129 a copied conference carries the structure and none of 
   const template = await env.DB.prepare("SELECT form_id, due_offset_days FROM task_templates WHERE event_id = ? AND kind = 'form'").bind(created).first<{ form_id: string; due_offset_days: number }>();
   expect(template?.form_id).toBe(form?.id);
   expect(template?.due_offset_days).toBe(14);
+
+  const copiedRule = await env.DB.prepare("SELECT form_id, label, field_keys, max_chars, sort_order FROM form_length_rules WHERE form_id = ?").bind(form?.id).first<{ form_id: string; label: string; field_keys: string; max_chars: number; sort_order: number }>();
+  expect(copiedRule).toMatchObject({ form_id: form?.id, label: "Printed programme block", field_keys: JSON.stringify(["title"]), max_chars: 120, sort_order: 0 });
 
   // The one with a fixed calendar deadline is declined and counted, not
   // silently reshaped into an offset that means something else.

@@ -32,6 +32,8 @@ import { contentOf, isContentAction, recordTimelinePage } from "../lib/history";
 import { purgePublicEmbedCache } from "../lib/public-site";
 import { PUBLISHED_CONTENT_REFUSAL, requirePublishedConfirmation } from "../lib/publication-guard";
 import { withSubmissionReferenceAllocation } from "../lib/submission-reference";
+import { listFormLengthRules } from "./forms.queries";
+import { readSubmissionAnswers } from "./portal-tasks.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const submissionParams = eventParams.extend({ submissionId: z.string().min(1) });
@@ -998,9 +1000,10 @@ async function validateOwnedIds(
       const field = suppliedFields[index]!;
       rawAnswers[field.key] = answer.value_json === undefined ? answer.value_text ?? null : answer.value_json;
     }
-    const projection = projectApplicableAnswers(fields.results, rawAnswers);
+    const lengthRules = body.form_id ? await listFormLengthRules(db, body.form_id) : [];
+    const projection = projectApplicableAnswers(fields.results, rawAnswers, lengthRules);
     const suppliedKeys = new Set(suppliedFields.map((field) => field!.key));
-    const issues = projection.issues.filter((issue) => suppliedKeys.has(issue.fieldKey));
+    const issues = projection.issues.filter((issue) => issue.kind === "form_length_rule" || suppliedKeys.has(issue.fieldKey));
     if (issues.length > 0) {
       throw ApiError.unprocessable("one or more supplied answers are invalid", issues[0]!.fieldKey, issues);
     }
@@ -1269,13 +1272,18 @@ const patchDraft = defineApiRoute(
         condition: string | null;
       }>();
       const fieldsById = new Map(fields.results.map((field) => [field.id, field]));
-      const rawAnswers: Record<string, unknown> = {};
+      const rawAnswers: Record<string, unknown> = await readSubmissionAnswers(context.env.DB, submissionId);
       for (const answer of body.answers) {
         const field = fieldsById.get(answer.field_id);
         if (!field) throw ApiError.unprocessable("every answer field must belong to this draft's form", "answers");
         rawAnswers[field.key] = answer.value_json === undefined ? answer.value_text ?? null : answer.value_json;
       }
-      const projection = projectApplicableAnswers(fields.results, rawAnswers);
+      const lengthRules = await listFormLengthRules(context.env.DB, submission.form_id);
+      const projection = projectApplicableAnswers(fields.results, rawAnswers, lengthRules);
+      const lengthIssues = projection.issues.filter((issue) => issue.kind === "form_length_rule");
+      if (lengthIssues.length > 0) {
+        throw ApiError.unprocessable("one or more answers exceed a combined character limit", lengthIssues[0]!.fieldKey, lengthIssues);
+      }
       // This is still a draft: incomplete visible answers remain valid draft
       // state, while the queue derives the missing-field attention from the
       // same projection. Persist only its normalized, currently applicable map.

@@ -15,6 +15,7 @@ const FORM_ID = "form-mrq-69-answers";
 const CONTENT_FIELD_ID = "field-mrq-69-content";
 const PRODUCT_FIELD_ID = "field-mrq-69-product";
 const OUTCOME_FIELD_ID = "field-mrq-69-outcome";
+const LENGTH_RULE_ID = "rule-mrq-246-organizer";
 const ORIGIN = "https://marquee.stage11.dev";
 
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
@@ -50,6 +51,10 @@ async function seedFixture(): Promise<void> {
       INSERT INTO form_fields (id, form_id, key, label, help_text, type, required, position, config, condition, created_at, updated_at)
       VALUES (?, ?, 'audience_outcome', 'Audience outcome', NULL, 'long_text', 0, 2, ?, NULL, ?, ?)
     `).bind(OUTCOME_FIELD_ID, FORM_ID, JSON.stringify({ minLength: 12 }), now, now),
+    env.DB.prepare(`
+      INSERT INTO form_length_rules (id, form_id, label, field_keys, max_chars, sort_order, created_at, updated_at)
+      VALUES (?, ?, 'Updated programme block', ?, 10, 0, ?, ?)
+    `).bind(LENGTH_RULE_ID, FORM_ID, JSON.stringify(["audience_outcome", "vendor_product"]), now, now),
   ]);
 }
 
@@ -108,6 +113,58 @@ describe.sequential("MRQ-69 admin answer applicability", () => {
     expect(hiddenRows.results.map((row) => row.field_id)).not.toContain(PRODUCT_FIELD_ID);
     expect(await submissionCount()).toBe(submissionsBefore + 2);
     expect(await answerCount()).toBe(answersBefore + 3);
+  });
+
+  test("CONTRACT · MRQ-246 · organizer writes reject a partial group violation even when the first rule field is omitted", async () => {
+    const submissionsBefore = await submissionCount();
+    const invalid = await request(`/api/v1/events/${EVENT_ID}/submissions`, {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "abstract",
+        title: "Organizer combined budget refusal",
+        form_id: FORM_ID,
+        answers: [
+          { field_id: CONTENT_FIELD_ID, value_text: "Yes" },
+          { field_id: PRODUCT_FIELD_ID, value_text: "12345678901" },
+        ],
+      }),
+    });
+
+    expect(invalid.status).toBe(422);
+    const error = await invalid.json<{ error: { details: Array<{ fieldKey: string; kind?: string }> } }>();
+    expect(error.error.details[0]).toMatchObject({ fieldKey: "audience_outcome", kind: "form_length_rule" });
+    expect(await submissionCount()).toBe(submissionsBefore);
+  });
+
+  test("CONTRACT · MRQ-246 · organizer draft edits merge stored answers before enforcing a combined budget", async () => {
+    const created = await request(`/api/v1/events/${EVENT_ID}/submissions`, {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "abstract",
+        title: "Organizer draft combined budget",
+        status: "draft",
+        form_id: FORM_ID,
+        answers: [
+          { field_id: CONTENT_FIELD_ID, value_text: "Yes" },
+          { field_id: PRODUCT_FIELD_ID, value_text: "Northstar" },
+        ],
+      }),
+    });
+    expect(created.status).toBe(201);
+    const draft = await created.json<{ id: string }>();
+    await env.DB.prepare(`
+      INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, NULL, ?, ?)
+    `).bind(`answer-${draft.id}-outcome`, draft.id, OUTCOME_FIELD_ID, "12345", Date.now(), Date.now()).run();
+
+    const edited = await request(`/api/v1/events/${EVENT_ID}/submissions/${draft.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ answers: [{ field_id: PRODUCT_FIELD_ID, value_text: "Northstar" }] }),
+    });
+
+    expect(edited.status).toBe(422);
+    const error = await edited.json<{ error: { details: Array<{ fieldKey: string; kind?: string }> } }>();
+    expect(error.error.details[0]).toMatchObject({ kind: "form_length_rule" });
   });
 
   test("AC-25 + AC-133 · invalid applicable minLength returns 422 without a submission or answer row", async () => {

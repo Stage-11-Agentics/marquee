@@ -107,6 +107,39 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(html.indexOf("Session title")).toBeLessThan(html.indexOf("Product or service"));
   });
 
+  test("CONTRACT · MRQ-246 · the public counter and server refusal share the projected character budget", async () => {
+    await env.DB.prepare(
+      `INSERT INTO form_length_rules
+        (id, form_id, label, field_keys, max_chars, sort_order, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind("rule_programme", FORM_ID, "Printed programme block", JSON.stringify(["title", "vendor_product"]), 20, 0, NOW, NOW).run();
+
+    const read = await request("/api/v1/public/forms/public-cfp");
+    expect(read.status).toBe(200);
+    const readBody = await json<{ form: { length_rules: Array<{ label: string; max_chars: number; disabled: boolean }> } }>(read);
+    expect(readBody.form.length_rules).toHaveLength(1);
+    expect(readBody.form.length_rules[0]).toMatchObject({ label: "Printed programme block", max_chars: 20, disabled: false });
+
+    const over = await request("/api/v1/public/forms/public-cfp/submissions", {
+      method: "POST",
+      body: JSON.stringify({
+        turnstileToken: nextTurnstileToken(),
+        answers: {
+          title: "A title",
+          speaker_name: "Over Rule Speaker",
+          speaker_email: "over-rule@example.com",
+          tracks: ["Agents"],
+          vendor_content: "Yes",
+          vendor_product: "123456789012345",
+        },
+      }),
+    });
+    expect(over.status).toBe(422);
+    const overBody = await json<{ error: { details: { issues: Array<{ fieldKey: string; message: string }> } } }>(over);
+    expect(overBody.error.details.issues[0]).toMatchObject({ fieldKey: "title" });
+    expect(overBody.error.details.issues[0]?.message).toContain("Printed programme block is 2 characters over its 20-character limit.");
+  });
+
   test("AC-231 · a demo conference withholds the Turnstile site key, so no widget mounts to block the client", async () => {
     // Exempting the SERVER is not enough. The client mounts the widget whenever
     // it is handed a site key, and then refuses to issue any public write until

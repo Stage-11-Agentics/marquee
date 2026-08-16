@@ -17,6 +17,7 @@ const OWNER_ID = "per_demo_organizer";
 const FORM_ID = "form-portal";
 const SUBMISSION_ID = "sub-portal-talk";
 const REVIEW_SUBMISSION_ID = "sub-portal-review";
+const DETAIL_CONTEXT_FIELD_ID = "field-portal-context";
 // Anchored to the real clock, not to a calendar date. Task state and form
 // windows are derived from Date.now() in production, so every fixture here
 // means "a day before now" or "a day after now" — relative offsets. Pinned to
@@ -75,6 +76,10 @@ async function seedFixture(): Promise<void> {
       `INSERT INTO form_fields (id, form_id, key, label, help_text, type, required, position, config, condition, created_at, updated_at)
        VALUES (?, ?, 'detail_note', 'Detail note', 'Only shown when needed.', 'long_text', 1, 1, '{}', ?, ?, ?)`,
     ).bind("field-portal-conditional", FORM_ID, JSON.stringify({ all: [{ fieldKey: "needs_details", op: "equals", value: "yes" }] }), NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO form_fields (id, form_id, key, label, help_text, type, required, position, config, condition, created_at, updated_at)
+       VALUES (?, ?, 'detail_context', 'Detail context', NULL, 'short_text', 0, 2, '{}', NULL, ?, ?)`,
+    ).bind(DETAIL_CONTEXT_FIELD_ID, FORM_ID, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO submissions
         (id, event_id, form_id, kind, title, abstract, status, origin, submitter_person_id, wave_id, submitted_at, last_saved_at, is_published, search_blob, last_write_source, created_at, updated_at)
@@ -227,6 +232,40 @@ describe.sequential("MRQ-16 speaker portal", () => {
       kind: "acknowledge",
       payload: { kind: "acknowledge", acknowledged: false },
     });
+  });
+
+  test("CONTRACT · MRQ-246 · portal form completion rejects stored-plus-submitted group overage like the organizer path", async () => {
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO form_length_rules (id, form_id, label, field_keys, max_chars, sort_order, created_at, updated_at)
+        VALUES ('rule-portal-mrq-246', ?, 'Updated programme block', ?, 10, 0, ?, ?)
+      `).bind(FORM_ID, JSON.stringify(["detail_note", "detail_context"]), NOW, NOW),
+      env.DB.prepare(`
+        INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at)
+        VALUES ('answer-portal-mrq-246-note', ?, 'field-portal-conditional', ?, NULL, ?, ?)
+      `).bind(SUBMISSION_ID, "12345678901", NOW, NOW),
+      env.DB.prepare(`
+        INSERT INTO speaker_tasks
+          (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status,
+           completed_at, response_json, attachment_id, last_write_source, created_at, updated_at)
+        VALUES ('task-portal-mrq-246', ?, ?, ?, 'template-portal-form', 'Combined character budget', 'form',
+                'Complete the combined character budget.', ?, 'open', NULL, NULL, NULL, 'marquee', ?, ?)
+      `).bind(EVENT_ID, SPEAKER_ID, SUBMISSION_ID, NOW + 3 * DAY_MS, NOW, NOW),
+    ]);
+
+    const partial = await request("/api/v1/me/tasks/task-portal-mrq-246/complete", {
+      method: "POST",
+      body: JSON.stringify({ answers: { needs_details: "yes" } }),
+    });
+    expect(partial.status).toBe(422);
+    const partialBody = await partial.json<{ error: { details: Array<{ fieldKey: string; kind?: string }> } }>();
+    expect(partialBody.error.details[0]).toMatchObject({ fieldKey: "detail_note", kind: "form_length_rule" });
+
+    const hidden = await request("/api/v1/me/tasks/task-portal-mrq-246/complete", {
+      method: "POST",
+      body: JSON.stringify({ answers: { needs_details: "no" } }),
+    });
+    expect(hidden.status).toBe(200);
   });
 
   test("AC-47 · acknowledge, file, and form task registry entries open real payload surfaces and validate completion", async () => {

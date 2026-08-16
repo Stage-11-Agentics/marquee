@@ -494,6 +494,14 @@ export interface FieldLibraryRow extends MutableRecord {
   version: number;
 }
 
+export interface FormLengthRuleRow extends MutableRecord {
+  field_keys: JsonText<Id[]>;
+  form_id: Id;
+  label: string;
+  max_chars: number;
+  sort_order: number;
+}
+
 export interface FormAdminRow extends MutableRecord {
   form_id: Id;
   person_id: Id;
@@ -1007,6 +1015,7 @@ export const CORE_TABLE_NAMES = [
   "forms",
   "form_fields",
   "field_library",
+  "form_length_rules",
   "form_admins",
   "email_templates",
   "outbox",
@@ -1061,7 +1070,7 @@ export const CORE_TABLE_NAMES = [
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 67 as const;
+export const CORE_TABLE_COUNT = 68 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -1079,7 +1088,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 67>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 68>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -1106,6 +1115,7 @@ export const CORE_TABLES = {
   form_admins: "form_admins",
   form_fields: "form_fields",
   field_library: "field_library",
+  form_length_rules: "form_length_rules",
   formats: "formats",
   forms: "forms",
   import_rows: "import_rows",
@@ -1176,6 +1186,7 @@ export interface CoreTableRows {
   form_admins: FormAdminRow;
   form_fields: FormFieldRow;
   field_library: FieldLibraryRow;
+  form_length_rules: FormLengthRuleRow;
   formats: FormatRow;
   forms: FormRow;
   import_rows: ImportRowRow;
@@ -1248,6 +1259,7 @@ interface CoreDefaultColumns {
   form_admins: never;
   form_fields: "config" | "required";
   field_library: "config" | "required" | "version";
+  form_length_rules: never;
   formats: never;
   forms:
     | "admin_notify_person_ids"
@@ -1342,6 +1354,7 @@ export type ApiTokenInsert = CoreInsert<"api_tokens">;
 export type FormInsert = CoreInsert<"forms">;
 export type FormFieldInsert = CoreInsert<"form_fields">;
 export type FieldLibraryInsert = CoreInsert<"field_library">;
+export type FormLengthRuleInsert = CoreInsert<"form_length_rules">;
 export type FormAdminInsert = CoreInsert<"form_admins">;
 export type EmailTemplateInsert = CoreInsert<"email_templates">;
 export type OutboxInsert = CoreInsert<"outbox">;

@@ -23,6 +23,10 @@ export const PUBLIC_FORM_STYLES = `
 .public-form-card-head { align-items: center; background: var(--sunk); border-bottom: 1px solid var(--line-strong); display: flex; justify-content: space-between; padding: 13px 16px; }
 .public-form-card-head h2 { font: 600 11px/1.2 var(--mono); letter-spacing: .15em; margin: 0; text-transform: uppercase; }
 .public-participant-limit { background: var(--accent-soft); border-bottom: 1px solid var(--line-strong); color: var(--accent-ink); font-size: 12px; line-height: 1.5; margin: 0; padding: 12px 20px; }
+.public-form-length-limits { background: var(--sunk); border-bottom: 1px solid var(--line-strong); display: grid; gap: 7px; padding: 12px 20px; }
+.public-form-length-limit { align-items: center; color: var(--ink-soft); display: flex; font: 500 11px/1.4 var(--mono); gap: 10px; justify-content: space-between; min-height: 1.5em; }
+.public-form-length-limit strong { color: var(--alarm); font-size: 10px; text-transform: uppercase; }
+.public-form-length-limit.is-disabled { color: var(--warning, var(--alarm)); }
 
 /* Who is presenting. Every slot is one height and both the add control and the
    on-behalf-of panel sit BELOW the control that opens them, so the thing the

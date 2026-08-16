@@ -50,11 +50,37 @@ export interface FormFieldAnswerInput extends FormFieldConditionInput {
 export interface FormValidationIssue {
   fieldKey: string;
   message: string;
+  /** Internal classification for constraints that span more than one field. */
+  kind?: "form_length_rule";
+  /** Every field participating in a group-level constraint. */
+  fieldKeys?: readonly string[];
 }
 
 export interface ProjectedFormAnswers {
   answers: Record<string, FormAnswerValue>;
   issues: FormValidationIssue[];
+}
+
+/** A form-owned group of text fields with one printed-block ceiling. */
+export interface FormLengthRule {
+  id?: string;
+  label: string;
+  field_keys: string[];
+  max_chars: number;
+  sort_order?: number;
+}
+
+export interface FormLengthRuleEvaluation extends FormLengthRule {
+  character_count: number;
+  over_by: number;
+  disabled: boolean;
+  missing_field_keys: string[];
+}
+
+const COMBINED_LENGTH_FIELD_TYPES = new Set(["short_text", "long_text", "email", "url"]);
+
+export function isCombinedLengthField(field: Pick<FormFieldAnswerInput, "type">): boolean {
+  return typeof field.type === "string" && COMBINED_LENGTH_FIELD_TYPES.has(field.type);
 }
 
 type DecodeResult =
@@ -281,6 +307,7 @@ function validateField(field: FormFieldAnswerInput, value: unknown): string | nu
 export function projectApplicableAnswers(
   fields: readonly FormFieldAnswerInput[],
   rawAnswers: Record<string, unknown>,
+  lengthRules: readonly FormLengthRule[] = [],
 ): ProjectedFormAnswers {
   const answers: Record<string, FormAnswerValue> = {};
   const issues: FormValidationIssue[] = [];
@@ -294,7 +321,73 @@ export function projectApplicableAnswers(
       if (normalized !== null) answers[field.key] = normalized;
     }
   }
+  if (lengthRules.length > 0) {
+    for (const violation of formLengthRuleIssues(lengthRules, fields, answers)) issues.push(violation);
+  }
   return { answers, issues };
+}
+
+/**
+ * Evaluate every configured group against the already-projected answer map.
+ * Missing or non-text field keys soft-disable a rule: a deleted question must
+ * never become a ghost constraint, but the author still needs to see Fix rule.
+ */
+export function evaluateFormLengthRules(
+  rules: readonly FormLengthRule[],
+  fields: readonly FormFieldAnswerInput[],
+  answers: Record<string, unknown>,
+): FormLengthRuleEvaluation[] {
+  if (rules.length === 0) return [];
+  const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
+  return [...rules]
+    .sort((left, right) => (left.sort_order ?? 0) - (right.sort_order ?? 0) || String(left.id ?? "").localeCompare(String(right.id ?? "")))
+    .map((rule) => {
+      const fieldKeys = Array.isArray(rule.field_keys) ? rule.field_keys : [];
+      const missing = fieldKeys.filter((key) => {
+        const field = fieldsByKey.get(key);
+        return !field || !isCombinedLengthField(field);
+      });
+      const characterCount = missing.length > 0
+        ? 0
+        : fieldKeys.reduce((total, key) => total + (typeof answers[key] === "string" ? (answers[key] as string).length : 0), 0);
+      const maxChars = Number(rule.max_chars);
+      const disabled = missing.length > 0 || !Number.isFinite(maxChars) || maxChars <= 0 || fieldKeys.length === 0;
+      const overBy = disabled ? 0 : Math.max(0, characterCount - maxChars);
+      return {
+        ...rule,
+        field_keys: fieldKeys,
+        max_chars: maxChars,
+        character_count: characterCount,
+        over_by: overBy,
+        disabled,
+        missing_field_keys: missing,
+      };
+    });
+}
+
+export function formLengthRuleIssues(
+  rules: readonly FormLengthRule[],
+  fields: readonly FormFieldAnswerInput[],
+  projectedAnswers: Record<string, unknown>,
+): FormValidationIssue[] {
+  const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
+  return evaluateFormLengthRules(rules, fields, projectedAnswers)
+    .filter((rule) => !rule.disabled && rule.over_by > 0)
+    .map((rule) => {
+      // A hidden first member cannot receive MRQ-240's recovery focus. Keep
+      // the rule's order, but hand the client the first member that is
+      // actually rendered under the projected answers.
+      const firstVisibleKey = rule.field_keys.find((key) => {
+        const field = fieldsByKey.get(key);
+        return field !== undefined && isFieldApplicable(field, projectedAnswers);
+      });
+      return {
+        fieldKey: firstVisibleKey ?? "",
+        kind: "form_length_rule" as const,
+        fieldKeys: rule.field_keys,
+        message: `${rule.label} is ${rule.over_by} characters over its ${rule.max_chars}-character limit.`,
+      };
+    });
 }
 
 /** Stable preview projection shared by builder and public-form consumers. */
