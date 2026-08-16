@@ -360,7 +360,11 @@ transition into `accepted`, `waitlisted`, or `rejected` writes the corresponding
 That write stops at the record boundary: it does not enqueue mail, assign
 onboarding tasks, or run the acceptance cascade; the existing
 "changed in Airtable · cascade not run" recovery action remains the explicit
-operator door.
+operator door. A replay whose status already equals Marquee's status is an
+idempotent no-op: it creates no rejection, audit row, counter increment,
+decision row, or write-back. Drafts are private incomplete form state, so the
+mirror deliberately refuses `draft → submitted`; only Marquee's submission
+writer can promote a draft after its required fields have been validated.
 
 ### 3.10 Operations and provenance
 

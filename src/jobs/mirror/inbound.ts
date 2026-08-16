@@ -211,6 +211,7 @@ async function applySubmissionRecord(
   let changed = false;
   let decisionId: string | null = null;
   let decision: "approve" | "maybe" | "deny" | null = null;
+  let decisionResultingStatus: (typeof DECISION_STATUSES)[number] | null = null;
   if (Object.hasOwn(fields, "status") && row.agenda_published === 1) {
     await recordMirrorSubmissionRejection({
       db,
@@ -254,11 +255,12 @@ async function applySubmissionRecord(
           now,
         });
         dropped += 1;
-      } else {
+      } else if (row.status !== requestedStatus) {
         assignments.push("status = ?"); values.push(requestedStatus); changed = true;
         if (DECISION_STATUSES.includes(requestedStatus as (typeof DECISION_STATUSES)[number])) {
           decisionId = newUlid(now);
           decision = requestedStatus === "accepted" ? "approve" : requestedStatus === "waitlisted" ? "maybe" : "deny";
+          decisionResultingStatus = requestedStatus as (typeof DECISION_STATUSES)[number];
           assignments.push("decided_at = ?", "decided_by_person_id = ?"); values.push(now, null);
         }
       }
@@ -303,13 +305,13 @@ async function applySubmissionRecord(
        VALUES (?, ?, ?, ?, ?, ?)`,
     ).bind(crypto.randomUUID(), rowId, trackId, trackId === primary || (primary === null && index === 0) ? 1 : 0, now, now)));
   }
-  if (decisionId !== null && decision !== null) {
+  if (decisionId !== null && decision !== null && decisionResultingStatus !== null) {
     statements.push(db.prepare(
       `INSERT INTO submission_decisions
         (id, event_id, submission_id, decision, resulting_status, feedback_md,
          decided_by_person_id, decided_at, outbox_id, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, NULL, ?, ?)`,
-    ).bind(decisionId, row.event_id, rowId, decision, fields.status, now, now, now));
+    ).bind(decisionId, row.event_id, rowId, decision, decisionResultingStatus, now, now, now));
     statements.push(auditStatement(db, {
       eventId: row.event_id,
       actorKind: "airtable",
@@ -318,7 +320,7 @@ async function applySubmissionRecord(
       entityType: "submission",
       entityId: rowId,
       before: { status: row.status },
-      after: { status: fields.status, decision_id: decisionId, source: "airtable" },
+      after: { status: decisionResultingStatus, decision_id: decisionId, source: "airtable" },
       now,
       requestId: null,
     }));

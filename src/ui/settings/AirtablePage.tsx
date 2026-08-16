@@ -54,6 +54,12 @@ export interface MirrorStatus {
   webhook_expires_at: number | null;
 }
 
+export interface AirtableLogEntry {
+  created_at: number;
+  id: string;
+  message: string;
+}
+
 type LoadState =
   | { kind: "loading" }
   | { kind: "ready"; status: MirrorStatus }
@@ -116,7 +122,7 @@ export function AirtableHealthCard({
     <section class="card airtable-health-card">
       <CardHeader title="Mirror health"><div class="airtable-health-actions"><Button small onClick={onSync} disabled={pending !== null}>{pending === "sync" ? "Queueing…" : "Sync now"}</Button><Button small variant="danger" onClick={onDisconnect} disabled={pending !== null}>{pending === "disconnect" ? "Disconnecting…" : "Disconnect"}</Button></div></CardHeader>
       <CardBody>
-        <div class="airtable-counts"><div><span>Queued</span><strong>{status.queued}</strong><small>Local changes waiting for Airtable</small></div><div><span>Rejected edits</span><strong class={status.rejected_edits > 0 ? "airtable-count-alarm" : ""}>{status.rejected_edits}</strong><small>Airtable edits Marquee wrote back</small></div><div><span>Stuck</span><strong class={status.stuck > 0 ? "airtable-count-alarm" : ""}>{status.stuck}</strong><small>At the retry cap and needing attention</small></div><div><span>Last sync</span><strong class="airtable-count-date">{dateOnly(status.last_sync_at)}</strong><small>Both counts are as of last sync</small></div></div>
+        <div class="airtable-counts"><div><span>Queued</span><strong>{status.queued}</strong><small>Local changes waiting for Airtable</small></div><div><span>Rejected edits</span><strong class={status.rejected_edits > 0 ? "airtable-count-alarm" : ""}>{status.rejected_edits}</strong><small>Airtable edits Marquee wrote back</small></div><div><span>Stuck</span><strong class={status.stuck > 0 ? "airtable-count-alarm" : ""}>{status.stuck}</strong><small>At the retry cap and needing attention</small></div><div><span>Last sync</span><strong class="airtable-count-date">{dateOnly(status.last_sync_at)}</strong><small>All row counts are as of last sync</small></div></div>
         {status.last_error && <div class="settings-error airtable-last-error" role="alert"><strong>Last provider error</strong><span>{status.last_error}</span></div>}
         <div class="table-scroll"><table class="airtable-table"><thead><tr><th scope="col">Table</th><th scope="col">Marquee rows</th><th scope="col">Airtable rows</th><th scope="col">As of last sync</th></tr></thead><tbody>{TABLE_ORDER.map((table) => { const row = rowsByName.get(table); return <tr key={table}><th scope="row">{TABLE_LABELS[table]}</th><td class="tabular">{row?.local_row_count ?? 0}</td><td class="tabular">{row?.remote_row_count ?? 0}</td><td class="tabular">{dateOnly(row?.last_sync_at ?? null)}</td></tr>; })}</tbody></table></div>
       </CardBody>
@@ -129,6 +135,24 @@ export function AirtableConnectionFacts({ status }: { status: MirrorStatus }): J
   return <div class="airtable-credential-facts"><span>Token fingerprint <code>{status.token_fingerprint ?? "—"}</code></span><span>Set {dateTime(status.set_at)}</span><span>Verified {dateTime(status.last_verified_at)}</span>{status.base_url && <a href={status.base_url} target="_blank" rel="noopener">Open base ↗</a>}</div>;
 }
 
+export function AirtableLiveLog({
+  log,
+  status,
+}: {
+  log: readonly AirtableLogEntry[];
+  status: MirrorStatus | null;
+}): JSX.Element {
+  const entries = [
+    ...(status?.recent_rejections ?? []).map((entry) => ({
+      created_at: entry.created_at,
+      id: entry.id,
+      message: entry.message,
+    })),
+    ...log,
+  ].sort((left, right) => right.created_at - left.created_at || right.id.localeCompare(left.id)).slice(0, 8);
+  return <section class="card airtable-log-card"><CardHeader title="Live log"><span class="subtle">Connection actions and edits Marquee did not apply</span></CardHeader><CardBody>{entries.length > 0 ? <ol class="airtable-log">{entries.map((entry) => <li key={entry.id}>{dateTime(entry.created_at)} · {entry.message}</li>)}</ol> : <div class="airtable-log-empty">No connection actions or rejected edits to show.</div>}</CardBody></section>;
+}
+
 export function AirtablePage({ navigate }: { navigate: (target: string) => void }): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [token, setToken] = useState("");
@@ -138,7 +162,7 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
   const [pending, setPending] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [log, setLog] = useState<string[]>([]);
+  const [log, setLog] = useState<AirtableLogEntry[]>([]);
 
   const status = state.kind === "ready" ? state.status : null;
   const expiry = expiryCopy(status?.webhook_expires_at ?? null);
@@ -162,7 +186,8 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
   }, []);
 
   function record(message: string): void {
-    setLog((current) => [`${dateTime(Date.now())} · ${message}`, ...current].slice(0, 8));
+    const created_at = Date.now();
+    setLog((current) => [{ created_at, id: `local-${created_at}-${current.length}`, message }, ...current].slice(0, 8));
   }
 
   async function connect(event: JSX.TargetedEvent<HTMLFormElement>): Promise<void> {
@@ -308,6 +333,6 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
       onDisconnect={() => void disconnect()}
     />}
 
-    <section class="card airtable-log-card"><CardHeader title="Live log"><span class="subtle">Connection actions and edits Marquee did not apply</span></CardHeader><CardBody>{(status?.recent_rejections.length ?? 0) > 0 || log.length > 0 ? <ol class="airtable-log">{status?.recent_rejections.map((entry) => <li key={entry.id}>{dateTime(entry.created_at)} · {entry.message}</li>)}{log.map((entry, index) => <li key={`${entry}-${index}`}>{entry}</li>)}</ol> : <div class="airtable-log-empty">No connection actions or rejected edits to show.</div>}</CardBody></section>
+    <AirtableLiveLog status={status} log={log} />
   </div>;
 }

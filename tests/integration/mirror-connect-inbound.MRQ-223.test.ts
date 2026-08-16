@@ -445,7 +445,23 @@ test("AC-226 · an illegal inbound transition is rejected before a non-published
   expect(await count("SELECT COUNT(*) AS count FROM mirror_outbox WHERE row_id = ? AND drained_at IS NULL", SUBMISSION_ID)).toBe(1);
 });
 
-test("AC-235 · a legal Airtable acceptance writes an unnotified decision without running derived work", async () => {
+test("AC-226 · an Airtable draft cannot be promoted to submitted through the mirror", async () => {
+  await seedMirrorSubmission("draft", "Draft transition session");
+  const fake = new FakeAirtableTransport(() => NOW, { tables: TABLES });
+  await connectAndMap(fake);
+  fake.payloads.push(submissionPayload("submitted"));
+
+  const pulled = await pullMirrorPayloads(actionEnvironment(fake), { transport: fake, ...clockAt() });
+  expect(pulled).toMatchObject({ applied: 0, dropped: 2 });
+  expect(await env.DB.prepare("SELECT status FROM submissions WHERE id = ?").bind(SUBMISSION_ID).first<{ status: string }>()).toEqual({ status: "draft" });
+  const rejection = await env.DB.prepare(
+    "SELECT after_json FROM audit_log WHERE event_id = ? AND entity_id = ? AND action = 'mirror.inbound_rejected' ORDER BY created_at DESC LIMIT 1",
+  ).bind(EVENT_ID, SUBMISSION_ID).first<{ after_json: string }>();
+  expect(JSON.parse(rejection?.after_json ?? "{}")).toMatchObject({ reason: "illegal_transition", requested: "submitted" });
+  expect(await count("SELECT COUNT(*) AS count FROM mirror_outbox WHERE row_id = ? AND drained_at IS NULL", SUBMISSION_ID)).toBe(1);
+});
+
+test("AC-226 · a legal Airtable acceptance writes an unnotified decision without running derived work", async () => {
   await seedMirrorSubmission("submitted", "Airtable acceptance session");
   const fake = new FakeAirtableTransport(() => NOW, { tables: TABLES });
   await connectAndMap(fake);
@@ -492,6 +508,19 @@ test("AC-235 · a legal Airtable acceptance writes an unnotified decision withou
   ]));
 });
 
+test("AC-226 · replaying an Airtable status is a no-op without rejection or write-back", async () => {
+  await seedMirrorSubmission("submitted", "Airtable replay session");
+  const fake = new FakeAirtableTransport(() => NOW, { tables: TABLES });
+  await connectAndMap(fake);
+  fake.payloads.push(submissionPayload("accepted"), submissionPayload("accepted"));
+
+  const pulled = await pullMirrorPayloads(actionEnvironment(fake), { transport: fake, ...clockAt() });
+  expect(pulled).toMatchObject({ applied: 1, dropped: 2, payloads: 2 });
+  expect(await count("SELECT COUNT(*) AS count FROM submission_decisions WHERE submission_id = ?", SUBMISSION_ID)).toBe(1);
+  expect(await count("SELECT COUNT(*) AS count FROM audit_log WHERE event_id = ? AND entity_id = ? AND action = 'mirror.inbound_rejected'", EVENT_ID, SUBMISSION_ID)).toBe(0);
+  expect(await count("SELECT COUNT(*) AS count FROM mirror_outbox WHERE row_id = ? AND drained_at IS NULL", SUBMISSION_ID)).toBe(0);
+});
+
 async function expectMirrorDecision(status: "waitlisted" | "rejected", decision: "maybe" | "deny"): Promise<void> {
   await seedMirrorSubmission("submitted", `Airtable ${status} session`);
   const fake = new FakeAirtableTransport(() => NOW, { tables: TABLES });
@@ -512,11 +541,11 @@ async function expectMirrorDecision(status: "waitlisted" | "rejected", decision:
   expect(await count("SELECT COUNT(*) AS count FROM speaker_tasks WHERE submission_id = ?", SUBMISSION_ID)).toBe(0);
 }
 
-test("AC-235 · Airtable waitlist writes the matching decision row without derived work", async () => {
+test("AC-226 · Airtable waitlist writes the matching decision row without derived work", async () => {
   await expectMirrorDecision("waitlisted", "maybe");
 });
 
-test("AC-235 · Airtable rejection writes the matching decision row without derived work", async () => {
+test("AC-226 · Airtable rejection writes the matching decision row without derived work", async () => {
   await expectMirrorDecision("rejected", "deny");
 });
 

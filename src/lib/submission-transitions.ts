@@ -31,7 +31,12 @@ export function canTransitionSubmissionStatus(
   if (!ACTIONABLE_STATUSES.has(currentStatus)) {
     return `submission is ${currentStatus} and cannot be decided`;
   }
-  if (currentStatus === targetStatus) return `submission is already ${targetStatus}`;
+  // Airtable delivery is at-least-once and its webhook has no source filter.
+  // A provider replay of Marquee's current value is therefore an idempotent
+  // no-op, while the organizer writer still reports a duplicate decision.
+  if (currentStatus === targetStatus) {
+    return source === "airtable" ? null : `submission is already ${targetStatus}`;
+  }
   if (targetStatus === "draft") return "submission cannot transition back to draft";
   if (source === "airtable" && currentStatus === "withdrawn") {
     return "submission is withdrawn and cannot be changed by Airtable";
