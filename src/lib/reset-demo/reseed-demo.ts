@@ -167,7 +167,7 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
     bindings: ORG,
   },
   submission_notes: {
-    sql: "DELETE FROM submission_notes WHERE submission_id IN (SELECT id FROM submissions WHERE event_id IN (${ORG_EVENTS}))",
+    sql: `DELETE FROM submission_notes WHERE submission_id IN (SELECT id FROM submissions WHERE event_id IN (${ORG_EVENTS}))`,
     bindings: ORG,
   },
   submission_answers: {

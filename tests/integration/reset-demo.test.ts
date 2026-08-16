@@ -30,6 +30,7 @@ const UNRELATED_OBJECT_KEY = "uploads/" + UNRELATED_EVENT_ID + "/event_logo/unre
 const SEEDED_COUNTS: Record<string, number> = {
   webhook_deliveries: 0,
   webhook_endpoints: 0,
+  submission_notes: 0,
   submission_decisions: 680,
   submission_answers: 4091,
   submission_tracks: 1156,
@@ -338,6 +339,7 @@ test("AC-230 · reset-demo restores the full seeded baseline from dirty state, s
 
   const job = await readResetJob(env.CACHE, jobId);
   expect(job?.status).toBe("done");
+  expect(job?.result).toMatchObject({ deletedObjects: 1 });
   await assertResetState();
   expect(mirrorSend).toHaveBeenCalledTimes(1);
   expect(mirrorSend.mock.calls[0][0]).toMatchObject({ type: "mirror_reconcile" });
@@ -352,7 +354,9 @@ test("AC-230 · reset-demo restores the full seeded baseline from dirty state, s
   const { job_id: secondJobId } = await secondPost.json<{ job_id: string }>();
   const secondMirrorSend = vi.fn();
   await dispatchResetJob(secondJobId, secondMirrorSend);
-  expect((await readResetJob(env.CACHE, secondJobId))?.status).toBe("done");
+  const secondJob = await readResetJob(env.CACHE, secondJobId);
+  expect(secondJob?.status).toBe("done");
+  expect(secondJob?.result).toMatchObject({ deletedObjects: 0 });
   await assertResetState();
   expect(secondMirrorSend).toHaveBeenCalledTimes(1);
   await assertBothDemoLogins();
