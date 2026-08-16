@@ -91,9 +91,9 @@ async function seedFixture(): Promise<void> {
   otherEventCookie = `mq_session=${otherEvent.id}`;
 }
 
-async function request(query: string, cookie = ownerCookie): Promise<Response> {
+async function request(query: string, cookie = ownerCookie, extraHeaders: Record<string, string> = {}): Promise<Response> {
   return SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/search${query}`, {
-    headers: { cookie },
+    headers: { cookie, ...extraHeaders },
   });
 }
 
@@ -171,5 +171,20 @@ describe.sequential("MRQ-29 quick search", () => {
     expect(fuzzyBody.data.some((result) => result.id === ABSTRACT_ID)).toBe(true);
     expect(fuzzyBody.data.some((result) => result.id === SPEAKER_ID)).toBe(true);
     expect(fuzzyBody.data.some((result) => result.id === SECRET_ID)).toBe(false);
+  });
+
+  test("CONTRACT · opening search refreshes a completed unscoped snapshot", async () => {
+    const sessionHeaders = { "x-search-session": "search-refresh-contract", "x-search-prefetch": "1" };
+    const prefetch = await request("?q=", ownerCookie, sessionHeaders);
+    expect(prefetch.status).toBe(200);
+
+    await env.DB.prepare("UPDATE submissions SET title = ? WHERE id = ?").bind("Fresh title after mount", ABSTRACT_ID).run();
+
+    const refresh = await request("?q=", ownerCookie, { ...sessionHeaders, "x-search-refresh": "1" });
+    expect(refresh.status).toBe(200);
+    const response = await request("?q=Fresh%20title%20after%20mount", ownerCookie, sessionHeaders);
+    expect(response.status).toBe(200);
+    const body = await json(response);
+    expect(body.data.some((result) => result.id === ABSTRACT_ID && result.title === "Fresh title after mount")).toBe(true);
   });
 });
