@@ -191,9 +191,10 @@ test("MRQ-228 · the UID floor survives invite deletion", async () => {
   });
   await env.DB.prepare("DELETE FROM calendar_invites WHERE submission_id = ? AND person_id = ?").bind(SUBMISSION_ID, PERSON_ID).run();
   await env.DB.prepare("DELETE FROM agenda_items WHERE event_id = ? AND submission_id = ?").bind(EVENT_ID, SUBMISSION_ID).run();
+  const recreatedAt = Date.now();
   await env.DB.prepare(
     "INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at) VALUES (?, ?, ?, 'session', ?, 30, ?, 0, ?, ?)",
-  ).bind("agenda_calendar_recreated", EVENT_ID, SUBMISSION_ID, Date.parse("2026-09-09T19:00:00.000Z"), "room_calendar", NOW + 1, NOW + 1).run();
+  ).bind("agenda_calendar_recreated", EVENT_ID, SUBMISSION_ID, Date.parse("2026-09-09T19:00:00.000Z"), "room_calendar", recreatedAt, recreatedAt).run();
 
   const second = await sendCalendarInvites({
     db: env.DB,
