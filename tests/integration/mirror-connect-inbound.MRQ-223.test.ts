@@ -410,6 +410,7 @@ test("CONTRACT · inbound accepted status stops before tasks and mail until the 
       `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
        VALUES ('participation_mrq223', ?, ?, 'speaker', 0, ?, ?)`,
     ).bind(SUBMISSION_ID, PERSON_ID, NOW, NOW),
+    // clock-check: allow — agenda starts_at is an exact schedule instant, not an event-local calendar deadline
     env.DB.prepare(
       `INSERT INTO agenda_items
         (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)

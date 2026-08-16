@@ -389,6 +389,7 @@ test("CONTRACT · MRQ-230 · a sponsor content write-back refuses a live Session
   await env.DB.batch([
     env.DB.prepare("INSERT INTO rooms (id, event_id, building_id, name, capacity, position, created_at, updated_at) VALUES ('room_mrq214_live', ?, 'bld_mrq214', 'Live room', 100, 0, ?, ?)")
       .bind(EVENT_ID, NOW, NOW),
+    // clock-check: allow — agenda starts_at is an exact schedule instant, not an event-local calendar deadline
     env.DB.prepare("INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at) VALUES ('agenda_mrq214_live', ?, ?, 'session', ?, 30, 'room_mrq214_live', 1, ?, ?)")
       .bind(EVENT_ID, SILVER_SESSION, NOW + DAY, NOW, NOW),
     env.DB.prepare("UPDATE submissions SET is_published = 1 WHERE id = ?").bind(SILVER_SESSION),
