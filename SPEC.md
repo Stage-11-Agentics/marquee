@@ -306,16 +306,19 @@ including calendar `sequence` and method, and the registry's inventory test
 proves that byte identity.
 
 Two intentional exceptions make the action grain explicit. A draft-resume request
-uses `submission_id:request_id`, where the request tail is a fresh non-secret
-value, so requesting the same draft link again is not swallowed. An ad-hoc manual
-send keeps the recipient id in the stored row for record-history joins, while its
-hash seed includes the durable per-compose id. The conference and organization
-send routes accept the standard `Idempotency-Key` header for retries; when it is
-absent, the route mints a fresh per-send id, so a genuinely new nudge produces a
-new row. The calendar composite is intentionally revisioned, but the consumer's
-post-send audit mapper cannot currently parse it into a submission/person
-timeline row; that known limitation is deferred to the calendar-truth work
-rather than hidden in a second entity-id format.
+keeps the newly minted `submission_id` plain: `createDraft` creates a new
+submission per request, and the consumer uses that id to join delivery back to
+submission history. The earlier hypothesis that a repeated request reused one
+submission was not reproducible on the shipped path, so no request tail is added
+at the cost of that audit join. An ad-hoc manual send keeps the recipient id in
+the stored row for record-history joins, while its hash seed includes the durable
+per-compose id. The conference and organization send routes accept and publish
+the standard `Idempotency-Key` header for retries; when it is absent, the route
+mints a fresh per-send id, so a genuinely new nudge produces a new row. The
+calendar composite is intentionally revisioned, but the consumer's post-send
+audit mapper cannot currently parse it into a submission/person timeline row;
+that known limitation is deferred to the calendar-truth work rather than hidden
+in a second entity-id format.
 
 **`calendar_invites`** (AC-95–AC-97, AC-124) — `submission_id`, `person_id`, `uid` (`{submission_id}.{person_id}@marquee.stage11.dev`), `sequence` INTEGER, `last_method` ∈ `REQUEST\|CANCEL`, `last_sent_at`, `status`.
 Writer: schedule/reschedule/un-accept. Reader: ICS builder — same `UID`, `SEQUENCE+1` on every material change; `METHOD:CANCEL` + `STATUS:CANCELLED` on reversal.
@@ -1055,5 +1058,6 @@ The route `SITEMAP.md` has always drawn and no build has ever installed. Unconfi
 
 Folds `USER_STORIES.md` Amendment 26 and `EVALUATION.md` §2.9. AC-117's existing
 bulk-send criterion is strengthened with the full registry byte-identity proof;
-AC-314 adds the manual-nudge resend contract. This is a post-deadline band and
-does not change the live in-scope count or tier arithmetic.
+AC-314 adds the manual-nudge resend contract and records the corrected
+draft-resume finding. This is a post-deadline band and does not change the live
+in-scope count or tier arithmetic.

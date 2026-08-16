@@ -1182,10 +1182,13 @@ change the live competition count or tier arithmetic.
 **AC-314** *(appended to US-45/US-68, post-deadline)*: A manual ad-hoc send
 repeated with the same durable `Idempotency-Key` produces exactly one outbox row
 per recipient, while a genuinely new nudge with no key produces a new row even
-when recipient and copy are identical. Draft-resume requests carry a per-request
-tail so asking for the same draft link again is not swallowed. The registry
-inventory proves unchanged idempotency-key bytes across the pure refactor, and a
-type-level guard rejects raw-string `entityId` values at the outbox boundary.
+when recipient and copy are identical; first-party compose clients retain that
+key across a retry and expose it in the API contract. Draft-resume requests keep
+the newly minted submission id as their grain: the old repeated-submission
+premise is not reproducible, and the plain id preserves the delivery-to-history
+join. The registry inventory proves unchanged idempotency-key bytes across the
+pure refactor, and a type-level guard rejects raw-string `entityId` values at the
+outbox boundary.
 
 `EVALUATION.md` §2.9 owns the verification row. Built by MRQ-226.
 

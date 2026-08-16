@@ -440,7 +440,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-114 | `auto` | `test:` merge fields for speaker name and submission title render with real seeded values. |
 | AC-115 | `auto` | `e2e:` bulk reject shows a rendered preview of one real recipient's version before sending. |
 | AC-116 | `auto` | `e2e:` rejected submitter's portal shows the outcome; outbox carries the email. |
-| AC-117 | `auto` | `test:` invoke the bulk action twice — exactly one outbox row per (template, submission); `Idempotency-Key` present on each provider call. The full pre-fix write-site inventory then compares every unchanged registry entity id and resulting hash byte-for-byte, so a central refactor cannot silently rename a grain. |
+| AC-117 | `auto` | `test:` invoke the repeated templated bulk action twice — exactly one outbox row per (template, submission), with `Idempotency-Key` present on each provider call. Ad-hoc compose retries are covered by AC-314 because they use a durable request header, while an omitted header intentionally starts a new nudge. The full pre-fix write-site inventory then compares every unchanged registry entity id and resulting hash byte-for-byte, so a central refactor cannot silently rename a grain. |
 
 **US-22 · Manual admin entry**
 
@@ -704,7 +704,7 @@ appended to US-45/US-68; the implementation seam is the frozen registry in
 
 | AC | Tier | Tag | How verified |
 |---|---|---|---|
-| AC-314 | PD | `auto` | `test:` a manual send repeated with the same `Idempotency-Key` produces one outbox row per recipient, while a new nudge with no key produces another row even when recipient and copy are identical; the draft-resume seam produces distinct keys for distinct request tails; the registry inventory preserves unchanged key bytes and a type-level fixture rejects raw-string `entityId` values. |
+| AC-314 | PD | `auto` | `test:` first-party compose clients send a durable `Idempotency-Key`; a client-level retry with the same key produces one outbox row per recipient, while a new nudge with no header produces another row even when recipient and copy are identical. The draft-resume seam remains the fresh per-request submission id so its delivery still joins submission history; the registry inventory preserves unchanged key bytes and a type-level fixture rejects raw-string `entityId` values. |
 
 ---
 
