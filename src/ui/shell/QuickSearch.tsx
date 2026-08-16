@@ -46,19 +46,23 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
   const searchSessionRef = useRef("");
 
   useEffect(() => {
-    if (!open) return;
     searchSessionRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=`, {
+      headers: { accept: "application/json", "x-search-session": searchSessionRef.current, "x-search-prefetch": "1" },
+      route: "/api/v1/events/{eventId}/search",
+    }).catch(() => undefined);
+    return () => activeRequestRef.current?.abort();
+  }, [eventId]);
+
+  useEffect(() => {
+    if (!open) return;
     setQuery("");
     setResults([]);
     setState("idle");
     setErrorMessage("");
     setPaintedQuery("");
-    void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=`, {
-      headers: { accept: "application/json", "x-search-session": searchSessionRef.current, "x-search-prefetch": "1" },
-      route: "/api/v1/events/{eventId}/search",
-    }).catch(() => undefined);
     inputRef.current?.focus();
-  }, [eventId, open]);
+  }, [open]);
 
   useEffect(() => {
     if (!open || query.trim().length === 0) {

@@ -283,11 +283,11 @@ export async function runSpeedCheck({ gate = false, scope = "all" }: { gate?: bo
     try {
       const admin = await adminContext(browser, runtime.baseUrl, client.sessionCookie);
       const adminPage = await admin.newPage();
-      if (!acceptanceOnly) {
-        const dashboardValues = await sample(SAMPLE_COUNTS.warm, () => loadPage(adminPage, runtime.baseUrl, "/dashboard", ".dashboard-page"));
-        recordSample(samples, measurements, "dashboard-render", dashboardValues, "Playwright authenticated /dashboard render", "p95");
-        methods["dashboard-render"] = "Playwright authenticated /dashboard render to .dashboard-page";
+      const dashboardValues = await sample(SAMPLE_COUNTS.warm, () => loadPage(adminPage, runtime.baseUrl, "/dashboard", ".dashboard-page"));
+      recordSample(samples, measurements, "dashboard-render", dashboardValues, "Playwright authenticated /dashboard render", "p95");
+      methods["dashboard-render"] = "Playwright authenticated /dashboard render to .dashboard-page";
 
+      if (!acceptanceOnly) {
         const submissionsValues = await sample(SAMPLE_COUNTS.warm, () => loadPage(adminPage, runtime.baseUrl, "/submissions", ".submissions-page"));
         recordSample(samples, measurements, "submissions-first-interactive", submissionsValues, "Playwright authenticated /submissions render", "p95");
         methods["submissions-first-interactive"] = "Playwright authenticated /submissions render to .submissions-page";
