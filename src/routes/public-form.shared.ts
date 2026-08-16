@@ -782,23 +782,42 @@ export function toPublicFormState(
   };
 }
 
+type PublicIssueField = Pick<FormFieldView, "key" | "type">;
+
 /** Convert evaluator language into a sentence with a visible remedy. */
-export function publicIssueMessage(issue: FormValidationIssue): string {
+export function publicIssueMessage(issue: FormValidationIssue, field?: PublicIssueField): string {
   const message = issue.message.toLowerCase();
-  if (message.includes("required")) return "Add an answer so the conference team can review this abstract.";
-  if (message.includes("email")) return "Enter an address where the conference team can reach you, then try again.";
-  if (message.includes("url")) return "Add a web address beginning with https://, then try again.";
-  if (message.includes("number")) return "Enter a number in the range shown, then try again.";
-  if (message.includes("date")) return "Choose a valid date, then try again.";
-  if (message.includes("option")) return "Choose an option from the list, then try again.";
-  if (message.includes("file")) return "Choose a file of the accepted size and format, then try again.";
-  if (message.includes("characters")) return `${issue.message} Then try again.`;
-  if (message.includes("format")) return "Use the format shown beneath this answer, then try again.";
+  if (issue.kind === "form_length_rule") return `${issue.message} Then try again.`;
+  if (message === "this field is required.") return "Add an answer so the conference team can review this abstract.";
+  switch (field?.type) {
+    case "email": return "Enter an address where the conference team can reach you, then try again.";
+    case "url": return "Add a web address beginning with https://, then try again.";
+    case "number": return "Enter a number in the range shown, then try again.";
+    case "date": return "Choose a valid date, then try again.";
+    case "single_select":
+    case "multi_select": return "Choose an option from the list, then try again.";
+    case "file": return "Choose a file of the accepted size and format, then try again.";
+    default: break;
+  }
+  // These domain checks already carry public-facing copy and are keyed by
+  // stable API fields. Never infer their kind from an organizer-authored label.
+  if (issue.fieldKey === "format" || issue.fieldKey === "tracks") return issue.message;
+  if (message === "use the requested format.") return "Use the format shown beneath this answer, then try again.";
   return "Add the requested detail, then try again.";
 }
 
-export function publicIssues(issues: FormValidationIssue[]): FormValidationIssue[] {
-  return issues.map((issue) => ({ ...issue, message: publicIssueMessage(issue) }));
+export function publicIssues(
+  issues: readonly FormValidationIssue[],
+  fields: readonly PublicIssueField[] = [],
+): FormValidationIssue[] {
+  const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
+  // Keep internal group metadata out of the public error envelope. The public
+  // contract is still the stable fieldKey/message pair; the local client has
+  // the evaluator's kind while server responses already contain public copy.
+  return issues.map((issue) => ({
+    fieldKey: issue.fieldKey,
+    message: publicIssueMessage(issue, fieldsByKey.get(issue.fieldKey)),
+  }));
 }
 
 export function projectPublicAnswers(
@@ -807,7 +826,7 @@ export function projectPublicAnswers(
   lengthRules: readonly FormLengthRule[] = [],
 ): PublicFormWriteResult {
   const projected = projectApplicableAnswers(fields, rawAnswers, lengthRules);
-  return { projected, issues: publicIssues(projected.issues) };
+  return { projected, issues: publicIssues(projected.issues, fields) };
 }
 
 function asText(value: unknown): string | null {

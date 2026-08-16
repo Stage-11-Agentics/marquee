@@ -60,14 +60,20 @@ test("CONTRACT · public answer projection and direct answer writers have an exp
   assert.deepEqual(
     tally(projectionCalls),
     [
-      // MRQ-214 MOVED one of portal.routes.ts's two projections into the task
-      // projection both portals now share. The draft editor is also a consumer:
-      // it uses the same projection before replacing a draft's answer rows.
+      // Payload projection shared by speaker and sponsor task readers.
       { file: "src/routes/portal-tasks.queries.ts", count: 1 },
+      // Portal form completion refusal and answer-row writeback.
       { file: "src/routes/portal.routes.ts", count: 1 },
+      // Public submit/edit projection and public-facing issue copy.
       { file: "src/routes/public-form.shared.ts", count: 1 },
+      // New admin submission validation plus draft-edit validation/writeback.
       { file: "src/routes/submission-record.routes.ts", count: 2 },
-      { file: "src/ui/public/form/PublicForm.tsx", count: 1 },
+      // Builder preview's projected answer/counter state.
+      { file: "src/ui/forms/FormsPage.tsx", count: 1 },
+      // The public form uses the shared projection once for its live counter
+      // and once for client-side submit validation; both are intentional
+      // consumers of the same server evaluator.
+      { file: "src/ui/public/form/PublicForm.tsx", count: 2 },
     ],
     "projection call-site inventory changed; re-audit every consumer before adding or moving a writer. Observed: "
       + JSON.stringify(projectionCalls),

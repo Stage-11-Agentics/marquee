@@ -50,6 +50,10 @@ export interface FormFieldAnswerInput extends FormFieldConditionInput {
 export interface FormValidationIssue {
   fieldKey: string;
   message: string;
+  /** Internal classification for constraints that span more than one field. */
+  kind?: "form_length_rule";
+  /** Every field participating in a group-level constraint. */
+  fieldKeys?: readonly string[];
 }
 
 export interface ProjectedFormAnswers {
@@ -366,12 +370,24 @@ export function formLengthRuleIssues(
   fields: readonly FormFieldAnswerInput[],
   projectedAnswers: Record<string, unknown>,
 ): FormValidationIssue[] {
+  const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
   return evaluateFormLengthRules(rules, fields, projectedAnswers)
     .filter((rule) => !rule.disabled && rule.over_by > 0)
-    .map((rule) => ({
-      fieldKey: rule.field_keys[0] ?? "",
-      message: `${rule.label} is ${rule.over_by} characters over its ${rule.max_chars}-character limit.`,
-    }));
+    .map((rule) => {
+      // A hidden first member cannot receive MRQ-240's recovery focus. Keep
+      // the rule's order, but hand the client the first member that is
+      // actually rendered under the projected answers.
+      const firstVisibleKey = rule.field_keys.find((key) => {
+        const field = fieldsByKey.get(key);
+        return field !== undefined && isFieldApplicable(field, projectedAnswers);
+      });
+      return {
+        fieldKey: firstVisibleKey ?? "",
+        kind: "form_length_rule" as const,
+        fieldKeys: rule.field_keys,
+        message: `${rule.label} is ${rule.over_by} characters over its ${rule.max_chars}-character limit.`,
+      };
+    });
 }
 
 /** Stable preview projection shared by builder and public-form consumers. */

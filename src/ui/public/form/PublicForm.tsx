@@ -98,16 +98,25 @@ function resumeLinkPath(url: string): string {
   }
 }
 
-function publicIssueMessage(issue: { message: string }): string {
+function publicIssueMessage(
+  issue: { fieldKey?: string; message: string; kind?: "form_length_rule" },
+  field?: Pick<PublicFormField, "key" | "type">,
+): string {
   const message = issue.message.toLowerCase();
-  if (message.includes("required")) return "Add an answer so the conference team can review this abstract.";
-  if (message.includes("email")) return "Enter an address where the conference team can reach you, then try again.";
-  if (message.includes("url")) return "Add a web address beginning with https://, then try again.";
-  if (message.includes("number")) return "Enter a number in the range shown, then try again.";
-  if (message.includes("date")) return "Choose a valid date, then try again.";
-  if (message.includes("option")) return "Choose an option from the list, then try again.";
-  if (message.includes("file")) return "Choose a file of the accepted size and format, then try again.";
-  if (message.includes("characters")) return `${issue.message} Then try again.`;
+  if (issue.kind === "form_length_rule") return `${issue.message} Then try again.`;
+  if (message === "this field is required.") return "Add an answer so the conference team can review this abstract.";
+  switch (field?.type) {
+    case "email": return "Enter an address where the conference team can reach you, then try again.";
+    case "url": return "Add a web address beginning with https://, then try again.";
+    case "number": return "Enter a number in the range shown, then try again.";
+    case "date": return "Choose a valid date, then try again.";
+    case "single_select":
+    case "multi_select": return "Choose an option from the list, then try again.";
+    case "file": return "Choose a file of the accepted size and format, then try again.";
+    default: break;
+  }
+  if (issue.fieldKey === "format" || issue.fieldKey === "tracks") return issue.message;
+  if (message === "use the requested format.") return "Use the format shown beneath this answer, then try again.";
   return "Add the requested detail, then try again.";
 }
 
@@ -414,7 +423,8 @@ export function PublicForm({ initial }: PublicFormProps) {
   function validate(): boolean {
     const result = projectApplicableAnswers(state.fields, answers, lengthRules);
     const next: Record<string, string> = {};
-    for (const issue of result.issues) next[issue.fieldKey] = publicIssueMessage(issue);
+    const fieldsByKey = new Map(state.fields.map((field) => [field.key, field]));
+    for (const issue of result.issues) next[issue.fieldKey] = publicIssueMessage(issue, fieldsByKey.get(issue.fieldKey));
     setErrors(next);
     const first = visibleFields.find((field) => next[field.key]);
     if (first) {

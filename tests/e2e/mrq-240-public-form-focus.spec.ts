@@ -29,6 +29,26 @@ async function installSubmission422(page: Page, error: Record<string, unknown>) 
   });
 }
 
+async function installCombinedLengthRule(page: Page) {
+  await page.route((url, request) => url.pathname === "/api/v1/public/forms/cfp" && request.method() === "GET", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json() as { form: { length_rules?: unknown[] } };
+    body.form.length_rules = [
+      ...(body.form.length_rules ?? []),
+      {
+        id: "e2e-mrq-246-programme",
+        label: "Updated programme block",
+        field_keys: ["title", "abstract"],
+        max_chars: 20,
+        sort_order: 0,
+        disabled: false,
+        missing_field_keys: [],
+      },
+    ];
+    await route.fulfill({ response, body: JSON.stringify(body) });
+  });
+}
+
 async function fillValidSubmission(page: Page) {
   await page.locator("#public-title").fill("A useful session title");
   await page.locator("#public-abstract").fill("This abstract is long enough to satisfy the conference validation rules for the browser path.");
@@ -56,6 +76,25 @@ test.describe("CONTRACT · public-form recovery focus", () => {
 
     await expect(page.locator("#public-title")).toBeFocused();
     await expect(page.locator('[data-field-key="title"] [role="alert"]')).toContainText("Add an answer");
+  });
+
+  test("CONTRACT · MRQ-246 · the combined counter crosses its cap and focuses the first visible group field", async ({ page }) => {
+    await use375px(page);
+    await installUploadRoutes(page);
+    await installCombinedLengthRule(page);
+
+    await page.goto("/f/cfp");
+    await expect(page.locator("[data-public-form]")).toBeVisible();
+    const counter = page.locator('[data-length-rule="e2e-mrq-246-programme"]');
+    await expect(counter).toContainText("0/20");
+
+    await fillValidSubmission(page);
+    await expect(counter).toContainText("over");
+    await page.getByRole("button", { name: "Submit abstract" }).click();
+
+    await expect(page.locator("#public-title")).toBeFocused();
+    await expect(page.locator('[data-field-key="title"] [role="alert"]')).toContainText("Updated programme block is");
+    await expect(page.locator('[data-field-key="title"] [role="alert"]')).not.toContainText("valid date");
   });
 
   test("AC-156 · a server 422 focuses the first offending field in document order at 375px", async ({ page }) => {
