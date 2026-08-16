@@ -15,6 +15,7 @@ import { sha256Hex } from "../../src/lib/auth/random-token";
 import type { MirrorActionEnvironment } from "../../src/jobs/mirror/actions";
 import type { MirrorConsumerEnvironment } from "../../src/jobs/mirror/consumer";
 import type { AirtableTable, AirtableWebhookPayload } from "../../src/jobs/mirror/transport";
+import { MIRROR_TABLE_SCHEMA } from "../../src/jobs/mirror/schema";
 import { applyMigrations, env } from "./apply-migrations";
 
 const NOW = Date.UTC(2026, 7, 15, 12, 0, 0);
@@ -32,10 +33,27 @@ const TABLE_IDS = {
   speaker_tasks: "tbl_mrq223_tasks",
 } as const;
 
+// MRQ-223 now carries full provider field metadata. An omitted `fields` value
+// means the schema is unknown and MRQ-248 must refuse to map it; this shared
+// fixture is deliberately complete so the pre-existing connect/inbound
+// coverage proves the expected conformant path.
+function fixtureTable(role: keyof typeof TABLE_IDS, name: string): AirtableTable {
+  return {
+    id: TABLE_IDS[role],
+    name,
+    fields: MIRROR_TABLE_SCHEMA[role === "speaker_tasks" ? "speaker_tasks" : role].fields.map((field, index) => ({
+      id: `fld_mrq223_${role}_${index}`,
+      name: field.name,
+      type: field.type,
+      ...(field.options === undefined ? {} : { options: structuredClone(field.options) }),
+    })),
+  };
+}
+
 const TABLES: readonly AirtableTable[] = [
-  { id: TABLE_IDS.people, name: "People" },
-  { id: TABLE_IDS.submissions, name: "Submissions" },
-  { id: TABLE_IDS.speaker_tasks, name: "Speaker Tasks" },
+  fixtureTable("people", "People"),
+  fixtureTable("submissions", "Submissions"),
+  fixtureTable("speaker_tasks", "Speaker Tasks"),
 ];
 
 function clockAt(start = NOW) {
@@ -94,18 +112,23 @@ async function connectAndMap(fake: FakeAirtableTransport): Promise<void> {
   if (!connected.ok) throw new Error(connected.message);
 
   const clock = clockAt();
-  const mapped = await mapMirror(actionEnvironment(fake), {
-    mapping: {
-      people: TABLE_IDS.people,
-      submissions: TABLE_IDS.submissions,
-      speaker_tasks: TABLE_IDS.speaker_tasks,
-    },
-    orgId: ORG_ID,
-    clock,
-    now: NOW,
-  });
-  expect(mapped.ok).toBe(true);
-  if (!mapped.ok) throw new Error(mapped.message);
+  let continuation: "submissions" | "speaker_tasks" | "people" | null = "submissions";
+  while (continuation) {
+    const mapped = await mapMirror(actionEnvironment(fake), {
+      mapping: {
+        people: TABLE_IDS.people,
+        submissions: TABLE_IDS.submissions,
+        speaker_tasks: TABLE_IDS.speaker_tasks,
+      },
+      orgId: ORG_ID,
+      clock,
+      now: NOW,
+      continuation,
+    });
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) throw new Error(mapped.message);
+    continuation = mapped.continuation ?? null;
+  }
 }
 
 async function seedMirrorSubmission(status: string, title = "MRQ-239 session"): Promise<void> {
@@ -242,7 +265,9 @@ test("AC-310 · mapping is the reachable mirror on-switch and creates all three 
     expect.objectContaining({ table_name: "submissions", airtable_table_id: TABLE_IDS.submissions, webhook_id: "whk_fake_mrq223" }),
     expect.objectContaining({ table_name: "speaker_tasks", airtable_table_id: TABLE_IDS.speaker_tasks, webhook_id: "whk_fake_mrq223" }),
   ]));
-  expect(fake.calls.map((call) => call.kind)).toEqual(["schema", "schema", "create_webhook"]);
+  expect(fake.calls.map((call) => call.kind)).toEqual([
+    "schema", "schema", "schema", "schema", "schema", "create_webhook",
+  ]);
   const status = await readMirrorStatus(env.DB, actionEnvironment(fake), ORG_ID);
   expect(status).toMatchObject({ configured: true, mapped: true, baseId: BASE_ID, trafficAssisted: true });
 

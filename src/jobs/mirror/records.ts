@@ -23,13 +23,50 @@ function isMirroredTable(value: string): value is MirroredTable {
   return (MIRRORED_TABLES as readonly string[]).includes(value);
 }
 
-function jsonValue(value: unknown): unknown {
-  if (typeof value !== "string") return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
+function stableJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableJsonValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value as Record<string, unknown>).sort().map((key) => [
+      key,
+      stableJsonValue((value as Record<string, unknown>)[key]),
+    ]));
   }
+  return value;
+}
+
+/** Stable JSON text is the provider shape for JSON-backed mirror fields. */
+export function stableJsonStringify(value: unknown): string | null {
+  if (value === null || value === undefined) return value === null ? "null" : null;
+  let parsed = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      // A non-JSON D1 string is still a valid JSON-backed value once quoted.
+    }
+  }
+  return JSON.stringify(stableJsonValue(parsed));
+}
+
+/** D1 epoch milliseconds are emitted as Airtable's canonical ISO dateTime text. */
+export function toAirtableDateTime(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return null;
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) return new Date(numeric).toISOString();
+    const parsed = Date.parse(trimmed);
+    if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
+  }
+  return String(value);
+}
+
+/** D1's 0/1 representation is converted once to Airtable checkbox booleans. */
+export function toAirtableCheckbox(value: unknown): boolean | null | undefined {
+  if (value === null || value === undefined) return value;
+  return value === true || value === 1 || value === "1";
 }
 
 async function readyAttachments(
@@ -49,16 +86,17 @@ async function readyAttachments(
 async function attachmentFields(
   env: MirrorRecordEnv,
   attachments: readonly MirrorAttachment[],
-): Promise<Array<{ url: string; filename: string; content_type: string }>> {
-  return Promise.all(attachments.map(async (attachment) => ({
-    url: await publicMediaUrl(
+): Promise<Array<{ url: string; filename?: string }>> {
+  return Promise.all(attachments.map(async (attachment) => {
+    const url = await publicMediaUrl(
       env.mirror.mediaPublicOrigin,
       { status: "ready", r2_key: attachment.r2_key },
       env.mirror.uploadTokenSecret,
-    ),
-    filename: attachment.filename,
-    content_type: attachment.content_type,
-  })));
+    );
+    return attachment.filename
+      ? { url, filename: attachment.filename }
+      : { url };
+  }));
 }
 
 function fieldRecord(row: Record<string, unknown>, fields: Record<string, unknown>): AirtableRecord {
@@ -80,7 +118,7 @@ async function submissionRecord(env: MirrorRecordEnv, rowId: string): Promise<Ai
     reference_code: row.reference_code,
     form_id: row.form_id,
     kind: row.kind,
-    bypass_evaluation: row.bypass_evaluation,
+    bypass_evaluation: toAirtableCheckbox(row.bypass_evaluation),
     title: row.title,
     abstract: row.abstract,
     status: row.status,
@@ -91,16 +129,16 @@ async function submissionRecord(env: MirrorRecordEnv, rowId: string): Promise<Ai
     vendor_affiliation: row.vendor_affiliation,
     wave_id: row.wave_id,
     submitter_person_id: row.submitter_person_id,
-    decided_at: row.decided_at,
+    decided_at: toAirtableDateTime(row.decided_at),
     decided_by_person_id: row.decided_by_person_id,
-    submitted_at: row.submitted_at,
-    last_saved_at: row.last_saved_at,
-    is_published: row.is_published,
+    submitted_at: toAirtableDateTime(row.submitted_at),
+    last_saved_at: toAirtableDateTime(row.last_saved_at),
+    is_published: toAirtableCheckbox(row.is_published),
     external_ref: row.external_ref,
     applied_rule_id: row.applied_rule_id,
     last_write_source: row.last_write_source,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    created_at: toAirtableDateTime(row.created_at),
+    updated_at: toAirtableDateTime(row.updated_at),
     attachments: await attachmentFields(env, attachments),
   });
 }
@@ -117,16 +155,16 @@ async function speakerTaskRecord(env: MirrorRecordEnv, rowId: string): Promise<A
     title: row.title,
     kind: row.kind,
     description: row.description,
-    due_at: row.due_at,
+    due_at: toAirtableDateTime(row.due_at),
     status: row.status,
-    completed_at: row.completed_at,
+    completed_at: toAirtableDateTime(row.completed_at),
     completed_by_person_id: row.completed_by_person_id,
-    response_json: jsonValue(row.response_json),
-    cancelled_at: row.cancelled_at,
+    response_json: stableJsonStringify(row.response_json),
+    cancelled_at: toAirtableDateTime(row.cancelled_at),
     sponsorship_id: row.sponsorship_id,
     last_write_source: row.last_write_source,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    created_at: toAirtableDateTime(row.created_at),
+    updated_at: toAirtableDateTime(row.updated_at),
     attachments: await attachmentFields(env, attachments),
   });
 }
@@ -146,14 +184,14 @@ async function personRecord(env: MirrorRecordEnv, rowId: string): Promise<Airtab
     company: row.company,
     company_id: row.company_id,
     bio: row.bio,
-    social_links: jsonValue(row.social_links),
-    custom_fields: jsonValue(row.custom_fields),
-    do_not_contact: row.do_not_contact,
-    is_demo: row.is_demo,
+    social_links: stableJsonStringify(row.social_links),
+    custom_fields: stableJsonStringify(row.custom_fields),
+    do_not_contact: toAirtableCheckbox(row.do_not_contact),
+    is_demo: toAirtableCheckbox(row.is_demo),
     kind: row.kind,
     last_write_source: row.last_write_source,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    created_at: toAirtableDateTime(row.created_at),
+    updated_at: toAirtableDateTime(row.updated_at),
     headshot_url: urls[0]?.url ?? null,
   });
 }

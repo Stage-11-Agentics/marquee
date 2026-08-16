@@ -2,9 +2,23 @@ import type {
   AirtableListRecord,
   AirtableRecord,
   AirtableTable,
+  AirtableTableField,
   AirtableTransport,
   AirtableWebhookPayload,
 } from "./transport";
+import { AirtableTransportError } from "./transport";
+
+export interface FakeAirtableFieldInput {
+  name: string;
+  type: string;
+  options?: Record<string, unknown>;
+}
+
+export interface FakeAirtableMetadataFailure {
+  call: number;
+  status: number;
+  message?: string;
+}
 
 export type FakeAirtableCall =
   | {
@@ -26,6 +40,19 @@ export type FakeAirtableCall =
       webhookId?: string;
       cursor?: string | null;
       at: number;
+    }
+  | {
+      kind: "create_table";
+      name: string;
+      fields: readonly FakeAirtableFieldInput[];
+      tableId: string;
+      at: number;
+    }
+  | {
+      kind: "create_field";
+      tableId: string;
+      field: FakeAirtableFieldInput;
+      at: number;
     };
 
 export interface FakeAirtableTransportOptions {
@@ -33,6 +60,7 @@ export interface FakeAirtableTransportOptions {
   webhookId?: string;
   webhookSecret?: string;
   payloads?: readonly AirtableWebhookPayload[];
+  metadataFailure?: FakeAirtableMetadataFailure;
 }
 
 /**
@@ -47,6 +75,8 @@ export class FakeAirtableTransport implements AirtableTransport {
   readonly payloads: AirtableWebhookPayload[];
   readonly webhookId: string;
   readonly webhookSecret: string;
+  private metadataCalls = 0;
+  private readonly metadataFailure?: FakeAirtableMetadataFailure;
 
   constructor(
     private readonly clock: () => number = Date.now,
@@ -56,11 +86,53 @@ export class FakeAirtableTransport implements AirtableTransport {
     this.payloads = [...options.payloads ?? []];
     this.webhookId = options.webhookId ?? "whk_fake_mrq223";
     this.webhookSecret = options.webhookSecret ?? "fake-webhook-secret";
+    this.metadataFailure = options.metadataFailure;
   }
 
   async readBaseSchema(): Promise<{ tables: readonly AirtableTable[] }> {
     this.calls.push({ kind: "schema", at: this.clock() });
     return { tables: structuredClone(this.tables) };
+  }
+
+  private beforeMetadataCall(): void {
+    this.metadataCalls += 1;
+    if (this.metadataFailure?.call === this.metadataCalls) {
+      throw new AirtableTransportError(
+        this.metadataFailure.status,
+        this.metadataFailure.message ?? `fake metadata failure ${this.metadataFailure.status}`,
+      );
+    }
+  }
+
+  async createTable({ name, fields }: { name: string; fields: readonly FakeAirtableFieldInput[] }): Promise<{ table: AirtableTable }> {
+    this.beforeMetadataCall();
+    const tableId = `tbl_fake_${name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "_")}_${this.tables.length + 1}`;
+    const table: AirtableTable = {
+      id: tableId,
+      name,
+      fields: fields.map((field, index) => ({
+        id: `fld_fake_${tableId}_${index + 1}`,
+        ...structuredClone(field),
+      })),
+    };
+    this.tables.push(table);
+    this.calls.push({ kind: "create_table", name, fields: structuredClone(fields), tableId, at: this.clock() });
+    return { table: structuredClone(table) };
+  }
+
+  async createField({ tableId, name, type, options }: FakeAirtableFieldInput & { tableId: string }): Promise<{ field: AirtableTableField }> {
+    this.beforeMetadataCall();
+    const table = this.tables.find((candidate) => candidate.id === tableId);
+    if (!table) throw new AirtableTransportError(404, "fake table not found");
+    const field: AirtableTableField = {
+      id: `fld_fake_${tableId}_${(table.fields?.length ?? 0) + 1}`,
+      name,
+      type,
+      ...(options === undefined ? {} : { options: structuredClone(options) }),
+    };
+    table.fields = [...table.fields ?? [], field];
+    this.calls.push({ kind: "create_field", tableId, field: structuredClone({ name, type, ...(options === undefined ? {} : { options }) }), at: this.clock() });
+    return { field: structuredClone(field) };
   }
 
   async listRecords({ tableId, offset }: { tableId: string; offset?: string }): Promise<{
