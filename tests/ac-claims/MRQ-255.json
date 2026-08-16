@@ -1,0 +1,9 @@
+{
+  "ticket": "MRQ-255",
+  "owns": [],
+  "exercises": ["AC-103"],
+  "notes": [
+    "MRQ-29 owns AC-103; this ticket repairs its worker-side ranking path and adds the AC-sourced speed subset to the per-PR gate.",
+    "The gate scope keeps AC-sourced budgets failing and leaves the seven client objectives warning-only in the full check; local Wrangler values are run evidence, not deployed proof."
+  ]
+}

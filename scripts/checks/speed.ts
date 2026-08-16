@@ -1,7 +1,7 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import { FROZEN_NOW } from "../seed/event.ts";
-import { classifySpeedMeasurements, SPEED_BUDGETS } from "./speed-budgets.mjs";
+import { budgetsForScope, classifySpeedMeasurements, SPEED_BUDGETS } from "./speed-budgets.mjs";
 import {
   ApiClient,
   DEMO_EVENT_ID,
@@ -239,6 +239,7 @@ function recordSample(
 
 export interface SpeedReport {
   command: "check:speed";
+  scope: SpeedScope;
   status: "pass" | "fail";
   gate: boolean;
   environment: {
@@ -259,7 +260,11 @@ export interface SpeedReport {
   shouldFail: boolean;
 }
 
-export async function runSpeedCheck({ gate = false } = {}): Promise<SpeedReport> {
+export type SpeedScope = "all" | "acceptance";
+
+export async function runSpeedCheck({ gate = false, scope = "all" }: { gate?: boolean; scope?: SpeedScope } = {}): Promise<SpeedReport> {
+  budgetsForScope(scope);
+  const acceptanceOnly = scope === "acceptance";
   const commandStartedAt = performance.now();
   return withLocalRuntime(async (runtime) => {
     const client = new ApiClient(runtime.baseUrl);
@@ -278,49 +283,55 @@ export async function runSpeedCheck({ gate = false } = {}): Promise<SpeedReport>
     try {
       const admin = await adminContext(browser, runtime.baseUrl, client.sessionCookie);
       const adminPage = await admin.newPage();
-      const speakerClient = new ApiClient(runtime.baseUrl);
-      await speakerClient.login("speaker");
-      const speaker = await adminContext(browser, runtime.baseUrl, speakerClient.sessionCookie);
-      const speakerPage = await speaker.newPage();
-      const dashboardValues = await sample(SAMPLE_COUNTS.warm, () => loadPage(adminPage, runtime.baseUrl, "/dashboard", ".dashboard-page"));
-      recordSample(samples, measurements, "dashboard-render", dashboardValues, "Playwright authenticated /dashboard render", "p95");
-      methods["dashboard-render"] = "Playwright authenticated /dashboard render to .dashboard-page";
+      if (!acceptanceOnly) {
+        const dashboardValues = await sample(SAMPLE_COUNTS.warm, () => loadPage(adminPage, runtime.baseUrl, "/dashboard", ".dashboard-page"));
+        recordSample(samples, measurements, "dashboard-render", dashboardValues, "Playwright authenticated /dashboard render", "p95");
+        methods["dashboard-render"] = "Playwright authenticated /dashboard render to .dashboard-page";
 
-      const submissionsValues = await sample(SAMPLE_COUNTS.warm, () => loadPage(adminPage, runtime.baseUrl, "/submissions", ".submissions-page"));
-      recordSample(samples, measurements, "submissions-first-interactive", submissionsValues, "Playwright authenticated /submissions render", "p95");
-      methods["submissions-first-interactive"] = "Playwright authenticated /submissions render to .submissions-page";
+        const submissionsValues = await sample(SAMPLE_COUNTS.warm, () => loadPage(adminPage, runtime.baseUrl, "/submissions", ".submissions-page"));
+        recordSample(samples, measurements, "submissions-first-interactive", submissionsValues, "Playwright authenticated /submissions render", "p95");
+        methods["submissions-first-interactive"] = "Playwright authenticated /submissions render to .submissions-page";
 
-      const filterValues = await sample(SAMPLE_COUNTS.warm, () => {
-        const query = ["status=in_review&sort=title", "kind=abstract&sort=score", "status=accepted&sort=updated", "format=fmt_workshop&sort=newest"][Math.floor(Math.random() * 4)]!;
-        return loadPage(adminPage, runtime.baseUrl, `/submissions?${query}`, ".submissions-page");
-      });
-      recordSample(samples, measurements, "submissions-filter-sort", filterValues, "Playwright authenticated submissions filter/sort reload", "p95");
-      methods["submissions-filter-sort"] = "Playwright authenticated submissions filter/sort reload to .submissions-page";
+        const filterValues = await sample(SAMPLE_COUNTS.warm, () => {
+          const query = ["status=in_review&sort=title", "kind=abstract&sort=score", "status=accepted&sort=updated", "format=fmt_workshop&sort=newest"][Math.floor(Math.random() * 4)]!;
+          return loadPage(adminPage, runtime.baseUrl, `/submissions?${query}`, ".submissions-page");
+        });
+        recordSample(samples, measurements, "submissions-filter-sort", filterValues, "Playwright authenticated submissions filter/sort reload", "p95");
+        methods["submissions-filter-sort"] = "Playwright authenticated submissions filter/sort reload to .submissions-page";
+      }
 
       const reviewValues = await reviewAdvanceSamples(await admin.newPage(), runtime.baseUrl);
       recordSample(samples, measurements, "review-next-interactive", reviewValues, "Playwright click recommendation + Save recommendation & next", "median");
       methods["review-next-interactive"] = "20 consecutive real reviewer UI advances; duration starts at save click and ends on next card";
 
-      const adminRoutes = ["/dashboard", "/submissions", "/forms", "/evaluation", "/agenda-builder", "/settings", "/board"];
-      const transitionValues: number[] = [];
-      for (let index = 0; index < SAMPLE_COUNTS.transitions; index += 1) {
-        transitionValues.push(await loadPage(adminPage, runtime.baseUrl, adminRoutes[index % adminRoutes.length]!, ".page"));
-      }
-      recordSample(samples, measurements, "admin-route-transition", transitionValues, "Playwright authenticated admin route navigation", "p95");
-      methods["admin-route-transition"] = "10 authenticated admin route navigations through the installed shell; the external speaker portal is measured separately";
+      if (!acceptanceOnly) {
+        const adminRoutes = ["/dashboard", "/submissions", "/forms", "/evaluation", "/agenda-builder", "/settings", "/board"];
+        const transitionValues: number[] = [];
+        for (let index = 0; index < SAMPLE_COUNTS.transitions; index += 1) {
+          transitionValues.push(await loadPage(adminPage, runtime.baseUrl, adminRoutes[index % adminRoutes.length]!, ".page"));
+        }
+        recordSample(samples, measurements, "admin-route-transition", transitionValues, "Playwright authenticated admin route navigation", "p95");
+        methods["admin-route-transition"] = "10 authenticated admin route navigations through the installed shell; the external speaker portal is measured separately";
 
-      const portalValues = await sample(SAMPLE_COUNTS.warm, () => loadPage(speakerPage, runtime.baseUrl, "/portal", ".portal-shell"));
-      recordSample(samples, measurements, "speaker-portal-load", portalValues, "Playwright authenticated speaker /portal shell load", "p95");
-      methods["speaker-portal-load"] = "Playwright /portal shell with the seeded speaker persona; this is an objective proxy for deployed-device speaker-portal performance";
-      await speaker.close();
+        const speakerClient = new ApiClient(runtime.baseUrl);
+        await speakerClient.login("speaker");
+        const speaker = await adminContext(browser, runtime.baseUrl, speakerClient.sessionCookie);
+        const speakerPage = await speaker.newPage();
+        const portalValues = await sample(SAMPLE_COUNTS.warm, () => loadPage(speakerPage, runtime.baseUrl, "/portal", ".portal-shell"));
+        recordSample(samples, measurements, "speaker-portal-load", portalValues, "Playwright authenticated speaker /portal shell load", "p95");
+        methods["speaker-portal-load"] = "Playwright /portal shell with the seeded speaker persona; this is an objective proxy for deployed-device speaker-portal performance";
+        await speaker.close();
+      }
 
       const bulk = await bulkAcceptSample(await admin.newPage(), runtime.baseUrl, inReviewIds);
       measurements["bulk-accept-completion"] = bulk.completed;
       samples["bulk-accept-completion"] = { ...summarize([bulk.durationMs]), values: [rounded(bulk.durationMs)], method: "Playwright page.evaluate fetch to bulk decision API", completed: bulk.completed };
       methods["bulk-accept-completion"] = "150 explicit IDs through the real bulk decision API; completed means 150 succeeded, 0 failed, durable completed state";
-      measurements["bulk-accept-long-task"] = rounded(bulk.longestMainThreadTaskMs);
-      samples["bulk-accept-long-task"] = { ...summarize([bulk.longestMainThreadTaskMs]), values: [rounded(bulk.longestMainThreadTaskMs)], method: "Chromium PerformanceObserver longtask during the same bulk operation", longTaskMs: rounded(bulk.longestMainThreadTaskMs) };
-      methods["bulk-accept-long-task"] = "Chromium Long Tasks API; zero means no long task was observed in the local browser";
+      if (!acceptanceOnly) {
+        measurements["bulk-accept-long-task"] = rounded(bulk.longestMainThreadTaskMs);
+        samples["bulk-accept-long-task"] = { ...summarize([bulk.longestMainThreadTaskMs]), values: [rounded(bulk.longestMainThreadTaskMs)], method: "Chromium PerformanceObserver longtask during the same bulk operation", longTaskMs: rounded(bulk.longestMainThreadTaskMs) };
+        methods["bulk-accept-long-task"] = "Chromium Long Tasks API; zero means no long task was observed in the local browser";
+      }
 
       const searchValues = await quickSearchPaintSamples(adminPage, runtime.baseUrl);
       recordSample(samples, measurements, "global-search-painted", searchValues, "Playwright keystroke-to-painted global search", "p95", ["Ten real browser queries include genuine seeded misspellings (Casy, Dhinkran, retrieval systms), a no-match, and a diacritic probe."]);
@@ -336,38 +347,41 @@ export async function runSpeedCheck({ gate = false } = {}): Promise<SpeedReport>
       recordSample(samples, measurements, "agenda-cold-interactive", agendaValues, "Playwright cold public /agenda render", "p95");
       methods["agenda-cold-interactive"] = "Playwright cold /agenda render to main";
 
-      const agendaSwitchValues: number[] = [];
-      const publicAgendaQueries = [
-        "day=2026-10-12", "day=2026-10-13", "track=trk_agents", "track=trk_evals", "q=agent",
-        "q=workshop", "day=2026-10-12&track=trk_agents", "day=2026-10-13&track=trk_infra",
-      ];
-      for (let index = 0; index < SAMPLE_COUNTS.agendaSwitch; index += 1) {
-        const query = publicAgendaQueries[index % publicAgendaQueries.length]!;
-        const result = await client.json<unknown>(`/api/v1/public/agenda?event=aie-ny-2026&${query}`);
-        agendaSwitchValues.push(result.elapsedMs);
-      }
-      recordSample(samples, measurements, "agenda-view-switch", agendaSwitchValues, "Public agenda API filtered snapshot", "p95", ["The installed public agenda exposes server-rendered filters; this records the source snapshot switch, not a deployed device paint."]);
-      methods["agenda-view-switch"] = "20 real public agenda day/track/search filter snapshots";
+      if (!acceptanceOnly) {
+        const agendaSwitchValues: number[] = [];
+        const publicAgendaQueries = [
+          "day=2026-10-12", "day=2026-10-13", "track=trk_agents", "track=trk_evals", "q=agent",
+          "q=workshop", "day=2026-10-12&track=trk_agents", "day=2026-10-13&track=trk_infra",
+        ];
+        for (let index = 0; index < SAMPLE_COUNTS.agendaSwitch; index += 1) {
+          const query = publicAgendaQueries[index % publicAgendaQueries.length]!;
+          const result = await client.json<unknown>(`/api/v1/public/agenda?event=aie-ny-2026&${query}`);
+          agendaSwitchValues.push(result.elapsedMs);
+        }
+        recordSample(samples, measurements, "agenda-view-switch", agendaSwitchValues, "Public agenda API filtered snapshot", "p95", ["The installed public agenda exposes server-rendered filters; this records the source snapshot switch, not a deployed device paint."]);
+        methods["agenda-view-switch"] = "20 real public agenda day/track/search filter snapshots";
 
-      const chaseValues: number[] = [];
-      for (let index = 0; index < SAMPLE_COUNTS.warm; index += 1) {
-        const result = await client.json<unknown>(`/api/v1/events/${EVENT}/submissions?status=onboarding&per_page=100&sort=updated`);
-        chaseValues.push(result.elapsedMs);
+        const chaseValues: number[] = [];
+        for (let index = 0; index < SAMPLE_COUNTS.warm; index += 1) {
+          const result = await client.json<unknown>(`/api/v1/events/${EVENT}/submissions?status=onboarding&per_page=100&sort=updated`);
+          chaseValues.push(result.elapsedMs);
+        }
+        recordSample(samples, measurements, "chase-board-load", chaseValues, "Authenticated onboarding/task-backed submissions API", "p95", ["The current tree has no board data module; this is the real task-backed source query and is not presented as a board render."]);
+        methods["chase-board-load"] = "10 real onboarding list reads backing the chase workload; board UI is a named product follow-up";
       }
-      recordSample(samples, measurements, "chase-board-load", chaseValues, "Authenticated onboarding/task-backed submissions API", "p95", ["The current tree has no board data module; this is the real task-backed source query and is not presented as a board render."]);
-      methods["chase-board-load"] = "10 real onboarding list reads backing the chase workload; board UI is a named product follow-up";
 
       const embedMs = await embedPropagationSample(client, agendaSession);
       measurements["embed-source-reflection"] = rounded(embedMs);
       samples["embed-source-reflection"] = { values: [rounded(embedMs)], method: "Agenda API mutation then clean unauthenticated public embed polls", n: 1, p50: rounded(embedMs), p95: rounded(embedMs), max: rounded(embedMs) };
       methods["embed-source-reflection"] = "Patch a seeded agenda item via API, then poll /api/v1/public/embeds/aie-ny-2026-agenda from the clean public path";
 
-      const classified = classifySpeedMeasurements(measurements, { gate });
+      const classified = classifySpeedMeasurements(measurements, { gate, scope });
       const checkSpeedElapsedMs = Math.round(performance.now() - commandStartedAt);
       const checkSpeedBudgetMs = 4 * 60_000;
       const harnessFail = checkSpeedElapsedMs > checkSpeedBudgetMs;
       return {
         command: "check:speed" as const,
+        scope,
         status: classified.shouldFail || harnessFail ? "fail" as const : "pass" as const,
         gate,
         environment: runtime.environment,

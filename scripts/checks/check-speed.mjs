@@ -17,15 +17,17 @@ import { runSpeedCheck } from "./speed.ts";
 import { classifySpeedMeasurements } from "./speed-budgets.mjs";
 
 const args = parseArguments();
+const scope = args.scope === undefined ? "all" : String(args.scope);
 let result;
 if (args.input) {
   // Keep the old explicit-input seam for operators replaying a captured
   // report, but classify it with the same binding AC/objective rules as the
   // local harness. It is never labeled as deployed evidence.
   const measurements = JSON.parse(await readFile(resolve(String(args.input)), "utf8"));
-  const classified = classifySpeedMeasurements(measurements, { gate: isGateRun() });
+  const classified = classifySpeedMeasurements(measurements, { gate: isGateRun(), scope });
   result = {
     command: "check:speed",
+    scope,
     status: classified.shouldFail ? "fail" : "pass",
     gate: isGateRun(),
     environment: { kind: "provided-input", runtime: "captured measurements", deployed: false },
@@ -34,7 +36,7 @@ if (args.input) {
     follow_up: "Provided input is not deployed evidence; MRQ-57 owns production measurements.",
   };
 } else {
-  result = await runSpeedCheck({ gate: isGateRun() });
+  result = await runSpeedCheck({ gate: isGateRun(), scope });
 }
 
 const report = await writeSpeedReport(result);

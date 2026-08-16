@@ -41,6 +41,7 @@ const checks = [
   ["route map", "npm", ["run", "check:routes"]],
   ["fixture clocks", "npm", ["run", "check:clocks"]],
   ["schema shape", "npm", ["run", "check:schema"]],
+  ["AC speed budgets", "npm", ["run", "check:speed", "--", "--scope=acceptance"], { MARQUEE_GATE: "1" }],
   ["hermetic fast suite", "npm", ["test"]],
   ["merged AC trace", "npm", ["run", "trace:ac", "--", "--scope=merged", ...(args.ticket ? [`--ticket=${args.ticket}`] : [])]],
 ];
@@ -57,10 +58,10 @@ const startedAt = performance.now();
 // A failing check still fails, immediately and by its own exit code. That is
 // the only thing a red gate should ever mean.
 const PR_GATE_BUDGET_MS = 120_000;
-for (const [name, binary, commandArgs] of checks) {
+for (const [name, binary, commandArgs, checkEnvironment] of checks) {
   process.stdout.write(`\n[pr-gate] ${name}\n`);
   const code = await new Promise((resolveExit, reject) => {
-    const child = spawn(binary, commandArgs, { cwd: REPOSITORY_ROOT, stdio: "inherit", env: process.env });
+    const child = spawn(binary, commandArgs, { cwd: REPOSITORY_ROOT, stdio: "inherit", env: { ...process.env, ...(checkEnvironment ?? {}) } });
     child.once("error", reject);
     child.once("exit", (exitCode) => resolveExit(exitCode ?? 1));
   });

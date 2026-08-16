@@ -51,4 +51,20 @@ describe("speed budget authority", () => {
     expect(classifySpeedMeasurements({}, { gate: false }).shouldFail).toBe(false);
     expect(classifySpeedMeasurements({}, { gate: true }).shouldFail).toBe(true);
   });
+
+  test("CONTRACT · the per-PR acceptance scope excludes warning-only objectives", () => {
+    const scoped = classifySpeedMeasurements({ ...passingMeasurements(), "submissions-filter-sort": 999 }, { gate: true, scope: "acceptance" });
+    expect(scoped.entries.every((entry) => entry.kind === "acceptance")).toBe(true);
+    expect(scoped.entries).toHaveLength(7);
+    expect(scoped.objectiveWarnings).toHaveLength(0);
+    expect(scoped.shouldFail).toBe(false);
+  });
+
+  test("CONTRACT · the per-PR acceptance scope still fails a missing AC measurement", () => {
+    const measurements = passingMeasurements();
+    delete measurements["global-search-painted"];
+    const scoped = classifySpeedMeasurements(measurements, { gate: true, scope: "acceptance" });
+    expect(scoped.missing.map((entry) => entry.id)).toEqual(["global-search-painted"]);
+    expect(scoped.shouldFail).toBe(true);
+  });
 });

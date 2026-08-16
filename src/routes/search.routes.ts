@@ -9,7 +9,7 @@ import {
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { authHasRole } from "../lib/auth/scope-resolution";
 import { requireSubmissionRead } from "../lib/auth/program-access";
-import { rankSearchCandidates } from "../lib/quick-search";
+import { prepareSearchCandidates, rankSearchCandidates } from "../lib/quick-search";
 import { SPEAKER_ROSTER_PERSON_SOURCE } from "./speakers.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -117,7 +117,7 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
   const people = new Map<string, SpeakerSearchRow>();
   for (const person of speakers.results) people.set(person.id, person);
 
-  return [
+  const candidates = [
     ...submissions.results.map((row) => {
       const type = resultTypeFor(row.kind);
       return {
@@ -153,6 +153,8 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
       searchText: [row.name, row.slug, row.id],
     } satisfies SearchCandidate)),
   ];
+  prepareSearchCandidates(candidates);
+  return candidates;
 }
 
 async function cachedSearchCandidates(

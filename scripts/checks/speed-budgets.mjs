@@ -15,8 +15,17 @@ export const SPEED_BUDGETS = Object.freeze([
   { id: "chase-board-load", kind: "objective", source: "client-objective", metric: "p95", threshold: 1_000, unit: "ms" },
 ]);
 
-export function classifySpeedMeasurements(measurements, { gate = false } = {}) {
-  const entries = SPEED_BUDGETS.map((budget) => {
+export function budgetsForScope(scope = "all") {
+  if (scope !== "all" && scope !== "acceptance") {
+    throw new Error(`check:speed: --scope must be "all" or "acceptance" (got "${scope}")`);
+  }
+  return scope === "acceptance"
+    ? SPEED_BUDGETS.filter((budget) => budget.kind === "acceptance")
+    : SPEED_BUDGETS;
+}
+
+export function classifySpeedMeasurements(measurements, { gate = false, scope = "all" } = {}) {
+  const entries = budgetsForScope(scope).map((budget) => {
     const observed = measurements[budget.id];
     const missing = observed === undefined;
     const met = !missing && (budget.metric === "completed" ? observed === true : Number(observed) <= budget.threshold);
