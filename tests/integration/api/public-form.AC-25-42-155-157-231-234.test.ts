@@ -474,7 +474,6 @@ describe.sequential("MRQ-15 public conference form", () => {
       personId: unrelatedPersonId,
       roleHint: "speaker",
       userAgent: "mrq-247-public-form-live-session",
-      now: NOW,
     });
     const beforeSession = await env.DB
       .prepare("SELECT id, person_id, role_hint, expires_at, revoked_at, created_at, updated_at FROM auth_sessions WHERE id = ?")
