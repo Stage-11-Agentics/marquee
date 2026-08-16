@@ -115,7 +115,7 @@ test("CONTRACT · MRQ-215 · SQL overdue/risk rollup follows a non-UTC calendar 
   expect(bySearch.data.map((row) => row.id)).toEqual(["person-calendar-edge"]);
 });
 
-test("MRQ-244 · accepted-speaker metric ignores open tasks without an accepted submission", async () => {
+test("CONTRACT · accepted-speaker metric ignores open tasks without an accepted submission", async () => {
   await env.DB.prepare("UPDATE submissions SET status = 'rejected' WHERE id = ?").bind("submission-calendar-edge").run();
 
   const snapshot = await listOnboarding(env.DB, EVENT_ID, {}, NOW);

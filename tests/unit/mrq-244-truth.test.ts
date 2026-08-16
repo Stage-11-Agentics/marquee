@@ -52,7 +52,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test("MRQ-244 · a running program keeps a live compact setup row and routes its next step", async () => {
+test("CONTRACT · a running program keeps a live compact setup row and routes its next step", async () => {
   const navigate = vi.fn();
   vi.stubGlobal("fetch", vi.fn(async (input: unknown) => {
     const url = requestUrl(input);
@@ -73,7 +73,7 @@ test("MRQ-244 · a running program keeps a live compact setup row and routes its
   expect(navigate).toHaveBeenCalledWith("/evaluation");
 });
 
-test("MRQ-244 · completed compact setup remains a reserved slot after dismissal", async () => {
+test("CONTRACT · completed compact setup remains a reserved slot after dismissal", async () => {
   vi.stubGlobal("fetch", vi.fn(async (input: unknown) => {
     const url = requestUrl(input);
     if (url.includes("/forms")) return okResponse({ data: [{ status: "open" }] });
@@ -127,7 +127,7 @@ function onboardingSnapshot(acceptedSpeakers: number, data = acceptedSpeakers ? 
   };
 }
 
-test("MRQ-244 · onboarding says acceptance is the prerequisite, not all-clear", async () => {
+test("CONTRACT · onboarding says acceptance is the prerequisite, not all-clear", async () => {
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   vi.stubGlobal("fetch", vi.fn(async () => okResponse(onboardingSnapshot(0))));
 
@@ -140,7 +140,7 @@ test("MRQ-244 · onboarding says acceptance is the prerequisite, not all-clear",
   expect(root.textContent).not.toContain("Every accepted speaker is clear");
 });
 
-test("MRQ-244 · an accepted speaker with no open tasks gets the genuine all-clear", async () => {
+test("CONTRACT · an accepted speaker with no open tasks gets the genuine all-clear", async () => {
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   vi.stubGlobal("fetch", vi.fn(async () => okResponse(onboardingSnapshot(1))));
 
@@ -153,7 +153,7 @@ test("MRQ-244 · an accepted speaker with no open tasks gets the genuine all-cle
   expect(root.querySelector(".onboarding-matrix")).toBeNull();
 });
 
-test("MRQ-244 · communications names the acceptance prerequisite before offering a recipient action", async () => {
+test("CONTRACT · communications names the acceptance prerequisite before offering a recipient action", async () => {
   vi.stubGlobal("fetch", vi.fn(async (input: unknown) => {
     const url = requestUrl(input);
     if (url.includes("/templates")) return okResponse({ data: [] });
@@ -170,7 +170,7 @@ test("MRQ-244 · communications names the acceptance prerequisite before offerin
   expect(root.querySelector('a[href="/submissions"]')?.textContent).toBe("Open submissions");
 });
 
-test("MRQ-244 · communications does not call an audience failure an empty prerequisite", async () => {
+test("CONTRACT · communications does not call an audience failure an empty prerequisite", async () => {
   vi.stubGlobal("fetch", vi.fn(async (input: unknown) => {
     const url = requestUrl(input);
     if (url.includes("/comms/audience")) return { ok: false, status: 503, headers: { get: () => null }, json: async () => ({}) } as unknown as Response;
@@ -186,7 +186,7 @@ test("MRQ-244 · communications does not call an audience failure an empty prere
   expect(root.querySelector('[role="alert"]')?.textContent).toContain("unexpected problem");
 });
 
-test("MRQ-244 · agenda empty state opens the unfiltered submissions surface", async () => {
+test("CONTRACT · agenda empty state opens the unfiltered submissions surface", async () => {
   const snapshot = {
     event: { id: "evt-truth", name: "Truth Conf", starts_on: "2026-09-01", ends_on: "2026-09-02", timezone: "UTC" },
     schedule_window: { outside_window_session_count: 0 },
@@ -217,7 +217,7 @@ test("MRQ-244 · agenda empty state opens the unfiltered submissions surface", a
   assign.mockRestore();
 });
 
-test("MRQ-244 · the shared demo signal hides reset on a non-demo account and keeps the footer reachable", async () => {
+test("CONTRACT · the shared demo signal hides reset on a non-demo account and keeps the footer reachable", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => okResponse({ kind: "session", demo_event_id: null })));
   mount(h(DemoSignalProbe, null));
   await settle();
