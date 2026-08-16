@@ -334,6 +334,69 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE submission_id = 'sub-mrq19-bulk-live'").first()).toEqual({ is_published: 0 });
   }, 20_000);
 
+  test("CONTRACT · MRQ-225 · decision-plan preview and sent decision mail use the same absolute public link", async () => {
+    const previewSubmissionId = "sub-mrq19-preview-mail";
+    const publicAnchorSubmissionId = "sub-mrq19-preview-anchor";
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO submissions
+          (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at)
+         VALUES (?, ?, 'session', 'Preview public mail', 'accepted', 'public', 'person-mrq19-speaker', ?, ?)`,
+      ).bind(previewSubmissionId, EVENT_ID, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+         VALUES ('participation-mrq19-preview-mail', ?, 'person-mrq19-speaker', 'speaker', 0, ?, ?)`,
+      ).bind(previewSubmissionId, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO submissions
+          (id, event_id, kind, title, status, origin, submitter_person_id, is_published, created_at, updated_at)
+         VALUES (?, ?, 'session', 'Preview public anchor', 'accepted', 'public', 'person-mrq19-speaker', 1, ?, ?)`,
+      ).bind(publicAnchorSubmissionId, EVENT_ID, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+         VALUES ('participation-mrq19-preview-anchor', ?, 'person-mrq19-speaker', 'speaker', 0, ?, ?)`,
+      ).bind(publicAnchorSubmissionId, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO agenda_items
+          (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
+         VALUES ('agenda-mrq19-preview-anchor', ?, ?, 'session', ?, 30, 'room-mrq19', 1, ?, ?)`,
+      ).bind(EVENT_ID, publicAnchorSubmissionId, NOW, NOW, NOW),
+    ]);
+
+    const body = { selector: { ids: [previewSubmissionId] }, action: "reject" };
+    const planResponse = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/decision-plan`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    expect(planResponse.status).toBe(200);
+    const plan = await planResponse.json<{
+      plan_fingerprint: string;
+      etag: string;
+      recipient_preview: { text: string } | null;
+    }>();
+    const publicLinkPattern = /https:\/\/marquee\.stage11\.dev\/p\/ada-lovelace\?event=mrq-19/;
+    const previewPublicLink = plan.recipient_preview?.text.match(publicLinkPattern)?.[0];
+    expect(previewPublicLink).toBe(`${ORIGIN}/p/ada-lovelace?event=mrq-19`);
+
+    const applied = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/bulk`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${TOKEN}`,
+        "content-type": "application/json",
+        "if-match": plan.etag,
+      },
+      body: JSON.stringify({ ...body, plan_fingerprint: plan.plan_fingerprint }),
+    });
+    expect(applied.status).toBe(200);
+    expect(await applied.json<BulkResponse>()).toMatchObject({ selected: 1, succeeded: 1, failed: 0 });
+    const outbox = await env.DB.prepare(
+      "SELECT text FROM outbox WHERE event_id = ? AND entity_id = ? AND template_key = 'rejection' LIMIT 1",
+    ).bind(EVENT_ID, previewSubmissionId).first<{ text: string }>();
+    const sentPublicLink = outbox?.text.match(publicLinkPattern)?.[0];
+    expect(sentPublicLink).toBe(previewPublicLink);
+  }, 20_000);
+
   test("AC-114, AC-115, AC-116, AC-117 · record-owned reject shares rendered merge fields, status history, and UNIQUE outbox identity", async () => {
     const recordDecision = await requestRecord("sub-mrq19-002", {
       recommendation: "maybe",

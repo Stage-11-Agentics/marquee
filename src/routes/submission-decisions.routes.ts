@@ -103,6 +103,7 @@ const planDecision = defineApiRoute(
       eventId,
       ids: [submissionId],
       action,
+      origin: new URL(context.req.url).origin,
       feedbackMd: body.feedback_md,
       confirmPublished: body.confirm_published === true,
       kindFeedbackEnabled: kindFeedbackConfigured(context.env),
@@ -221,6 +222,7 @@ const decideSubmission = defineApiRoute(
       eventId,
       ids: [submissionId],
       action: body.recommendation === "approve" ? "accept" : body.recommendation === "deny" ? "reject" : "waitlist",
+      origin: new URL(context.req.url).origin,
       feedbackMd: body.feedback_md,
       confirmPublished: body.confirm_published === true,
     });

@@ -170,6 +170,7 @@ export async function buildDecisionPlan(input: {
   eventId: string;
   ids: readonly string[];
   action: BulkAction;
+  origin: string;
   feedbackMd?: string | null;
   confirmPublished?: boolean;
   waveId?: string | null;
@@ -179,6 +180,7 @@ export async function buildDecisionPlan(input: {
   if (ids.length > BULK_ID_LIMIT) {
     throw new Error(`decision plan is capped at ${BULK_ID_LIMIT} submissions`);
   }
+  const origin = (input.origin.trim() || "https://marquee.stage11.dev").replace(/\/+$/, "");
   const [event, submissions, notifications, template] = await Promise.all([
     input.db.prepare("SELECT demo_mode, updated_at FROM events WHERE id = ?").bind(input.eventId).first<{ demo_mode: number; updated_at: number }>(),
     loadSubmissions(input.db, input.eventId, ids),
@@ -215,9 +217,10 @@ export async function buildDecisionPlan(input: {
   const sendable = new Set(plan.rows[0]?.records.map((record) => record.id) ?? []);
   const firstPreviewId = [...sendable][0];
   const previewSubmission = firstPreviewId ? byId.get(firstPreviewId) : undefined;
-  const previewPublicLink = previewSubmission
+  const previewPublicLinkPath = previewSubmission
     ? await publicSpeakerPathForPerson(input.db, input.eventId, previewSubmission.person_name, previewSubmission.person_id)
     : null;
+  const previewPublicLink = previewPublicLinkPath ? `${origin}${previewPublicLinkPath}` : null;
   const recipientPreview = input.action === "waitlist" || input.action === "withdraw" || !previewSubmission
     ? null
     : { ...renderDecisionMail(template, previewData(previewSubmission, input.action === "accept" ? "accepted" : "rejected", plan.feedback_md, previewPublicLink)), to_email: previewSubmission.person_email.trim() };
