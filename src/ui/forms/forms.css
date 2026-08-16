@@ -49,7 +49,7 @@
 .forms-library-row small { color: var(--accent-dark); }
 .forms-library-editor { background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); display: grid; gap: 11px; padding: 14px; }
 .forms-library-editor .field { display: grid; gap: 6px; }
-.forms-library-editor .field input, .forms-library-editor .field select, .forms-library-editor .field textarea { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); font: 11px/1.3 var(--mono); min-width: 0; padding: 7px 8px; width: 100%; }
+.forms-library-editor .field :is(input, select, textarea) { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); font: 11px/1.3 var(--mono); min-width: 0; padding: 7px 8px; width: 100%; }
 .forms-library-editor .field textarea { min-height: 70px; resize: vertical; }
 .forms-library-editor-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .forms-library-editor .subtle { line-height: 1.45; margin: 0; }
