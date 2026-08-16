@@ -284,3 +284,54 @@ The implementation must name and update the existing mail manifest count 9 to 10
 The focused validation set now also includes: submit-through-reminder then confirmation-follow; closed-form read versus write rejection; upload-through-reminder; old saved-view round-trip; complete-draft mail with zero queue row; trigger editor round-trip; palette exclusion; manual/bulk trigger refusal; reminder access revocation with original-token survival; and the idempotency template-key separation assertion.
 
 MRQ-247 remains a plan-only hold after this amendment: keep Lattice backlog, do not write feature code, do not launch Cycle 3 review from this turn, and wait for the queued sole-slot review to consume this pushed amendment.
+
+## Plan-Review Cycle 3 Resolutions (AUTHORITATIVE)
+
+Source review: art_01M04VQ33D5TQC4PFDSXK3FZ05, reviewed at plan-only head 8a13401f5b35ec5dd720a2a53734eb802d7f88e3, verdict FAIL (plan-level). These resolutions are binding for implementation and supersede earlier plan text wherever they conflict. All Cycle 1 and Cycle 2 supersession markers remain in force. This is a plan amendment only; it does not authorize feature code, a Lattice status transition, or a reviewer launch.
+
+### A. Generic pre-close exclusion is submitter-grained
+
+The generic selectPreCloseReminderCandidates exclusion is exactly submitter-grained:
+
+NOT EXISTS a draft submission with the same form ID, status = draft, and draft.submitter_person_id = p.id.
+
+It must not infer the exclusion through a draft's participations. The specific selector remains directly keyed to submissions.submitter_person_id, so generic exclusion and specific substitution cover the same person grain.
+
+Add the on-behalf-of proof that distinguishes these grains: a draft has submitter A and a second speaker participation for speaker B. A receives exactly one draft_close_reminder, while B remains eligible for and receives the generic form_closing_reminder. This supplements the submitter-only/second-speaker one-row proof; it must assert both recipient IDs and template keys.
+
+### B. Key-aware merge validation; shared communication field set stays unchanged
+
+The Cycle 2 wording that adds draft.resume_link to COMMUNICATION_MERGE_FIELDS is superseded by this key-aware ruling:
+
+- MERGE_FIELDS may include draft.resume_link for private trigger rendering.
+- COMMUNICATION_MERGE_FIELDS remains unchanged, so the general composer palette and the unchanged shared ad-hoc/bulk validator do not admit draft.resume_link.
+- Template create/update validation becomes key-aware: only after validating template_key = draft_close_reminder may the editor accept draft.resume_link in addition to COMMUNICATION_MERGE_FIELDS. All other template keys use the unchanged shared validator.
+- The general CommsScreen palette continues to exclude draft.resume_link. The positive trigger-editor test must prove save/edit round-trip for the draft_close_reminder body.
+- All custom, ad-hoc, reminder_generic, and bulk/manual bodies containing draft.resume_link are refused before render/enqueue. Add negative tests for each relevant manual/bulk route and assert that literal {{draft.resume_link}} cannot be mailed.
+
+The trigger scheduler remains the only path that supplies a draft-bound value. Preserve the earlier refusal of manually sending draft_close_reminder without a draft context; this key-aware validator closes the additional custom-template body path found in Cycle 3.
+
+### C. Accepted one-dial consequence
+
+ACCEPTED RULING: reminder_offset_hours = NULL means the form has not configured the existing one-dial reminder and draft-close nudges are explicitly disabled. Do not invent a fallback default. This preserves the existing form contract and the ticket's reuse of one timing knob.
+
+State the product consequence plainly: a form with closes_at set but reminder_offset_hours NULL produces zero draft-close enqueue rows. Add that negative selector/scheduler proof alongside the positive in-window case.
+
+### D. Submitted-edit and resolver lookup order
+
+Enumerate the submitted-edit PATCH route, PATCH /api/v1/public/forms/{slug}/submissions/{token} / editSubmittedSubmission, as a token-bearing public-form write surface. A reminder token uses the same unconditional identity binding and the route's existing submitterEditability gate unchanged. This post-submit edit path is not a new draft/open policy; it must behave identically to the original raw resume token. Add a raw-token-equivalent test for a submitted abstract edit.
+
+Resolver order is fixed for R7 and compatibility: attempt the original resume_token_hash lookup first; only when that misses, attempt readMagicLink for the bound draft_resume token. If both miss, return the current no-submission result with no new error surface. A raw-token hit is the winner and does not pay or invoke the magic-link path.
+
+### E. Required implementation checks
+
+Before implementation can claim this amended plan, focused validation must include:
+
+- submitter A versus on-behalf speaker B generic/specific recipient and template-key assertions;
+- trigger-editor draft.resume_link save/edit round-trip;
+- custom, ad-hoc, reminder_generic, and bulk literal-token refusal;
+- closes_at present with reminder_offset_hours NULL and zero enqueue;
+- submitted-edit reminder-token behavior matching raw-token behavior;
+- raw-token-first lookup, magic-link-on-miss, and both-miss no-submission behavior.
+
+MRQ-247 remains a plan-only hold after this amendment: keep Lattice backlog, do not write feature code, do not launch Cycle 4 review from this turn, and wait for the queued sole-slot review to consume this pushed amendment.
