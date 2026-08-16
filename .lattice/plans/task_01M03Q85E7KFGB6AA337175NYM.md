@@ -4,7 +4,7 @@
 **Actor:** `agent:delegator-mrq-237`  
 **Worktree:** `/Users/atin/Projects/Stage11/deployments/Marquee-worktrees/mrq-237-publication-truth`  
 **Branch:** `mrq-237-publication-truth`  
-**Plan status:** `in_planning`; Cycle 4 plan amendment is authoritative after Cycle 3 plan-review FAIL artifact `art_01M055Q3ND00BCZ0P3RB7W9RKP`; implementation remains held.
+**Plan status:** `in_planning`; this Cycle 4 FAIL amendment is authoritative after plan-review artifact `art_01M05756R208MQ3CV85FA5PJ88`; implementation remains held.
 **Base/head at planning start:** `github/main` = `52bb485f105e0392fe475332b87cbb48dbcee832`; local `HEAD` matches exactly.  
 **Terminal boundary:** stop at `pr_open`; Merge Captain owns merge. No deploy or publication.
 
@@ -91,7 +91,7 @@ The onboarding reminder drawer uses the conference communications seam and is co
 ### Phase 0 — plan, review, and lifecycle
 
 1. Commit and push this plan as the first branch commit, staging only this plan file. Verify local branch HEAD equals `github/mrq-237-publication-truth` after push.
-2. Do **not** request plan review or transition `planned` while the MRQ-233 sole review is running. After the Adoption Orchestrator explicitly releases the slot, request the sole MRQ-237 plan-review slot at c11 `workspace:10` / `surface:513`, mailbox `adoption-orchestrator`; only then move `in_planning → planned`.
+2. After a plan-review FAIL, reopen only the ticket to `in_planning`, amend the authoritative and branch plan copies, and push the plan-only commit. On this resume, return `in_planning → planned` with `--no-auto-review` after exact parity checks; do not launch or request a built-in reviewer in this turn. The Adoption Orchestrator owns the separate fresh plan-review handoff at c11 `workspace:10` / `surface:513`, mailbox `adoption-orchestrator`.
 3. At every later phase boundary fetch `github`, record the exact base/head, and recheck migration numbering. The current tree has `0028_participant_fanout.sql`. Cycle 4 now requires a draft migration for durable request operations and their operation-to-outbox links; use an unnumbered planning label such as `NNNN_request_operations.sql` here, re-derive the next real slot at implementation and after every rebase, and never assume `0029`. The migration/schema/reset/delete/audit contract is binding in §3c below.
 
 ### Phase 1 — canonical publication truth
@@ -114,7 +114,7 @@ Extend `src/api/board.ts` / `src/ui/board/ProgramBoardPage.tsx` / board styles w
 
 ### Phase 3 — zero-effect actions
 
-- Return a structured no-op effect from direct publication and render `Already live — nothing changed` (and the corresponding already-unpublished explanation where applicable) without creating an audit row.
+- Return a structured no-op effect from direct publication and render `Already live — nothing changed` (and the corresponding already-unpublished explanation where applicable) without creating a publication audit row; the durable request-operation audit row remains the single request-level record.
 - Refuse conference bulk decision selectors that resolve to nobody with the org-comms-style not-found explanation. For every syntactically valid, non-empty selection whose unique IDs all fail, return the exact `409` all-failed operation contract in §3b: closed `ALL_FAILED` reason, first failure plus total counts, no decision/cache/mail/outbox effect, request-level audit, and keyed byte-identical replay/key-conflict handling.
 - Refuse notification retry when no decisions remain; if rows exist but have no valid address, succeed with the explicit address exclusion rather than pretending a send occurred.
 - Refuse conference communications when the selector resolves to nobody; when all selected rows are duplicate/skipped, render why nothing new was queued. Preserve explicit-empty-selector semantics so clearing a selection cannot become an all-recipient send.
@@ -126,13 +126,13 @@ No unrelated bulk/export/import semantics are changed. No stable criterion is mi
 Add/update tests with `CONTRACT · MRQ-237 ...` titles only:
 
 - unit truth-table coverage for every named reason and the shared helper's identity/precedence;
-- durable keyed conference/org communication-operation coverage for claim-before-send, zero-row records, byte-identical replay, changed-fingerprint `409 key-conflict`, fresh/in-flight/stale-lease recovery, exact response/outbox IDs, reset/delete behavior, and request-audit versus recipient-audit accounting;
+- durable keyed conference/org communication-operation coverage for claim-before-send, zero-row records, byte-identical replay, changed-fingerprint `409 key-conflict`, fresh/in-flight/stale-lease recovery, typed org/event FK and cross-tenant rejection, event/org cascade and reset behavior, exact response/outbox IDs, request-audit versus recipient-audit accounting, queue failure/backoff, crash-after-send recovery, stale-dispatch fencing, and one-provider-send-only outbox recovery;
 - agenda API coverage for accepted unscheduled, accepted scheduled, rejected/withdrawn after publish, malformed/foreign slot facts, already-live exclusion, per-row review reasons, and all-or-nothing batch conflict details;
 - record API coverage proving `actions.can_publish`, no-op effect/notice, audit absence on no-op, and post-publish anomaly data;
 - dashboard API/UI coverage proving six always-rendered gauges, zero values, the exact `kind=session`/`not_yet_public` and `kind=session`/`live_on_site` URLs, shared-classification count/list parity, and each clickthrough's returned set;
 - agenda review render coverage for `N will go live · M withheld`, every row reason, the live anomaly banner, and every publication-panel zero-row state;
 - board API/render coverage for retained published rows and both warning-chip variants;
-- zero-effect coverage for bulk decisions, including the exact non-empty all-failed unknown/illegal/live-refused contract and keyed replay, communications, notification retry, duplicates/skips, and the existing org-comms reference pattern.
+- zero-effect coverage for bulk decisions, including the exact all-already `200` carve-out, mixed already/refused `409 ALL_FAILED` contract, unknown/illegal/live-refused codes and keyed replay, communications, notification retry, duplicates/skips, and the existing org-comms reference pattern.
 
 Run focused Vitest/node tests, `npx tsc --noEmit`, and relevant static/design checks first. Record browser/computer validation as N/A. Before any full `pr-gate`, send the exact HEAD and requested command to mailbox `merge-captain` and wait for a serialized gate slot. Run the full gate only in that slot, interpret `pass-over-budget` as pass and timeout as unknown, then attach exact-head evidence.
 
@@ -237,6 +237,7 @@ ReadyToPublish_e = { s ∈ Unpublished_e | ValidSlot(s) ∧
   s.status = accepted ∧ PublicBoundary_e }
 
 ScheduledUnpublishedDiagnostics_e =
+  { (s, 'malformed') | s ∈ ExistingItemMalformed_e } ⊔
   { (s, 'withheld') | s ∈ ExistingItemWithheld_e } ⊔
   { (s, 'ready') | s ∈ ReadyToPublish_e }
 
@@ -253,7 +254,7 @@ S_e = AcceptedUnscheduled_e ⊔ UnscheduledWithheld_e ⊔
   BoardAnomaly_e ⊔ PublicLive_e ⊔ PublishedNotPublic_e
 ```
 
-The displayed `Unscheduled` gauge reads exactly `AcceptedUnscheduled_e`; an accepted Session with no matching agenda item can never disappear into a join omission. The signed `Not yet public` gauge reads exactly the `ready` arm of `ScheduledUnpublishedDiagnostics_e`, which is `ReadyToPublish_e`; the `withheld` arm is diagnostic only and is never counted as ready. The signed `Live on site` gauge reads `PublicLive_e` and carries the warning/sub-line from the disjoint `BoardAnomaly_e`. `PublishedIncludingAnomalies_e` is an aggregate label whose three tagged children are the non-overlapping published states; it is never counted alongside its children. `ExistingItemMalformed_e` is separate from `ExistingItemWithheld_e`; malformed scheduled rows never enter either publishable or scheduled-unpublished-ready counts. The displayed state partition is exhaustive and pairwise disjoint, and every projection uses this same fact object rather than a consumer-specific WHERE predicate.
+The displayed `Unscheduled` gauge reads exactly `AcceptedUnscheduled_e`; an accepted Session with no matching agenda item can never disappear into a join omission. The signed `Not yet public` gauge reads exactly the `ready` arm of `ScheduledUnpublishedDiagnostics_e`, which is `ReadyToPublish_e`; the `malformed` and `withheld` arms are diagnostic only and are never counted as ready. The signed `Live on site` gauge reads `PublicLive_e` and carries the warning/sub-line from the disjoint `BoardAnomaly_e`. `PublishedIncludingAnomalies_e` is an aggregate label whose three tagged children are the non-overlapping published states; it is never counted alongside its children. `ExistingItemMalformed_e` is present in the agenda review projection with a named `malformed` diagnostic and selected-ID details, but never enters either publishable or scheduled-unpublished-ready counts. The displayed state partition is exhaustive and pairwise disjoint, and every projection uses this same fact object rather than a consumer-specific WHERE predicate.
 
 ### 2. Selected-ID explainer and all-or-nothing publication
 
@@ -311,7 +312,8 @@ operation: {
   effect: "changed" | "no_op",
   reason_code: PublicationReasonCode | NoOpReasonCode | null,
   notice: string | null,
-  duplicate_skipped: integer
+  duplicate_skipped: integer,
+  dispatch_state: "not_required" | "pending" | "dispatched"
 }
 ```
 
@@ -319,10 +321,10 @@ No-op responses must carry a non-null reason code and notice. Pre-admission sche
 
 | Endpoint and no-op case | Exact status/envelope | Effect and notice | Cache | Audit | Operation ID | Duplicate skip | Idempotency / empty semantics |
 |---|---|---|---|---|---|---|---|
-| `POST /api/v1/events/{eventId}/submissions/{submissionId}/publish`; agenda row already published | `200`; existing record payload plus `operation` | `no_op`, `ALREADY_PUBLISHED`, `Already live — nothing changed` | No public-cache purge | No row | Fresh ULID per admitted request | `0` | No request idempotency key; repeat is state-aware and remains a no-op, with a new operation ID. Ineligible/malformed rows use the selected-ID explainer conflict. |
-| `POST /api/v1/events/{eventId}/agenda/publish`; any selected ID is already published, foreign, wrong-kind, stale, or malformed | `409`; existing conflict envelope plus `operation` and complete explainer `rows`; explicit duplicate IDs are `422` with no operation | `no_op`; all-or-nothing notice names the first/aggregate reason, e.g. `all N scheduled sessions are already live` | No purge on conflict | No rows | Fresh ULID for the admitted conflict; no ID for 422 | Never silently skipped | No request idempotency key; repeat re-explains current facts. `submission_ids` is required and non-empty; empty never means all. |
-| `POST /api/v1/events/{eventId}/submissions/bulk`; filter resolves to zero, every unique ID is already in the requested decision state, or the non-empty selection is all-failed | Filter-empty: `404` standard error `empty_selection`; all-already-state: `200` existing `bulkResult` plus `operation`; all-failed: exact `409` envelope in §3b | Empty is refused with `that selection resolves to nobody in this conference`; all-already-state is `no_op`, `ALREADY_IN_STATE`, `nothing changed — every selected record is already {state}`; all-failed is `no_op`, `ALL_FAILED`, with first failure/counts | No purge | No decision rows for no-op; one request-operation audit row | No ID for pre-admission 404; fresh or replayed ULID for admitted results | First-seen ID de-duplication is reported in `duplicate_skipped`; no duplicate is applied twice | No implicit all. `selector.ids: []` is `400` and filter-zero is `404`; an optional `Idempotency-Key` uses the durable request-operation registry for admitted zero/all-failed outcomes: identical replay is byte-identical, changed fingerprint is `409 key-conflict`, and an unkeyed repeat is fresh. |
-| `POST /api/v1/events/{eventId}/submissions/not-notified/notify`; no eligible decision remains, or all candidates lack valid addresses | `409` admitted no-candidate response, or `202` existing summary when candidates are all address-excluded; both include `operation` | `no_op`, `NO_DECISIONS_REMAIN` / `NO_VALID_RECIPIENT`, with an explicit notice; never `0` as success-only prose | No cache | No rows | Fresh ULID for each admitted no-op | Server-side ID set is de-duplicated; report `duplicate_skipped: 0` because callers do not supply a selector | No request idempotency key; `cursor` is pagination only. Empty server result means no matching decisions, never all decisions. |
+| `POST /api/v1/events/{eventId}/submissions/{submissionId}/publish`; agenda row already published | `200`; existing record payload plus `operation` | `no_op`, `ALREADY_PUBLISHED`, `Already live — nothing changed` | No public-cache purge | No publication audit row; one request-operation row | Fresh ULID per admitted request | `0` | No request idempotency key; repeat is state-aware and remains a no-op, with a new operation ID. Ineligible/malformed rows use the selected-ID explainer conflict. |
+| `POST /api/v1/events/{eventId}/agenda/publish`; any selected ID is already published, foreign, wrong-kind, stale, or malformed | `409`; existing conflict envelope plus `operation` and complete explainer `rows`; explicit duplicate IDs are `422` with no operation | `no_op`; all-or-nothing notice names the first/aggregate reason, e.g. `all N scheduled sessions are already live` | No purge on conflict | No publication audit rows; one request-operation row for the admitted conflict | Fresh ULID for the admitted conflict; no ID for 422 | Never silently skipped | No request idempotency key; repeat re-explains current facts. `submission_ids` is required and non-empty; empty never means all. |
+| `POST /api/v1/events/{eventId}/submissions/bulk`; filter resolves to zero, every unique ID is already in the requested decision state, or the non-empty selection has no successful transition | Filter-empty: `404` standard error `empty_selection`; all-already-state: exact `200` no-op envelope in §3b; any zero-success selection containing at least one true refusal: exact `409 ALL_FAILED` envelope in §3b. The all-already carve-out has precedence over `ALL_FAILED`; `ALREADY_IN_STATE` rows mixed with a true refusal remain in the `409` result but do not make an all-already selection fail. | Empty is refused with `that selection resolves to nobody in this conference`; all-already-state is `no_op`, `ALREADY_IN_STATE`, `nothing changed — every selected record is already {state}`; mixed already/refused with no transition is `no_op`, `ALL_FAILED`, with first true failure/counts | No purge | No decision rows for no-op; exactly one request-operation audit row for each admitted no-op | No ID for pre-admission 404; fresh or replayed ULID for admitted results | First-seen ID de-duplication is reported in `duplicate_skipped`; no duplicate is applied twice | No implicit all. `selector.ids: []` is `400` and filter-zero is `404`; an optional `Idempotency-Key` uses the durable request-operation registry for admitted zero/all-failed outcomes: identical replay is byte-identical, changed fingerprint is `409 key-conflict`, and an unkeyed repeat is fresh. |
+| `POST /api/v1/events/{eventId}/submissions/not-notified/notify`; no eligible decision remains, or all candidates lack valid addresses | `409` admitted no-candidate response, or `202` existing summary when candidates are all address-excluded; both include `operation` | `no_op`, `NO_DECISIONS_REMAIN` / `NO_VALID_RECIPIENT`, with an explicit notice; never `0` as success-only prose | No cache | No decision/recipient audit rows; one request-operation row | Fresh ULID for each admitted no-op | Server-side ID set is de-duplicated; report `duplicate_skipped: 0` because callers do not supply a selector | No request idempotency key; `cursor` is pagination only. Empty server result means no matching decisions, never all decisions. |
 | `POST /api/v1/events/{eventId}/comms/send`; actual conference selector dimensions and all duplicate/skipped cases | Exact statuses, envelopes, operation IDs, notices, queue/audit effects, and duplicate accounting are bound in §3a below; no generic `ids` selector is valid | See §3a | See §3a | See §3a | See §3a | See §3a | Omitted selector, `{}`, every present empty array, and implicit-all behavior are all explicitly refused in §3a. |
 | `POST /api/v1/org/comms/send`; actual org audience dimensions and all duplicate/skipped cases | Exact statuses, envelopes, operation IDs, notices, queue/audit effects, and duplicate accounting are bound in §3a below | See §3a | See §3a | See §3a | See §3a | See §3a | Omitted audience, `{}`, and implicit-all behavior are all explicitly refused in §3a. |
 | `POST /api/v1/events/{eventId}/submissions/{submissionId}/decision/resend`; no current accepted/rejected decision or no valid speaker address | No decision: `409` existing conflict error; invalid address: `422` existing validation error; no `operation`/`operation_id` | Refusal names the exact reason; never a successful zero-count envelope | No cache | No rows | None because the request is rejected before admission | Always `0` | This route is deliberately non-idempotent: valid resend is `202` with a fresh operation ID and fresh outbox ID every time; no duplicate skip and no `Idempotency-Key` replay. An empty decision set is a refusal, never a broadcast. |
@@ -368,7 +370,7 @@ The two routes use the following exact outcome rules. Every response uses the ex
 | Duplicate input values | Dedupe `submission_ids` and `person_ids` by first appearance; dedupe `recipient_pairs` by `(person_id, submission_id)` including `null` | Dedupe `person_ids` by first appearance | `duplicate_skipped` reports only input duplicates; `selected` uses the unique resolved audience; no duplicate input is queued twice or audited twice. |
 | Unknown/foreign IDs or pairs | Unknown submission/person/pair is a skipped row with its selector dimension and reason; if no valid recipient remains, `404` `empty_selection` | Unknown or out-of-org person is a skipped row; if no valid person remains, `404` `empty_selection` | A syntactically valid request with an `Idempotency-Key` is admitted before resolution: the `404` includes its `operation` (`NO_VALID_RECIPIENT`, `queued: 0`, `outbox_ids: []`) and is replayed byte-for-byte; the request-operation audit row is the only audit. Without a key, preserve the fresh `404` with no replay claim. Mixed known/unknown sends only known rows and names every skipped row; no ID is treated as an implicit filter. |
 | Filter-zero | A valid `status`, `track_id`, `format_id`, `task_state`, or `role` filter resolving zero is `404` `filter_zero` | A `list_id` resolving to no in-org people is `404` `filter_zero` | With a key, the valid zero-row request is admitted before resolution and returns/stores an operation with `NO_VALID_RECIPIENT`, queue `0`, audit `1` request-operation row, and no recipient/outbox rows; without a key, no replay claim is made. Notice states that the explicit selection resolves to nobody. |
-| Duplicate-only after resolution | `202` existing `sendResponse` plus `operation = { effect: no_op, reason_code: DUPLICATE_SKIPPED, notice: "all selected messages were already queued", duplicate_skipped, duplicate: selected, queued: 0, outbox_ids: [] }` | `202` existing org envelope plus the same operation semantics; `excluded_people` remains the do-not-contact list | Fresh operation ID on first admitted request; queue `0`; audit `0`; duplicate accounting is exact and not reported as a send. |
+| Duplicate-only after resolution | `202` existing `sendResponse` plus the binding `operation` (`effect: no_op`, `reason_code: DUPLICATE_SKIPPED`, `notice: "all selected messages were already queued"`, `operation_id`, `duplicate_skipped`, `dispatch_state: "not_required"`, `duplicate: selected`, `queued: 0`, `outbox_ids: []`) | `202` existing org envelope plus the same operation semantics; `excluded_people` remains the do-not-contact list | Fresh operation ID on first admitted request; queue `0`; recipient audit `0`, request-operation audit `1`; duplicate accounting is exact and not reported as a send. |
 | Non-empty mixed result | `202`; queue/audit only newly inserted rows; skipped rows and both duplicate counters are returned | `202`; queue only newly inserted rows; `excluded_people`, skipped people, and both duplicate counters are returned | `operation.effect = changed` when `queued > 0`; no-op only when `queued = 0`. |
 | Repeated request with the same `Idempotency-Key` and byte-identical compose/selector | Replay of the original status and envelope, operation ID, and outbox IDs, including a stored zero-row response | Same | Queue `0`; no new recipient audit or duplicate rows. A reused key with a different subject/body/template or canonical selector is `409` `key-conflict`; no new operation/queue/recipient-audit row. The durable claim/recovery algorithm is §3c. |
 | Repeated request without an `Idempotency-Key` | Each ad-hoc compose is a new nudge with a new operation ID; registry outcomes still populate `duplicate` where its business key says duplicate | Same | No claim of idempotency; duplicate-only remains a reasoned `202`, never silent success. |
@@ -377,7 +379,26 @@ The canonical selector must be included in the idempotency fingerprint after fir
 
 ### 3b. Exact non-empty all-failed bulk-decision contract
 
-`POST /api/v1/events/{eventId}/submissions/bulk` must distinguish a non-empty admitted selection whose every unique selected ID is refused from a filter that was empty before admission. The selector is still the exclusive `ids`/`filter` union; `selector.ids` must be non-empty, and a filter selection that resolves to a non-empty ID set is admitted. Input duplicates are first-seen de-duplicated and counted in `duplicate_skipped`; unknown IDs are not silently dropped. A non-empty selection is **all-failed** when `succeeded = 0` and `failed = selected_unique > 0`.
+`POST /api/v1/events/{eventId}/submissions/bulk` must distinguish a non-empty admitted selection from a filter that was empty before admission, and must distinguish a terminal already-in-state no-op from a refusal. The selector is still the exclusive `ids`/`filter` union; `selector.ids` must be non-empty, and a filter selection that resolves to a non-empty ID set is admitted. Input duplicates are first-seen de-duplicated and counted in `duplicate_skipped`; unknown IDs are not silently dropped.
+
+The route first classifies every unique selected ID in first-seen order into exactly one result outcome:
+
+```text
+succeeded         -- the requested decision transition was written;
+already_in_state  -- the requested target state is already authoritative;
+failed            -- the request was refused with a code other than ALREADY_IN_STATE.
+```
+
+The counts are binding: `selected = succeeded + already_in_state + failed`. `ALREADY_IN_STATE` remains a closed per-record code and appears in that row's `result.error`, but it is a terminal no-op, not a member of the `failures` array and not part of the `failed` count. This makes the all-already carve-out explicit instead of allowing the same rows to select two envelopes.
+
+Outcome precedence is closed and ordered:
+
+1. A selector that resolves to zero before admission is `404 empty_selection` with no operation.
+2. `succeeded = 0`, `already_in_state = selected`, and `failed = 0` is the all-already no-op: `200` with `operation.reason_code = ALREADY_IN_STATE`.
+3. `succeeded = 0` and `failed > 0` is all-failed: `409` with `operation.reason_code = ALL_FAILED`. It may contain `already_in_state > 0`; those rows remain explicit `ALREADY_IN_STATE` results, while `first_failure` and `failures` describe the true refusals.
+4. `succeeded > 0` uses the existing changed-effect `200` bulk envelope, with any already-in-state and failed rows reported separately.
+
+Thus an all-already selection can never return `409 ALL_FAILED`, while an already-in-state row combined with a real refusal and no successful transition always returns `409 ALL_FAILED`. A duplicate-only input is evaluated after first-seen de-duplication and follows the same rules; `duplicate_skipped` never changes the selected count.
 
 The closed per-record failure-code set for this result is:
 
@@ -398,80 +419,159 @@ For every all-failed non-empty selection the exact HTTP and envelope contract is
   operation_id: ULID,
   selected: N,
   succeeded: 0,
-  failed: N,
+  already_in_state: A,
+  failed: F,
   state: "completed_with_failures",
   outbox_enqueued: 0,
   published_count: P,
   first_failure: { id: string, code: BulkDecisionFailureCode, message: string },
   failures: [{ id: string, code: BulkDecisionFailureCode, message: string }],
-  results: [{ id, outcome: "failed", resulting_status: null, error }],
+  results: [
+    { id, outcome: "already_in_state", resulting_status: target, error: {
+      code: "ALREADY_IN_STATE", message: string
+    } },
+    { id, outcome: "failed", resulting_status: null, error }
+  ],
   operation: {
     operation_id: same ULID,
     effect: "no_op",
     reason_code: "ALL_FAILED",
     notice: "Nothing changed — all N selected records were refused",
-    duplicate_skipped: D
+    duplicate_skipped: D,
+    dispatch_state: "not_required"
   }
 }
 ```
 
-`first_failure` is always present and is the first failure in stable first-seen selection order. `failures` contains the bounded recorded failure list, while `failed` counts every failed unique selection; explicit-ID requests include every bounded `results` row and filter-wide requests retain the existing bounded-result rule but still expose the first failure and exact counts. `P` is the count of live/published rows refused, not a mutation count. Unknown, foreign-event, illegal-decision, already-in-state, stale, no-address, and live-refused cases all use their specific codes above; none is collapsed into a generic success or silently removed from the attempted set.
+`N = A + F`; `failed = F` counts only true refusals and `already_in_state = A` counts terminal no-op rows. `first_failure` is always present because this envelope requires `F > 0`, and it is the first true failure in stable first-seen selection order. `failures` contains the bounded recorded true-failure list. Explicit-ID requests include every bounded `results` row and filter-wide requests retain the existing bounded-result rule while still exposing the first failure and exact counts. `P` is the count of live/published rows refused, not a mutation count. Unknown, foreign-event, illegal-decision, stale, no-address, and live-refused cases use their specific codes; `ALREADY_IN_STATE` appears in its result but cannot turn an all-already selection into this envelope.
 
-The all-failed side-effect ledger is binding: `public_cache_purges = 0`, `decision_audit_rows = 0`, `mail_queued = 0`, `outbox_enqueued = 0`, and no decision transition is written. Exactly one request-operation audit row is retained with the canonical request, `operation_id`, `ALL_FAILED`, `selected/succeeded/failed/duplicate_skipped` counts, the first/recorded failures, and the exact response; replaying it does not create another audit row. Input duplicates are counted only in `duplicate_skipped`; no duplicate is applied or queued. A mixed selection remains the existing `200 completed_with_failures` changed-effect path and reports its successes and failures separately.
+For the all-already carve-out, the exact `200` envelope is the existing `bulkResult` plus:
 
-The bulk route accepts `Idempotency-Key` under the same request-operation registry as communications. A byte-identical repeat of an all-failed request replays the original `409` status, complete envelope, operation ID, failure list, counts, and empty outbox list with zero writes. A changed action, feedback, wave, confirmation flag, or canonical selector under the same scoped key is `409` `key-conflict` with no mutation. A repeat without a key is a fresh evaluation with a fresh operation ID; if state is unchanged it produces the same `ALL_FAILED` effect but is not claimed as byte-identical replay. A crash or stale in-flight claim follows §3c and cannot queue a second copy.
+```text
+{
+  selected: N,
+  succeeded: 0,
+  already_in_state: N,
+  failed: 0,
+  state: "completed_noop",
+  outbox_enqueued: 0,
+  first_failure: null,
+  failures: [],
+  results: [{ id, outcome: "already_in_state", resulting_status: target,
+              error: { code: "ALREADY_IN_STATE", message: string } }],
+  operation: {
+    operation_id: same ULID,
+    effect: "no_op",
+    reason_code: "ALREADY_IN_STATE",
+    notice: "Nothing changed — every N selected record(s) is already {state}",
+    duplicate_skipped: D,
+    dispatch_state: "not_required"
+  }
+}
+```
+
+The all-failed and all-already side-effect ledger is binding: `public_cache_purges = 0`, `decision_audit_rows = 0`, `mail_queued = 0`, `outbox_enqueued = 0`, and no decision transition is written. Exactly one request-operation audit row is retained for each admitted no-op with the canonical request, `operation_id`, reason, `selected/succeeded/already_in_state/failed/duplicate_skipped` counts, the first/recorded failures, and the exact response; replaying it does not create another audit row. Input duplicates are counted only in `duplicate_skipped`; no duplicate is applied or queued. A mixed selection with `succeeded > 0` remains the existing `200 completed_with_failures` changed-effect path and reports its successes, already-in-state rows, and refusals separately.
+
+The bulk route accepts `Idempotency-Key` under the same request-operation registry as communications. A byte-identical repeat of an all-failed request replays the original `409` status, complete envelope, operation ID, failure list, counts, and empty outbox list with zero writes. A byte-identical repeat of an all-already request replays the original `200` status and complete envelope, including `ALREADY_IN_STATE`, with zero writes. A changed action, feedback, wave, confirmation flag, or canonical selector under the same scoped key is `409` `key-conflict` with no mutation. A repeat without a key is a fresh evaluation with a fresh operation ID; if state is unchanged it produces the same classified outcome but is not claimed as byte-identical replay. A crash or stale claim follows §3c and cannot queue a second copy.
 
 ### 3c. Durable request-operation storage, claim algorithm, and lifecycle impact
 
-Cycle 4 replaces the prior no-migration wording with one draft schema seam. The implementation must add an unnumbered planning migration, re-numbered only after a fresh `github/main` recheck, such as `NNNN_request_operations.sql`, containing:
+Cycle 4 replaces the prior polymorphic `scope_kind + scope_id` draft with a typed, tenant-enforced schema. The implementation must add an unnumbered planning migration, re-numbered only after a fresh `github/main` recheck, such as `NNNN_request_operations.sql`, containing the following shape:
 
 ```text
+-- Required parent key for the composite event/org scope FK. `events.id` is
+-- already unique, so this index adds no new logical event identity.
+CREATE UNIQUE INDEX uq_events_id_org_request_scope ON events(id, org_id);
+
 request_operations(
   operation_id TEXT PRIMARY KEY,              -- ULID
-  organization_id TEXT NOT NULL,
+  organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   scope_kind TEXT NOT NULL CHECK (scope_kind IN ('org', 'event')),
-  scope_id TEXT NOT NULL,                     -- org id for org routes, event id for event routes
+  event_id TEXT NULL,                         -- NULL for org scope; concrete event for event scope
   route TEXT NOT NULL,                        -- e.g. org.comms.send, events.comms.send, submissions.bulk
   idempotency_key TEXT NULL,
   canonical_fingerprint TEXT NOT NULL,       -- SHA-256 of canonical selector/compose/request data
   canonical_request_json TEXT NOT NULL,
-  state TEXT NOT NULL CHECK (state IN ('in_flight', 'completed', 'failed')),
+  request_id TEXT NOT NULL,                   -- request/trace correlation id
+  actor_kind TEXT NOT NULL CHECK (actor_kind IN ('user', 'api_token', 'system', 'airtable')),
+  actor_person_id TEXT NULL REFERENCES people(id) ON DELETE SET NULL,
+  state TEXT NOT NULL CHECK (state IN ('in_flight', 'dispatch_pending', 'completed', 'failed')),
   response_status INTEGER NULL,
   response_headers_json TEXT NULL,
-  response_json TEXT NULL,                    -- exact serialized response envelope
+  response_json TEXT NULL,                    -- exact final serialized response envelope
   outbox_ids_json TEXT NOT NULL DEFAULT '[]',
   claim_token TEXT NULL,
   lease_expires_at INTEGER NULL,
   attempt_count INTEGER NOT NULL DEFAULT 1,
+  dispatch_claim_token TEXT NULL,
+  dispatch_lease_expires_at INTEGER NULL,
+  dispatch_attempt_count INTEGER NOT NULL DEFAULT 0,
+  dispatch_next_attempt_at INTEGER NULL,
+  dispatch_last_error TEXT NULL,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  completed_at INTEGER NULL
+  completed_at INTEGER NULL,
+  CHECK ((scope_kind = 'org' AND event_id IS NULL)
+      OR (scope_kind = 'event' AND event_id IS NOT NULL)),
+  FOREIGN KEY (event_id, organization_id)
+    REFERENCES events(id, org_id) ON DELETE CASCADE
 )
 
-UNIQUE INDEX request_operations_scoped_key
-  ON request_operations(organization_id, scope_kind, scope_id, route, idempotency_key)
-  WHERE idempotency_key IS NOT NULL;
+UNIQUE INDEX request_operations_org_key
+  ON request_operations(organization_id, route, idempotency_key)
+  WHERE scope_kind = 'org' AND event_id IS NULL AND idempotency_key IS NOT NULL;
+
+UNIQUE INDEX request_operations_event_key
+  ON request_operations(organization_id, event_id, route, idempotency_key)
+  WHERE scope_kind = 'event' AND event_id IS NOT NULL AND idempotency_key IS NOT NULL;
 
 request_operation_outbox(
   operation_id TEXT NOT NULL REFERENCES request_operations(operation_id) ON DELETE CASCADE,
   outbox_id TEXT NOT NULL,                     -- retained as audit text even if outbox cleanup removes the row
   ordinal INTEGER NOT NULL,
+  dispatch_state TEXT NOT NULL DEFAULT 'pending'
+    CHECK (dispatch_state IN ('pending', 'dispatched')),
+  dispatch_attempt_count INTEGER NOT NULL DEFAULT 0,
+  dispatched_at INTEGER NULL,
+  last_dispatch_error TEXT NULL,
   PRIMARY KEY (operation_id, outbox_id),
   UNIQUE (operation_id, ordinal)
 )
 ```
 
-The unique key is therefore exactly organization + org/event scope + route + `Idempotency-Key`; an event key cannot collide with an org key or with the same key on a different route. The registry row is created for every admitted mutation, keyed or unkeyed, so zero-row operations have a durable `operation_id`; only keyed rows participate in replay. The canonical request includes the route/scope, action or template, every compose field that changes the message (subject, body, template, attachments/options), and the normalized selector/audience. Selector arrays are first-seen de-duplicated, then sorted by their semantic keys; `recipient_pairs` sort and fingerprint as pairs and are never expanded. The stored canonical JSON and SHA-256 fingerprint are the comparison authority.
+The polymorphic `scope_id` is deliberately absent from storage. The API may call the derived value `scope_id` in diagnostics (`organization_id` for org scope, `event_id` for event scope), but callers never write an untyped scope ID. The unique key is exactly organization + typed org/event scope + route + `Idempotency-Key`: an event key cannot collide with an org key or with the same key on a different route. The registry row is created for every admitted mutation, keyed or unkeyed, so zero-row operations have a durable `operation_id`; only keyed rows participate in replay. The canonical request includes the route/scope, action or template, every compose field that changes the message (subject, body, template, attachments/options), and the normalized selector/audience. Selector arrays are first-seen de-duplicated, then sorted by their semantic keys; `recipient_pairs` sort and fingerprint as pairs and are never expanded. The stored canonical JSON and SHA-256 fingerprint are the comparison authority.
+
+Tenant binding is enforced twice. The event route loads `events.id, events.org_id` in the same transaction as the claim and derives both `event_id` and `organization_id` from that row; an event from another organization cannot be inserted because the composite `(event_id, organization_id) REFERENCES events(id, org_id)` rejects it. The organization route derives `organization_id` from the authenticated organization context and requires `event_id IS NULL`. The `scope_kind`/`event_id` check rejects the two other combinations. `actor_person_id`, when present, is checked in the same claim transaction to belong to `organization_id`; system and token actors retain a null person. A request cannot select, replay, or delete an operation by an arbitrary cross-tenant `scope_id`.
+
+Delete and reset semantics are binding. Deleting an event cascades its event-scoped operations through the composite event/org FK; deleting an organization cascades both its org-scoped rows and all event-scoped rows through `organization_id`. In either case `request_operation_outbox` links cascade from the operation. The outbox ID is intentionally text-only: existing outbox cleanup may remove the mail row without deleting the request audit record, while tenant deletion/reset is the explicit exception that removes both operation history and links with the tenant's existing data deletion transaction. `reset:demo` deletes request operations, links, outbox rows, and communication/audit rows for the reset organization/event in one transaction, intentionally permitting a fresh key. There is no per-request delete API and no TTL deletion in this ticket.
 
 The request algorithm is binding and claim-before-send:
 
 1. Validate authentication and syntax. Invalid/omitted/empty selectors fail before admission and create no row. For a valid mutation, compute the canonical JSON/fingerprint and insert an `in_flight` row with a new ULID before resolving recipients or touching the outbox. A uniqueness race selects the existing scoped row instead.
-2. On an existing keyed row, compare fingerprints before any effect. A mismatch returns `409` `key-conflict` and creates no new operation, audit, queue, or cache effect. A `completed`/`failed` row with the same fingerprint replays its stored status, headers/envelope, operation ID, and exact `outbox_ids_json` byte-for-byte, including `[]` for zero-row/no-op responses.
-3. A fresh or atomically reclaimed claim resolves the selector, writes the request-operation audit state, and inserts/link outbox rows in one transaction. The link table records exact IDs and ordinals; only newly inserted outbox rows enter `outbox_ids_json`. Duplicate/skipped rows are counted in the stored response, never inferred from a later outbox query.
-4. Before any queue dispatch, persist the final response status, headers, envelope, outbox IDs, counts, and `state = completed` under the claim token. Replays after this point do not send, audit, or purge again. A deterministic admitted refusal, including a zero-row response or all-failed bulk decision, is stored the same way with `outbox_ids_json = []`.
-5. If the worker crashes while `in_flight`, a caller seeing a live lease receives `409` `operation_in_flight` with the original operation ID and retry guidance, with no new effect. After `lease_expires_at`, a compare-and-swap claim changes the token/lease and increments `attempt_count`; recovery first reads linked outbox rows, finalizes a response if the work already completed, and otherwise inserts only missing recipient rows before persisting completion. A stale worker's token cannot finalize or dispatch after losing its claim. This covers crashes before resolution, after partial outbox insertion, and before response persistence without double-send.
+2. On an existing keyed row, compare fingerprints before any effect. A mismatch returns `409` `key-conflict` and creates no new operation, audit, queue, or cache effect. A `completed`/`failed` row with the same fingerprint replays its stored status, headers/envelope, operation ID, and exact `outbox_ids_json` byte-for-byte, including `[]` for zero-row/no-op responses. An `in_flight` or `dispatch_pending` row with a live lease returns `409` `operation_in_flight` and its operation ID; after the lease expires, a compare-and-swap reclaim is allowed. A pending row is never replayed as completed.
+3. A fresh or atomically reclaimed claim resolves the selector, writes the request-operation audit state, and inserts/links outbox rows in one transaction. The link table records exact IDs and ordinals with `dispatch_state = pending`; only newly inserted outbox rows enter `outbox_ids_json`. Duplicate/skipped rows are counted in the stored response, never inferred from a later outbox query. If there are no outbox rows, the operation is finalized in this transaction as `state = completed`, `dispatch_state = not_required`, and the exact response is replayable immediately.
+4. If outbox rows exist, persist the resolved response status, headers, envelope, counts, and outbox IDs under the claim token but set `state = dispatch_pending`; do **not** mark the operation completed before Queue dispatch. The response fields are staged, not replayable, until every linked outbox ID has a durable dispatch acknowledgement. A queue-dispatch failure returns `503 operation_dispatch_pending` with the operation ID and retry guidance, leaves the operation pending, and schedules recovery; it cannot claim a successful completed response.
+5. `dispatchPendingRequestOperation` claims a pending operation with `dispatch_claim_token` and `dispatch_lease_expires_at`, then sends each `pending` link through the existing `enqueueMailMessage(MAIL_QUEUE, outbox_id)` seam. After each successful `queue.send`, it marks that link `dispatched` with a CAS on the operation dispatch token. Once every link is `dispatched`, it marks the operation `completed`, `dispatch_state = dispatched`, and `completed_at` with the same CAS. Only this terminal update makes the stored response replayable. A stale dispatcher cannot finalize an operation or mark a link after losing its token.
+6. The scheduled mail path runs a bounded `dispatchPendingRequestOperations` sweeper on every mail schedule tick, alongside the existing reminder work and before the mirror-only backstop. It claims due `dispatch_pending` operations whose dispatch lease is absent/expired, retries missing links with bounded backoff, records `dispatch_attempt_count` and `dispatch_last_error`, and leaves a queue failure in `dispatch_pending` for the next tick. It also finalizes an operation whose links are all already `dispatched`, covering a crash after the last Queue send and before the operation CAS.
+7. Crash and duplicate behavior is explicit: a crash after the D1 commit but before any Queue send is recovered by the sweeper; a crash after Queue acceptance but before the link update resends the same outbox ID, and the existing outbox consumer's `claimRow`/status fence permits only one provider send; a crash after all link updates but before completion is finalized by the sweeper. The same operation ID and link IDs are used throughout, so no recovery path inserts a second outbox row. A live pending claim returns `409 operation_in_flight`; a stale claim is reclaimed; a completed operation replays the exact final response. Queue acceptance is the dispatch boundary; provider delivery remains the existing outbox consumer's separately audited lifecycle.
 
-Schema/lifecycle impact is explicit. The migration adds the two tables, the scoped-key and operation-created indexes, and the foreign keys needed for event/org scope validation; no stable migration number is written in this plan. `reset:demo` deletes request-operation and link rows for the reset organization/event in the same reset transaction as the existing demo outbox/communication/audit cleanup, so a reset intentionally permits a fresh key. Event or organization deletion cascades the request-operation and link rows; there is no per-request delete API and no automatic TTL deletion in this ticket. Outbox cleanup is independent: the request audit retains the exact historical outbox IDs even if an old outbox row is later purged. The request-operation row is the one durable audit record for a keyed or unkeyed admitted zero-row/no-op; existing per-recipient communication/decision audit rows are written only for actual newly applied/queued effects. Replays and key conflicts add none. The migration, reset, delete, and audit behavior must be covered in targeted non-browser proof and folded by the Adoption Orchestrator into `SPEC.md`, `EVALUATION.md`, `sequence/USER_STORIES.md`, and claims only after `MRQ-244` and explicit `CONSOLIDATION RESUME`.
+Schema/lifecycle impact is explicit. The migration adds the typed scope tables/indexes, request/actor correlation fields, dispatch state/leases, the operation-to-outbox link state, and the foreign keys above; no stable migration number is written in this plan. The request-operation row is the one durable request-level audit record for a keyed or unkeyed admitted zero-row/no-op, and it retains actor/request correlation even when no event-bound `audit_log` row is possible for an org-only route. Existing per-recipient communication/decision audit rows are written only for actual newly applied/queued effects. Replays and key conflicts add none. The migration, cross-tenant rejection, event/org cascade, reset, crash-after-queue, queue-failure retry, stale-dispatch fencing, and no-double-send behavior must be covered in targeted non-browser proof and folded by the Adoption Orchestrator into `SPEC.md`, `EVALUATION.md`, `sequence/USER_STORIES.md`, and claims only after `MRQ-244` and explicit `CONSOLIDATION RESUME`.
+
+## Plan-Review Cycle 4 Resolutions (AUTHORITATIVE)
+
+**Review artifact:** `art_01M05756R208MQ3CV85FA5PJ88` at exact head `88d53e082597191a4dbb1713165d9ad3ac1bcc33`.
+
+This is the binding response to the Cycle 4 FAIL. It supersedes any earlier conflicting wording in §§3, 3b, and 3c without reopening the cleared design, privacy, board, trace, browser, migration-number, selector, set-algebra, or consolidation decisions. No feature code, contract-file edit, stable US/AC number, browser proof, gate, or live side effect is authorized by this amendment.
+
+1. **Bulk precedence is deterministic.** `ALREADY_IN_STATE` is a terminal per-row no-op, not a true failure. An all-already unique selection is exactly `200 completed_noop` with `operation.reason_code = ALREADY_IN_STATE`, `already_in_state = selected`, `failed = 0`, no decision/mail/cache effect, one request-operation audit row, and exact keyed replay. A zero-success selection containing any true refusal is exactly `409 completed_with_failures` with `ALL_FAILED`; already-in-state rows remain explicit results, while `failed`, `first_failure`, and `failures` contain only true refusals. A mixed successful selection stays the existing changed `200` path. There is no request shape that can choose both envelopes.
+
+2. **Scope storage is typed and tenant-bound.** The draft no longer stores polymorphic `scope_id`. It stores `organization_id` plus nullable `event_id`, checks the org/event combination, derives event organization from `events`, enforces `(event_id, organization_id) → events(id, org_id)`, and uses separate partial uniqueness indexes for org and event keys. Org deletion cascades every operation in the tenant; event deletion cascades event-scoped operations; operation-to-outbox links cascade from the operation; reset deletes these rows with the existing demo cleanup. Request/actor correlation fields and same-tenant actor validation make the registry the durable request-level audit seam, including org-only operations.
+
+3. **Queue dispatch is a durable second phase.** An operation with outbox rows is `dispatch_pending`, never `completed`, until each linked outbox ID has a durable `dispatched` acknowledgement after `enqueueMailMessage` returns. A dispatch lease/token fences stale workers; queue failure leaves the operation pending with backoff; the mail-schedule sweeper retries pending links and finalizes all-dispatched operations. Re-sending an outbox ID after a crash is safe because the existing consumer claim/status fence permits only one provider send. Completed replays are exposed only after dispatch; pending/in-flight callers receive `operation_in_flight`/`operation_dispatch_pending` and recovery guidance. This closes crashes before Queue send, after Queue acceptance, after link acknowledgement, and before terminal operation CAS without inserting a second outbox row.
+
+4. **The prior nonblocking diagnostic note is closed.** `ScheduledUnpublishedDiagnostics_e` now has explicit `malformed`, `withheld`, and `ready` tagged arms. Malformed existing-item rows are included in the agenda review projection and selected-ID explanations with detail, but never in either publication gauge. The request-operation row explicitly records `request_id`, `actor_kind`, and optional `actor_person_id`; event-bound `audit_log` remains for event-specific effects, while this row is the request-level audit for org-only and zero-effect operations.
+
+The signed v1.17 six-gauge/seven-stage geometry, exact clickthroughs, privacy divergence marker, retained published anomalies and warning chips, exhaustive event-scoped classification, actual selector matrix, `CONTRACT · MRQ-237 ...` trace prefix, browser N/A boundary, unnumbered migration rule, and Adoption Orchestrator's post-`MRQ-244` fold into SPEC/EVALUATION/USER_STORIES/claims after explicit `CONSOLIDATION RESUME` remain binding.
 
 ## Plan-Review Cycle 3 Resolutions (AUTHORITATIVE)
 
@@ -508,6 +608,8 @@ The orchestrator records the fold owner, destination paths, next-mint decision, 
 - **Trace:** targeted test names keep the `CONTRACT · MRQ-237 ...` prefix; claims remain held for consolidation.
 - **Browser:** browser/computer-use validation remains `N/A — approval not granted`; no approval is inferred from the plan review.
 - **Migration:** Cycle 4 authorizes only the unnumbered draft `NNNN_request_operations.sql` and its operation-to-outbox link schema for durable request replay; recheck the current migration number at implementation and after rebase, and never assume `0029`.
+
+## Reset 2026-08-16 by agent:delegator-mrq-237
 
 ## Reset 2026-08-16 by agent:delegator-mrq-237
 
