@@ -71,7 +71,7 @@ test("CONTRACT · every link advertised by llms.txt resolves in-process", async 
 
   const llms = await readFile(llmsPath, "utf8");
   const paths = [...llms.matchAll(/\]\((\/[^)\s]+)\)/g)].map((match) => match[1]);
-  assert.ok(paths.length >= 10, "llms.txt should advertise the machine and document doors");
+  if (paths.length < 10) throw new Error("llms.txt should advertise the machine and document doors");
 
   for (const path of new Set(paths)) {
     const response = await request(path);
