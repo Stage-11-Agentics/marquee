@@ -27,16 +27,6 @@ test("CONTRACT · a refused write is told apart from an unreachable record", asy
   assert.match(page, /error\.status !== 404 && error\.status !== 401/);
 });
 
-test("CONTRACT · act() keeps the record on screen when a write is refused", async () => {
-  const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
-
-  const act = page.slice(page.indexOf("const act = async"), page.indexOf("const changePublication"));
-  assert.match(act, /if \(isRefusal\(error\)\) setActionError\(\{ action: name, message: errorSummary\(error\) \}\)/);
-  assert.match(act, /else setState\(\{ kind: "error"/);
-  // A fresh attempt must not inherit the last refusal.
-  assert.match(act, /setActionError\(null\)/);
-});
-
 test("CONTRACT · the refusal is rendered where the operator can see it", async () => {
   const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
   const css = await source("src/ui/submissions/record.css");

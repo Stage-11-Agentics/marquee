@@ -260,10 +260,37 @@ function isRefusal(error: unknown): boolean {
     && error.status !== 404 && error.status !== 401;
 }
 
+export interface SubmissionActionError {
+  action: string;
+  message: string;
+  kind?: "missing-decision-email";
+}
+
+export type SubmissionWriteFailure =
+  | { kind: "refusal"; actionError: SubmissionActionError }
+  | { kind: "page"; state: Extract<LoadState, { kind: "error" }> };
+
 export function isMissingDecisionEmail(error: unknown): boolean {
   return error instanceof MarqueeApiError
     && error.code === "unprocessable"
     && /no valid email address/i.test(error.message);
+}
+
+export function submissionWriteFailure(error: unknown, action: string): SubmissionWriteFailure {
+  if (isRefusal(error)) {
+    return {
+      kind: "refusal",
+      actionError: {
+        action,
+        message: errorSummary(error),
+        ...(action === "approve" || action === "deny") && isMissingDecisionEmail(error) ? { kind: "missing-decision-email" } : {},
+      },
+    };
+  }
+  return {
+    kind: "page",
+    state: { kind: "error", message: errorSummary(error), notFound: isNotFound(error) },
+  };
 }
 
 export function DecisionEmailRecovery({ speakerName, onOpen }: { speakerName: string; onOpen: () => void }): JSX.Element {
@@ -604,7 +631,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantEmail, setNewParticipantEmail] = useState("");
   const [participantError, setParticipantError] = useState("");
-  const [actionError, setActionError] = useState<{ action: string; message: string; kind?: "missing-decision-email" } | null>(null);
+  const [actionError, setActionError] = useState<SubmissionActionError | null>(null);
   const [notes, setNotes] = useState<SubmissionNote[]>([]);
   const [notesState, setNotesState] = useState<SubmissionNotesState>("loading");
   const [notesLoadError, setNotesLoadError] = useState("");
@@ -814,12 +841,9 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     return writeThenRefresh(name,
       () => apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) }, route }).then(() => undefined),
       (error) => {
-        if (isRefusal(error)) setActionError({
-          action: name,
-          message: errorSummary(error),
-          ...(name === "approve" || name === "deny") && isMissingDecisionEmail(error) ? { kind: "missing-decision-email" } : {},
-        });
-        else setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) });
+        const failure = submissionWriteFailure(error, name);
+        if (failure.kind === "refusal") setActionError(failure.actionError);
+        else setState(failure.state);
       });
   };
 
@@ -1073,7 +1097,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           notes={notes}
           error={notesLoadError}
           onRetry={() => setNotesReloadKey((value) => value + 1)}
-          compose={<form class="record-notes-compose" onSubmit={(event) => void appendSubmissionNote(event)}><label class="field"><span>Add internal note</span><textarea rows={3} maxLength={5000} value={notesDraft} onInput={(event) => { setNotesDraft(event.currentTarget.value); setNotesWriteError(""); }} placeholder="Keep context for the conference team." /></label><div class="record-action-row"><span class={`record-inline-message ${notesWriteError ? "error" : ""}`} role={notesWriteError ? "alert" : undefined}>{notesWriteError || " "}</span><Button small variant="primary" type="submit" disabled={notesBusy || notesState === "loading"}>{notesBusy ? "Saving…" : "Save note"}</Button></div></form>}
+          compose={<form class="record-notes-compose" onSubmit={(event) => void appendSubmissionNote(event)}><label class="field"><span>Write an internal note — never sent to the speaker</span><textarea rows={3} maxLength={5000} value={notesDraft} onInput={(event) => { setNotesDraft(event.currentTarget.value); setNotesWriteError(""); }} placeholder="Keep context for the conference team." /></label><div class="record-action-row"><span class={`record-inline-message ${notesWriteError ? "error" : ""}`} role={notesWriteError ? "alert" : undefined}>{notesWriteError || " "}</span><Button small variant="primary" type="submit" disabled={notesBusy || notesState === "loading"}>{notesBusy ? "Saving…" : "Save note"}</Button></div></form>}
         /></CardBody></Card>}
         {record.actions.can_resend_decision && <Card><CardHeader title="Decision delivery"><span class="subtle">The decision is already recorded.</span></CardHeader><CardBody>
           <p class="record-delivery-copy">If the speaker did not receive this decision, correct the address on their speaker record, then send the decision again.</p>
