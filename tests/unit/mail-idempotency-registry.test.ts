@@ -5,9 +5,9 @@ import { IDEMPOTENCY_REGISTRY } from "../../src/jobs/mail/idempotency";
 
 /**
  * These are the pre-registry entity-id expressions whose grains remain
- * unchanged after the two intentional bug fixes below. Keeping the old
- * strings beside the named builders makes the pure refactor auditable:
- * before the bug fixes, every resulting key was byte-for-byte identical.
+ * unchanged after the pure refactor and the corrected Bug A finding. Keeping
+ * the old strings beside the named builders makes the registry auditable:
+ * every resulting key is byte-for-byte identical for an unchanged grain.
  */
 const inventory = [
   { name: "trigger", template: "submission_confirmation", person: "person-1", before: "submission-1", actual: IDEMPOTENCY_REGISTRY.trigger("submission-1") },
@@ -17,6 +17,7 @@ const inventory = [
   { name: "overdue reminder", template: "task_overdue", person: "person-1", before: "task-1", actual: IDEMPOTENCY_REGISTRY.overdueTaskReminder("task-1") },
   { name: "co-speaker invitation", template: "added_to_submission", person: "person-1", before: "participation-1", actual: IDEMPOTENCY_REGISTRY.coSpeakerInvitation("participation-1") },
   { name: "form confirmation", template: "submission_confirmation", person: "person-1", before: "submission-1", actual: IDEMPOTENCY_REGISTRY.formConfirmation("submission-1") },
+  { name: "draft resume", template: "draft_resume", person: "person-1", before: "submission-1", actual: IDEMPOTENCY_REGISTRY.draftResume("submission-1") },
   { name: "admin notification", template: "custom", person: "admin-1", before: "submission-1:admin:admin-1", actual: IDEMPOTENCY_REGISTRY.adminNotification("submission-1", "admin-1") },
   { name: "attendee claim", template: "attendee_schedule_claim", person: null, before: "attendee_schedule_claim:ABC123:1720000000000", actual: IDEMPOTENCY_REGISTRY.attendeeClaim("ABC123", 1720000000000) },
   { name: "reviewer reminder", template: "reviewer_reminder", person: "person-1", before: "round-1:person-1:2026-08-15", actual: IDEMPOTENCY_REGISTRY.reviewerReminder("round-1", "person-1", "2026-08-15") },
@@ -41,12 +42,8 @@ describe("outbox idempotency registry", () => {
     expect(Object.isFrozen(IDEMPOTENCY_REGISTRY)).toBe(true);
   });
 
-  test("CONTRACT · MRQ-226 · Bug A draft-resume requests keep the submission and add a request tail", () => {
-    const first = IDEMPOTENCY_REGISTRY.draftResume("submission-1", "request-1");
-    const second = IDEMPOTENCY_REGISTRY.draftResume("submission-1", "request-2");
-    expect(first).toBe("submission-1:request-1");
-    expect(second).toBe("submission-1:request-2");
-    expect(second).not.toBe(first);
+  test("CONTRACT · MRQ-226 · draft-resume grain preserves the submission audit join", () => {
+    expect(IDEMPOTENCY_REGISTRY.draftResume("submission-1")).toBe("submission-1");
   });
 
   test("CONTRACT · MRQ-226 · Bug B custom-send seeds separate composes without changing the row entity", () => {

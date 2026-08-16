@@ -1,4 +1,5 @@
 import type { Id } from "../../db/schema";
+import { ATTENDEE_CLAIM_TEMPLATE_KEY } from "../../lib/attendee-claim-mail";
 
 /**
  * The outbox's entity id names the business action that a message represents.
@@ -28,13 +29,21 @@ function entityId(value: string): EntityId {
 }
 
 export const IDEMPOTENCY_REGISTRY = Object.freeze({
-  /** Automated trigger: one configured action for the entity selected by the trigger. */
+  /**
+   * Automated trigger: one configured action for the entity selected by the
+   * trigger. The brand is advisory here: this builder accepts any Id because
+   * the trigger configuration already owns the business-entity selection.
+   */
   trigger: (businessEntityId: Id): EntityId => entityId(businessEntityId),
 
   /** Initial decision mail: one notification for the submission's current decision action. */
   decision: (submissionId: Id): EntityId => entityId(submissionId),
 
-  /** Decision retry/notify: the recorded decision remains the business entity. */
+  /**
+   * Decision retry/notify: deliberately never deduplicated. The retry paths
+   * override this entity with a fresh ULID-derived hash key on every attempt;
+   * the recorded decision remains the audit business entity.
+   */
   decisionRetry: (decisionId: Id): EntityId => entityId(decisionId),
 
   /** Pre-close reminder: one form-closing action per form and recipient. */
@@ -49,8 +58,11 @@ export const IDEMPOTENCY_REGISTRY = Object.freeze({
   /** Public form confirmation: one confirmation for the newly created submission. */
   formConfirmation: (submissionId: Id): EntityId => entityId(submissionId),
 
-  /** Draft resume link: the submission plus a fresh non-secret request tail. */
-  draftResume: (submissionId: Id, requestId: Id): EntityId => entityId(`${submissionId}:${requestId}`),
+  /**
+   * Draft resume link: the new submission is already minted per request. Keep
+   * its plain id so the consumer can join delivery back to submission history.
+   */
+  draftResume: (submissionId: Id): EntityId => entityId(submissionId),
 
   /** Admin notification: one newly received submission per notified admin. */
   adminNotification: (submissionId: Id, adminId: Id): EntityId => entityId(`${submissionId}:admin:${adminId}`),
@@ -59,7 +71,7 @@ export const IDEMPOTENCY_REGISTRY = Object.freeze({
    * Attendee claim: deliberately never deduplicated. Every request is a new
    * claim-mail action, even when the code and recipient are unchanged.
    */
-  attendeeClaim: (code: string, requestedAt: number): EntityId => entityId(`attendee_schedule_claim:${code}:${requestedAt}`),
+  attendeeClaim: (code: string, requestedAt: number): EntityId => entityId(`${ATTENDEE_CLAIM_TEMPLATE_KEY}:${code}:${requestedAt}`),
 
   /** Reviewer reminder: one rung per reviewer, round, and conference-local day. */
   reviewerReminder: (roundId: Id, personId: Id, reminderDay: string): EntityId => entityId(`${roundId}:${personId}:${reminderDay}`),
