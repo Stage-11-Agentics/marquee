@@ -104,6 +104,15 @@ function url(name: string): MirrorSchemaField {
  * The declaration intentionally contains every field currentAirtableRecord can
  * emit. `marquee_id` is first in every table because Airtable's first field is
  * the primary field and this is the only legal primary shape we use.
+ *
+ * Provider legality is grounded in Airtable's official Metadata API references:
+ * https://airtable.com/developers/web/api/get-base-schema.md
+ * https://airtable.com/developers/web/api/create-table.md
+ * https://airtable.com/developers/web/api/create-field.md
+ * https://airtable.com/developers/web/api/field-model.md
+ * https://airtable.com/developers/web/api/model/field-type.md
+ * The hermetic validator below proves our declared write shapes; it does not
+ * replace that vendor documentation or a later operator-approved smoke.
  */
 export const MIRROR_TABLE_SCHEMA: Record<MirroredTable, MirrorTableDefinition> = {
   submissions: {
@@ -176,7 +185,7 @@ export const MIRROR_TABLE_SCHEMA: Record<MirroredTable, MirrorTableDefinition> =
       longText("custom_fields"),
       checkbox("do_not_contact"),
       checkbox("is_demo"),
-      text("kind"),
+      selectOrText("kind"),
       text("last_write_source"),
       dateTime("created_at"),
       dateTime("updated_at"),
@@ -235,19 +244,25 @@ function choiceNames(field: AirtableTableField): string[] {
   });
 }
 
-function representativeShapeIsLegal(field: MirrorSchemaField, actualType: string): boolean {
-  const representative = field.representative;
+export function airtableValueMatchesType(actualType: string, representative: unknown): boolean {
   if (representative === null || representative === undefined) return true;
   if (actualType === "checkbox") return typeof representative === "boolean";
   if (actualType === "multipleAttachments") {
     return Array.isArray(representative)
-      && representative.every((value) => value && typeof value === "object" && typeof (value as { url?: unknown }).url === "string");
+      && representative.every((value) => {
+        if (!value || typeof value !== "object" || typeof (value as { url?: unknown }).url !== "string") return false;
+        return Object.keys(value).every((key) => key === "url" || key === "filename");
+      });
   }
   if (actualType === "dateTime") return typeof representative === "string";
   if (["singleLineText", "multilineText", "richText", "singleSelect", "email", "url"].includes(actualType)) {
     return typeof representative === "string";
   }
   return false;
+}
+
+function representativeShapeIsLegal(field: MirrorSchemaField, actualType: string): boolean {
+  return airtableValueMatchesType(actualType, field.representative);
 }
 
 /** Validate one table without rejecting unrelated organizer-owned columns. */
@@ -368,6 +383,16 @@ export function createFieldPayload(field: MirrorSchemaField): {
   };
 }
 
+export function mirrorRecordFieldNames(table: MirroredTable): readonly string[] {
+  return MIRROR_TABLE_SCHEMA[table].fields.map((field) => field.name);
+}
+
+export function mirrorRecordMatchesSchema(table: MirroredTable, fields: Record<string, unknown>): boolean {
+  const expected = new Set(mirrorRecordFieldNames(table));
+  const actual = Object.keys(fields);
+  return actual.length === expected.size && actual.every((name) => expected.has(name));
+}
+
 export function normalizeTableName(name: string): string {
   return name.trim().toLocaleLowerCase().replaceAll(/\s+/g, " ");
 }
@@ -376,4 +401,3 @@ export function findExactMirrorTable(tables: readonly AirtableTable[], table: Mi
   const expected = normalizeTableName(MIRROR_TABLE_SCHEMA[table].name);
   return tables.find((candidate) => normalizeTableName(candidate.name) === expected);
 }
-

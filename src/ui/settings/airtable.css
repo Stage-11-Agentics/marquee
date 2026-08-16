@@ -10,6 +10,14 @@
 .airtable-mapping-fields { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .airtable-empty-mapping { align-items: baseline; background: var(--sunk); border: 1px dashed var(--line-strong); border-radius: 7px; color: var(--muted); display: flex; gap: 10px; min-height: 45px; padding: 12px; }
 .airtable-empty-mapping strong { color: var(--ink-soft); }
+.airtable-provision-offer { align-items: center; background: var(--sunk); border: 1px solid var(--line); border-radius: 7px; color: var(--muted); display: flex; gap: 12px; justify-content: space-between; margin-top: 16px; min-height: 48px; padding: 10px 12px; }
+.airtable-setup-progress { border-top: 1px solid var(--line); margin-top: 20px; }
+.airtable-setup-progress-heading, .airtable-setup-progress-row { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.5fr) minmax(60px, .5fr) minmax(100px, .75fr); }
+.airtable-setup-progress-heading { color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .06em; padding: 11px 8px 7px; text-transform: uppercase; }
+.airtable-setup-progress-row { align-items: center; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; min-height: 54px; padding: 8px; }
+.airtable-setup-progress-row > span:first-child { display: grid; gap: 2px; min-width: 0; }
+.airtable-setup-progress-row strong { color: var(--ink-soft); font-size: 12px; }
+.airtable-setup-progress-row small { color: var(--muted); font: 400 10px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .airtable-health-actions { display: flex; gap: 8px; }
 .airtable-counts { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 18px; }
 .airtable-counts > div { background: var(--sunk); border: 1px solid var(--line); border-radius: 7px; display: grid; gap: 4px; min-height: 88px; padding: 12px; }
@@ -34,6 +42,7 @@
 
 @media (max-width: 760px) {
   .airtable-mapping-fields, .airtable-counts { grid-template-columns: 1fr; }
+  .airtable-provision-offer { align-items: stretch; flex-direction: column; }
   .airtable-health-actions { align-items: stretch; flex-direction: column; }
   .airtable-health-actions .button { width: 100%; }
   .airtable-form-actions { justify-content: stretch; }

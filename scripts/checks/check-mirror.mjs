@@ -14,6 +14,7 @@ const vitest = resolve(REPOSITORY_ROOT, "node_modules/.bin/vitest");
 const testFiles = [
   "tests/integration/mirror-outbound.MRQ-217.test.ts",
   "tests/integration/mirror-connect-inbound.MRQ-223.test.ts",
+  "tests/integration/mirror-schema.MRQ-248.test.ts",
 ];
 
 const exitCode = await new Promise((resolveExit, reject) => {

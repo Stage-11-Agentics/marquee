@@ -13,8 +13,8 @@ The command registry is:
 - `node cli/marquee.mjs setup instance`
 - `node cli/marquee.mjs event create --set name=<name> --set starts_on=<date> --set ends_on=<date> --set timezone=<tz> [--from <event-id>] [--copy <sets>]`
 - `node cli/marquee.mjs event list`
-- `node cli/marquee.mjs mirror connect --base-id <base-id> --airtable-token <token>`
-- `node cli/marquee.mjs mirror map --set submissions=<table-id> --set speaker_tasks=<table-id> --set people=<table-id>`
+- `node cli/marquee.mjs mirror connect --base-id <base-id> --airtable-token <token> [--provision]`
+- `node cli/marquee.mjs mirror map --set submissions=<table-id> --set speaker_tasks=<table-id> --set people=<table-id> --airtable-token <token> [--provision]`
 - `node cli/marquee.mjs mirror status`
 - `node cli/marquee.mjs mirror sync`
 - `node cli/marquee.mjs mirror disconnect`

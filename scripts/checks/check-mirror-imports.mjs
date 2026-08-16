@@ -4,7 +4,7 @@ import { dirname, extname, relative, resolve } from "node:path";
 import { REPOSITORY_ROOT, emit } from "./lib/command.mjs";
 
 export const MIRROR_TRANSPORT = resolve(REPOSITORY_ROOT, "src/jobs/mirror/transport.ts");
-const MIRROR_JOB_ROOT = resolve(REPOSITORY_ROOT, "src/jobs/mirror");
+export const MIRROR_JOB_ROOT = resolve(REPOSITORY_ROOT, "src/jobs/mirror");
 const IMPORT_PATTERN = /(?:\bfrom\s*|\bimport\s*\(\s*)["']([^"']+)["']/g;
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
@@ -28,15 +28,21 @@ function candidatePaths(importer, specifier) {
 export async function findMirrorImportViolations(root = REPOSITORY_ROOT) {
   const sourceRoot = resolve(root, "src");
   const mirrorRoot = resolve(root, "src/jobs/mirror");
+  const airtablePage = resolve(root, "src/ui/settings/AirtablePage.tsx");
   const transport = resolve(root, "src/jobs/mirror/transport.ts");
   const violations = [];
   for (const file of await sourceFiles(sourceRoot)) {
     const source = await readFile(file, "utf8");
     for (const match of source.matchAll(IMPORT_PATTERN)) {
-      const target = candidatePaths(file, match[1]).find((candidate) => candidate === transport);
+      const target = candidatePaths(file, match[1]).find((candidate) => {
+        const relativeTarget = relative(mirrorRoot, candidate);
+        return relativeTarget === "" || (!relativeTarget.startsWith("..") && !relativeTarget.startsWith("/"));
+      });
       if (!target) continue;
       const importerRelative = relative(mirrorRoot, file);
-      if (importerRelative.startsWith("..")) {
+      const targetIsTransport = target === transport || target === transport.replace(/\.ts$/, "");
+      const importerIsAirtablePage = file === airtablePage;
+      if (importerIsAirtablePage || (targetIsTransport && importerRelative.startsWith(".."))) {
         violations.push({ file: relative(root, file), specifier: match[1] });
       }
     }

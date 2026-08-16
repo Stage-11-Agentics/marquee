@@ -19,30 +19,80 @@ const errors = errorResponses([400, 401, 403, 422, 429, 500]);
 const connectInput = z.object({
   token: z.string().trim().min(1),
   base_id: z.string().trim().min(1),
+  intent: z.enum(["verify", "provision", "adopt"]).default("verify"),
+  mapping: z.object({
+    people: z.string().trim().min(1).optional(),
+    submissions: z.string().trim().min(1).optional(),
+    speaker_tasks: z.string().trim().min(1).optional(),
+  }).strict().optional(),
 }).strict();
 
 const mappingInput = z.object({
   people: z.string().trim().min(1),
   submissions: z.string().trim().min(1),
   speaker_tasks: z.string().trim().min(1),
+  token: z.string().trim().min(1).optional(),
+  intent: z.enum(["adopt", "provision"]).default("adopt"),
+  continuation: z.enum(["submissions", "speaker_tasks", "people"]).nullable().optional(),
 }).strict();
 
 const airtableField = z.object({
   id: z.string(),
   name: z.string(),
   type: z.string().optional(),
+  options: z.record(z.string(), z.unknown()).optional(),
 });
 
 const airtableTable = z.object({
   id: z.string(),
   name: z.string(),
-  fields: z.array(airtableField),
+  fields: z.array(airtableField).nullable(),
+});
+
+const readinessRole = z.object({
+  role: z.enum(["submissions", "speaker_tasks", "people"]),
+  label: z.string(),
+  expected_field_count: z.number().int().positive(),
+  candidate_table_ids: z.array(z.string()),
+  selected_table_id: z.string().nullable(),
+  state: z.enum(["ready", "missing", "conflict", "unknown"]),
+  conflict: z.unknown().nullable(),
+});
+
+const readiness = z.object({
+  needs_provisioning: z.boolean(),
+  provisionable: z.boolean(),
+  max_conformant_roles: z.number().int().nonnegative(),
+  roles: z.array(readinessRole),
+});
+
+const progress = z.object({
+  role: z.enum(["submissions", "speaker_tasks", "people"]),
+  label: z.string(),
+  table_id: z.string().nullable(),
+  state: z.enum(["idle", "created", "adopted", "conflict", "complete"]),
+  expected_field_count: z.number().int().positive(),
+  conformant_field_count: z.number().int().nonnegative(),
+  missing_fields: z.array(z.string()),
+  conflicts: z.array(z.unknown()),
+});
+
+const tableAction = z.object({
+  role: z.enum(["submissions", "speaker_tasks", "people"]),
+  table_id: z.string(),
+  outcome: z.enum(["created", "adopted"]),
 });
 
 const connectionResponse = z.object({
   data: z.object({
     base_id: z.string(),
     tables: z.array(airtableTable),
+    needs_provisioning: z.boolean(),
+    readiness,
+    progress: z.array(progress).optional(),
+    continuation: z.enum(["submissions", "speaker_tasks", "people"]).nullable().optional(),
+    complete: z.boolean().optional(),
+    table_actions: z.array(tableAction).optional(),
   }),
 });
 
@@ -51,6 +101,12 @@ const mappingResponse = z.object({
     base_id: z.string(),
     mapped: z.boolean(),
     tables: z.array(airtableTable),
+    needs_provisioning: z.boolean(),
+    readiness,
+    progress: z.array(progress).optional(),
+    continuation: z.enum(["submissions", "speaker_tasks", "people"]).nullable().optional(),
+    complete: z.boolean().optional(),
+    table_actions: z.array(tableAction).optional(),
   }),
 });
 
@@ -101,11 +157,11 @@ function environment(context: Parameters<typeof requireOrgAdmin>[0]): MirrorActi
   return context.env as unknown as MirrorActionEnvironment;
 }
 
-function tableSummaries(tables: readonly { id: string; name: string; fields?: readonly { id: string; name: string; type?: string }[] }[]) {
+function tableSummaries(tables: readonly { id: string; name: string; fields?: readonly { id: string; name: string; type?: string; options?: Record<string, unknown> }[] }[]) {
   return tables.map((table) => ({
     id: table.id,
     name: table.name,
-    fields: [...table.fields ?? []],
+    fields: table.fields === undefined ? null : [...table.fields],
   }));
 }
 
@@ -122,8 +178,11 @@ async function actorPersonId(
   return row.created_by;
 }
 
-function throwActionFailure(result: { ok: false; field: string; message: string }): never {
-  throw ApiError.unprocessable(result.message, result.field);
+function throwActionFailure(result: { ok: false; field: string; message: string; code?: string; retryable?: boolean; details?: unknown }): never {
+  if (result.code === "rate_limited") throw ApiError.rateLimited(1);
+  if (result.code === "provider_forbidden") throw ApiError.forbidden(result.message);
+  if (result.code === "schema_conflict") throw ApiError.conflict(result.message, { ...(typeof result.details === "object" && result.details ? result.details : {}), retryable: result.retryable === true });
+  throw ApiError.unprocessable(result.message, result.field, result.details);
 }
 
 const connect = defineApiRoute(
@@ -146,9 +205,22 @@ const connect = defineApiRoute(
       orgId: auth.orgId,
       setByPersonId: await actorPersonId(context, auth),
       token: body.token,
+      intent: body.intent,
+      mapping: body.mapping,
     });
     if (!result.ok) throwActionFailure(result);
-    return context.json({ data: { base_id: body.base_id, tables: tableSummaries(result.tables) } }, 200);
+    return context.json({
+      data: {
+        base_id: body.base_id,
+        tables: tableSummaries(result.tables),
+        needs_provisioning: result.needsProvisioning,
+        readiness: result.readiness,
+        ...(result.progress === undefined ? {} : { progress: result.progress }),
+        ...(result.continuation === undefined ? {} : { continuation: result.continuation }),
+        ...(result.complete === undefined ? {} : { complete: result.complete }),
+        ...(result.tableActions === undefined ? {} : { table_actions: result.tableActions }),
+      },
+    }, 200);
   },
 );
 
@@ -168,8 +240,15 @@ const mapping = defineApiRoute(
     const auth = requireOrgAdmin(context, "mirror:write");
     const body = context.req.valid("json");
     const result = await mapMirror(environment(context), {
-      mapping: body as MirrorMappingInput,
+      mapping: {
+        people: body.people,
+        submissions: body.submissions,
+        speaker_tasks: body.speaker_tasks,
+      } as MirrorMappingInput,
       orgId: auth.orgId,
+      token: body.token,
+      intent: body.intent,
+      continuation: body.continuation,
     });
     if (!result.ok) throwActionFailure(result);
     const status = await readMirrorStatus(context.env.DB, environment(context), auth.orgId);
@@ -178,6 +257,12 @@ const mapping = defineApiRoute(
         base_id: status.baseId!,
         mapped: status.mapped,
         tables: tableSummaries(result.tables),
+        needs_provisioning: result.needsProvisioning,
+        readiness: result.readiness,
+        ...(result.progress === undefined ? {} : { progress: result.progress }),
+        ...(result.continuation === undefined ? {} : { continuation: result.continuation }),
+        ...(result.complete === undefined ? {} : { complete: result.complete }),
+        ...(result.tableActions === undefined ? {} : { table_actions: result.tableActions }),
       },
     }, 200);
   },

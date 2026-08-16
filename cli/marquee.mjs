@@ -37,7 +37,7 @@ const VALUE_OPTIONS = new Set([
   "--comment",
   "--criteria",
 ]);
-const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue", "--tail", "--bundle"]);
+const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue", "--tail", "--bundle", "--provision"]);
 const LIST_FILTER_KEYS = new Set(["kind", "status", "track", "format", "wave", "task", "placement", "q"]);
 const REMINDER_FILTER_KEYS = new Set([
   "status",
@@ -407,9 +407,29 @@ async function execute(command, arguments_, options, flags, client) {
       const airtableToken = option(options, "--airtable-token");
       if (!baseId) usageError(`${command.usage} requires --base-id`);
       if (!airtableToken) usageError(`${command.usage} requires --airtable-token`);
-      return client.post("/api/v1/mirror/connect", { base_id: baseId, token: airtableToken });
+      return client.post("/api/v1/mirror/connect", {
+        base_id: baseId,
+        token: airtableToken,
+        intent: flags.has("--provision") ? "provision" : "verify",
+      });
     }
-    if (verb === "map") return client.post("/api/v1/mirror/mapping", requireSetValues(command, options));
+    if (verb === "map") {
+      const airtableToken = option(options, "--airtable-token");
+      if (!airtableToken) usageError(`${command.usage} requires --airtable-token`);
+      const mapping = requireSetValues(command, options);
+      let continuation = "submissions";
+      let response;
+      while (continuation) {
+        response = await client.post("/api/v1/mirror/mapping", {
+          ...mapping,
+          token: airtableToken,
+          intent: flags.has("--provision") ? "provision" : "adopt",
+          continuation,
+        });
+        continuation = response?.data?.continuation ?? null;
+      }
+      return response;
+    }
     if (verb === "status") return client.get("/api/v1/mirror/status");
     if (verb === "sync") return client.post("/api/v1/mirror/sync");
     if (verb === "disconnect") return client.post("/api/v1/mirror/disconnect");
