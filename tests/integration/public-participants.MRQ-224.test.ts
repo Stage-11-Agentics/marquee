@@ -193,3 +193,30 @@ test("AC-329 · a participant with a name and no address is refused, not dropped
   const body = await response.json<{ error: { details?: { issues?: Array<{ fieldKey: string }> } } }>();
   expect(JSON.stringify(body)).toContain("participants");
 });
+
+test("AC-329 · one address in two slots is one person, not two rows", async () => {
+  // Two slots resolving to the same record is ordinary — a submitter listing
+  // themselves again, or one address typed twice. A second participation row
+  // for the same person on the same submission is not a second person; it is a
+  // duplicate the record, the agenda, and the chase board would each have to
+  // dedupe for themselves.
+  const response = await submit({
+    answers: { title: "A doubled panel", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
+    participants: [
+      { name: "Ana R.", email: "ana@example.com", role: "moderator" },
+      { name: "Ana Again", email: "ana@example.com", role: "co_speaker" },
+      { name: "Robin Alvarez", email: "robin@example.com", role: "co_speaker" },
+    ],
+  });
+  expect(response.status).toBe(201);
+  const submission = await latestSubmission();
+  const rows = await participationsFor(submission.id);
+  // The first entry wins, so the role the submitter chose first is the one kept.
+  expect(rows.map((row) => row.role).sort()).toEqual(["moderator", "speaker", "submitter"]);
+
+  // And one invitation, not two.
+  const invites = await env.DB
+    .prepare("SELECT COUNT(*) AS total FROM outbox WHERE template_key = 'added_to_submission'")
+    .first<{ total: number }>();
+  expect(Number(invites?.total)).toBe(1);
+});

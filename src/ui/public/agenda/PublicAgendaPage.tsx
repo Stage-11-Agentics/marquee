@@ -1123,7 +1123,10 @@ export function PublicSpeakerAvatar({
   speaker,
   className,
 }: {
-  speaker: PublicSpeakerSummary;
+  // Named fields, not the whole summary: an avatar needs a name and a headshot,
+  // and asking for a participation role it will never draw would keep the
+  // person-scoped directory and speaker page from passing their own rows.
+  speaker: Pick<PublicSpeakerSummary, "name" | "headshotUrl">;
   className?: string;
 }): JSX.Element {
   const classes = ["public-avatar", className].filter(Boolean).join(" ");

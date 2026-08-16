@@ -31,6 +31,8 @@ export const PUBLIC_FORM_STYLES = `
 .public-participants { border-bottom: 1px solid var(--line-strong); display: grid; gap: 12px; padding: 16px 20px; }
 .public-participants-head { align-items: center; display: flex; justify-content: space-between; }
 .public-participants-head h2 { font: 600 11px/1.2 var(--mono); letter-spacing: .15em; margin: 0; text-transform: uppercase; }
+/* Tabular, so the count does not reflow the heading row as people are added. */
+.public-participant-count { font-variant-numeric: tabular-nums; }
 .public-behalf-toggle { align-items: center; display: flex; font-size: 12.5px; gap: 8px; line-height: 1.5; }
 .public-behalf-fields { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); min-height: 0; }
 .public-behalf-fields.is-open { min-height: 96px; }

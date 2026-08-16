@@ -442,6 +442,13 @@ async function insertParticipationRows(
       invite: identities.speaker.id !== identities.submitter.id,
     });
   }
+  // One row per person, whatever the roster says. Two entries can resolve to the
+  // same record — the submitter listing themselves again, or one address typed
+  // into two slots — and a second participation row for the same person on the
+  // same submission is not a second person: it is a duplicate the record, the
+  // agenda, and the chase board would each have to dedupe for themselves. The
+  // first entry wins, so the role the submitter chose first is the one kept.
+  const seen = new Set<string>([identities.submitter.id, identities.speaker.id]);
   for (const [index, entry] of roster.participants.entries()) {
     const person = await upsertPublicPerson({
       // This argument is intentionally supplied by the event context, not the request.
@@ -452,8 +459,8 @@ async function insertParticipationRows(
       trust: "named_by_other",
       now,
     });
-    // A submitter who lists themselves again is one person, not two rows.
-    if (person.id === identities.speaker.id || person.id === identities.submitter.id) continue;
+    if (seen.has(person.id)) continue;
+    seen.add(person.id);
     participants.push({ person, role: entry.role, position: index + 1, invite: true });
   }
   const statements = [db.prepare("DELETE FROM participations WHERE submission_id = ?").bind(submissionId)];

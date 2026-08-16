@@ -764,7 +764,7 @@ export function PublicForm({ initial }: PublicFormProps) {
     ? <section class="public-participants" aria-labelledby="public-participants-heading">
         <div class="public-participants-head">
           <h2 id="public-participants-heading">Who is presenting?</h2>
-          <span class="public-kicker">{1 + participants.length} of {state.form.max_speakers}</span>
+          <span class="public-kicker public-participant-count">{1 + participants.length} of {state.form.max_speakers}</span>
         </div>
         <label class="public-behalf-toggle">
           <input

@@ -131,11 +131,19 @@ export interface PublicSpeakerDirectoryData {
 
 export type PublicSpeakerDirectoryView = "gallery" | "list";
 
-export interface PublicSpeakerDirectoryEntry extends PublicSpeakerSummary {
+/**
+ * A person across the whole conference, so `role` is dropped rather than
+ * carried: someone can moderate one session and speak at another, and printing
+ * one of those beside their name in a directory would be a coin toss the reader
+ * has no way to see. Role is a fact about a seat on a session, and it renders
+ * where sessions do.
+ */
+export interface PublicSpeakerDirectoryEntry extends Omit<PublicSpeakerSummary, "role"> {
   sessionCount: number;
 }
 
-export interface PublicSpeaker extends PublicSpeakerSummary {
+/** Same reasoning: the speaker page lists their sessions, and the role rides with each. */
+export interface PublicSpeaker extends Omit<PublicSpeakerSummary, "role"> {
   sessions: Array<Pick<PublicSession, "id" | "slug" | "title" | "day" | "date" | "time" | "roomLabel">>;
 }
 
