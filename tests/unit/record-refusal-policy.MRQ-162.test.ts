@@ -14,7 +14,7 @@ function apiError(overrides: Partial<ConstructorParameters<typeof MarqueeApiErro
 }
 
 describe("CONTRACT · MRQ-162 · refused record writes stay on the record", () => {
-  test("a 4xx refusal becomes an action error without depending on object formatting or optional metadata", () => {
+  test("CONTRACT · MRQ-162 · a 4xx refusal becomes an action error without depending on object formatting or optional metadata", () => {
     const error = apiError();
     const failure = submissionWriteFailure(error, "assign-round");
 
@@ -25,7 +25,7 @@ describe("CONTRACT · MRQ-162 · refused record writes stay on the record", () =
     expect(failure.actionError.kind).toBeUndefined();
   });
 
-  test("optional missing-email metadata stays on the action error, while a 404 remains page-level", () => {
+  test("CONTRACT · MRQ-162 · optional missing-email metadata stays on the action error, while a 404 remains page-level", () => {
     const missingEmail = submissionWriteFailure(apiError({
       code: "unprocessable",
       message: "speaker has no valid email address",

@@ -73,7 +73,7 @@ beforeAll(async () => {
   submissionId = (await created.json() as { id: string }).id;
 });
 
-test("AC-337 + AC-338 + AC-339 · a fresh submission saves one internal note and a second organizer sees its authenticated attribution", async () => {
+test("AC-337 + AC-338 · a fresh submission saves one internal note and a second organizer sees its authenticated attribution", async () => {
   const beforeEvaluations = await env.DB.prepare(
     "SELECT COUNT(*) AS count FROM evaluations WHERE submission_id = ?",
   ).bind(submissionId).first<{ count: number }>();
@@ -106,7 +106,7 @@ test("AC-337 + AC-338 + AC-339 · a fresh submission saves one internal note and
   expect(Number(afterEvaluations?.count ?? 0)).toBe(0);
 });
 
-test("AC-338 + AC-340 · the authenticated speaker cannot read the note, and its sentinel never reaches public or outbound projections", async () => {
+test("AC-339 · the authenticated speaker cannot read the note, and its sentinel never reaches public or outbound projections", async () => {
   const speakerRead = await request(`/api/v1/submissions/${submissionId}/notes`, {}, SPEAKER_SESSION);
   expect(speakerRead.status).toBe(403);
   expect(await speakerRead.text()).not.toContain(SENTINEL);
@@ -120,7 +120,7 @@ test("AC-338 + AC-340 · the authenticated speaker cannot read the note, and its
   expect(Number(outbound?.count ?? 0)).toBe(0);
 });
 
-test("AC-337 + AC-338 · notes have no update path and the request cannot choose an author", async () => {
+test("CONTRACT · MRQ-242 · notes have no update path and the request cannot choose an author", async () => {
   const forged = await request(`/api/v1/submissions/${submissionId}/notes`, {
     method: "POST",
     body: JSON.stringify({ body: "forged", author_person_id: DEMO_SPEAKER_PERSON_ID }),

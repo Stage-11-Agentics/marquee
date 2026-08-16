@@ -42,7 +42,7 @@ const note: SubmissionNote = {
 };
 
 describe("MRQ-242 submission notes and recovery copy", () => {
-  test("the notes card renders loading, empty, and populated states without losing their content", () => {
+  test("AC-340 · the notes card renders loading, empty, and populated states without losing their content", () => {
     const loading = renderToString(h(SubmissionNotesBody, { state: "loading", notes: [], error: "" }));
     const empty = renderToString(h(SubmissionNotesBody, { state: "ready", notes: [], error: "" }));
     const populated = renderToString(h(SubmissionNotesBody, { state: "ready", notes: [note], error: "" }));
@@ -53,7 +53,7 @@ describe("MRQ-242 submission notes and recovery copy", () => {
     expect(populated).toContain(note.body);
   });
 
-  test("the evaluation empty state renders its setup CTA and navigates to evaluation", () => {
+  test("AC-341 · the evaluation empty state renders its setup CTA and navigates to evaluation", () => {
     const destinations: string[] = [];
     const mounted = mount(h(EvaluationEmptyState, { navigate: (target: string) => destinations.push(target) }));
     const emptyState = mounted.querySelector(".record-evaluation-empty");
@@ -68,7 +68,7 @@ describe("MRQ-242 submission notes and recovery copy", () => {
     expect(destinations).toEqual(["/evaluation"]);
   });
 
-  test("the notes card keeps its computed viewport across loading, empty, and populated states", () => {
+  test("AC-340 · the notes card keeps its computed viewport across loading, empty, and populated states", () => {
     const mounted = mount(h(SubmissionNotesCardBody, {
       state: "loading",
       notes: [],
@@ -112,7 +112,7 @@ describe("MRQ-242 submission notes and recovery copy", () => {
     }
   });
 
-  test("a missing decision email gets a speaker-record recovery action", () => {
+  test("AC-342 · a missing decision email gets a speaker-record recovery action", () => {
     const error = new MarqueeApiError({
       code: "unprocessable",
       message: "speaker has no valid email address; record was left unchanged",
