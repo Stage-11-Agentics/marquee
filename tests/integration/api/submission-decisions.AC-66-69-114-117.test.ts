@@ -310,7 +310,7 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
         `INSERT INTO agenda_items
           (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at)
          VALUES ('agenda-mrq19-bulk-live', ?, 'sub-mrq19-bulk-live', 'session', ?, 30, 'room-mrq19', 1, ?, ?)`,
-      ).bind(EVENT_ID, NOW + 86_400_000, NOW, NOW),
+      ).bind(EVENT_ID, NOW, NOW, NOW),
     ]);
     const bulkConfirmed = await requestBulk({ selector: { ids: ["sub-mrq19-bulk-live"] }, action: "reject", confirm_published: true });
     expect(bulkConfirmed.status).toBe(200);
