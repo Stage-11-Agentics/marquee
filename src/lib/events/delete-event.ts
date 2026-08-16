@@ -476,7 +476,7 @@ async function deleteDemoPeopleEventCascade(
   const companyBlockers = await db.prepare(
     [
       "WITH selected_event_orgs AS (SELECT DISTINCT org_id FROM events WHERE id IN " + eventFilter(eventIds) + "),",
-      "surviving_events AS (SELECT id, org_id FROM events WHERE org_id IN (SELECT org_id FROM selected_event_orgs) AND id NOT IN " + eventFilter(eventIds) + "),",
+      "surviving_events AS (SELECT id, org_id FROM events WHERE org_id IN (SELECT org_id FROM selected_event_orgs) AND id NOT IN " + eventFilter(eventIds) + ")",
       "SELECT 'people.company_id' AS family, 'company_id' AS column, retained.company_id AS row_id, '' AS event_id, retained.id AS person_id",
       "FROM people retained LEFT JOIN companies company ON company.id = retained.company_id",
       "WHERE retained.is_demo = 0 AND retained.org_id IN (SELECT org_id FROM selected_event_orgs) AND retained.company_id IS NOT NULL",

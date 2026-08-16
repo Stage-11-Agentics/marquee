@@ -1030,10 +1030,10 @@ async function cleanupImportedPerson(db: D1Database, personId: string, importId?
        (SELECT COUNT(*) FROM memberships WHERE person_id = ?) AS memberships`,
   ).bind(personId, personId, personId, personId, personId).first<{ participations: number; submissions: number; evaluations: number; memberships: number }>();
   if (!references || Number(references.participations) || Number(references.submissions) || Number(references.evaluations) || Number(references.memberships)) return;
-  const remaining = await personReferences(db, personId);
-  if (remaining.length > 0) return;
   await db.prepare("UPDATE people SET headshot_attachment_id = NULL WHERE id = ? AND id LIKE '%_import_%'").bind(personId).run();
   await db.prepare("DELETE FROM attachments WHERE owner_type = 'person_headshot' AND owner_id = ?").bind(personId).run();
+  const remaining = await personReferences(db, personId);
+  if (remaining.length > 0) return;
   await db.prepare("DELETE FROM people WHERE id = ? AND id LIKE '%_import_%'").bind(personId).run();
 }
 
@@ -1250,13 +1250,21 @@ export async function undoSessionizeImport(db: D1Database, eventId: string, impo
       Object.keys(snapshot?.speaker_changes ?? {}).length > 0
       || snapshot?.speaker_attachment_changed === true
     );
-    if (!row.target_id || row.outcome === "failed" || (row.outcome === "skipped" && !createdMarker && !membershipCreatedMarker && !speakerChangesMarker)) continue;
+    const importCreatedSpeakerMarker = row.entity === "speaker" && row.target_id?.startsWith("person_import_") === true;
+    if (!row.target_id || row.outcome === "failed" || (row.outcome === "skipped" && !createdMarker && !membershipCreatedMarker && !speakerChangesMarker && !importCreatedSpeakerMarker)) continue;
     if (snapshot && membershipCreatedMarker) await removeImportedSpeakerMembership(db, eventId, row.target_id, snapshot);
     if (snapshot && snapshot.submission === null && snapshot.person === null) {
       if (row.entity === "session") await deleteCreatedSubmission(db, row.target_id);
       else await cleanupImportedPerson(db, row.target_id, importId);
     } else if (snapshot) {
       await restoreSnapshot(db, snapshot);
+      // A later import can hold an older snapshot of a person created by an
+      // earlier import. Clear this import's target receipt too, so the final
+      // undo can remove the import-created person once all live references
+      // have been restored or deleted.
+      if (row.entity === "speaker" && row.target_id.startsWith("person_import_")) {
+        await cleanupImportedPerson(db, row.target_id, importId);
+      }
     } else if (row.entity === "session") {
       await deleteCreatedSubmission(db, row.target_id);
     } else if (row.entity === "speaker") {
