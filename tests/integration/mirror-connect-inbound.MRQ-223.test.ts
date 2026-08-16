@@ -492,10 +492,7 @@ test("AC-235 · a legal Airtable acceptance writes an unnotified decision withou
   ]));
 });
 
-test.each([
-  ["waitlisted", "maybe"],
-  ["rejected", "deny"],
-] as const)("AC-235 · Airtable %s writes the matching decision row without derived work", async (status, decision) => {
+async function expectMirrorDecision(status: "waitlisted" | "rejected", decision: "maybe" | "deny"): Promise<void> {
   await seedMirrorSubmission("submitted", `Airtable ${status} session`);
   const fake = new FakeAirtableTransport(() => NOW, { tables: TABLES });
   await connectAndMap(fake);
@@ -513,6 +510,14 @@ test.each([
   });
   expect(await count("SELECT COUNT(*) AS count FROM outbox WHERE event_id = ?", EVENT_ID)).toBe(0);
   expect(await count("SELECT COUNT(*) AS count FROM speaker_tasks WHERE submission_id = ?", SUBMISSION_ID)).toBe(0);
+}
+
+test("AC-235 · Airtable waitlist writes the matching decision row without derived work", async () => {
+  await expectMirrorDecision("waitlisted", "maybe");
+});
+
+test("AC-235 · Airtable rejection writes the matching decision row without derived work", async () => {
+  await expectMirrorDecision("rejected", "deny");
 });
 
 test("AC-316 · a published inbound status edit is dropped, audited, counted, and repaired from current truth", async () => {
