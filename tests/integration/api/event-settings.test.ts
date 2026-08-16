@@ -195,3 +195,23 @@ test("CONTRACT · an unknown platform id is refused rather than stored", async (
   });
   expect(response.status).toBeGreaterThanOrEqual(400);
 });
+
+test("CONTRACT · MRQ-245 · the event default is bounded at 1–100 and is returned to inheriting readers", async () => {
+  const initial = await request(`/api/v1/events/${EVENT_ID}`);
+  expect((await initial.json<{ data: { submission_default_limit: number } }>()).data.submission_default_limit).toBe(3);
+
+  const saved = await request(`/api/v1/events/${EVENT_ID}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ submission_default_limit: 7 }),
+  });
+  expect(saved.status).toBe(200);
+  expect((await saved.json<{ data: { submission_default_limit: number } }>()).data.submission_default_limit).toBe(7);
+
+  const rejected = await request(`/api/v1/events/${EVENT_ID}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ submission_default_limit: 0 }),
+  });
+  expect(rejected.status).toBe(400);
+});

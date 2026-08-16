@@ -134,7 +134,7 @@ export const COMMAND_REGISTRY = [
   },
   {
     path: ["forms", "create"],
-    usage: "marquee forms create <event-id> --set name=<name> --set slug=<slug> --set kind=abstract",
+    usage: "marquee forms create <event-id> --set name=<name> --set slug=<slug> --set kind=abstract [--set submitter_limit_inherit=true] [--set per_submitter_limit=<1-100>]",
     summary: "Draft a call for speakers. New forms inherit the conference capacity unless an override is set.",
     operations: ["createEventForm"],
     skill: "setup",
@@ -196,7 +196,7 @@ export const COMMAND_REGISTRY = [
   },
   {
     path: ["event", "set"],
-    usage: "marquee event set <event-id> --set <key=value>",
+    usage: "marquee event set <event-id> --set <key=value> (including submission_default_limit=<1-100>)",
     summary: "Update conference name, dates, timezone, venue, or branding.",
     operations: ["updateEventSettings"],
     skill: "configure",

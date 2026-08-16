@@ -384,12 +384,15 @@ describe.sequential("MRQ-15 public conference form", () => {
     });
     expect(first.status).toBe(201);
     const atLimit = await request("/api/v1/public/forms/public-cfp?email=first%40example.com");
-    expect((await json<{ state: string }>(atLimit)).state).toBe("at_limit");
+    const atLimitBody = await json<{ state: string; message: string | null }>(atLimit);
+    expect(atLimitBody.state).toBe("at_limit");
+    expect(atLimitBody.message).toContain("This call accepts 1 abstracts per person, and you already have 1.");
     const rejected = await request("/api/v1/public/forms/public-cfp/submissions", {
       method: "POST",
       body: JSON.stringify({ turnstileToken: nextTurnstileToken(), answers: { title: "Second public proposal", speaker_name: "First Speaker", speaker_email: "first@example.com", tracks: ["Agents"], vendor_content: "No" } }),
     });
     expect(rejected.status).toBe(409);
+    expect((await json<{ error: { message: string } }>(rejected)).error.message).toContain("This call accepts 1 abstracts per person, and you already have 1. Use a saved resume link");
     expect(await rowCount("submissions")).toBe(1);
 
     await env.DB.prepare("UPDATE forms SET status = 'closed' WHERE id = ?").bind(FORM_ID).run();
@@ -410,6 +413,50 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(Number(tracks?.total ?? 0)).toBe(1);
     const participants = await env.DB.prepare("SELECT role FROM participations WHERE submission_id = (SELECT id FROM submissions LIMIT 1) ORDER BY role").all<{ role: string }>();
     expect(participants.results.map((row) => row.role)).toEqual(["speaker", "submitter"]);
+  });
+
+  test("CONTRACT · MRQ-245 · inherited capacity follows the event, while a legacy explicit zero remains unlimited", async () => {
+    await env.DB.prepare("UPDATE forms SET submitter_limit_inherit = 1, per_submitter_limit = 3 WHERE id = ?").bind(FORM_ID).run();
+    await env.DB.prepare(
+      `INSERT INTO event_settings (id, event_id, key, value_json, created_at, updated_at)
+       VALUES ('submission-default-public', ?, 'submission_default_limit', ?, ?, ?)`,
+    ).bind(EVENT_ID, JSON.stringify({ limit: 2 }), NOW, NOW).run();
+    const inherited = await request("/api/v1/public/forms/public-cfp");
+    expect((await json<{ state: string; form: { per_submitter_limit: number } }>(inherited))).toMatchObject({ state: "open", form: { per_submitter_limit: 2 } });
+
+    await env.DB.prepare("UPDATE forms SET submitter_limit_inherit = 0, per_submitter_limit = 0 WHERE id = ?").bind(FORM_ID).run();
+    const legacy = await request("/api/v1/public/forms/public-cfp");
+    expect((await json<{ state: string; form: { per_submitter_limit: number } }>(legacy))).toMatchObject({ state: "open", form: { per_submitter_limit: 0 } });
+    const answers = { title: "Unlimited legacy proposal", speaker_name: "Unlimited Speaker", speaker_email: "unlimited@example.com", tracks: ["Agents"], vendor_content: "No" };
+    const first = await request("/api/v1/public/forms/public-cfp/submissions", { method: "POST", body: JSON.stringify({ turnstileToken: nextTurnstileToken(), answers }) });
+    const second = await request("/api/v1/public/forms/public-cfp/submissions", { method: "POST", body: JSON.stringify({ turnstileToken: nextTurnstileToken(), answers: { ...answers, title: "Unlimited legacy proposal again" } }) });
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+  });
+
+  test("CONTRACT · MRQ-245 · resumed-draft capacity refusal names the saved draft and organizer next step", async () => {
+    await env.DB.prepare("UPDATE forms SET submitter_limit_inherit = 0, per_submitter_limit = 1 WHERE id = ?").bind(FORM_ID).run();
+    const draftResponse = await request("/api/v1/public/forms/public-cfp/drafts", {
+      method: "POST",
+      body: JSON.stringify({ answers: { speaker_name: "Resumed Speaker", speaker_email: "resumed@example.com" } }),
+    });
+    expect(draftResponse.status).toBe(201);
+    const draft = await json<{ resume_token: string }>(draftResponse);
+    const first = await request("/api/v1/public/forms/public-cfp/submissions", {
+      method: "POST",
+      body: JSON.stringify({ turnstileToken: nextTurnstileToken(), answers: { title: "Already submitted", speaker_name: "Resumed Speaker", speaker_email: "resumed@example.com", tracks: ["Agents"], vendor_content: "No" } }),
+    });
+    expect(first.status).toBe(201);
+    const resumed = await request("/api/v1/public/forms/public-cfp/submissions", {
+      method: "POST",
+      body: JSON.stringify({ resumeToken: draft.resume_token, answers: { title: "Submit saved draft", speaker_name: "Resumed Speaker", speaker_email: "resumed@example.com", tracks: ["Agents"], vendor_content: "No" } }),
+    });
+    expect(resumed.status).toBe(409);
+    const message = (await json<{ error: { message: string } }>(resumed)).error.message;
+    expect(message).toContain("This call accepts 1 abstracts per person, and you already have 1.");
+    expect(message).toContain("Your saved draft is still available");
+    expect(message).toContain("conference organizer");
+    expect(message).not.toContain("Use a saved resume link");
   });
 
   test("CONTRACT · MRQ-156 · a manually closed public form does not print its future close date", async () => {
