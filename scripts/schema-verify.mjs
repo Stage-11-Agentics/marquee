@@ -193,6 +193,7 @@ const requiredIndexes = [
   "idx_speaker_tasks_submission_status",
   "idx_webhook_deliveries_endpoint_created",
   "idx_submission_tracks_track_submission",
+  "idx_submission_notes_submission_created",
   "idx_submissions_event_kind_status",
   "idx_submissions_event_status",
   "uq_evaluations_round_submission_reviewer",

@@ -36,6 +36,7 @@ import airtableConnectMigrationSql from "../../migrations/0025_airtable_connect.
 import calendarTruthMigrationSql from "../../migrations/0026_calendar_truth.sql?raw";
 import airtableDecisionActorMigrationSql from "../../migrations/0027_airtable_decision_actor.sql?raw";
 import participantFanoutMigrationSql from "../../migrations/0028_participant_fanout.sql?raw";
+import submissionNotesMigrationSql from "../../migrations/0029_submission_notes.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -138,6 +139,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(calendarTruthMigrationSql),
     ...splitStatements(airtableDecisionActorMigrationSql),
     ...splitStatements(participantFanoutMigrationSql),
+    ...splitStatements(submissionNotesMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }
