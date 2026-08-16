@@ -10,11 +10,13 @@ export interface AirtableTableField {
   id: string;
   name: string;
   type?: string;
+  options?: Record<string, unknown>;
 }
 
 export interface AirtableTable {
   id: string;
   name: string;
+  primaryFieldId?: string;
   fields?: readonly AirtableTableField[];
 }
 
@@ -30,6 +32,20 @@ export interface AirtableWebhookPayload {
 
 export interface AirtableTransport {
   readBaseSchema(): Promise<{ tables: readonly AirtableTable[] }>;
+  createTable(input: {
+    name: string;
+    fields: readonly {
+      name: string;
+      type: string;
+      options?: Record<string, unknown>;
+    }[];
+  }): Promise<{ table: AirtableTable }>;
+  createField(input: {
+    tableId: string;
+    name: string;
+    type: string;
+    options?: Record<string, unknown>;
+  }): Promise<{ field: AirtableTableField }>;
   listRecords(input: { tableId: string; offset?: string }): Promise<{
     records: readonly AirtableListRecord[];
     offset: string | null;
@@ -84,6 +100,14 @@ export function rateLimitedAirtableTransport(
       await limiter.take();
       return transport.readBaseSchema();
     },
+    async createTable(input) {
+      await limiter.take();
+      return transport.createTable(input);
+    },
+    async createField(input) {
+      await limiter.take();
+      return transport.createField(input);
+    },
     async listRecords(input) {
       await limiter.take();
       return transport.listRecords(input);
@@ -127,6 +151,20 @@ interface ListResponse {
 
 interface SchemaResponse {
   tables?: AirtableTable[];
+}
+
+interface TableResponse {
+  id?: string;
+  name?: string;
+  primaryFieldId?: string;
+  fields?: AirtableTableField[];
+}
+
+interface FieldResponse {
+  id?: string;
+  name?: string;
+  type?: string;
+  options?: Record<string, unknown>;
 }
 
 interface PayloadResponse {
@@ -178,6 +216,47 @@ export function createFetchAirtableTransport(options: AirtableTransportOptions):
       );
       const payload = await response.json() as SchemaResponse;
       return { tables: payload.tables ?? [] };
+    },
+
+    async createTable({ name, fields }) {
+      const response = await request(
+        baseUrl(`/v0/meta/bases/${encodePathPart(options.baseId)}/tables`),
+        { method: "POST", body: JSON.stringify({ name, fields }) },
+      );
+      const payload = await response.json() as TableResponse;
+      if (!payload.id || !payload.name) {
+        throw new AirtableTransportError(502, "Airtable returned an incomplete table");
+      }
+      return {
+        table: {
+          id: payload.id,
+          name: payload.name,
+          ...(payload.primaryFieldId === undefined ? {} : { primaryFieldId: payload.primaryFieldId }),
+          fields: payload.fields ?? [],
+        },
+      };
+    },
+
+    async createField({ tableId, name, type, options: fieldOptions }) {
+      const response = await request(
+        baseUrl(`/v0/meta/bases/${encodePathPart(options.baseId)}/tables/${encodePathPart(tableId)}/fields`),
+        {
+          method: "POST",
+          body: JSON.stringify({ name, type, ...(fieldOptions === undefined ? {} : { options: fieldOptions }) }),
+        },
+      );
+      const payload = await response.json() as FieldResponse;
+      if (!payload.id || !payload.name || !payload.type) {
+        throw new AirtableTransportError(502, "Airtable returned an incomplete field");
+      }
+      return {
+        field: {
+          id: payload.id,
+          name: payload.name,
+          type: payload.type,
+          ...(payload.options === undefined ? {} : { options: payload.options }),
+        },
+      };
     },
 
     async listRecords({ tableId, offset }) {

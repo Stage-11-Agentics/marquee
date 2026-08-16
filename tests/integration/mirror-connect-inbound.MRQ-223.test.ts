@@ -5,7 +5,7 @@ import type { Queue } from "@cloudflare/workers-types";
 import { connectMirror, disconnectMirror, keepaliveMirror, mapMirror, readMirrorStatus } from "../../src/jobs/mirror/actions";
 import { runOnboardingCascade } from "../../src/jobs/cascade/decisions";
 import { listSubmissions } from "../../src/routes/submissions.queries";
-import { encryptMirrorSecret, readMirrorCredential, tokenFingerprint } from "../../src/jobs/mirror/credentials";
+import { encryptMirrorSecret, tokenFingerprint } from "../../src/jobs/mirror/credentials";
 import { FakeAirtableTransport } from "../../src/jobs/mirror/fake-transport";
 import { drainMirrorOutbox } from "../../src/jobs/mirror/consumer";
 import { dispatchPendingMirrorMessages } from "../../src/jobs/mirror/outbox";
@@ -15,6 +15,7 @@ import { sha256Hex } from "../../src/lib/auth/random-token";
 import type { MirrorActionEnvironment } from "../../src/jobs/mirror/actions";
 import type { MirrorConsumerEnvironment } from "../../src/jobs/mirror/consumer";
 import type { AirtableTable, AirtableWebhookPayload } from "../../src/jobs/mirror/transport";
+import { MIRROR_TABLE_SCHEMA } from "../../src/jobs/mirror/schema";
 import { applyMigrations, env } from "./apply-migrations";
 
 const NOW = Date.UTC(2026, 7, 15, 12, 0, 0);
@@ -32,10 +33,29 @@ const TABLE_IDS = {
   speaker_tasks: "tbl_mrq223_tasks",
 } as const;
 
+// MRQ-223 now carries full provider field metadata. An omitted `fields` value
+// means the schema is unknown and MRQ-248 must refuse to map it; this shared
+// fixture is deliberately complete so the pre-existing connect/inbound
+// coverage proves the expected conformant path.
+function fixtureTable(role: keyof typeof TABLE_IDS, name: string): AirtableTable {
+  const fields = MIRROR_TABLE_SCHEMA[role === "speaker_tasks" ? "speaker_tasks" : role].fields.map((field, index) => ({
+    id: `fld_mrq223_${role}_${index}`,
+    name: field.name,
+    type: field.type,
+    ...(field.options === undefined ? {} : { options: structuredClone(field.options) }),
+  }));
+  return {
+    id: TABLE_IDS[role],
+    name,
+    primaryFieldId: fields[0]?.id,
+    fields,
+  };
+}
+
 const TABLES: readonly AirtableTable[] = [
-  { id: TABLE_IDS.people, name: "People" },
-  { id: TABLE_IDS.submissions, name: "Submissions" },
-  { id: TABLE_IDS.speaker_tasks, name: "Speaker Tasks" },
+  fixtureTable("people", "People"),
+  fixtureTable("submissions", "Submissions"),
+  fixtureTable("speaker_tasks", "Speaker Tasks"),
 ];
 
 function clockAt(start = NOW) {
@@ -94,18 +114,26 @@ async function connectAndMap(fake: FakeAirtableTransport): Promise<void> {
   if (!connected.ok) throw new Error(connected.message);
 
   const clock = clockAt();
-  const mapped = await mapMirror(actionEnvironment(fake), {
-    mapping: {
-      people: TABLE_IDS.people,
-      submissions: TABLE_IDS.submissions,
-      speaker_tasks: TABLE_IDS.speaker_tasks,
-    },
-    orgId: ORG_ID,
-    clock,
-    now: NOW,
-  });
-  expect(mapped.ok).toBe(true);
-  if (!mapped.ok) throw new Error(mapped.message);
+  let continuation: "submissions" | "speaker_tasks" | "people" | null = "submissions";
+  while (continuation) {
+    const mapped = await mapMirror(actionEnvironment(fake), {
+      mapping: {
+        people: TABLE_IDS.people,
+        submissions: TABLE_IDS.submissions,
+        speaker_tasks: TABLE_IDS.speaker_tasks,
+      },
+      orgId: ORG_ID,
+      baseId: BASE_ID,
+      setByPersonId: PERSON_ID,
+      token: AIRTABLE_TOKEN,
+      clock,
+      now: NOW,
+      continuation,
+    });
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) throw new Error(mapped.message);
+    continuation = mapped.continuation ?? null;
+  }
 }
 
 async function seedMirrorSubmission(status: string, title = "MRQ-239 session"): Promise<void> {
@@ -200,7 +228,7 @@ beforeEach(async () => {
   await seedPerson();
 });
 
-test("AC-308 · connect verifies the base before persistence and stores only encrypted provider credentials", async () => {
+test("AC-308 · connect verifies the base without persistence until the mapping on-switch", async () => {
   const fake = new FakeAirtableTransport(() => NOW, { tables: TABLES });
   const result = await connectMirror(actionEnvironment(fake), {
     baseId: BASE_ID,
@@ -212,19 +240,14 @@ test("AC-308 · connect verifies the base before persistence and stores only enc
 
   expect(result.ok).toBe(true);
   expect(fake.calls.map((call) => call.kind)).toEqual(["schema"]);
-  expect(await count("SELECT COUNT(*) AS count FROM mirror_credentials WHERE org_id = ?", ORG_ID)).toBe(1);
+  expect(await count("SELECT COUNT(*) AS count FROM mirror_credentials WHERE org_id = ?", ORG_ID)).toBe(0);
   // AC-310's fixture prohibition matters here: connect itself has not created
   // an on-switch state row, and the fake schema call is the proof of reachability.
   expect(await count("SELECT COUNT(*) AS count FROM mirror_state")).toBe(0);
 
-  const stored = await env.DB.prepare(
+  expect(await env.DB.prepare(
     "SELECT token_ciphertext, token_fingerprint, base_id FROM mirror_credentials WHERE org_id = ?",
-  ).bind(ORG_ID).first<{ token_ciphertext: string; token_fingerprint: string; base_id: string }>();
-  expect(stored?.token_ciphertext).toBeTruthy();
-  expect(stored?.token_ciphertext).not.toContain(AIRTABLE_TOKEN);
-  expect(stored?.token_fingerprint).toBe(await tokenFingerprint(AIRTABLE_TOKEN));
-  expect(stored?.base_id).toBe(BASE_ID);
-  expect((await readMirrorCredential(env.DB, actionEnvironment(fake), ORG_ID))?.token).toBe(AIRTABLE_TOKEN);
+  ).bind(ORG_ID).first()).toBeNull();
 });
 
 test("AC-310 · mapping is the reachable mirror on-switch and creates all three state rows", async () => {
@@ -242,7 +265,9 @@ test("AC-310 · mapping is the reachable mirror on-switch and creates all three 
     expect.objectContaining({ table_name: "submissions", airtable_table_id: TABLE_IDS.submissions, webhook_id: "whk_fake_mrq223" }),
     expect.objectContaining({ table_name: "speaker_tasks", airtable_table_id: TABLE_IDS.speaker_tasks, webhook_id: "whk_fake_mrq223" }),
   ]));
-  expect(fake.calls.map((call) => call.kind)).toEqual(["schema", "schema", "create_webhook"]);
+  expect(fake.calls.map((call) => call.kind)).toEqual([
+    "schema", "schema", "schema", "schema", "schema", "create_webhook",
+  ]);
   const status = await readMirrorStatus(env.DB, actionEnvironment(fake), ORG_ID);
   expect(status).toMatchObject({ configured: true, mapped: true, baseId: BASE_ID, trafficAssisted: true });
 

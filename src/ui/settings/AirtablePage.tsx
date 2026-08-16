@@ -1,7 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
-import { apiFetch, errorSummary } from "../shell/api-client";
+import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader } from "../shell/components";
 import "./settings.css";
 import "./airtable.css";
@@ -17,7 +17,48 @@ type MirroredTableName = "submissions" | "speaker_tasks" | "people";
 interface AirtableTable {
   id: string;
   name: string;
-  fields: { id: string; name: string; type?: string }[];
+  fields: { id: string; name: string; type?: string; options?: Record<string, unknown> }[] | null;
+}
+
+interface MirrorReadinessRole {
+  role: MirroredTableName;
+  label: string;
+  expected_field_count: number;
+  candidate_table_ids: string[];
+  selected_table_id: string | null;
+  state: "ready" | "missing" | "conflict" | "unknown";
+  conflict: unknown;
+}
+
+interface MirrorReadiness {
+  needs_provisioning: boolean;
+  provisionable: boolean;
+  max_conformant_roles: number;
+  roles: MirrorReadinessRole[];
+}
+
+interface MirrorProgress {
+  role: MirroredTableName;
+  label: string;
+  table_id: string | null;
+  state: "idle" | "created" | "adopted" | "conflict" | "complete";
+  expected_field_count: number;
+  conformant_field_count: number;
+  fields: { name: string; state: "pending" | "created" | "adopted" | "conflict" }[];
+  missing_fields: string[];
+  organizer_fields: string[];
+  conflicts: unknown[];
+}
+
+interface MirrorSetupResponse {
+  base_id: string;
+  tables: AirtableTable[];
+  needs_provisioning: boolean;
+  readiness: MirrorReadiness;
+  progress?: MirrorProgress[];
+  continuation?: MirroredTableName | null;
+  complete?: boolean;
+  table_actions?: { role: MirroredTableName; table_id: string; outcome: "created" | "adopted" }[];
 }
 
 export interface MirrorStatus {
@@ -84,15 +125,131 @@ function dateOnly(value: number | null): string {
 }
 
 function initialMapping(tables: readonly AirtableTable[]): Record<MirroredTableName, string> {
-  const find = (terms: readonly string[]): string => {
-    const match = tables.find((table) => terms.some((term) => table.name.toLowerCase().includes(term)));
+  const normalized = (value: string): string => value.trim().toLocaleLowerCase().replaceAll(/\s+/g, " ");
+  const used = new Set<string>();
+  const find = (exact: readonly string[], terms: readonly string[], reject?: RegExp): string => {
+    const exactMatch = tables.find((table) => !used.has(table.id) && exact.includes(normalized(table.name)));
+    const match = exactMatch ?? tables.find((table) => {
+      const name = normalized(table.name);
+      return !used.has(table.id) && (!reject || !reject.test(name)) && terms.some((term) => name.includes(term));
+    });
+    if (match) used.add(match.id);
     return match?.id ?? "";
   };
   return {
-    submissions: find(["submission", "abstract", "session"]),
-    speaker_tasks: find(["task", "follow"]),
-    people: find(["people", "speaker", "person"]),
+    submissions: find(["submissions", "submissions / abstracts"], ["submission", "abstract", "session"], /task|follow/),
+    speaker_tasks: find(["speaker tasks", "speaker task"], ["task", "follow"], /people|person/),
+    people: find(["people", "speakers", "persons"], ["people", "speaker", "person"], /task|follow/),
   };
+}
+
+function mappingFromReadiness(
+  tables: readonly AirtableTable[],
+  readiness: MirrorReadiness,
+): Record<MirroredTableName, string> {
+  const fromRoles = Object.fromEntries(readiness.roles.map((role) => [role.role, role.selected_table_id ?? ""])) as Record<MirroredTableName, string>;
+  const values = TABLE_ORDER.map((role) => fromRoles[role]).filter(Boolean);
+  if (values.length === TABLE_ORDER.length && new Set(values).size === TABLE_ORDER.length) return fromRoles;
+  return initialMapping(tables);
+}
+
+function mappingFromActions(
+  actions: readonly { role: MirroredTableName; table_id: string }[] | undefined,
+): Record<MirroredTableName, string> | null {
+  if (!actions) return null;
+  const byRole = new Map(actions.map((action) => [action.role, action.table_id]));
+  const values = TABLE_ORDER.map((role) => byRole.get(role) ?? "");
+  if (values.some((value) => !value) || new Set(values).size !== TABLE_ORDER.length) return null;
+  return Object.fromEntries(TABLE_ORDER.map((role) => [role, byRole.get(role)!])) as Record<MirroredTableName, string>;
+}
+
+function idleProgress(readiness: MirrorReadiness | null): MirrorProgress[] {
+  return TABLE_ORDER.map((role) => {
+    const expected = readiness?.roles.find((candidate) => candidate.role === role)?.expected_field_count ?? 0;
+    return {
+      role,
+      label: TABLE_LABELS[role],
+      table_id: null,
+      state: "idle",
+      expected_field_count: expected,
+      conformant_field_count: 0,
+      fields: [],
+      missing_fields: [],
+      organizer_fields: [],
+      conflicts: [],
+    };
+  });
+}
+
+function progressLabel(state: MirrorProgress["state"]): string {
+  if (state === "created") return "Created";
+  if (state === "adopted" || state === "complete") return "Adopted";
+  if (state === "conflict") return "Needs attention";
+  return "—";
+}
+
+function compactMapping(mapping: Readonly<Record<MirroredTableName, string>>): Partial<Record<MirroredTableName, string>> {
+  return Object.fromEntries(TABLE_ORDER.flatMap((role) => {
+    const tableId = mapping[role].trim();
+    return tableId ? [[role, tableId]] : [];
+  }));
+}
+
+export function mergeSetupProgress(
+  current: readonly MirrorProgress[],
+  incoming: readonly MirrorProgress[],
+): MirrorProgress[] {
+  const previous = new Map(current.map((row) => [row.role, row]));
+  const next = new Map(incoming.map((row) => [row.role, row]));
+  return TABLE_ORDER.flatMap((role) => {
+    const row = next.get(role) ?? previous.get(role);
+    if (!row) return [];
+    const old = previous.get(role);
+    if (!old) return [row];
+    const oldFields = new Map(old.fields.map((field) => [field.name, field]));
+    const fields = row.fields.map((field) => {
+      const prior = oldFields.get(field.name);
+      return prior?.state === "created" && field.state === "adopted" ? prior : field;
+    });
+    const state = row.state === "conflict"
+      ? "conflict"
+      : old.state === "created"
+        ? "created"
+        : row.state;
+    return [{ ...row, state, fields }];
+  });
+}
+
+function mirrorSetupDetails(error: unknown): { progress?: MirrorProgress[]; continuation?: MirroredTableName | null } | null {
+  if (!(error instanceof MarqueeApiError) || !error.details || typeof error.details !== "object") return null;
+  const details = error.details as { mirror_setup?: unknown; progress?: unknown; continuation?: unknown };
+  if (details.mirror_setup !== true) return null;
+  const progress = Array.isArray(details.progress) ? details.progress as MirrorProgress[] : undefined;
+  const continuation = TABLE_ORDER.includes(details.continuation as MirroredTableName)
+    ? details.continuation as MirroredTableName
+    : details.continuation === null ? null : undefined;
+  return { progress, continuation };
+}
+
+export function mirrorSetupErrorSummary(error: unknown): string {
+  const details = mirrorSetupDetails(error);
+  if (!(error instanceof MarqueeApiError) || !details || error.message.trim().length === 0) return errorSummary(error);
+  const trimmed = error.message.trim();
+  const sentence = `${trimmed[0]!.toUpperCase()}${trimmed.slice(1)}${/[.!?]$/.test(trimmed) ? "" : "."}`;
+  return `${sentence} ${error.treatment.recovery} · ref ${error.reference}`;
+}
+
+function progressDetail(row: MirrorProgress | undefined): string {
+  if (!row?.table_id) return "—";
+  const conflictFields = row.fields.filter((field) => field.state === "conflict").map((field) => field.name);
+  const createdFields = row.fields.filter((field) => field.state === "created").map((field) => field.name);
+  const organizerCount = row.organizer_fields.length;
+  const kept = organizerCount > 0 ? ` · kept ${organizerCount} organizer column${organizerCount === 1 ? "" : "s"}` : "";
+  if (conflictFields.length > 0) return `conflict: ${conflictFields.join(", ")}${kept}`;
+  if (row.missing_fields.length > 0) return `pending: ${row.missing_fields.join(", ")}${kept}`;
+  if (createdFields.length === row.expected_field_count) return `created all ${row.expected_field_count} Marquee columns${kept}`;
+  if (createdFields.length > 0) return `added ${createdFields.join(", ")}${kept}`;
+  return `all ${row.expected_field_count} Marquee columns ready${kept}`;
 }
 
 function expiryCopy(expiresAt: number | null): string | null {
@@ -153,12 +310,38 @@ export function AirtableLiveLog({
   return <section class="card airtable-log-card"><CardHeader title="Live log"><span class="subtle">Connection actions and edits Marquee did not apply</span></CardHeader><CardBody>{entries.length > 0 ? <ol class="airtable-log">{entries.map((entry) => <li key={entry.id}>{dateTime(entry.created_at)} · {entry.message}</li>)}</ol> : <div class="airtable-log-empty">No connection actions or rejected edits to show.</div>}</CardBody></section>;
 }
 
+export function AirtableSetupProgress({
+  readiness,
+  progress,
+}: {
+  readiness: MirrorReadiness | null;
+  progress: readonly MirrorProgress[];
+}): JSX.Element {
+  const rows = new Map(progress.map((row) => [row.role, row]));
+  return <div class="airtable-setup-progress" aria-live="polite">
+    <div class="airtable-setup-progress-heading"><span>Table readiness</span><span>Fields</span><span>Status</span></div>
+    {TABLE_ORDER.map((role) => {
+      const row = rows.get(role);
+      const expected = row?.expected_field_count ?? readiness?.roles.find((candidate) => candidate.role === role)?.expected_field_count ?? 0;
+      const fields = row && expected > 0 ? `${row.conformant_field_count}/${expected}` : "—";
+      return <div class="airtable-setup-progress-row" key={role}>
+        <span><strong>{TABLE_LABELS[role]}</strong><small title={progressDetail(row)}>{progressDetail(row)}</small></span>
+        <span class="tabular">{fields}</span>
+        <span>{progressLabel(row?.state ?? "idle")}</span>
+      </div>;
+    })}
+  </div>;
+}
+
 export function AirtablePage({ navigate }: { navigate: (target: string) => void }): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [token, setToken] = useState("");
   const [baseId, setBaseId] = useState("");
   const [tables, setTables] = useState<AirtableTable[]>([]);
   const [mapping, setMapping] = useState<Record<MirroredTableName, string>>({ submissions: "", speaker_tasks: "", people: "" });
+  const [readiness, setReadiness] = useState<MirrorReadiness | null>(null);
+  const [progress, setProgress] = useState<MirrorProgress[]>([]);
+  const [setupActive, setSetupActive] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -196,20 +379,56 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
     setError("");
     setNotice("");
     try {
-      const response = await apiFetch<{ data: { base_id: string; tables: AirtableTable[] } }>(CONNECT_ROUTE, {
+      const response = await apiFetch<{ data: MirrorSetupResponse }>(CONNECT_ROUTE, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token, base_id: baseId }),
+        body: JSON.stringify({ token, base_id: baseId, intent: "verify" }),
         route: CONNECT_ROUTE,
       });
       setBaseId(response.data.base_id);
       setTables(response.data.tables);
-      setMapping(initialMapping(response.data.tables));
-      setNotice("Connection verified. Choose the three tables to turn the mirror on.");
+      setReadiness(response.data.readiness);
+      setMapping(mappingFromReadiness(response.data.tables, response.data.readiness));
+      setProgress(response.data.progress ?? idleProgress(response.data.readiness));
+      setSetupActive(true);
+      setNotice(response.data.needs_provisioning
+        ? "Connection verified. Choose existing tables or create the three canonical tables."
+        : "Connection verified. Review the three table choices, then turn on the mirror.");
       record("Connection verified; table schema received");
       await loadStatus();
     } catch (caught) {
       setError(errorSummary(caught));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function provisionTables(): Promise<void> {
+    setPending("provision");
+    setError("");
+    setNotice("");
+    try {
+      const response = await apiFetch<{ data: MirrorSetupResponse }>(CONNECT_ROUTE, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token,
+          base_id: baseId || status?.base_id || "",
+          intent: "provision",
+          ...(Object.keys(compactMapping(mapping)).length > 0 ? { mapping: compactMapping(mapping) } : {}),
+        }),
+        route: CONNECT_ROUTE,
+      });
+      setTables(response.data.tables);
+      setReadiness(response.data.readiness);
+      setMapping(mappingFromActions(response.data.table_actions) ?? mappingFromReadiness(response.data.tables, response.data.readiness));
+      setProgress((current) => mergeSetupProgress(current, response.data.progress ?? idleProgress(response.data.readiness)));
+      setNotice("Canonical tables are ready. Review the selected IDs, then turn on the mirror.");
+      record("Canonical mirror tables created or adopted");
+    } catch (caught) {
+      const details = mirrorSetupDetails(caught);
+      if (details?.progress) setProgress((current) => mergeSetupProgress(current, details.progress!));
+      setError(mirrorSetupErrorSummary(caught));
     } finally {
       setPending(null);
     }
@@ -220,17 +439,28 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
     setError("");
     setNotice("");
     try {
-      await apiFetch(MAPPING_ROUTE, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(mapping),
-        route: MAPPING_ROUTE,
-      });
+      let continuation: MirroredTableName | null = "submissions";
+      while (continuation) {
+        const response: { data: MirrorSetupResponse } = await apiFetch<{ data: MirrorSetupResponse }>(MAPPING_ROUTE, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...mapping, base_id: baseId || status?.base_id || "", token, intent: "adopt", continuation }),
+          route: MAPPING_ROUTE,
+        });
+        setTables(response.data.tables);
+        setReadiness(response.data.readiness);
+        setProgress((current) => mergeSetupProgress(current, response.data.progress ?? idleProgress(response.data.readiness)));
+        continuation = response.data.continuation ?? null;
+      }
+      setSetupActive(false);
+      setTables([]);
       setNotice("The mirror is on. Local changes will queue for Airtable and signed Airtable edits will come back through the allowlist.");
       record("Three table mapping saved; mirror switched on");
       await loadStatus();
     } catch (caught) {
-      setError(errorSummary(caught));
+      const details = mirrorSetupDetails(caught);
+      if (details?.progress) setProgress((current) => mergeSetupProgress(current, details.progress!));
+      setError(mirrorSetupErrorSummary(caught));
     } finally {
       setPending(null);
     }
@@ -269,6 +499,9 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
       setNotice(response.data.warning ?? "Airtable disconnected. Pending mirror changes were cleared.");
       record("Airtable disconnected");
       setTables([]);
+      setReadiness(null);
+      setProgress([]);
+      setSetupActive(false);
       setToken("");
       setMapping({ submissions: "", speaker_tasks: "", people: "" });
       await loadStatus();
@@ -305,7 +538,7 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
         <Chip tone={status?.configured ? "success" : "warning"}>{status?.configured ? "connected" : "not connected"}</Chip>
       </CardHeader>
       <CardBody>
-        <p class="airtable-lede">Paste an Airtable personal access token with access to this base. Marquee verifies the schema before storing an encrypted credential; the token is never shown again.</p>
+        <p class="airtable-lede">Paste an Airtable personal access token with access to this base. Marquee verifies the schema first and stores the encrypted credential only when the final table mapping turns the mirror on.</p>
         <form class="settings-fields airtable-connect-form" onSubmit={(event) => void connect(event)}>
           <label class="field"><span>Airtable personal access token</span><input type="password" value={token} onInput={(event) => setToken(event.currentTarget.value)} placeholder={status?.configured ? "Paste a replacement token to rotate" : "pat…"} autoComplete="new-password" /></label>
           <label class="field"><span>Base ID</span><input value={baseId || status?.base_id || ""} onInput={(event) => setBaseId(event.currentTarget.value)} placeholder="app…" /></label>
@@ -315,23 +548,30 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
       </CardBody>
     </section>
 
-    {status?.configured && !status.mapped && <section class="card airtable-mapping-card">
+    {setupActive && <section class="card airtable-mapping-card">
       <CardHeader title="Choose the three tables"><span class="subtle">The mapping is the on-switch</span></CardHeader>
       <CardBody>
-        {tables.length === 0
-          ? <div class="airtable-empty-mapping"><strong>Schema not loaded yet</strong><span>Verify the connection above to read the available tables.</span></div>
-          : <div class="airtable-mapping-fields">{TABLE_ORDER.map((table) => <label class="field" key={table}><span>{TABLE_LABELS[table]}</span><select value={mapping[table]} onChange={(event) => setMapping((current) => ({ ...current, [table]: event.currentTarget.value }))}><option value="">Choose a table</option>{tables.map((candidate) => <option value={candidate.id} key={candidate.id}>{candidate.name}</option>)}</select></label>)}</div>}
-        <div class="airtable-form-actions"><Button variant="primary" onClick={() => void mapTables()} disabled={pending !== null || tables.length === 0 || !mappingComplete}>{pending === "mapping" ? "Turning on…" : "Turn on mirror"}</Button></div>
+        <p class="airtable-lede">Choose existing tables first. Marquee uses the submitted table IDs exactly; it creates canonical tables only when you explicitly ask it to.</p>
+        {tables.length === 0 && <div class="airtable-empty-mapping"><strong>No tables returned</strong><span>This base is ready for the three canonical mirror tables.</span></div>}
+        <div class="airtable-mapping-fields">{TABLE_ORDER.map((table) => <label class="field" key={table}><span>{TABLE_LABELS[table]}</span><select value={mapping[table]} onChange={(event) => setMapping((current) => ({ ...current, [table]: event.currentTarget.value }))}><option value="">Choose a table</option>{tables.map((candidate) => <option value={candidate.id} key={candidate.id}>{candidate.name}</option>)}</select></label>)}</div>
+        <AirtableSetupProgress readiness={readiness} progress={progress} />
+        {!mappingComplete && readiness?.needs_provisioning && readiness.provisionable && <div class="airtable-provision-offer"><span>Fewer than three distinct conformant roles are ready.</span><Button onClick={() => void provisionTables()} disabled={pending !== null || token.trim().length === 0 || (baseId || status?.base_id || "").trim().length === 0}>{pending === "provision" ? "Preparing tables…" : "Create the three tables for me"}</Button></div>}
+        <div class="airtable-form-actions"><Button variant="primary" onClick={() => void mapTables()} disabled={pending !== null || tables.length === 0 || token.trim().length === 0 || !mappingComplete}>{pending === "mapping" ? "Turning on…" : "Turn on mirror"}</Button></div>
       </CardBody>
     </section>}
 
-    {status?.configured && status.mapped && <AirtableHealthCard
+    {status?.configured && status.mapped && !setupActive && <AirtableHealthCard
       status={status}
       pending={pending}
       expiry={expiry}
       onSync={() => void syncNow()}
       onDisconnect={() => void disconnect()}
     />}
+
+    {!setupActive && progress.length > 0 && <section class="card airtable-setup-report">
+      <CardHeader title="Mirror setup report"><span class="subtle">Created and adopted columns from the completed setup</span></CardHeader>
+      <CardBody><AirtableSetupProgress readiness={readiness} progress={progress} /></CardBody>
+    </section>}
 
     <AirtableLiveLog status={status} log={log} />
   </div>;

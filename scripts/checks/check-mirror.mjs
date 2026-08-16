@@ -14,6 +14,7 @@ const vitest = resolve(REPOSITORY_ROOT, "node_modules/.bin/vitest");
 const testFiles = [
   "tests/integration/mirror-outbound.MRQ-217.test.ts",
   "tests/integration/mirror-connect-inbound.MRQ-223.test.ts",
+  "tests/integration/mirror-schema.MRQ-248.test.ts",
 ];
 
 const exitCode = await new Promise((resolveExit, reject) => {
@@ -43,6 +44,8 @@ if (exitCode !== 0) {
       "recorded outbound batch calls and shared rate budget",
       "signed inbound allowlist, cursor, and echo suppression",
       "keepalive webhook expiry refresh and row-count reconciliation",
+      "canonical 27/19/17 schemas, ID-authoritative provisioning, and resumable adoption",
+      "fresh three-table conformance before webhook and organizer-column preservation",
     ],
     tests: testFiles,
   });

@@ -13,8 +13,8 @@ The command registry is:
 - `node cli/marquee.mjs setup instance`
 - `node cli/marquee.mjs event create --set name=<name> --set starts_on=<date> --set ends_on=<date> --set timezone=<tz> [--from <event-id>] [--copy <sets>]`
 - `node cli/marquee.mjs event list`
-- `node cli/marquee.mjs mirror connect --base-id <base-id> --airtable-token <token>`
-- `node cli/marquee.mjs mirror map --set submissions=<table-id> --set speaker_tasks=<table-id> --set people=<table-id>`
+- `node cli/marquee.mjs mirror connect --base-id <base-id> --airtable-token <token> [--set submissions=<table-id>] [--set speaker_tasks=<table-id>] [--set people=<table-id>] [--provision]`
+- `node cli/marquee.mjs mirror map --base-id <base-id> --set submissions=<table-id> --set speaker_tasks=<table-id> --set people=<table-id> --airtable-token <token> [--provision]`
 - `node cli/marquee.mjs mirror status`
 - `node cli/marquee.mjs mirror sync`
 - `node cli/marquee.mjs mirror disconnect`
@@ -120,15 +120,15 @@ openssl rand -base64 32
 npx wrangler secret put MIRROR_CREDENTIAL_SECRET
 ```
 
-Use Settings → Airtable for the screen flow, or run the same API-backed flow from a terminal. The Marquee bearer token authenticates these commands; the Airtable personal access token is passed only to the connect command and is stored encrypted after schema verification:
+Use Settings → Airtable for the screen flow, or run the same API-backed flow from a terminal. The Marquee bearer token needs `mirror:write` for connect, mapping, sync, and disconnect; `program:read` is enough for status. The Airtable personal access token needs `schema.bases:read` for verification and `schema.bases:write` only for explicit table or field mutation. It is re-sent on every schema-adoption continuation and is stored encrypted only when the final mapping turns the mirror on:
 
 ```sh
 node cli/marquee.mjs mirror connect --base-id "$AIRTABLE_BASE_ID" --airtable-token "$AIRTABLE_TOKEN" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
-node cli/marquee.mjs mirror map --set submissions="$AIRTABLE_SUBMISSIONS_TABLE_ID" --set speaker_tasks="$AIRTABLE_TASKS_TABLE_ID" --set people="$AIRTABLE_PEOPLE_TABLE_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs mirror map --base-id "$AIRTABLE_BASE_ID" --set submissions="$AIRTABLE_SUBMISSIONS_TABLE_ID" --set speaker_tasks="$AIRTABLE_TASKS_TABLE_ID" --set people="$AIRTABLE_PEOPLE_TABLE_ID" --airtable-token "$AIRTABLE_TOKEN" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 node cli/marquee.mjs mirror status --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 ```
 
-Connect verifies the base schema before persisting anything. Mapping is the on-switch. Status reports the base link, both row counts as of the last sync, queued and stuck work, and webhook expiry; it never returns the provider token. `mirror sync` queues reconciliation, and `mirror disconnect` explicitly removes the webhook, credential, state, and pending feed:
+Connect verifies the base schema without changing the current credential or mirror state. Mapping is the on-switch: only its final three-table validation and webhook registration persist the credential and state. Status reports the base link, both row counts as of the last sync, queued and stuck work, and webhook expiry; it never returns the provider token. `mirror sync` queues reconciliation, and `mirror disconnect` explicitly removes the webhook, credential, state, and pending feed:
 
 ```sh
 node cli/marquee.mjs mirror sync --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json

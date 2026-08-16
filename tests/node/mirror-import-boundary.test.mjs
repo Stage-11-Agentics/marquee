@@ -30,19 +30,29 @@ test("CONTRACT · the mirror transport import boundary has teeth", async () => {
   const fixtureRoot = await mkdtemp(join(tmpdir(), "marquee-mirror-boundary-"));
   const sourceRoot = join(fixtureRoot, "src");
   const badImport = join(sourceRoot, "__mirror-boundary-bad-import.ts");
+  const badSchemaImport = join(sourceRoot, "ui/settings/AirtablePage.tsx");
   await mkdir(join(sourceRoot, "jobs/mirror"), { recursive: true });
+  await mkdir(join(sourceRoot, "ui/settings"), { recursive: true });
   await writeFile(join(sourceRoot, "jobs/mirror/transport.ts"), "export {};\n", "utf8");
+  await writeFile(join(sourceRoot, "jobs/mirror/schema.ts"), "export {};\n", "utf8");
   await writeFile(
     badImport,
     'import { createFetchAirtableTransport } from "./jobs/mirror/transport";\nvoid createFetchAirtableTransport;\n',
+    "utf8",
+  );
+  await writeFile(
+    badSchemaImport,
+    'import { ensureMirrorSchema } from "../../jobs/mirror/schema";\nvoid ensureMirrorSchema;\n',
     "utf8",
   );
   try {
     const failing = await runChecker(fixtureRoot);
     assert.equal(failing.code, 1);
     assert.match(failing.stdout, /__mirror-boundary-bad-import\.ts/);
+    assert.match(failing.stdout, /ui\/settings\/AirtablePage\.tsx/);
 
     await rm(badImport);
+    await rm(badSchemaImport);
     const passing = await runChecker(fixtureRoot);
     assert.equal(passing.code, 0, passing.stdout + passing.stderr);
   } finally {

@@ -185,18 +185,26 @@ npx wrangler secret put MIRROR_CREDENTIAL_SECRET
 ```
 
 For local development, put the generated value in the ignored `.dev.vars`;
-`.dev.vars.example` shows the name. Then open **Settings → Airtable**, paste an
-Airtable personal access token and base ID, verify the returned schema, and map
-Submissions, Speaker tasks, and People. Mapping is the on-switch. The screen
-shows the Airtable base link, Marquee and Airtable row counts as of the last
-sync, queued versus stuck changes, last sync time, and webhook expiry. The
-token is stored encrypted and is never shown again.
+`.dev.vars.example` shows the name. The Marquee bearer token needs
+`mirror:write` for connect, mapping, sync, and disconnect; `program:read` is
+enough for status. The Airtable token needs `schema.bases:read` for
+verification. `schema.bases:write` is needed only when the organizer
+explicitly provisions missing tables or fields; a conformant existing base can
+be adopted with read access alone. Then open **Settings → Airtable**, paste the
+token and base ID, verify the returned schema, choose the submitted IDs for
+Submissions, Speaker tasks, and People, and turn the mirror on. Mapping is the
+on-switch; verification and provisioning do not replace the current credential
+or mirror state. The screen shows the Airtable base link, Marquee and Airtable
+row counts as of the last sync, queued versus stuck changes, last sync time, and
+webhook expiry. The token is stored encrypted only after the final mapping and
+is never shown again.
 
 An agent can use the same API-backed commands without opening a screen:
 
 ```sh
 node cli/marquee.mjs mirror connect --base-id "$AIRTABLE_BASE_ID" --airtable-token "$AIRTABLE_TOKEN" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
-node cli/marquee.mjs mirror map --set submissions="$AIRTABLE_SUBMISSIONS_TABLE_ID" --set speaker_tasks="$AIRTABLE_TASKS_TABLE_ID" --set people="$AIRTABLE_PEOPLE_TABLE_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs mirror connect --base-id "$AIRTABLE_BASE_ID" --airtable-token "$AIRTABLE_TOKEN" --provision --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json # only when you explicitly want canonical tables
+node cli/marquee.mjs mirror map --base-id "$AIRTABLE_BASE_ID" --set submissions="$AIRTABLE_SUBMISSIONS_TABLE_ID" --set speaker_tasks="$AIRTABLE_TASKS_TABLE_ID" --set people="$AIRTABLE_PEOPLE_TABLE_ID" --airtable-token "$AIRTABLE_TOKEN" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 node cli/marquee.mjs mirror status --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 ```
 

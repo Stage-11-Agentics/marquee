@@ -37,7 +37,7 @@ const VALUE_OPTIONS = new Set([
   "--comment",
   "--criteria",
 ]);
-const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue", "--tail", "--bundle"]);
+const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue", "--tail", "--bundle", "--provision"]);
 const LIST_FILTER_KEYS = new Set(["kind", "status", "track", "format", "wave", "task", "placement", "q"]);
 const REMINDER_FILTER_KEYS = new Set([
   "status",
@@ -407,9 +407,49 @@ async function execute(command, arguments_, options, flags, client) {
       const airtableToken = option(options, "--airtable-token");
       if (!baseId) usageError(`${command.usage} requires --base-id`);
       if (!airtableToken) usageError(`${command.usage} requires --airtable-token`);
-      return client.post("/api/v1/mirror/connect", { base_id: baseId, token: airtableToken });
+      const mapping = parseSetValues(command, options);
+      return client.post("/api/v1/mirror/connect", {
+        base_id: baseId,
+        token: airtableToken,
+        intent: flags.has("--provision") ? "provision" : "verify",
+        ...(Object.keys(mapping).length > 0 ? { mapping } : {}),
+      });
     }
-    if (verb === "map") return client.post("/api/v1/mirror/mapping", requireSetValues(command, options));
+    if (verb === "map") {
+      const baseId = option(options, "--base-id");
+      if (!baseId) usageError(`${command.usage} requires --base-id`);
+      const airtableToken = option(options, "--airtable-token");
+      if (!airtableToken) usageError(`${command.usage} requires --airtable-token`);
+      const mapping = requireSetValues(command, options);
+      let continuation = "submissions";
+      let response;
+      const progressByRole = new Map();
+      while (continuation) {
+        const requestedRole = continuation;
+        response = await client.post("/api/v1/mirror/mapping", {
+          ...mapping,
+          base_id: baseId,
+          token: airtableToken,
+          intent: flags.has("--provision") ? "provision" : "adopt",
+          continuation,
+        });
+        const requestedProgress = response?.data?.progress?.find((row) => row.role === requestedRole);
+        if (requestedProgress) progressByRole.set(requestedRole, requestedProgress);
+        continuation = response?.data?.continuation ?? null;
+      }
+      if (!response?.data || progressByRole.size === 0) return response;
+      const finalProgress = response.data.progress ?? [];
+      return {
+        ...response,
+        data: {
+          ...response.data,
+          progress: ["submissions", "speaker_tasks", "people"].flatMap((role) => {
+            const row = progressByRole.get(role) ?? finalProgress.find((candidate) => candidate.role === role);
+            return row ? [row] : [];
+          }),
+        },
+      };
+    }
     if (verb === "status") return client.get("/api/v1/mirror/status");
     if (verb === "sync") return client.post("/api/v1/mirror/sync");
     if (verb === "disconnect") return client.post("/api/v1/mirror/disconnect");
