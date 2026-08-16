@@ -7,6 +7,7 @@ import { chromeFor, useThemeId, type RegisterChrome } from "./register";
 import { StageFlyout } from "./StageFlyout";
 import { ThemeSwitch } from "./ThemeSwitch";
 import { useDialogLifecycle } from "./OverlayHosts";
+import { GETTING_STARTED_URL } from "./getting-started";
 
 /**
  * The public site and the speaker portal are real browser navigations out of
@@ -80,7 +81,7 @@ function Nav({ label, routes, activeId, navigate, slug, chrome, extraClass = "",
 const SYSTEM_HEALTH_PATH = matchRoute("/delivery-health", "?view=system")?.path ?? "/delivery-health?view=system";
 const API_DOCS_PATH = matchRoute("/api/docs")?.path ?? "/api/docs";
 
-export function Sidebar({ activeId, eventName, navigate, resetting, onReset, drawerOpen = false, onClose }: { activeId?: string; eventName: string; navigate: (target: string) => void; resetting: boolean; onReset: () => void; drawerOpen?: boolean; onClose?: () => void }): JSX.Element {
+export function Sidebar({ activeId, eventName, navigate, resetting, onReset, showResetDemo = false, drawerOpen = false, onClose }: { activeId?: string; eventName: string; navigate: (target: string) => void; resetting: boolean; onReset: () => void; showResetDemo?: boolean; drawerOpen?: boolean; onClose?: () => void }): JSX.Element {
   const { event } = useEventContext();
   const slug = event?.slug ?? null;
   const chrome = chromeFor(useThemeId());
@@ -153,11 +154,12 @@ export function Sidebar({ activeId, eventName, navigate, resetting, onReset, dra
     {group("Settings", "settings", "settings-nav")}
     <div class="sidebar-foot">
       <div class="sidebar-theme-switch"><ThemeSwitch /></div>
+      <a href={GETTING_STARTED_URL} target="_blank" rel="noopener" onClick={onClose}>Getting started ↗</a>
       <a href={API_DOCS_PATH} onClick={onClose}>⌘ API &amp; CLI</a>
       <a href={SYSTEM_HEALTH_PATH} onClick={onClose}>◌ System health</a>
-      <button type="button" class="reset-demo-button" onClick={onReset} disabled={resetting} aria-busy={resetting}>
+      {showResetDemo && <button type="button" class="reset-demo-button" onClick={onReset} disabled={resetting} aria-busy={resetting}>
         <span class="reset-demo-label">{resetting ? "Resetting…" : "↻ Reset demo"}</span>
-      </button>
+      </button>}
     </div>
     <StageFlyout navigate={drawerNavigate} />
   </aside>

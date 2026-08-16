@@ -5,7 +5,7 @@ import { executeListPage, parsePagination } from "../api/pagination";
 import { localParts } from "../lib/event-time";
 import { listVersionsFor, listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
 import { isTaskDueWithinDays, isTaskOverdue, taskDaysOverdue } from "../lib/task-due";
-import { ONBOARDING_PERSON_SOURCE, onboardingPersonSource } from "../lib/roster-source";
+import { ONBOARDING_PERSON_SOURCE, ROSTER_PARTICIPATION_ROLES, onboardingPersonSource } from "../lib/roster-source";
 
 export const ONBOARDING_FILTERS = ["all", "overdue", "incomplete", "risk"] as const;
 export type OnboardingFilter = (typeof ONBOARDING_FILTERS)[number];
@@ -115,6 +115,7 @@ export interface OnboardingFilters {
 }
 
 const DAY_MS = 86_400_000;
+const ROSTER_ROLE_LIST = ROSTER_PARTICIPATION_ROLES.map((role) => `'${role}'`).join(", ");
 const TASK_OWED_SQL = "task.status = 'open' AND task.cancelled_at IS NULL";
 const TASK_FIXED_SQL = "template.due_at IS NOT NULL AND task.due_at = template.due_at";
 const TASK_OVERDUE_SQL = `(
@@ -603,9 +604,12 @@ async function listSessions(db: D1Database, eventId: string, personIds: readonly
 
 async function acceptedSpeakerCount(db: D1Database, eventId: string): Promise<number> {
   const row = await db.prepare(
-    `SELECT COUNT(DISTINCT person_id) AS count
-     FROM speaker_tasks
-     WHERE event_id = ? AND status = 'open' AND cancelled_at IS NULL`,
+    `SELECT COUNT(DISTINCT part.person_id) AS count
+     FROM participations part
+     JOIN submissions submission ON submission.id = part.submission_id
+     WHERE submission.event_id = ?
+       AND submission.status = 'accepted'
+       AND part.role IN (${ROSTER_ROLE_LIST})`,
   ).bind(eventId).first<{ count: number | null }>();
   return Number(row?.count ?? 0);
 }

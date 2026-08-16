@@ -11,7 +11,7 @@ import { useBrowserRouter } from "./router";
 import { SeatBlockedPage, useSeat } from "./seat";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
-import { useIdentity, useOrgName } from "./identity";
+import { useDemoEventPresent, useIdentity, useOrgName } from "./identity";
 import { useEventContext } from "./event-context";
 import { NoConference } from "./NoConference";
 import { QuickSearch } from "./QuickSearch";
@@ -64,6 +64,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const identity = useIdentity();
   const orgName = useOrgName();
+  const demoEventPresent = useDemoEventPresent();
   const { eventId } = useEventContext();
   const [resetting, setResetting] = useState(false);
   const [toast, setToast] = useState("");
@@ -112,7 +113,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
     setDrawerOpen(false);
   }, [location.pathname, location.search]);
   const resetDemo = useCallback(async () => {
-    if (resetting) return;
+    if (demoEventPresent !== true || resetting) return;
     if (!window.confirm("Reset the demo conference? This removes demo edits, submissions, uploads, and queued work.")) return;
 
     setResetting(true);
@@ -148,7 +149,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
       setResetting(false);
       showToast("Reset failed: " + errorSummary(error), true);
     }
-  }, [resetting, showToast]);
+  }, [demoEventPresent, resetting, showToast]);
 
   // A screen that is about to navigate away hands its receipt to the host that
   // outlives it.
@@ -259,7 +260,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   </>;
   return <>
     <div class="app-shell">
-      <Sidebar activeId={activeNavId(route?.id)} eventName={eventName} navigate={navigate} resetting={resetting} onReset={() => void resetDemo()} drawerOpen={drawerOpen} onClose={closeNavigation} />
+      <Sidebar activeId={activeNavId(route?.id)} eventName={eventName} navigate={navigate} resetting={resetting} onReset={() => void resetDemo()} showResetDemo={demoEventPresent === true} drawerOpen={drawerOpen} onClose={closeNavigation} />
       <main class="main">
         <Topbar
           eventName={eventName}

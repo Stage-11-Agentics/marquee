@@ -61,15 +61,25 @@ async function readProgress(eventId: string): Promise<Progress> {
 export function SetupChecklistCard({
   eventId,
   navigate,
+  inSetup,
 }: {
   eventId: string;
   navigate: (target: string) => void;
+  inSetup: boolean;
 }): JSX.Element {
   const [progress, setProgress] = useState<Progress>(NOTHING_DONE);
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    void readProgress(eventId).then((next) => { if (!cancelled) setProgress(next); });
+    setProgressLoaded(false);
+    setDismissed(false);
+    void readProgress(eventId).then((next) => {
+      if (cancelled) return;
+      setProgress(next);
+      setProgressLoaded(true);
+    });
     return () => { cancelled = true; };
   }, [eventId]);
 
@@ -79,6 +89,23 @@ export function SetupChecklistCard({
   }));
   const done = steps.filter((step) => step.done).length;
   const nextIndex = steps.findIndex((step) => !step.done);
+  const nextStep = nextIndex === -1 ? null : steps[nextIndex];
+
+  if (!inSetup) {
+    if (!progressLoaded) return <div class="setup-checklist-slot" data-setup-checklist="compact" aria-busy="true"><div class="setup-checklist-compact"><strong>Setup</strong><span class="subtle">Reading live setup state…</span></div></div>;
+    if (nextStep === null && dismissed) return <div class="setup-checklist-slot" data-setup-checklist="dismissed" aria-hidden="true" />;
+    return <div class="setup-checklist-slot" data-setup-checklist="compact">
+      <div class="setup-checklist-compact" aria-label="Conference setup status">
+        <strong class="setup-compact-label">Setup</strong>
+        <span class="setup-compact-progress tabular">{done} of {steps.length}</span>
+        <span class="setup-compact-next">{nextStep === null ? "Conference setup is complete" : `${nextStep.label} is next`}</span>
+        {nextStep === null
+          ? <Button small onClick={() => setDismissed(true)}>Dismiss</Button>
+          : <Button small variant="primary" onClick={() => navigate(nextStep.route)}>{nextStep.label} →</Button>}
+      </div>
+    </div>;
+  }
+
 
   return <Card>
     <CardHeader title="Set up your conference">

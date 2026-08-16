@@ -17,10 +17,10 @@ const row = {
   tracks: [],
   sessions: [],
   submission_ids: [],
-  tasks: [],
-  cells: {},
+  tasks: [{ template_id: "template-a", task_id: "task-a", submission_id: null, title: "Speaker agreement", kind: "acknowledge", description: "Confirm the speaker agreement.", due_at: null, completed_at: null, state: "upcoming", glyph: "·", owed: true }],
+  cells: { "template-a": { template_id: "template-a", task_id: "task-a", submission_id: null, title: "Speaker agreement", kind: "acknowledge", description: "Confirm the speaker agreement.", due_at: null, completed_at: null, state: "upcoming", glyph: "·", owed: true } },
   last_contact: null,
-  owed_count: 0,
+  owed_count: 1,
   done_count: 0,
   overdue_task_count: 0,
   risk_task_count: 0,
@@ -36,9 +36,9 @@ const snapshot = {
   generated_at: 0,
   risk_window_days: 14,
   metrics: { accepted_speakers: 1, overdue_tasks: 0, at_risk: 0, ready_to_schedule: 0 },
-  counts: { all: 1, overdue: 0, incomplete: 0, risk: 0 },
+  counts: { all: 1, overdue: 0, incomplete: 1, risk: 0 },
   facets: { task_types: [], tracks: [] },
-  task_templates: [],
+  task_templates: [{ id: "template-a", name: "Speaker agreement", kind: "acknowledge", description: "Confirm the speaker agreement.", position: 0 }],
 };
 
 const secondRow = {

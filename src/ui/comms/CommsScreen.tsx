@@ -148,6 +148,7 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [audienceLoading, setAudienceLoading] = useState(false);
+  const [audienceLoaded, setAudienceLoaded] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(true);
@@ -208,8 +209,13 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
   useEffect(() => {
     let cancelled = false;
     setAudienceLoading(true);
+    setAudienceLoaded(false);
     request<AudienceResult>(audiencePath(eventId, filters), "/api/v1/events/{eventId}/comms/audience")
-      .then((result) => { if (!cancelled) setAudience(result); })
+      .then((result) => {
+        if (cancelled) return;
+        setAudience(result);
+        setAudienceLoaded(true);
+      })
       .catch((reason: unknown) => {
         if (!cancelled) setError(errorSummary(reason));
       })
@@ -333,6 +339,13 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
       && (mode === "adhoc" || (activeTemplate?.enabled === 1 && !templateDirty)),
   );
   const triggers = templates.filter(isTrigger);
+  const noAcceptedRecipients = audienceLoaded
+    && !audienceLoading
+    && filters.status === "accepted"
+    && !filters.track.trim()
+    && !filters.format.trim()
+    && !filters.task_state
+    && audience.total === 0;
 
   return <section class="comms-screen" aria-label="Communications">
     {/* The banner states which of the two worlds this conference is in. On a
@@ -348,6 +361,7 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
     </div>
     {demoMode && <DemoMailAllowlist eventId={eventId} />}
     {error && <div class="inline-error" role="alert"><span>{error}</span><button class="button small" type="button" onClick={() => { setError(null); setReloadKey((value) => value + 1); }}>Retry communications</button></div>}
+    {noAcceptedRecipients && <div class="comms-prerequisite" role="status"><div><strong>No accepted speakers to contact yet</strong><span>Accept a submission first; recipients will appear here when the decision lands.</span></div><a class="button-primary comms-prerequisite-action" href="/submissions">Open submissions</a></div>}
 
     <section class="comms-section panel" aria-labelledby="comms-templates-heading">
       <div class="section-heading"><div><div class="panel-kicker">Templates</div><h2 id="comms-templates-heading">Conference messages</h2></div><span class="section-count">{templates.length || "—"} available</span></div>
