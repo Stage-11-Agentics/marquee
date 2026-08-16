@@ -111,4 +111,87 @@ describe.sequential("MRQ-234 decision plan routes", () => {
     expect(plan.recipient_preview).toBeNull();
     expect(plan.rows[0]).toMatchObject({ disposition: "will_send", count: 1 });
   });
+
+  test("apply refuses a changed email with authored 409, then accepts a fresh positive plan", async () => {
+    const body = { selector: { ids: ["sub-mrq234-plan-good"] }, action: "accept", feedback_md: "Fresh plan" };
+    const planResponse = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/decision-plan`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(body),
+    });
+    const oldPlan = await planResponse.json<{ plan_fingerprint: string; etag: string }>();
+    await env.DB.prepare("UPDATE people SET email = ? WHERE id = ?").bind("changed@mrq234.test", "person-mrq234-plan-good").run();
+    const stale = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/bulk`, {
+      method: "POST",
+      headers: { ...authHeaders(), "if-match": oldPlan.etag },
+      body: JSON.stringify({ ...body, plan_fingerprint: oldPlan.plan_fingerprint }),
+    });
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({
+      error: {
+        code: "conflict",
+        message: "The selection or the email changed after you previewed it.",
+        details: { code: "stale_plan" },
+      },
+    });
+    await env.DB.prepare("UPDATE people SET email = ? WHERE id = ?").bind("ada@mrq234.test", "person-mrq234-plan-good").run();
+
+    const freshResponse = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/decision-plan`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(body),
+    });
+    const fresh = await freshResponse.json<{ plan_fingerprint: string; etag: string }>();
+    const applied = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/bulk`, {
+      method: "POST",
+      headers: { ...authHeaders(), "if-match": fresh.etag },
+      body: JSON.stringify({ ...body, plan_fingerprint: fresh.plan_fingerprint }),
+    });
+    expect(applied.status).toBe(200);
+    expect(await applied.json()).toMatchObject({ selected: 1, succeeded: 1, failed: 0 });
+  });
+
+  test("missing precondition is 400 and an all-skipped apply is a zero-effect 409", async () => {
+    const planBody = { selector: { ids: ["sub-mrq234-plan-invalid"] }, action: "accept" };
+    const planResponse = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/decision-plan`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(planBody),
+    });
+    const plan = await planResponse.json<{ plan_fingerprint: string; etag: string }>();
+    const missing = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/bulk`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ ...planBody, plan_fingerprint: plan.plan_fingerprint }),
+    });
+    expect(missing.status).toBe(400);
+
+    const zeroEffect = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/bulk`, {
+      method: "POST",
+      headers: { ...authHeaders(), "if-match": plan.etag },
+      body: JSON.stringify({ ...planBody, plan_fingerprint: plan.plan_fingerprint }),
+    });
+    expect(zeroEffect.status).toBe(409);
+    expect(await zeroEffect.json()).toMatchObject({ error: { code: "conflict", details: { code: "zero_effect" } } });
+  });
+
+  test("mixed apply preserves per-record post-send failures", async () => {
+    const body = {
+      selector: { ids: ["sub-mrq234-plan-good", "sub-mrq234-plan-invalid"] },
+      action: "reject",
+    };
+    const planResponse = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/decision-plan`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(body),
+    });
+    const plan = await planResponse.json<{ plan_fingerprint: string; etag: string }>();
+    const applied = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/bulk`, {
+      method: "POST",
+      headers: { ...authHeaders(), "if-match": plan.etag },
+      body: JSON.stringify({ ...body, plan_fingerprint: plan.plan_fingerprint }),
+    });
+    expect(applied.status).toBe(200);
+    expect(await applied.json()).toMatchObject({ selected: 2, succeeded: 1, failed: 1, state: "completed_with_failures" });
+  });
 });

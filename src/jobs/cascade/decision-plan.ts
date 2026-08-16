@@ -127,7 +127,13 @@ export function planBulkDecision(input: {
     demo_suppressed: demoSuppressed,
     rows,
     zero_effect: input.selected.length > 0 && rowByDisposition.get("will_send")!.count === 0
-      ? { code: "zero_effect", reason: "No selected record can be changed with this action." }
+      ? {
+          code: "zero_effect",
+          reason: rows
+            .slice(1)
+            .flatMap((candidate) => candidate.records)
+            .at(0)?.reason ?? "No selected record can be changed with this action.",
+        }
       : null,
   };
 }

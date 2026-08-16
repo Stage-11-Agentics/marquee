@@ -15,7 +15,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { notifyExistingDecisions, writeBulkSubmissionDecisions } from "../jobs/cascade/decisions";
-import { buildDecisionPlan } from "../jobs/cascade/decision-plan-service";
+import { buildDecisionPlan, refuseZeroEffect, requireCurrentDecisionPlan } from "../jobs/cascade/decision-plan-service";
 import { decisionPlanResponseSchema } from "../api/decision-plan";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { PUBLISHED_SESSION_REFUSAL } from "../lib/publication-guard";
@@ -30,7 +30,7 @@ const bulkBodySchema = z
     feedback_md: z.string().max(50_000).nullable().optional(),
     wave_id: z.string().min(1).max(200).nullable().optional(),
     confirm_published: z.boolean().optional(),
-    plan_fingerprint: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+    plan_fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
   })
   .strict();
 
@@ -155,12 +155,13 @@ const bulkDecideSubmissions = defineApiRoute(
     tags: ["Submissions"],
     request: {
       params: eventParams,
+      headers: z.object({ "if-match": z.string().min(1).describe("The decision plan's current strong ETag.") }),
       body: { content: { "application/json": { schema: bulkBodySchema } } },
     },
     policy: {
       auth: { kind: "grants", grants: ["program:write"] },
       rateLimit: { bucket: "write" },
-      concurrency: "none",
+      concurrency: "if-match",
     },
     responses: {
       200: jsonResponse(bulkResultSchema, "The per-record bulk decision summary."),
@@ -184,6 +185,22 @@ const bulkDecideSubmissions = defineApiRoute(
       }
     }
     await assertWaveBelongsToEvent(context.env.DB, eventId, body.wave_id);
+
+    const plan = await buildDecisionPlan({
+      db: context.env.DB,
+      eventId,
+      ids,
+      action: body.action,
+      feedbackMd: body.feedback_md,
+      confirmPublished: body.confirm_published === true,
+      waveId: body.wave_id,
+    });
+    requireCurrentDecisionPlan({
+      request: context.req.raw,
+      plan,
+      planFingerprint: body.plan_fingerprint,
+    });
+    if (plan.zero_effect) refuseZeroEffect(plan);
 
     const actor = await actorFor(context);
     const operationId = newUlid();

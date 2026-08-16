@@ -36,6 +36,34 @@ async function request(path: string, init: RequestInit = {}, cookie = speakerCoo
   return SELF.fetch(`${ORIGIN}${path}`, { ...init, headers });
 }
 
+async function requestDecision(submissionId: string, body: Record<string, unknown>, cookie = ownerCookie): Promise<Response> {
+  const plan = await request(`/api/v1/events/${EVENT_ID}/submissions/${submissionId}/decision-plan`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, cookie);
+  expect(plan.status).toBe(200);
+  const planBody = await plan.json<{ plan_fingerprint: string; etag: string }>();
+  return request(`/api/v1/events/${EVENT_ID}/submissions/${submissionId}/decision`, {
+    method: "POST",
+    headers: { "if-match": planBody.etag },
+    body: JSON.stringify({ ...body, plan_fingerprint: planBody.plan_fingerprint }),
+  }, cookie);
+}
+
+async function requestBulkDecision(body: Record<string, unknown>, cookie = ownerCookie): Promise<Response> {
+  const plan = await request(`/api/v1/events/${EVENT_ID}/submissions/decision-plan`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, cookie);
+  expect(plan.status).toBe(200);
+  const planBody = await plan.json<{ plan_fingerprint: string; etag: string }>();
+  return request(`/api/v1/events/${EVENT_ID}/submissions/bulk`, {
+    method: "POST",
+    headers: { "if-match": planBody.etag },
+    body: JSON.stringify({ ...body, plan_fingerprint: planBody.plan_fingerprint }),
+  }, cookie);
+}
+
 async function seedFixture(): Promise<void> {
   await applyMigrations();
   for (const row of demoFixtureRows(NOW)) await env.DB.prepare(row.statement).bind(...row.bindings).run();
@@ -253,10 +281,7 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
   });
 
   test("AC-235 · single and bulk decisions write one decision row, render feedback once, and the portal reads those exact rows", async () => {
-    const single = await request(`/api/v1/events/${EVENT_ID}/submissions/${SUB_SINGLE}/decision`, {
-      method: "POST",
-      body: JSON.stringify({ recommendation: "approve", feedback_md: "Line one\r\nLine two  " }),
-    }, ownerCookie);
+    const single = await requestDecision(SUB_SINGLE, { recommendation: "approve", feedback_md: "Line one\r\nLine two  " });
     expect(single.status).toBe(200);
     const singleResult = await single.json<{ decision_id: string; outbox_id: string | null }>();
     const singleDecision = await env.DB.prepare(
@@ -276,20 +301,14 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
     const singleOutbox = await env.DB.prepare("SELECT text, html, send_policy FROM outbox WHERE id = ?").bind(singleResult.outbox_id).first<{ text: string; html: string; send_policy: string }>();
     expect(singleOutbox).toEqual({ text: expectedSingle.text, html: expectedSingle.html, send_policy: "demo_safe" });
 
-    const noFeedback = await request(`/api/v1/events/${EVENT_ID}/submissions/${SUB_NO_FEEDBACK}/decision`, {
-      method: "POST",
-      body: JSON.stringify({ recommendation: "approve" }),
-    }, ownerCookie);
+    const noFeedback = await requestDecision(SUB_NO_FEEDBACK, { recommendation: "approve" });
     expect(noFeedback.status).toBe(200);
     const noFeedbackDecision = await env.DB.prepare(
       "SELECT feedback_md FROM submission_decisions WHERE submission_id = ?",
     ).bind(SUB_NO_FEEDBACK).first<{ feedback_md: string | null }>();
     expect(noFeedbackDecision?.feedback_md).toBeNull();
 
-    const bulk = await request(`/api/v1/events/${EVENT_ID}/submissions/bulk`, {
-      method: "POST",
-      body: JSON.stringify({ selector: { ids: BULK_IDS }, action: "accept", feedback_md: "Shared bulk note" }),
-    }, ownerCookie);
+    const bulk = await requestBulkDecision({ selector: { ids: BULK_IDS }, action: "accept", feedback_md: "Shared bulk note" });
     expect(bulk.status).toBe(200);
     const bulkResult = await bulk.json<{ succeeded: number; outbox_enqueued: number }>();
     expect(bulkResult).toMatchObject({ succeeded: 3, outbox_enqueued: 3 });

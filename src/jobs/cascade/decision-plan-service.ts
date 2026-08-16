@@ -1,7 +1,8 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import { BULK_ID_LIMIT } from "../../api/bulk";
-import { strongEtag } from "../../api/concurrency";
+import { requireIfMatch, strongEtag, type ResourceVersion } from "../../api/concurrency";
+import { ApiError } from "../../api/errors";
 import type { DecisionPlanResponse } from "../../api/decision-plan";
 import { sha256Hex } from "../../lib/auth/random-token";
 import { demoMailAllowlistFor, normalizeAllowlistEmail } from "../../lib/demo-mail-allowlist";
@@ -21,7 +22,36 @@ import { planBulkDecision, type DecisionPlanRecordSnapshot } from "./decision-pl
 
 interface NotificationStateRow {
   submission_id: string;
+  resulting_status: string;
   outbox_status: string | null;
+}
+
+export const STALE_DECISION_PLAN_MESSAGE = "The selection or the email changed after you previewed it.";
+
+export function requireCurrentDecisionPlan(input: {
+  request: Request;
+  plan: DecisionPlanResponse;
+  planFingerprint: string;
+}): ResourceVersion {
+  const expected = requireIfMatch(input.request, input.planFingerprint);
+  if (expected.updatedAt !== 0) {
+    throw ApiError.badRequest("If-Match must be the decision plan's strong ETag", "if-match");
+  }
+  if (input.plan.plan_fingerprint !== input.planFingerprint) {
+    throw new ApiError("conflict", STALE_DECISION_PLAN_MESSAGE, {
+      details: {
+        code: "stale_plan",
+        plan_fingerprint: input.plan.plan_fingerprint,
+      },
+      headers: { ETag: input.plan.etag },
+    });
+  }
+  return expected;
+}
+
+export function refuseZeroEffect(plan: DecisionPlanResponse): never {
+  if (!plan.zero_effect) throw new Error("decision plan has an effect");
+  throw ApiError.conflict(plan.zero_effect.reason, plan.zero_effect);
 }
 
 function templateKey(action: BulkAction): "acceptance" | "rejection" {
@@ -69,7 +99,8 @@ function snapshotFor(
     email,
     transitionError: transitionError ?? publishedRefusal,
     published: submission.agenda_published === 1,
-    alreadyNotified: notification?.outbox_status !== null
+    alreadyNotified: notification?.resulting_status === decisionTargetStatus(action)
+      && notification?.outbox_status !== null
       && notification?.outbox_status !== undefined
       && ["queued", "sent", "suppressed"].includes(notification.outbox_status),
     demoSuppressed,
@@ -83,7 +114,7 @@ async function notificationStates(
 ): Promise<Map<string, NotificationStateRow>> {
   if (ids.length === 0) return new Map();
   const result = await db.prepare(`
-    SELECT latest.submission_id, settled.status AS outbox_status
+    SELECT latest.submission_id, latest.resulting_status, settled.status AS outbox_status
     FROM submission_decisions latest
     LEFT JOIN outbox settled ON settled.id = (
       SELECT candidate.id
