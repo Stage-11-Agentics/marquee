@@ -194,7 +194,7 @@ describe.sequential("MRQ-250 kind rejection feedback", () => {
     const outbox = await env.DB.prepare("SELECT text FROM outbox WHERE id = ?").bind(result.outbox_id).first<{ text: string }>();
     expect(outbox?.text).toContain(GENERATED_PARAGRAPH);
     expect(outbox?.text).toContain("We’re unable to include it in this program.");
-    expect(outbox?.text).toContain("Open your speaker portal:");
+    expect(outbox?.text).toContain("You can review the decision in your speaker portal:");
   });
 
   test("CONTRACT · MRQ-250 · provider failure is non-blocking and the normal rejection template still sends", async () => {
@@ -230,7 +230,7 @@ describe.sequential("MRQ-250 kind rejection feedback", () => {
     const result = await applied.json<{ outbox_id: string }>();
     const outbox = await env.DB.prepare("SELECT text FROM outbox WHERE id = ?").bind(result.outbox_id).first<{ text: string }>();
     expect(outbox?.text).toContain("We’re unable to include it in this program.");
-    expect(outbox?.text).toContain("Open your speaker portal:");
+    expect(outbox?.text).toContain("You can review the decision in your speaker portal:");
     expect(outbox?.text).not.toContain("simulated provider outage");
     expect(outbox?.text).not.toContain(GENERATED_NOTE);
   });
@@ -284,6 +284,6 @@ describe.sequential("MRQ-250 kind rejection feedback", () => {
     const result = await applied.json<{ outbox_id: string }>();
     const outbox = await env.DB.prepare("SELECT text FROM outbox WHERE id = ?").bind(result.outbox_id).first<{ text: string }>();
     expect(outbox?.text).toContain("We’re unable to include it in this program.");
-    expect(outbox?.text).toContain("Open your speaker portal:");
+    expect(outbox?.text).toContain("You can review the decision in your speaker portal:");
   });
 });
