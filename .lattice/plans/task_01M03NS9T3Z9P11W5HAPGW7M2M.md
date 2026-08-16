@@ -449,7 +449,8 @@ occurs before preflight succeeds.
 
 The single batch contains, in dependency order: any new/changed public person
 row; the submission insert or guarded draft-to-submitted update; the unique
-`submission_arrivals` claim; replacement of projected answers; replacement of
+`submission_arrivals` claim; replacement of projected answers through the
+Cycle 4B `replaceSubmissionAnswers` retention contract; replacement of
 `submission_tracks`; replacement/upsert of `submission_tags`; the `level_id`
 projection; participant/participation rows; attachment metadata ownership
 updates; routed `round_assignments`; idempotent outbox rows; and both
@@ -473,26 +474,33 @@ continues to use its own provenance-scoped track reconciliation and never calls
 Add an opt-in `routing` copy set, defaulting to false so event-specific routing
 does not silently travel to a new conference. The set contains event tags,
 levels, and eligible routing rules. Selecting it requires the copied forms and
-tracks; a rule using a format ID also requires formats. The copy plan returns a
-422 with its dependency reason when a selected rule would lose a required
-parent, rather than creating a half-valid clone.
+tracks; a rule using a format ID also requires formats. A copied form with an
+active `config.source: levels` field makes `routing` and its Levels parent a
+hard dependency: `forms=true,routing=false` is rejected with a dependency
+422 before any destination form or field is written. Forms may copy without
+routing only when none of the selected forms has a Levels-bound field. The
+copy plan returns a 422 with its dependency reason when a selected rule would
+lose a required parent, rather than creating a half-valid clone.
 
 Copy order and remaps are explicit: formats/tracks/forms/fields and the routing
 taxonomy parents are read first; fresh tag/level IDs are recorded in the map;
 then routing rules receive fresh IDs, remap `event_id`, `track_id`,
 `add_tag_ids`, `level_id`, and any format/track/plan/round IDs in canonical
-condition/action JSON. Field keys remain unchanged because copied fields retain
-their keys. Legacy name references resolve through the normalized destination
-`name_key` map or the rule is reported as skipped. Commit the entire clone in
-the existing one-batch copy contract. Commit no submissions, submission joins,
-arrival claims, or applied-history rows.
+condition/action JSON. A copied `source: levels` field retains its exact
+source-only binding and is admitted only after the destination Levels map
+exists; it can never point at an empty source. Field keys remain unchanged
+because copied fields retain their keys. Legacy name references resolve through
+the normalized destination `name_key` map or the rule is reported as skipped.
+Commit the entire clone in the existing one-batch copy contract. Commit no
+submissions, submission joins, arrival claims, or applied-history rows.
 
 Because committees are deliberately not copied and copied plans are draft, a
 rule with a route-to-review target is reported in the copy receipt and skipped;
 an action-only track/tag/level rule is copied. This is safer than copying a
-review rule that points at last year's committee or a closed plan. If the
-organizer does not select `routing`, forms may still copy but the receipt says
-that taxonomy/rules did not travel.
+review rule that points at last year's committee or a closed plan. A rejected
+`forms=true,routing=false` request with a Levels-bound field reports the exact
+dependency and leaves the clone absent; it never strips or silently closes the
+signed binding.
 
 For event delete, extend the existing children-before-parents batch in this
 explicit order: `submission_answers`, `submission_tracks`, `submission_tags`,
@@ -804,6 +812,117 @@ Sessionize exclusion remain unchanged.
   `scripts/seed/event.ts`, `scripts/seed/routing.ts`, copy/remap, and reset
   tests must preserve that dependency order. These are disposable fixture IDs,
   not stable US/AC IDs and not a migration allocation.
+
+## Cycle 4B amendment 2026-08-16 — answer retention and Level-bound copy dependency
+
+This amendment is limited to the two blocking findings in canonical artifact
+`art_01M05DFM8YED52EDW9XG9043EJ`. All prior evaluator, Level arrival/source-ID,
+preview, tombstone, manual-routing, FK-order, signed-v1.17, apply-once,
+reviewer-scope, Sessionize, admin-positive-control, tenant, audit, copy/remap,
+and no-status-change contracts remain binding. This is plan-only; no migration
+number, stable ID, implementation, or lifecycle transition is introduced here.
+
+### 1. Preserve answers unless a caller explicitly removes them
+
+Every path that writes `submission_answers` uses one shared transactional seam,
+`replaceSubmissionAnswers`, including public create, draft/resume autosave,
+draft submit, public submit, submitted edit, admin create/edit, and any other
+shared or future writer. No caller may issue an unconditional
+`DELETE FROM submission_answers` followed by reinsertion. The seam receives
+the submission/form identity, incoming active-field upserts, and an explicit
+`explicitlyRemovedFieldIds` set. It loads existing answer rows joined to
+`form_fields` (including tombstoned fields) in the same transaction, then:
+
+- upserts each incoming active answer after normal field/type/source validation;
+- carries every existing answer row forward when its field is omitted from the
+  incoming map and its field ID is not in `explicitlyRemovedFieldIds`;
+- deletes only rows whose field IDs are explicitly listed for removal; and
+- never infers removal from active-projection filtering, a missing key caused by
+  a tombstone, an autosave delta, a draft-to-submitted transition, or an
+  unrelated field edit.
+
+An endpoint that presents a complete form still has to mark an intentional
+clear/removal by field ID; an absent optional answer without that marker is
+preservation, not deletion. A fresh public/admin create has no prior answer
+rows to carry, so its empty map remains empty. The same batch writes the
+targeted removals and upserts with the submission transition; retries reuse
+the existing arrival/idempotency boundary. This makes preserve-unless-
+explicitly-removed semantics identical for public create, autosave, submit,
+submitted edit, admin, draft, and the shared writer rather than a property of
+only one route.
+
+Active form projections and `projectApplicableAnswers` exclude
+`form_fields.deleted_at` rows, so a tombstoned answer is not submitted again,
+validated as a current option, or shown as an active question. The stored row
+itself is retained with its original `field_id`, `value_text` label, and
+`value_json` Level source metadata
+`{"bound_source":"levels","id":"<levelId>","label":"<name>"}`.
+Historical record reads and `resolveStoredRoutingAnswers` continue to see that
+row; restoring the exact field row makes it active again without recreating or
+re-keying the answer. Explicit removal is the only path that deletes the row,
+and it is a targeted `(submission_id, field_id)` delete that leaves unrelated
+answers untouched.
+
+### 2. Exact retention regression and writer coverage
+
+Add `tests/integration/api/submission-answers-retention.MRQ-229.test.ts` with
+one canonical sequence and a writer matrix:
+
+1. Seed an event Level, a form with the signed `audience_level` field bound to
+   `source: levels`, and another active field. Submit the Level answer and
+   assert the raw `submission_answers` row has the original field FK, label,
+   and source-ID metadata.
+2. Tombstone the Level-bound field. Change only the other active field through
+   the submitted-edit writer (the same fixture is reused through draft
+   autosave, draft submit, public submit/resume, and admin answer writers).
+   Assert active projection excludes the tombstoned field but the raw answer
+   row, field FK, label, and Level metadata are byte-for-byte unchanged.
+3. Restore the exact field row and assert the answer/label/source ID returns to
+   the active record; run the historical preview path as well and assert it
+   resolves the stored Level ID and produces the same rule/landing result.
+4. Repeat the shared seam with an explicit field-ID removal and assert only
+   that row is deleted; an unrelated-field edit and every omission without the
+   removal marker preserve it. The test names each public, draft, autosave,
+   submitted-edit, admin, and shared-writer adapter so no replacement writer
+   can regress to delete-all behavior.
+
+The unit seam test fails if any answer replacement uses a blanket delete. The
+integration test also proves the tombstoned field's FK remains valid until the
+event cascade, and that Level metadata—not mutable `submissions.level_id`—is
+the source for restore/history/preview. This preserves the existing active
+projection, applied-history, retry, tenant, and apply-once contracts.
+
+### 3. Coherent copy dependency policy and exact copy tests
+
+The chosen policy is: a form containing an active `config.source: levels`
+field requires the `routing` copy set, and selecting `routing` automatically
+copies the event Levels parent with tags/rules. There is no separate opt-in
+Levels toggle and no strip/close fallback. Therefore:
+
+- `forms=true,routing=false` with any selected form carrying
+  `source: levels` fails preflight with a stable dependency reason such as
+  `forms_require_routing_for_levels`; the clone is atomic and contains no
+  destination form, field, or empty Level binding.
+- `forms=true,routing=false` remains allowed for forms with no Levels-bound
+  field, preserving the existing opt-out meaning for unrelated forms.
+- `routing=true` requires the copied forms/tracks and includes Levels before
+  fields/rules are committed. A source-bound field is copied only after the
+  destination Levels map exists, so its `source: levels` options resolve on the
+  destination.
+- The selected-routing copy remaps every Level rule reference: condition
+  expected IDs and `set-level` action IDs use the fresh destination Level IDs;
+  field keys and the source-only `config.source` remain unchanged. No
+  submission, answer, arrival-claim, or applied-history row is copied.
+
+Add `tests/integration/api/event-copy.MRQ-229.test.ts` covering both branches:
+`forms=true,routing=false` with the signed Level-bound form returns the
+dependency 422 and proves no partial destination form/binding exists; a
+non-Level form still follows the existing successful forms-only path. A
+selected-routing copy then asserts destination Levels exist before the form
+is readable, the copied `audience_level` field retains `source: levels`, bound
+options resolve, and a rule's Level condition/action IDs are remapped and
+match the destination taxonomy rather than the source IDs. The copy receipt
+and one-batch rollback are asserted, with no stable IDs minted.
 
 ## Reset 2026-08-16 by agent:delegator-mrq-229
 
