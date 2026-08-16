@@ -1,4 +1,5 @@
 import type { SubmissionListStatus, SubmissionSpeakerListItem, SubmissionTrackListItem } from "./submissions";
+import type { PublicationClassification, PublicationReasonCode, PublicationReasonDetails } from "../lib/publication-truth";
 
 export const AGENDA_VIEWS = ["list", "day", "week", "track", "room"] as const;
 export type AgendaView = (typeof AGENDA_VIEWS)[number];
@@ -45,6 +46,13 @@ export interface AgendaPublishCandidate {
   can_publish: boolean;
   blocked_reason: string | null;
   speakers: SubmissionSpeakerListItem[];
+  /** MRQ-237's exhaustive state bucket and fact set. */
+  classification?: PublicationClassification;
+  primary_reason_code?: PublicationReasonCode;
+  reason_codes?: PublicationReasonCode[];
+  reason_details?: PublicationReasonDetails;
+  observed_revision?: { submission_updated_at: number; agenda_updated_at: number | null } | null;
+  anomaly?: "rejected" | "withdrawn" | null;
 }
 
 export interface AgendaPublication {
@@ -52,6 +60,7 @@ export interface AgendaPublication {
   not_yet_public: number;
   candidates: AgendaPublishCandidate[];
   public_agenda_url: string;
+  anomaly_count?: number;
 }
 
 export interface AgendaCalendarDebtItem {

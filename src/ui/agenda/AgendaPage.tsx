@@ -835,6 +835,7 @@ export function PublicationCandidateRow({
       <strong title={candidate.title}>{candidate.title}</strong>
       <span>{detail}</span>
       {!candidate.can_publish && <span class="agenda-publication-candidate-reason">{blockedReason}</span>}
+      {!candidate.can_publish && candidate.reason_details && <span class="agenda-publication-candidate-reason">{candidate.reason_codes?.join(" · ")}</span>}
       <span>{speakers}</span>
       {!hasPublicSpeaker(candidate) && <span class="agenda-publication-candidate-warning" role="alert">No speaking participant attached · the public agenda will show “Speaker to be announced”.</span>}
     </div>
@@ -867,7 +868,8 @@ function PublicationPanel({
   error: string;
 }): JSX.Element {
   const selected = new Set(selectedIds);
-  const selectedCandidates = publication.candidates.filter((candidate) => candidate.can_publish && selected.has(candidate.submission_id));
+  const selectedReviewCandidates = publication.candidates.filter((candidate) => selected.has(candidate.submission_id));
+  const selectedCandidates = selectedReviewCandidates.filter((candidate) => candidate.can_publish);
   const selectableCandidates = publication.candidates.filter((candidate) => candidate.can_publish).slice(0, MAX_BATCH_PUBLISH_IDS);
   const allSelectableSelected = selectableCandidates.length > 0 && selectableCandidates.every((candidate) => selected.has(candidate.submission_id));
   const selectAllLabel = `Select all ${selectableCandidates.length} ${selectableCandidates.length === 1 ? "Session" : "Sessions"}`;
@@ -882,7 +884,7 @@ function PublicationPanel({
       <a class="button ghost small" href={publication.public_agenda_url}>View public agenda ↗</a>
     </header>
     {step === "select" ? <>
-      <div class="agenda-publication-intro">Every accepted Session that is not yet public is listed here. Select a scheduled Session to make its title, time, room, and speakers visible on the public agenda.</div>
+      <div class="agenda-publication-intro">Every Session with publication work is listed here. Select a ready scheduled Session to make its title, time, room, and speakers visible on the public agenda; withheld rows stay visible with their reason.</div>
       {publication.candidates.length ? <div class="agenda-publication-list" role="list" aria-label="Accepted Sessions and publication readiness">
         <div class="agenda-publication-select-all">
           <label><input type="checkbox" checked={allSelectableSelected} disabled={!selectableCandidates.length} aria-label={selectAllLabel} onChange={toggleAll} />{selectAllLabel}</label>
@@ -893,24 +895,26 @@ function PublicationPanel({
           candidate={candidate}
           timezone={timezone}
           selected={selected.has(candidate.submission_id)}
-          disabled={!selected.has(candidate.submission_id) && selectedCandidates.length >= MAX_BATCH_PUBLISH_IDS}
+          disabled={!selected.has(candidate.submission_id) && selectedReviewCandidates.length >= MAX_BATCH_PUBLISH_IDS}
           onToggle={onToggle}
         />)}
-      </div> : <div class="agenda-publication-empty" role="status"><strong>Everything accepted is public.</strong><span>Accepted Sessions will appear here when they need publication.</span></div>}
+      </div> : <div class="agenda-publication-empty" role="status"><strong>{publication.live > 0 ? "Everything ready is live." : "No publication work is waiting."}</strong><span>Withheld, malformed, or reversed rows stay visible here with the reason the public agenda is not changing.</span></div>}
+      {publication.anomaly_count ? <div class="agenda-publication-warning" role="alert"><strong>{publication.anomaly_count} live Session{publication.anomaly_count === 1 ? "" : "s"} no longer accepted.</strong><span>They stay out of the attendee agenda until you deliberately remove the retained publication.</span></div> : null}
       {error && <div class="agenda-publication-error" role="alert">{error}</div>}
       <footer class="agenda-publication-actions">
-        <span class="subtle"><span class="tabular">{selectedCandidates.length}</span> selected</span>
-        <Button variant="primary" disabled={!selectedCandidates.length || busy} onClick={onReview}>Review publication</Button>
+        <span class="subtle"><span class="tabular">{selectedReviewCandidates.length}</span> selected</span>
+        <Button variant="primary" disabled={!selectedReviewCandidates.length || busy} onClick={onReview}>Review publication</Button>
       </footer>
     </> : <>
-      <div class="agenda-publication-intro"><strong>About to publish {selectedCandidates.length} Session{selectedCandidates.length === 1 ? "" : "s"}.</strong> Review the exact public fields below. Nothing is visible until you confirm.</div>
+      <div class="agenda-publication-intro"><strong>{selectedCandidates.length} will go live · {Math.max(0, selectedReviewCandidates.length - selectedCandidates.length)} withheld</strong> — reasons named per row. Nothing is visible until you confirm.</div>
       <div class="agenda-publication-list" role="list" aria-label="Publication preview">
-        {selectedCandidates.map((candidate) => <PublicationCandidateRow key={candidate.submission_id} candidate={candidate} timezone={timezone} review />)}
+        {selectedReviewCandidates.map((candidate) => <PublicationCandidateRow key={candidate.submission_id} candidate={candidate} timezone={timezone} review />)}
       </div>
+      {publication.anomaly_count ? <div class="agenda-publication-warning" role="alert"><strong>{publication.anomaly_count} live Session{publication.anomaly_count === 1 ? "" : "s"} no longer accepted.</strong><span>Review the board anomaly before changing the public projection.</span></div> : null}
       {error && <div class="agenda-publication-error" role="alert">{error}</div>}
       <footer class="agenda-publication-actions">
         <Button variant="ghost" disabled={busy} onClick={onBack}>Back to selection</Button>
-        <Button variant="primary" disabled={!selectedCandidates.length || busy} onClick={onPublish}>{busy ? "Publishing…" : `Publish ${selectedCandidates.length} to public agenda`}</Button>
+        <Button variant="primary" disabled={!selectedReviewCandidates.length || busy} onClick={onPublish}>{busy ? "Publishing…" : `Publish ${selectedCandidates.length} to public agenda`}</Button>
       </footer>
     </>}
   </section>;
@@ -1268,12 +1272,17 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
     setPublicationBusy(true);
     setNotice("");
     setPublicationError("");
+    const expectedRevisions: Record<string, { submission_updated_at: number; agenda_updated_at: number | null }> = {};
+    for (const submissionId of publishSelection) {
+      const revision = state.snapshot?.publication.candidates.find((candidate) => candidate.submission_id === submissionId)?.observed_revision;
+      if (revision) expectedRevisions[submissionId] = revision;
+    }
     try {
       const result = await apiFetch<{ published_count: number; public_agenda_url: string }>(
         `/api/v1/events/${encodeURIComponent(eventId)}/agenda/publish`,
         {
           method: "POST",
-          body: JSON.stringify({ submission_ids: publishSelection }),
+          body: JSON.stringify({ submission_ids: publishSelection, expected_revisions: expectedRevisions }),
           headers: { "content-type": "application/json" },
           route: AGENDA_PUBLISH_ROUTE,
         },

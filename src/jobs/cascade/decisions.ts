@@ -65,7 +65,7 @@ export interface SubmissionDecisionInput {
 
 export interface SubmissionDecisionResult {
   id: Id;
-  outcome: "succeeded" | "failed";
+  outcome: "succeeded" | "already_in_state" | "failed";
   resultingStatus: "accepted" | "waitlisted" | "rejected" | "withdrawn" | null;
   decisionId?: Id;
   outboxId?: Id | null;
@@ -87,6 +87,8 @@ export interface BulkDecisionInput {
   cache?: PublicEmbedCache;
   waveId?: Id | null;
   operationId: Id;
+  /** Bulk routes stage request-operation dispatch so Queue failure is recoverable. */
+  dispatchMail?: boolean;
   now?: number;
   origin?: string;
 }
@@ -97,6 +99,7 @@ export interface BulkDecisionResult {
   selected: number;
   results: SubmissionDecisionResult[];
   outboxEnqueued: number;
+  outboxIds: Id[];
 }
 
 export type AcceptanceReversalChoice = "cancel" | "retain";
@@ -485,6 +488,7 @@ async function enqueueDecisionMail(
     entityId?: Id;
     idempotencyKey?: string;
     origin?: string;
+    dispatch?: boolean;
   },
 ): Promise<{ id: Id | null; inserted: boolean }> {
   if (!isValidEmail(input.submission.person_email)) return { id: null, inserted: false };
@@ -530,7 +534,7 @@ async function enqueueDecisionMail(
     now: input.now,
     idempotencyKey,
   });
-  if (result.inserted) await enqueueMailMessage(input.queue, result.id);
+  if (result.inserted && input.dispatch !== false) await enqueueMailMessage(input.queue, result.id);
   return { id: result.id, inserted: result.inserted };
 }
 
@@ -548,6 +552,7 @@ async function enqueueDecisionRetry(input: {
   decision: Decision;
   resultingStatus: "accepted" | "rejected";
   feedbackMd: string | null;
+  dispatch?: boolean;
   now: number;
   origin?: string;
 }): Promise<{ id: Id | null; inserted: boolean }> {
@@ -563,6 +568,7 @@ async function enqueueDecisionRetry(input: {
     feedbackMd: input.feedbackMd,
     entityId: input.decisionId,
     idempotencyKey: retryKey,
+    dispatch: input.dispatch,
     now: input.now,
     origin: input.origin,
   });
@@ -641,6 +647,8 @@ export interface ResendDecisionInput {
   eventId: Id;
   submissionId: Id;
   actor: DecisionActor;
+  /** Request-operation routes stage Queue dispatch as a second phase. */
+  dispatch?: boolean;
   now?: number;
   origin?: string;
 }
@@ -660,6 +668,34 @@ interface ResendDecisionCandidate {
   decision: Decision;
   resulting_status: "accepted" | "rejected";
   feedback_md: string | null;
+}
+
+/** Refusal-only read used before a deliberate resend is admitted. */
+export async function resendDecisionValidationError(
+  db: D1Database,
+  eventId: Id,
+  submissionId: Id,
+): Promise<string | null> {
+  const submission = await loadSubmission(db, eventId, submissionId);
+  if (!submission) return "submission not found";
+  if (submission.status !== "accepted" && submission.status !== "rejected") {
+    return "only accepted or rejected decisions can be resent";
+  }
+  const decision = await db
+    .prepare(
+      `SELECT id
+       FROM submission_decisions
+       WHERE event_id = ? AND submission_id = ? AND resulting_status = ?
+       ORDER BY decided_at DESC, id DESC
+       LIMIT 1`,
+    )
+    .bind(eventId, submissionId, submission.status)
+    .first<{ id: string }>();
+  if (!decision) return "no accepted or rejected decision exists to resend";
+  if (!isValidEmail(submission.person_email)) {
+    return "speaker has no valid email address; correct the address before resending";
+  }
+  return null;
 }
 
 /**
@@ -705,6 +741,7 @@ export async function resendSubmissionDecision(input: ResendDecisionInput): Prom
     decision: decision.decision,
     resultingStatus: decision.resulting_status,
     feedbackMd: decision.feedback_md,
+    dispatch: input.dispatch,
     now,
     origin: input.origin,
   });
@@ -752,6 +789,8 @@ export async function notifyExistingDecisions(input: {
   /** HTTP Notify supplies this from the summary/plan; internal recovery may omit it. */
   queueRevision?: number;
   cursor?: string | null;
+  /** The request-operation route stages Queue dispatch as a second phase. */
+  dispatch?: boolean;
   now?: number;
   origin?: string;
 }): Promise<NotifyNotifiedResult> {
@@ -860,6 +899,7 @@ export async function notifyExistingDecisions(input: {
       idempotencyKey: retryKey,
       now,
       origin: input.origin,
+      dispatch: input.dispatch !== false,
     });
     if (result.id) outboxIds.push(result.id);
     if (result.inserted) queued += 1;
@@ -1271,6 +1311,20 @@ function failureResult(id: Id, error: string): SubmissionDecisionResult {
   };
 }
 
+function alreadyInStateResult(
+  id: Id,
+  resultingStatus: "accepted" | "waitlisted" | "rejected" | "withdrawn",
+): SubmissionDecisionResult {
+  return {
+    id,
+    outcome: "already_in_state",
+    resultingStatus,
+    outboxInserted: false,
+    tasksAssigned: 0,
+    error: "ALREADY_IN_STATE",
+  };
+}
+
 function canTransition(submission: SubmissionContext, targetStatus: string): string | null {
   return canTransitionSubmissionStatus(submission.status, targetStatus, "organizer");
 }
@@ -1410,7 +1464,12 @@ export async function writeBulkSubmissionDecisions(
       results.push(failureResult(id, "submission not found"));
       continue;
     }
-    const invalidState = canTransition(submission, target?.status ?? "withdrawn");
+    const targetStatus = target?.status ?? "withdrawn";
+    if (submission.status === targetStatus) {
+      results.push(alreadyInStateResult(id, targetStatus));
+      continue;
+    }
+    const invalidState = canTransition(submission, targetStatus);
     if (invalidState) {
       results.push(failureResult(id, invalidState));
       continue;
@@ -1429,16 +1488,10 @@ export async function writeBulkSubmissionDecisions(
   }
 
   if (eligible.length === 0) {
-    await writeAudit(input.db, {
-      eventId: input.eventId,
-      actor: input.actor,
-      action: `bulk.${input.action}`,
-      entityType: "bulk_submission_decision",
-      entityId: input.operationId,
-      after: { selected: ids.length, succeeded: 0, failed: results.length, results },
-      now,
-    });
-    return { operationId: input.operationId, publishedCount, selected: ids.length, results, outboxEnqueued: 0 };
+    // A refused or already-set selection has no decision-side effect. The
+    // request-operation registry owns the one durable no-op receipt; writing
+    // a bulk audit row here would double-count the same admitted request.
+    return { operationId: input.operationId, publishedCount, selected: ids.length, results, outboxEnqueued: 0, outboxIds: [] };
   }
 
   const targetStatus = target?.status ?? "withdrawn";
@@ -1511,6 +1564,7 @@ export async function writeBulkSubmissionDecisions(
         feedbackMd,
         now,
         origin: input.origin,
+        dispatch: input.dispatchMail !== false,
       });
     mailById.set(submission.id, mail);
     if (mail.inserted) outboxEnqueued += 1;
@@ -1573,9 +1627,13 @@ export async function writeBulkSubmissionDecisions(
     after: {
       selected: ids.length,
       succeeded: results.filter((result) => result.outcome === "succeeded").length,
+      already_in_state: results.filter((result) => result.outcome === "already_in_state").length,
       failed: results.filter((result) => result.outcome === "failed").length,
     },
     now,
   });
-  return { operationId: input.operationId, publishedCount, selected: ids.length, results, outboxEnqueued };
+  const outboxIds = [...new Set(results
+    .filter((result) => result.outboxInserted && result.outboxId !== undefined && result.outboxId !== null)
+    .map((result) => result.outboxId!))];
+  return { operationId: input.operationId, publishedCount, selected: ids.length, results, outboxEnqueued, outboxIds };
 }

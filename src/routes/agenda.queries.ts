@@ -27,6 +27,12 @@ import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import { getTransitConflicts, type TransitAgendaItem } from "../lib/venue-geometry";
 import type { SubmissionSpeakerListItem, SubmissionTrackListItem } from "../api/submissions";
 import { projectCalendarDebt, type CalendarDebtProjection } from "../jobs/calendar/projection";
+import {
+  PUBLICATION_REASON_COPY,
+  classifyPublicationFact,
+  readPublicationFacts,
+  type PublicationEvaluation,
+} from "../lib/publication-truth";
 
 const SETTINGS_KEY = "agenda_schedulable_statuses";
 const LEGACY_SETTINGS_KEY = "agenda.schedulable_statuses";
@@ -151,7 +157,8 @@ export interface PlacementSubmission {
 
 const SESSION_FROM = `
   FROM agenda_items item
-  LEFT JOIN submissions submission ON submission.id = item.submission_id
+  LEFT JOIN submissions submission
+    ON submission.id = item.submission_id AND submission.event_id = item.event_id
   JOIN rooms room ON room.id = item.room_id AND room.event_id = item.event_id
   JOIN buildings building ON building.id = room.building_id AND building.event_id = item.event_id
   LEFT JOIN tracks track ON track.id = item.track_id AND track.event_id = item.event_id
@@ -509,33 +516,44 @@ export async function readAgendaSnapshot(
   };
 }
 
-interface PublishCandidateRow {
-  agenda_item_id: string | null;
+interface PublishCandidateMetaRow {
   submission_id: string;
   title: string;
+  agenda_item_id: string | null;
   starts_at: number | null;
   duration_min: number | null;
   room: string | null;
   building: string | null;
-  scheduled: number;
-  can_publish: number;
-  blocked_reason: string | null;
   speakers_json: string;
 }
 
-function toPublishCandidate(row: PublishCandidateRow): AgendaPublishCandidate {
+function candidateFromTruth(
+  evaluation: PublicationEvaluation,
+  meta: PublishCandidateMetaRow | undefined,
+): AgendaPublishCandidate {
+  const reason = evaluation.primaryReasonCode === "READY_TO_PUBLISH"
+    ? null
+    : PUBLICATION_REASON_COPY[evaluation.primaryReasonCode];
   return {
-    agenda_item_id: row.agenda_item_id,
-    submission_id: row.submission_id,
-    title: row.title,
-    starts_at: row.starts_at === null ? null : Number(row.starts_at),
-    duration_min: row.duration_min === null ? null : Number(row.duration_min),
-    room: row.room,
-    building: row.building,
-    scheduled: row.scheduled === 1,
-    can_publish: row.can_publish === 1,
-    blocked_reason: row.blocked_reason,
-    speakers: parseSpeakers(row.speakers_json),
+    agenda_item_id: evaluation.agendaItem?.id ?? meta?.agenda_item_id ?? null,
+    submission_id: evaluation.submissionId,
+    title: evaluation.title ?? meta?.title ?? "Untitled Session",
+    starts_at: evaluation.agendaItem?.startsAt ?? meta?.starts_at ?? null,
+    duration_min: evaluation.agendaItem?.durationMin ?? meta?.duration_min ?? null,
+    room: meta?.room ?? null,
+    building: meta?.building ?? null,
+    scheduled: evaluation.reasonDetails.item_count > 0,
+    can_publish: evaluation.classification === "READY_TO_PUBLISH",
+    blocked_reason: reason,
+    speakers: parseSpeakers(meta?.speakers_json ?? "[]"),
+    classification: evaluation.classification,
+    primary_reason_code: evaluation.primaryReasonCode,
+    reason_codes: evaluation.reasonCodes,
+    reason_details: evaluation.reasonDetails,
+    observed_revision: evaluation.observedRevision,
+    anomaly: evaluation.classification === "BOARD_ANOMALY"
+      ? evaluation.status === "rejected" ? "rejected" : "withdrawn"
+      : null,
   };
 }
 
@@ -555,47 +573,58 @@ export async function readAgendaPublication(
   eventId: string,
   eventSlug?: string,
 ): Promise<AgendaPublication> {
-  const [live, candidates] = await Promise.all([
+  const [truth, metadata] = await Promise.all([
+    readPublicationFacts(database, eventId),
     database.prepare(`
-      SELECT COUNT(*) AS count
-      FROM agenda_items item
-      JOIN submissions submission ON submission.id = item.submission_id AND submission.event_id = item.event_id
-      WHERE item.event_id = ? AND item.kind = 'session'
-        AND item.is_published = 1 AND submission.status NOT IN ('rejected', 'withdrawn')
-    `).bind(eventId).first<{ count: number | null }>(),
-    database.prepare(`
-      SELECT item.id AS agenda_item_id, submission.id AS submission_id, submission.title,
-        item.starts_at, item.duration_min, room.name AS room, building.name AS building,
-        CASE WHEN item.id IS NULL THEN 0 ELSE 1 END AS scheduled,
-        CASE WHEN item.id IS NULL THEN 0 ELSE 1 END AS can_publish,
-        CASE WHEN item.id IS NULL THEN 'needs a room and time before it can go public' ELSE NULL END AS blocked_reason,
+      SELECT submission.id AS submission_id, submission.title,
+        item.id AS agenda_item_id, item.starts_at, item.duration_min,
+        room.name AS room, building.name AS building,
         ${SPEAKERS_JSON} AS speakers_json
       FROM submissions submission
       LEFT JOIN agenda_items item
         ON item.event_id = submission.event_id
        AND item.submission_id = submission.id
        AND item.kind = 'session'
-       AND item.is_published = 0
       LEFT JOIN rooms room ON room.id = item.room_id AND room.event_id = item.event_id
       LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id
       WHERE submission.event_id = ?
-        AND submission.status = 'accepted'
-        AND submission.kind = 'session'
-        AND NOT EXISTS (
-          SELECT 1 FROM agenda_items published_item
-          WHERE published_item.event_id = submission.event_id
-            AND published_item.submission_id = submission.id
-            AND published_item.kind = 'session'
-            AND published_item.is_published = 1
-        )
-      ORDER BY CASE WHEN item.id IS NULL THEN 1 ELSE 0 END, item.starts_at ASC, submission.id ASC
-    `).bind(eventId).all<PublishCandidateRow>(),
+      ORDER BY submission.id ASC, item.id ASC
+    `).bind(eventId).all<PublishCandidateMetaRow>(),
   ]);
+  const metadataByKey = new Map(metadata.results.map((row) => [`${row.submission_id}\u0000${row.agenda_item_id ?? ""}`, row]));
+  const metadataBySubmission = new Map<string, PublishCandidateMetaRow>();
+  for (const row of metadata.results) {
+    if (!metadataBySubmission.has(row.submission_id) || row.agenda_item_id !== null) metadataBySubmission.set(row.submission_id, row);
+  }
+  const evaluations = truth.facts.map((fact) => classifyPublicationFact(fact, {
+    eventId,
+    publicBoundaryOpen: truth.publicBoundaryOpen,
+  }));
+  const included = new Set([
+    "ACCEPTED_UNSCHEDULED",
+    "EXISTING_ITEM_MALFORMED",
+    "EXISTING_ITEM_WITHHELD",
+    "READY_TO_PUBLISH",
+    "BOARD_ANOMALY",
+  ]);
+  const candidates = evaluations
+    .filter((evaluation) => included.has(evaluation.classification))
+    .map((evaluation) => {
+      const meta = metadataByKey.get(`${evaluation.submissionId}\u0000${evaluation.agendaItem?.id ?? ""}`)
+        ?? metadataBySubmission.get(evaluation.submissionId);
+      return candidateFromTruth(evaluation, meta);
+    })
+    .sort((left, right) => Number(right.scheduled) - Number(left.scheduled)
+      || (left.starts_at ?? Number.MAX_SAFE_INTEGER) - (right.starts_at ?? Number.MAX_SAFE_INTEGER)
+      || left.submission_id.localeCompare(right.submission_id));
+  const live = evaluations.filter((evaluation) => evaluation.classification === "PUBLIC_LIVE").length;
+  const anomalyCount = evaluations.filter((evaluation) => evaluation.classification === "BOARD_ANOMALY").length;
   return {
-    live: Number(live?.count ?? 0),
-    not_yet_public: candidates.results.length,
-    candidates: candidates.results.map(toPublishCandidate),
+    live,
+    not_yet_public: evaluations.filter((evaluation) => evaluation.classification === "READY_TO_PUBLISH").length,
+    candidates,
     public_agenda_url: `/agenda?event=${encodeURIComponent(eventSlug ?? eventId)}`,
+    anomaly_count: anomalyCount,
   };
 }
 

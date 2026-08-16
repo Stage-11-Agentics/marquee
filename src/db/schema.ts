@@ -1014,6 +1014,55 @@ export interface AuditLogRow extends ImmutableRecord {
   request_id: string | null;
 }
 
+export const REQUEST_OPERATION_SCOPES = ["org", "event"] as const;
+export const REQUEST_OPERATION_STATES = ["in_flight", "dispatch_pending", "completed", "failed"] as const;
+export const REQUEST_OPERATION_ACTOR_KINDS = ["user", "api_token", "system", "airtable"] as const;
+export type RequestOperationScope = (typeof REQUEST_OPERATION_SCOPES)[number];
+export type RequestOperationState = (typeof REQUEST_OPERATION_STATES)[number];
+export type RequestOperationActorKind = (typeof REQUEST_OPERATION_ACTOR_KINDS)[number];
+
+export interface RequestOperationRow {
+  actor_kind: RequestOperationActorKind;
+  actor_person_id: Id | null;
+  attempt_count: number;
+  canonical_fingerprint: string;
+  canonical_request_json: JsonText;
+  claim_token: string | null;
+  completed_at: EpochMilliseconds | null;
+  created_at: EpochMilliseconds;
+  dispatch_attempt_count: number;
+  dispatch_claim_token: string | null;
+  dispatch_last_error: string | null;
+  dispatch_lease_expires_at: EpochMilliseconds | null;
+  dispatch_next_attempt_at: EpochMilliseconds | null;
+  event_id: Id | null;
+  idempotency_key: string | null;
+  lease_expires_at: EpochMilliseconds | null;
+  operation_id: Id;
+  organization_id: Id;
+  outbox_ids_json: JsonText<Id[]>;
+  request_id: string;
+  response_headers_json: JsonText | null;
+  response_json: JsonText | null;
+  response_status: number | null;
+  route: string;
+  scope_kind: RequestOperationScope;
+  state: RequestOperationState;
+  updated_at: EpochMilliseconds;
+}
+
+export type RequestOperationDispatchState = "pending" | "dispatched";
+
+export interface RequestOperationOutboxRow {
+  dispatch_attempt_count: number;
+  dispatch_state: RequestOperationDispatchState;
+  dispatched_at: EpochMilliseconds | null;
+  last_dispatch_error: string | null;
+  operation_id: Id;
+  ordinal: number;
+  outbox_id: Id;
+}
+
 export interface EventSettingRow extends MutableRecord {
   event_id: Id;
   key: string;
@@ -1148,10 +1197,12 @@ export const CORE_TABLE_NAMES = [
   "sponsor_tiers",
   "sponsorships",
   "sponsorship_contacts",
+  "request_operations",
+  "request_operation_outbox",
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 75 as const;
+export const CORE_TABLE_COUNT = 77 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -1169,7 +1220,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 75>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 77>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -1247,6 +1298,8 @@ export const CORE_TABLES = {
   sponsor_tiers: "sponsor_tiers",
   sponsorships: "sponsorships",
   sponsorship_contacts: "sponsorship_contacts",
+  request_operations: "request_operations",
+  request_operation_outbox: "request_operation_outbox",
 } as const satisfies { [Table in CoreTableName]: Table };
 
 export interface CoreTableRows {
@@ -1325,6 +1378,8 @@ export interface CoreTableRows {
   sponsor_tiers: SponsorTierRow;
   sponsorships: SponsorshipRow;
   sponsorship_contacts: SponsorshipContactRow;
+  request_operations: RequestOperationRow;
+  request_operation_outbox: RequestOperationOutboxRow;
 }
 
 type _CoreRowsAreComplete = Assert<Equal<keyof CoreTableRows, CoreTableName>>;
@@ -1419,6 +1474,8 @@ interface CoreDefaultColumns {
   sponsor_tiers: never;
   sponsorships: "passes" | "status";
   sponsorship_contacts: "is_primary";
+  request_operations: never;
+  request_operation_outbox: never;
 }
 
 type GeneratedColumn<Row> = Extract<
@@ -1505,3 +1562,5 @@ export type SponsorshipContactInsert = CoreInsert<"sponsorship_contacts">;
 export type FileCommentInsert = CoreInsert<"file_comments">;
 export type WebhookEndpointInsert = CoreInsert<"webhook_endpoints">;
 export type WebhookDeliveryInsert = CoreInsert<"webhook_deliveries">;
+export type RequestOperationInsert = CoreInsert<"request_operations">;
+export type RequestOperationOutboxInsert = CoreInsert<"request_operation_outbox">;

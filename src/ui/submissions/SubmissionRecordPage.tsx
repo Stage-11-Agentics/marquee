@@ -121,6 +121,7 @@ interface RecordData {
   status: string; stage: string; stage_label: string; bypass_evaluation: boolean; origin: string; vendor_affiliation: string;
   submitter_person_id: string; submitted_at: number | null; last_saved_at: number | null; updated_at: number; time_in_stage: string;
   is_published: boolean;
+  publication?: { classification: string; observed_state: string | null; primary_reason_code: string; reason_codes: string[]; reason_details: Record<string, unknown>; observed_revision: { submission_updated_at: number; agenda_updated_at: number | null } | null; anomaly: "rejected" | "withdrawn" | null };
   slot: { day: string; time: string; room: string; building: string; duration_min: number; is_published: boolean } | null;
   format: { id: string; name: string | null } | null; wave: { id: string; name: string | null } | null;
   primary_track_id: string | null;
@@ -1402,6 +1403,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const canEditParticipants = record.actions.can_edit_participants;
   return <div class="submission-record-page">
     <PageHeader title="Submission record" copy={`${record.reference_code ?? record.id} · ${record.kind === "session" ? "Session" : "Abstract"} · ${record.origin} origin`} actions={<><AgentBriefLauncher surface="decision" eventId={eventId} small /><button class="chip submission-reference-copy" type="button" disabled={!record.reference_code} title={record.id} aria-label={record.reference_code ? `Copy submission reference ${record.reference_code}` : "Submission reference unavailable"} onClick={() => void copyReferenceCode()}>{referenceCopied ? "Copied" : record.reference_code ?? "No reference"}</button><Chip tone={headerChipTone(record)}>{record.stage_label}</Chip></>} />
+    {record.publication?.anomaly && <div class="record-refusal" role="alert"><strong>{record.publication.anomaly === "withdrawn" ? "Withdrawn after publish" : "Rejected after publish"}</strong><span>This Session remains on the organizer board as a retained publication anomaly. Remove it from the public site deliberately when you are ready.</span></div>}
     {/* An assignment refusal answers inside the evaluation panel; every other
         declined action answers here, where the record is still on screen. */}
     {actionError && !actionError.action.startsWith("assign-") && !actionError.action.startsWith("remove-")

@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import type { Env } from "../index";
 import { resolveCalendarIcs } from "../jobs/calendar/resolver";
 import { ICON_LINKS } from "../lib/head-icons";
+import { publicPublicationPredicate } from "../lib/publication-truth";
 
 export const calendarRoutes = new Hono<{ Bindings: Env }>();
 
@@ -28,13 +29,14 @@ calendarRoutes.get("/s/:submissionId", async (context) => {
               event.name AS event_name, event.timezone
        FROM submissions submission
        JOIN events event ON event.id = submission.event_id
-       JOIN agenda_items agenda ON agenda.submission_id = submission.id AND agenda.kind = 'session'
-       JOIN rooms room ON room.id = agenda.room_id
-       LEFT JOIN buildings building ON building.id = room.building_id
+       JOIN agenda_items agenda
+         ON agenda.submission_id = submission.id
+        AND agenda.event_id = submission.event_id
+        AND agenda.kind = 'session'
+       JOIN rooms room ON room.id = agenda.room_id AND room.event_id = agenda.event_id
+       LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id
        WHERE submission.id = ?
-         AND submission.is_published = 1
-         AND agenda.is_published = 1
-         AND submission.status NOT IN ('rejected', 'withdrawn')
+         AND ${publicPublicationPredicate({ submission: "submission", agenda: "agenda", event: "event" })}
        LIMIT 1`,
     )
     .bind(context.req.param("submissionId"))

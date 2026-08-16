@@ -413,9 +413,18 @@ describe.sequential("MRQ-68 decided not notified", () => {
     expect(fourth).toMatchObject({ selected: candidateCount - NOTIFY_DECISIONS_BATCH_SIZE * 3, queued: candidateCount - NOTIFY_DECISIONS_BATCH_SIZE * 3, skipped_no_address: 0, remaining: 0, next_cursor: null });
     await suppress(fourth.outbox_ids);
 
-    const final = await notify();
-    expect(final).toMatchObject({ selected: 0, queued: 0, skipped_no_address: 0, remaining: 0, next_cursor: null, outbox_ids: [] });
-    expect(final.queue_revision).toEqual(expect.any(Number));
+    const finalResponse = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ queue_revision: (await summary()).queue_revision }),
+    });
+    expect(finalResponse.status).toBe(409);
+    expect(await finalResponse.json()).toMatchObject({
+      error: {
+        code: "conflict",
+        details: { operation: { reason_code: "NO_DECISIONS_REMAIN", effect: "no_op" } },
+      },
+    });
     const outbox = await env.DB.prepare(
       `SELECT COUNT(*) AS total, COUNT(DISTINCT entity_id) AS decisions
        FROM outbox WHERE event_id = ? AND entity_id LIKE 'decision-mrq68-bulk-%'`,

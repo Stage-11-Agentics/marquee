@@ -41,6 +41,7 @@ import submissionReferenceCodesMigrationSql from "../../migrations/0030_submissi
 import submissionCapacityMigrationSql from "../../migrations/0031_submission_capacity.sql?raw";
 import calendarBatchPartsMigrationSql from "../../migrations/0032_calendar_batch_parts.sql?raw";
 import fieldLibraryMigrationSql from "../../migrations/0033_field_library.sql?raw";
+import requestOperationsMigrationSql from "../../migrations/0034_request_operations.sql?raw";
 import personAliasesMergesMigrationSql from "../../migrations/0035_person_aliases_merges.sql?raw";
 import routingTagsMigrationSql from "../../migrations/0036_routing_tags.sql?raw";
 import formLengthRulesMigrationSql from "../../migrations/0037_form_length_rules.sql?raw";
@@ -97,6 +98,9 @@ export async function applyMigrations(): Promise<void> {
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'organizations'",
   ).first();
   if (alreadyApplied) {
+    const requestOperationsApplied = await env.DB.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'request_operations'",
+    ).first();
     const calendarTruthApplied = await env.DB.prepare(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'calendar_cancellations'",
     ).first();
@@ -109,6 +113,12 @@ export async function applyMigrations(): Promise<void> {
     const modelUsageEventsApplied = await env.DB.prepare(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'model_usage_events'",
     ).first();
+    const fieldLibraryApplied = await env.DB.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'field_library'",
+    ).first();
+    const existingTables = new Set((await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table'",
+    ).all<{ name: string }>()).results.map((row) => row.name));
     // Disable mirror triggers before the wipe reaches people. WIPE_ORDER
     // removes pending rows before deleting those parents; clearing state first
     // prevents the delete itself from re-enqueuing a stale people tombstone.
@@ -116,7 +126,9 @@ export async function applyMigrations(): Promise<void> {
     await env.DB.batch([
       env.DB.prepare("UPDATE people SET headshot_attachment_id = NULL"),
       env.DB.prepare("DELETE FROM attachments WHERE owner_type = 'person_headshot'"),
-      ...WIPE_ORDER.map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
+      ...WIPE_ORDER
+        .filter((table) => existingTables.has(table))
+        .map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
     ]);
     if (calendarTruthApplied) {
       // WIPE_ORDER already clears both calendar tables for test isolation.
@@ -129,6 +141,16 @@ export async function applyMigrations(): Promise<void> {
     }
     if (!calendarBatchPartsApplied) {
       for (const statement of splitStatements(calendarBatchPartsMigrationSql)) {
+        await env.DB.prepare(`${statement};`).run();
+      }
+    }
+    if (!fieldLibraryApplied) {
+      for (const statement of splitStatements(fieldLibraryMigrationSql)) {
+        await env.DB.prepare(`${statement};`).run();
+      }
+    }
+    if (!requestOperationsApplied) {
+      for (const statement of splitStatements(requestOperationsMigrationSql)) {
         await env.DB.prepare(`${statement};`).run();
       }
     }
@@ -184,6 +206,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(submissionCapacityMigrationSql),
     ...splitStatements(calendarBatchPartsMigrationSql),
     ...splitStatements(fieldLibraryMigrationSql),
+    ...splitStatements(requestOperationsMigrationSql),
     ...splitStatements(personAliasesMergesMigrationSql),
     ...splitStatements(routingTagsMigrationSql),
     ...splitStatements(formLengthRulesMigrationSql),

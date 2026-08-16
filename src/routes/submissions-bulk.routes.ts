@@ -29,9 +29,13 @@ import { getAuth } from "../lib/auth/auth-middleware";
 import { PUBLISHED_SESSION_REFUSAL } from "../lib/publication-guard";
 import { canTransitionSubmissionStatus } from "../lib/submission-transitions";
 import { selectSubmissionIds, submissionFilterSchema, summarizeNotNotifiedSubmissions } from "./submissions.queries";
+import { claimRequestOperation, completeRequestOperation, dispatchRequestOperationNow, eventOperationScope, linkRequestOperationOutbox, markRequestOperationDispatchPending } from "../lib/request-operations";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
-const submissionIdSchema = z.string().min(1).max(200);
+const idempotencyKeyHeaders = z.object({
+  "idempotency-key": z.string().trim().min(1).max(200).optional(),
+});
+const submissionIdSchema = z.string().trim().min(1).max(200);
 const bulkBodySchema = z
   .object({
     selector: bulkSelectorWireSchema(submissionFilterSchema, submissionIdSchema),
@@ -72,6 +76,14 @@ const notifyNotifiedResultSchema = z.object({
   next_cursor: z.string().nullable(),
   outbox_ids: z.array(z.string()),
   queue_revision: z.number().int().nonnegative(),
+  operation: z.object({
+    operation_id: z.string(),
+    effect: z.enum(["changed", "no_op"]),
+    reason_code: z.string().nullable(),
+    notice: z.string().nullable(),
+    duplicate_skipped: z.number().int().nonnegative(),
+    dispatch_state: z.enum(["not_required", "pending", "dispatched"]),
+  }),
 });
 
 async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
@@ -270,6 +282,26 @@ const planNotifiedSubmissions = defineApiRoute(
   },
 );
 
+type BulkFailureCode =
+  | "UNKNOWN_ID"
+  | "FOREIGN_EVENT"
+  | "ILLEGAL_DECISION"
+  | "LIVE_REFUSED"
+  | "STALE_SELECTION"
+  | "NO_VALID_ADDRESS";
+
+function bulkFailureCode(
+  item: { id: string; error?: string },
+  foreignIds: ReadonlySet<string>,
+): BulkFailureCode {
+  const message = item.error ?? "transition failed";
+  if (message === "submission not found") return foreignIds.has(item.id) ? "FOREIGN_EVENT" : "UNKNOWN_ID";
+  if (message === PUBLISHED_SESSION_REFUSAL) return "LIVE_REFUSED";
+  if (/no valid email|no valid address/i.test(message)) return "NO_VALID_ADDRESS";
+  if (/changed during|stale selection/i.test(message)) return "STALE_SELECTION";
+  return "ILLEGAL_DECISION";
+}
+
 const bulkDecideSubmissions = defineApiRoute(
   {
     method: "post",
@@ -281,7 +313,10 @@ const bulkDecideSubmissions = defineApiRoute(
     tags: ["Submissions"],
     request: {
       params: eventParams,
-      headers: z.object({ "if-match": z.string().min(1).describe("The decision plan's current strong ETag.") }),
+      headers: z.object({
+        "if-match": z.string().min(1).describe("The decision plan's current strong ETag."),
+        "idempotency-key": idempotencyKeyHeaders.shape["idempotency-key"],
+      }),
       body: { content: { "application/json": { schema: bulkBodySchema } } },
     },
     policy: {
@@ -291,13 +326,21 @@ const bulkDecideSubmissions = defineApiRoute(
     },
     responses: {
       200: jsonResponse(bulkResultSchema, "The per-record bulk decision summary."),
-      ...errorResponses([400, 401, 403, 404, 409, 422, 429, 500]),
+      ...errorResponses([400, 401, 403, 404, 409, 422, 429, 500, 503]),
     },
   },
   async (context) => {
     const { eventId } = context.req.valid("param");
     const body = context.req.valid("json");
     const selector = normalizeBulkSelector(body.selector, (id) => submissionIdSchema.safeParse(id).success);
+    const actor = await actorFor(context);
+    const requestId = context.get("requestId") ?? crypto.randomUUID();
+    const idempotencyKey = context.req.header("Idempotency-Key")?.trim() || undefined;
+    // The plan fingerprint is a changing precondition, not the operation's
+    // identity. A retry may re-plan after the first write has changed it.
+    const { plan_fingerprint: planFingerprint, ...operationRequest } = body;
+    const duplicateSkipped = selector.kind === "ids" ? selector.ids.length - new Set(selector.ids).size : 0;
+    const scope = await eventOperationScope(context.env.DB, eventId);
     let ids: string[];
     if (selector.kind === "ids") {
       ids = [...new Set(selector.ids)];
@@ -309,27 +352,78 @@ const bulkDecideSubmissions = defineApiRoute(
       if (ids.length > BULK_ID_LIMIT) {
         throw ApiError.unprocessable(`selector resolves to more than ${BULK_ID_LIMIT} submissions; narrow the selection`, "selector");
       }
+      if (ids.length === 0) {
+        throw ApiError.notFound("that selection resolves to nobody in this conference");
+      }
     }
     await assertWaveBelongsToEvent(context.env.DB, eventId, body.wave_id);
 
-    const plan = await buildDecisionPlan({
-      db: context.env.DB,
-      eventId,
-      ids,
-      action: body.action,
-      feedbackMd: body.feedback_md,
-      confirmPublished: body.confirm_published === true,
-      waveId: body.wave_id,
-    });
-    requireCurrentDecisionPlan({
-      request: context.req.raw,
-      plan,
-      planFingerprint: body.plan_fingerprint,
-    });
-    if (plan.zero_effect) refuseZeroEffect(plan);
+    let operation: Awaited<ReturnType<typeof claimRequestOperation>> | null = null;
+    if (idempotencyKey) {
+      operation = await claimRequestOperation({
+        db: context.env.DB,
+        scope,
+        route: "events.submissions.bulk",
+        idempotencyKey,
+        requestId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        request: operationRequest,
+      });
+      if (operation.replay) return context.json(operation.replay.body, operation.replay.status as 200);
+    }
 
-    const actor = await actorFor(context);
-    const operationId = newUlid();
+    let plan;
+    try {
+      plan = await buildDecisionPlan({
+        db: context.env.DB,
+        eventId,
+        ids,
+        action: body.action,
+        feedbackMd: body.feedback_md,
+        confirmPublished: body.confirm_published === true,
+        waveId: body.wave_id,
+      });
+      requireCurrentDecisionPlan({
+        request: context.req.raw,
+        plan,
+        planFingerprint,
+      });
+    } catch (error: unknown) {
+      if (operation && error instanceof ApiError) {
+        await completeRequestOperation(context.env.DB, operation.operationId, error.status, error.toEnvelope(requestId), {
+          state: "failed",
+          claimToken: operation.claimToken,
+        });
+      }
+      throw error;
+    }
+    // The preview/apply contract refuses an unkeyed zero-effect action before
+    // mutation. A keyed request is an admitted operation, so it records and
+    // replays the durable no-op receipt instead of losing that audit seam.
+    if (plan.zero_effect && !idempotencyKey) refuseZeroEffect(plan);
+
+    if (!operation) {
+      operation = await claimRequestOperation({
+        db: context.env.DB,
+        scope,
+        route: "events.submissions.bulk",
+        requestId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        request: operationRequest,
+      });
+      if (operation.replay) return context.json(operation.replay.body, operation.replay.status as 200);
+    }
+    const foreignIds = new Set<string>();
+    if (selector.kind === "ids") {
+      const existing = await context.env.DB.prepare(
+        "SELECT id, event_id FROM submissions WHERE id IN (SELECT CAST(value AS TEXT) FROM json_each(?))",
+      ).bind(JSON.stringify(ids)).all<{ id: string; event_id: string }>();
+      for (const row of existing.results) {
+        if (row.event_id !== eventId) foreignIds.add(row.id);
+      }
+    }
     const result = await writeBulkSubmissionDecisions({
       db: context.env.DB,
       queue: context.env.MAIL_QUEUE,
@@ -342,33 +436,85 @@ const bulkDecideSubmissions = defineApiRoute(
       confirmPublished: body.confirm_published === true,
       cache: context.env.CACHE,
       waveId: body.wave_id,
-      operationId,
+      operationId: operation.operationId,
       origin: new URL(context.req.url).origin,
+      dispatchMail: false,
     });
-    const failures = result.results
+    const failureCodeById = new Map(
+      result.results
+        .filter((item) => item.outcome === "failed")
+        .map((item) => [item.id, bulkFailureCode(item, foreignIds)] as const),
+    );
+    const failureRows = result.results
       .filter((item) => item.outcome === "failed")
       .slice(0, BULK_FAILURE_REPORT_LIMIT)
       .map((item) => ({
         id: item.id,
-        code: item.error === PUBLISHED_SESSION_REFUSAL ? "published_while_live" : "transition_failed",
+        code: failureCodeById.get(item.id) ?? "ILLEGAL_DECISION",
         message: item.error ?? "transition failed",
       }));
-    return context.json(buildBulkResult({
-      operation_id: operationId,
+    const succeeded = result.results.filter((item) => item.outcome === "succeeded").length;
+    const alreadyInState = result.results.filter((item) => item.outcome === "already_in_state").length;
+    const failed = result.results.filter((item) => item.outcome === "failed").length;
+    const allAlready = succeeded === 0 && alreadyInState === result.selected && failed === 0;
+    const allFailed = succeeded === 0 && failed > 0;
+    const outboxIds = result.outboxIds;
+    const operationResult = {
+      operation_id: operation.operationId,
+      effect: succeeded > 0 ? "changed" as const : "no_op" as const,
+      reason_code: allAlready ? "ALREADY_IN_STATE" : allFailed ? "ALL_FAILED" : null,
+      notice: allAlready
+        ? `Nothing changed — every ${alreadyInState} selected record${alreadyInState === 1 ? " is" : "s are"} already in state`
+        : allFailed
+          ? `Nothing changed — all ${failed + alreadyInState} selected records were refused`
+          : `${succeeded} selected record${succeeded === 1 ? " was" : "s were"} changed`,
+      duplicate_skipped: duplicateSkipped,
+      dispatch_state: outboxIds.length > 0 ? "pending" as const : "not_required" as const,
+    };
+    const failures = failureRows.length > 0 ? failureRows : undefined;
+    const firstFailure = failureRows[0] ?? null;
+    const pendingBody = buildBulkResult({
+      operation_id: operation.operationId,
       selected: result.selected,
-      succeeded: result.results.filter((item) => item.outcome === "succeeded").length,
-      failed: result.results.filter((item) => item.outcome === "failed").length,
-      state: failures.length > 0 ? "completed_with_failures" : "completed",
+      succeeded,
+      already_in_state: alreadyInState,
+      failed,
+      state: allAlready ? "completed_noop" : failures ? "completed_with_failures" : "completed",
       outbox_enqueued: result.outboxEnqueued,
+      outbox_ids: outboxIds,
       published_count: result.publishedCount,
-      failures: failures.length > 0 ? failures : undefined,
+      failures,
+      first_failure: firstFailure,
+      operation: operationResult,
       results: result.results.map((item) => ({
         id: item.id,
         outcome: item.outcome,
         resulting_status: item.resultingStatus,
-        ...(item.error ? { error: item.error } : {}),
+        ...(item.outcome === "already_in_state"
+          ? { error: { code: "ALREADY_IN_STATE", message: `submission is already ${item.resultingStatus}` } }
+          : item.error ? { error: { code: failureCodeById.get(item.id) ?? "ILLEGAL_DECISION", message: item.error } } : {}),
       })),
-    }), 200);
+    });
+    await linkRequestOperationOutbox(context.env.DB, operation.operationId, outboxIds);
+    if (outboxIds.length > 0) {
+      const dispatchAdmitted = await markRequestOperationDispatchPending(context.env.DB, operation.operationId, 200, pendingBody, outboxIds, { claimToken: operation.claimToken });
+      if (!dispatchAdmitted) throw ApiError.conflict("the operation claim was reclaimed before mail dispatch", { code: "operation_in_flight", operation_id: operation.operationId });
+      await dispatchRequestOperationNow(context.env.DB, context.env.MAIL_QUEUE, operation.operationId, outboxIds);
+    }
+    const bodyOut = buildBulkResult({
+      ...pendingBody,
+      operation: {
+        ...operationResult,
+        dispatch_state: outboxIds.length > 0 ? "dispatched" as const : "not_required" as const,
+      },
+    });
+    if (allFailed) {
+      const error = ApiError.conflict(operationResult.notice, bodyOut);
+      await completeRequestOperation(context.env.DB, operation.operationId, 409, error.toEnvelope(requestId), { state: "failed", claimToken: operation.claimToken });
+      throw error;
+    }
+    await completeRequestOperation(context.env.DB, operation.operationId, 200, bodyOut, { outboxIds, claimToken: operation.claimToken, dispatchClaimToken: operation.operationId });
+    return context.json(bodyOut, 200);
   },
 );
 
@@ -417,13 +563,25 @@ const notifyNotifiedSubmissions = defineApiRoute(
     },
     responses: {
       202: jsonResponse(notifyNotifiedResultSchema, "Notification retry summary"),
-      ...errorResponses([400, 401, 403, 409, 429, 500]),
+      ...errorResponses([401, 403, 409, 429, 500, 503]),
     },
   },
   async (context) => {
     const { eventId } = context.req.valid("param");
     const { cursor } = context.req.valid("query");
     const { queue_revision: queueRevision } = context.req.valid("json");
+    const actor = await actorFor(context);
+    const requestId = context.get("requestId") ?? crypto.randomUUID();
+    const operation = await claimRequestOperation({
+      db: context.env.DB,
+      scope: await eventOperationScope(context.env.DB, eventId),
+      route: "events.submissions.not_notified.notify",
+      requestId,
+      actorKind: actor.kind,
+      actorPersonId: actor.personId,
+      request: { cursor: cursor ?? null, queue_revision: queueRevision },
+    });
+    if (operation.replay) return context.json(operation.replay.body, operation.replay.status as 202);
     const ids = await selectSubmissionIds(context.env.DB, { eventId, status: "not_notified" }, { limit: null });
     const result = await notifyExistingDecisions({
       db: context.env.DB,
@@ -433,8 +591,37 @@ const notifyNotifiedSubmissions = defineApiRoute(
       queueRevision,
       cursor,
       origin: new URL(context.req.url).origin,
+      dispatch: false,
     });
-    return context.json({
+    const noDecisionsRemain = result.selected === 0
+      && result.skippedNoAddress === 0
+      && result.queued === 0
+      && result.remaining === 0;
+    const noValidRecipient = result.selected === 0 && result.skippedNoAddress > 0;
+    const operationResponse = {
+      operation_id: operation.operationId,
+      effect: result.outboxIds.length > 0 ? "changed" as const : "no_op" as const,
+      reason_code: noDecisionsRemain
+        ? "NO_DECISIONS_REMAIN"
+        : noValidRecipient
+          ? "NO_VALID_RECIPIENT"
+          : result.outboxIds.length > 0 ? null : "NO_VALID_RECIPIENT",
+      notice: noDecisionsRemain
+        ? "Nothing changed — no undecided notification remains to send"
+        : noValidRecipient
+          ? "Nothing changed — every remaining decision has no valid address"
+          : result.outboxIds.length > 0
+            ? `Queued ${result.outboxIds.length} notification${result.outboxIds.length === 1 ? "" : "s"}`
+            : "Nothing changed — no new notification was queued",
+      duplicate_skipped: 0,
+      dispatch_state: result.outboxIds.length > 0 ? "pending" as const : "not_required" as const,
+    };
+    if (noDecisionsRemain) {
+      const error = ApiError.conflict(operationResponse.notice!, { operation: operationResponse });
+      await completeRequestOperation(context.env.DB, operation.operationId, 409, error.toEnvelope(requestId), { state: "failed", claimToken: operation.claimToken });
+      throw error;
+    }
+    const pendingResponse = {
       selected: result.selected,
       queued: result.queued,
       skipped_no_address: result.skippedNoAddress,
@@ -442,7 +629,23 @@ const notifyNotifiedSubmissions = defineApiRoute(
       next_cursor: result.nextCursor,
       outbox_ids: result.outboxIds,
       queue_revision: result.queueRevision,
-    }, 202);
+      operation: operationResponse,
+    };
+    await linkRequestOperationOutbox(context.env.DB, operation.operationId, result.outboxIds);
+    if (result.outboxIds.length > 0) {
+      const dispatchAdmitted = await markRequestOperationDispatchPending(context.env.DB, operation.operationId, 202, pendingResponse, result.outboxIds, { claimToken: operation.claimToken });
+      if (!dispatchAdmitted) throw ApiError.conflict("the operation claim was reclaimed before mail dispatch", { code: "operation_in_flight", operation_id: operation.operationId });
+      await dispatchRequestOperationNow(context.env.DB, context.env.MAIL_QUEUE, operation.operationId, result.outboxIds);
+    }
+    const response = {
+      ...pendingResponse,
+      operation: {
+        ...operationResponse,
+        dispatch_state: result.outboxIds.length > 0 ? "dispatched" as const : "not_required" as const,
+      },
+    };
+    await completeRequestOperation(context.env.DB, operation.operationId, 202, response, { outboxIds: result.outboxIds, claimToken: operation.claimToken, dispatchClaimToken: operation.operationId });
+    return context.json(response, 202);
   },
 );
 

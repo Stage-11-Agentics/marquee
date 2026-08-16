@@ -370,8 +370,6 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
     expect(repeated.status).toBe(202);
     expect(await repeated.json()).toMatchObject({ selected: 1, queued: 0, duplicate: 1 });
 
-    // The same compose can be retried with its durable key, while a new
-    // nudge with no key is a new send even when the recipient and copy match.
     const newNudge = await request(`/api/v1/events/${EVENT_ID}/comms/send`, {
       method: "POST",
       body: JSON.stringify(body),
@@ -387,8 +385,8 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
       method: "POST",
       body: JSON.stringify({ selector: { submission_ids: [], person_ids: [SPEAKER_ID], role: "speaker" }, subject: "Must not send", body: "Must not send" }),
     }, ownerCookie);
-    expect(empty.status).toBe(202);
-    expect(await empty.json()).toMatchObject({ selected: 0, queued: 0, duplicate: 0, outbox_rows: [] });
+    expect(empty.status).toBe(400);
+    expect(await empty.json()).toMatchObject({ error: { code: "malformed_request", field: "selector.submission_ids" } });
     const afterEmpty = await env.DB.prepare(
       "SELECT COUNT(*) AS total FROM outbox WHERE event_id = ? AND template_key = 'custom' AND entity_id = ?",
     ).bind(EVENT_ID, SUB_SINGLE).first<{ total: number }>();

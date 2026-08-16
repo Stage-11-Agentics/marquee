@@ -68,6 +68,8 @@ const SEEDED_COUNTS: Record<string, number> = {
   // Attendee-created, never seeded: a fresh demo has nobody's schedule in it,
   // nobody's stars, and nobody's email attached to either.
   public_schedules: 0,
+  request_operations: 0,
+  request_operation_outbox: 0,
   schedule_claims: 0,
   session_star_beacons: 0,
   event_attendances: 0,

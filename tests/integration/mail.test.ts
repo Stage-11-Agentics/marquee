@@ -121,6 +121,44 @@ test("CONTRACT · MRQ-211 · queue admission says queued and the consumer alone 
   expect(JSON.parse(afterConsumer.results[1]?.after_json ?? "{}")).toMatchObject({ outbox_id: outboxId, provider_message_id: `provider-${outboxId}` });
 });
 
+test("CONTRACT · MRQ-237 · conference communication with no valid address refuses with a durable zero-effect reason", async () => {
+  await env.DB.prepare("UPDATE people SET email = '' WHERE id = 'per_mail'").run();
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-237-empty-mail" });
+  const headers = {
+    cookie: `mq_session=${session.id}`,
+    "content-type": "application/json",
+    "Idempotency-Key": "mrq237-conference-no-address",
+  };
+  const input = {
+    selector: { person_ids: ["per_mail"], role: "speaker" },
+    template_key: "reminder_generic",
+  };
+  const first = await app.request("/api/v1/events/evt_mail/comms/send", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(input),
+  }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+  expect(first.status).toBe(202);
+  const firstBody = await first.json<{ selected: number; queued: number; outbox_ids: string[]; operation: { effect: string; reason_code: string; notice: string } }>();
+  expect(firstBody).toMatchObject({
+    selected: 1,
+    queued: 0,
+    outbox_ids: [],
+    operation: { effect: "no_op", reason_code: "NO_VALID_RECIPIENT", notice: expect.stringContaining("no selected recipient") },
+  });
+  const replay = await app.request("/api/v1/events/evt_mail/comms/send", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(input),
+  }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+  expect(replay.status).toBe(202);
+  expect(await replay.json()).toEqual(firstBody);
+  expect(await env.DB.prepare(
+    "SELECT COUNT(*) AS count FROM request_operations WHERE event_id = 'evt_mail' AND route = 'events.comms.send'",
+  ).first<{ count: number }>()).toEqual({ count: 1 });
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM outbox WHERE event_id = 'evt_mail'").first<{ count: number }>()).toEqual({ count: 0 });
+});
+
 test("AC-117, AC-93 · the same bulk action twice relies on the UNIQUE idempotency constraint and delivers once", async () => {
   const input = {
     db: env.DB,
@@ -150,8 +188,8 @@ test("AC-117, AC-93 · the same bulk action twice relies on the UNIQUE idempoten
     headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
     body: JSON.stringify({ selector: { person_ids: [], submission_ids: [] }, template_key: "reminder_generic" }),
   }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
-  expect(emptyResponse.status).toBe(202);
-  expect(await emptyResponse.json<{ selected: number; queued: number; duplicate: number; skipped: unknown[]; outbox_ids: string[]; outbox_rows: unknown[] }>()).toEqual({ selected: 0, queued: 0, duplicate: 0, skipped: [], outbox_ids: [], outbox_rows: [] });
+  expect(emptyResponse.status).toBe(400);
+  expect(await emptyResponse.json()).toMatchObject({ error: { code: "malformed_request" } });
   const emptyCount = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbox WHERE event_id = 'evt_mail'").first<{ n: number }>();
   expect(emptyCount?.n).toBe(0);
 });
@@ -278,7 +316,7 @@ test("CONTRACT · MRQ-180 · exact onboarding pairs queue a co-speaker without a
   }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
   expect(roleFilteredResponse.status).toBe(202);
   expect(await roleFilteredResponse.json()).toMatchObject({
-    selected: 2,
+    selected: 1,
     queued: 1,
     duplicate: 0,
     skipped: [{ person_id: "per_mrq180_co", name: "Marcus Okafor", reason: "does not have the speaker role on this Session" }],

@@ -64,7 +64,7 @@ describe.sequential("MRQ-20 agenda API", () => {
   test("CONTRACT · CNT-12 + AIA-07 show every accepted Session but publish only scheduled ones", async () => {
     const initial = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
     const initialBody = await initial.json<{ publication: { live: number; not_yet_public: number; candidates: Array<{ submission_id: string; title: string; scheduled: boolean; can_publish: boolean; blocked_reason: string | null; starts_at: number | null; room: string | null; building: string | null; speakers: Array<{ name: string }> }> } }>();
-    expect(initialBody.publication).toMatchObject({ live: 0, not_yet_public: 2 });
+    expect(initialBody.publication).toMatchObject({ live: 0, not_yet_public: 1 });
     const placedCandidate = initialBody.publication.candidates.find((candidate) => candidate.submission_id === "sub-agenda-placed");
     expect(placedCandidate).toMatchObject({ submission_id: "sub-agenda-placed", title: "Already placed", scheduled: true, can_publish: true, room: "Room 101", building: "North Hall" });
     expect(placedCandidate?.speakers[0]?.name).toBe("Demo Organizer");
@@ -93,6 +93,26 @@ describe.sequential("MRQ-20 agenda API", () => {
       body: JSON.stringify({ submission_ids: ["sub-agenda-placed", "sub-agenda-accepted"] }),
     });
     expect(mixed.status).toBe(409);
+    const mixedBody = await mixed.json<{
+      error: {
+        details: {
+          operation: { effect: string; reason_code: string; operation_id: string };
+          rows: Array<{ submissionId: string; classification: string; primaryReasonCode: string; reasonCodes: string[] }>;
+          all_or_nothing: boolean;
+        };
+      };
+    }>();
+    expect(mixedBody.error.details.operation).toMatchObject({ effect: "no_op", reason_code: "MISSING_AGENDA_ITEM" });
+    expect(mixedBody.error.details.all_or_nothing).toBe(true);
+    expect(mixedBody.error.details.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ submissionId: "sub-agenda-placed", classification: "READY_TO_PUBLISH" }),
+      expect.objectContaining({
+        submissionId: "sub-agenda-accepted",
+        classification: "ACCEPTED_UNSCHEDULED",
+        primaryReasonCode: "MISSING_AGENDA_ITEM",
+        reasonCodes: expect.arrayContaining(["MISSING_AGENDA_ITEM"]),
+      }),
+    ]));
     expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE submission_id = ?").bind("sub-agenda-placed").first<{ is_published: number }>()).toMatchObject({ is_published: 0 });
 
     const published = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/publish`, {
@@ -103,11 +123,23 @@ describe.sequential("MRQ-20 agenda API", () => {
     expect(await published.json<{ published_count: number; live: number; not_yet_public: number; public_agenda_url: string }>()).toMatchObject({
       published_count: 1,
       live: 1,
-      not_yet_public: 1,
+      not_yet_public: 0,
       public_agenda_url: "/agenda?event=aie-nyc-2026",
     });
     expect(await env.DB.prepare("SELECT is_published FROM submissions WHERE id = ?").bind("sub-agenda-placed").first<{ is_published: number }>()).toMatchObject({ is_published: 1 });
     expect(await env.DB.prepare("SELECT action, entity_type FROM audit_log WHERE entity_id = ? AND action = 'published'").bind("sub-agenda-placed").first<{ action: string; entity_type: string }>()).toMatchObject({ action: "published", entity_type: "submission" });
+
+    const auditCountBeforeNoOp = await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ? AND action = 'published'").bind("sub-agenda-placed").first<{ count: number }>();
+    const alreadyLive = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/publish`, {
+      method: "POST",
+      body: JSON.stringify({ submission_ids: ["sub-agenda-placed"] }),
+    });
+    expect(alreadyLive.status).toBe(409);
+    expect(await alreadyLive.json()).toMatchObject({
+      error: { details: { operation: { effect: "no_op", reason_code: "ALREADY_PUBLISHED", notice: expect.stringContaining("Nothing changed") } } },
+    });
+    const auditCountAfterNoOp = await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ? AND action = 'published'").bind("sub-agenda-placed").first<{ count: number }>();
+    expect(auditCountAfterNoOp).toEqual(auditCountBeforeNoOp);
 
     const publicResponse = await SELF.fetch(`${ORIGIN}/api/v1/public/agenda?event=aie-nyc-2026`);
     expect(publicResponse.status).toBe(200);
@@ -136,7 +168,7 @@ describe.sequential("MRQ-20 agenda API", () => {
       const response = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
       expect(response.status).toBe(200);
       const body = await response.json<{ publication: { live: number; not_yet_public: number; candidates: Array<{ submission_id: string }> } }>();
-      expect(body.publication).toMatchObject({ live: 1, not_yet_public: 1 });
+      expect(body.publication).toMatchObject({ live: 1, not_yet_public: 0 });
       expect(body.publication.candidates.some((candidate) => candidate.submission_id === "sub-agenda-placed")).toBe(false);
       expect(body.publication.candidates.some((candidate) => candidate.submission_id === "sub-agenda-accepted")).toBe(true);
 

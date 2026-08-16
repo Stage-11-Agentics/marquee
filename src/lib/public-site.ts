@@ -7,6 +7,7 @@ import { slugify } from "./ids";
 import { roomDisplayLabel } from "./venues";
 import { syntheticPublicHeadshotUrl } from "./public-headshots";
 import { conferenceDayLabel, conferenceDays } from "./conference-dates";
+import { publicPublicationPredicate } from "./publication-truth";
 
 export const EMBED_CACHE_TTL_SECONDS = 30;
 const CLOUDFLARE_KV_MIN_TTL_SECONDS = 60;
@@ -504,9 +505,10 @@ function sessionRowsQuery(
 ): { sql: string; bindings: unknown[] } {
   const clauses = [
     "ai.event_id = ?",
-    "ai.kind = 'session'",
-    "ai.is_published = 1",
-    "s.status NOT IN ('rejected', 'withdrawn')",
+    // SPEC-MRQ-237-PUBLIC-PRIVACY: [beyond v1.17 prototype — acknowledged divergence]
+    // MRQ-237 keeps the privacy boundary beside the public projection. The
+    // organizer may retain a published anomaly; attendees may not see it.
+    publicPublicationPredicate({ submission: "s", agenda: "ai", event: "event" }),
   ];
   const bindings: unknown[] = [event.id];
 
@@ -607,6 +609,7 @@ function sessionRowsQuery(
         ), '[]') AS tracks_json
       FROM agenda_items ai
       JOIN submissions s ON s.id = ai.submission_id AND s.event_id = ai.event_id
+      JOIN events event ON event.id = ai.event_id
       JOIN rooms room ON room.id = ai.room_id AND room.event_id = ai.event_id
       LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id
       LEFT JOIN formats fmt ON fmt.id = s.format_id AND fmt.event_id = s.event_id

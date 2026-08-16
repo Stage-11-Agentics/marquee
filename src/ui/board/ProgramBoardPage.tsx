@@ -59,6 +59,7 @@ function BoardCardButton({ card, navigate }: { card: BoardCard; navigate: (targe
     <strong class="program-board-card-title" title={card.title}>{card.title}</strong>
     <span class="program-board-card-speakers" title={card.speakers.map((speaker) => speaker.name).join(", ")}>{card.speakers.length ? card.speakers.map((speaker) => speaker.name).join(" · ") : "—"}</span>
     <span class="program-board-card-tracks">{card.tracks.length ? card.tracks.slice(0, 2).map((track) => <span key={track.id} class="chip track-chip" style={{ borderLeftColor: track.color }}>{track.name}</span>) : "—"}</span>
+    {card.post_publish_anomaly && <span class="chip alarm" role="status">{card.post_publish_anomaly === "withdrawn" ? "Withdrawn after publish" : "Rejected after publish"}</span>}
     {card.slot && <span class="program-board-slot"><span class="chip slot-chip">{card.slot.day} · {card.slot.time} · {card.slot.room}</span>{!card.slot.is_published && <span class="chip not-public">Not yet public</span>}</span>}
     <span class="program-board-card-foot"><span>{card.format ?? "—"}{card.wave ? ` · ${card.wave.name}` : ""}</span><strong class="tabular">{card.time_in_stage}</strong></span>
   </button>;

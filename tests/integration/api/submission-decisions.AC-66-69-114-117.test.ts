@@ -15,10 +15,12 @@ interface BulkResponse {
   operation_id: string;
   selected: number;
   succeeded: number;
+  already_in_state: number;
   failed: number;
   published_count?: number;
   state: string;
   outbox_enqueued: number;
+  operation: { effect: string; reason_code: string | null; notice?: string };
   failures?: Array<{ id: string; code: string; message: string }>;
   results?: Array<{ id: string; outcome: string; resulting_status: string | null; error?: string }>;
 }
@@ -132,7 +134,7 @@ async function seedFixture(): Promise<void> {
   ).bind(NOW, NOW).run();
 }
 
-async function requestBulk(body: unknown): Promise<Response> {
+async function requestBulk(body: unknown, idempotencyKey?: string): Promise<Response> {
   const plan = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/decision-plan`, {
     method: "POST",
     headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
@@ -140,13 +142,15 @@ async function requestBulk(body: unknown): Promise<Response> {
   });
   expect(plan.status).toBe(200);
   const planBody = await plan.json<{ plan_fingerprint: string; etag: string }>();
+  const headers: Record<string, string> = {
+    authorization: `Bearer ${TOKEN}`,
+    "content-type": "application/json",
+    "if-match": planBody.etag,
+  };
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
   return SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/bulk`, {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${TOKEN}`,
-      "content-type": "application/json",
-      "if-match": planBody.etag,
-    },
+    headers,
     body: JSON.stringify({ ...(body as Record<string, unknown>), plan_fingerprint: planBody.plan_fingerprint }),
   });
 }
@@ -396,5 +400,70 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
       "SELECT status FROM submissions WHERE id = 'sub-mrq19-invalid-email'",
     ).first<{ status: string }>();
     expect(row?.status).toBe("in_review");
+  });
+
+  test("CONTRACT · MRQ-237 · an effectful keyed bulk decision replays its stored 200 after the state changes", async () => {
+    const accepted = await env.DB.prepare(
+      "SELECT id FROM submissions WHERE event_id = ? AND status = 'accepted' ORDER BY id LIMIT 1",
+    ).bind(EVENT_ID).first<{ id: string }>();
+    expect(accepted?.id).toBeTruthy();
+    const requestBody = { selector: { ids: [accepted!.id] }, action: "reject" };
+    const key = "mrq237-bulk-effectful-replay";
+    const first = await requestBulk(requestBody, key);
+    expect(first.status).toBe(200);
+    const firstPayload = await first.json<BulkResponse>();
+    expect(firstPayload).toMatchObject({
+      selected: 1,
+      succeeded: 1,
+      already_in_state: 0,
+      failed: 0,
+      state: "completed",
+      operation: { effect: "changed", reason_code: null },
+    });
+    const afterFirst = await env.DB.prepare(
+      "SELECT status, (SELECT COUNT(*) FROM submission_decisions WHERE submission_id = ?) AS decisions, (SELECT COUNT(*) FROM outbox WHERE entity_id = ?) AS outbox FROM submissions WHERE id = ?",
+    ).bind(accepted!.id, accepted!.id, accepted!.id).first<{ status: string; decisions: number; outbox: number }>();
+    expect(afterFirst?.status).toBe("rejected");
+
+    // requestBulk deliberately re-plans before sending the retry. The new
+    // plan fingerprint must not turn a successful keyed operation into a
+    // stale-plan or key-conflict response.
+    const replay = await requestBulk(requestBody, key);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual(firstPayload);
+    const afterReplay = await env.DB.prepare(
+      "SELECT status, (SELECT COUNT(*) FROM submission_decisions WHERE submission_id = ?) AS decisions, (SELECT COUNT(*) FROM outbox WHERE entity_id = ?) AS outbox FROM submissions WHERE id = ?",
+    ).bind(accepted!.id, accepted!.id, accepted!.id).first<{ status: string; decisions: number; outbox: number }>();
+    expect(afterReplay).toEqual(afterFirst);
+  });
+
+  test("CONTRACT · MRQ-237 · an all-already bulk decision is a keyed, reasoned zero-effect replay", async () => {
+    const accepted = await env.DB.prepare(
+      "SELECT id FROM submissions WHERE event_id = ? AND status = 'accepted' ORDER BY id LIMIT 1",
+    ).bind(EVENT_ID).first<{ id: string }>();
+    expect(accepted?.id).toBeTruthy();
+    const before = await env.DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM submission_decisions WHERE submission_id = ?) AS decisions, (SELECT COUNT(*) FROM outbox WHERE entity_id = ?) AS outbox",
+    ).bind(accepted!.id, accepted!.id).first<{ decisions: number; outbox: number }>();
+    const key = "mrq237-bulk-all-already";
+    const requestBody = { selector: { ids: [accepted!.id] }, action: "accept" };
+    const first = await requestBulk(requestBody, key);
+    expect(first.status).toBe(200);
+    const firstPayload = await first.json<BulkResponse & { already_in_state: number; operation: { effect: string; reason_code: string; notice: string } }>();
+    expect(firstPayload).toMatchObject({
+      selected: 1,
+      succeeded: 0,
+      already_in_state: 1,
+      failed: 0,
+      state: "completed_noop",
+      operation: { effect: "no_op", reason_code: "ALREADY_IN_STATE", notice: expect.stringContaining("Nothing changed") },
+    });
+    const replay = await requestBulk(requestBody, key);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual(firstPayload);
+    const after = await env.DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM submission_decisions WHERE submission_id = ?) AS decisions, (SELECT COUNT(*) FROM outbox WHERE entity_id = ?) AS outbox",
+    ).bind(accepted!.id, accepted!.id).first<{ decisions: number; outbox: number }>();
+    expect(after).toEqual(before);
   });
 });

@@ -35,6 +35,8 @@ export const WIPE_ORDER = [
   "committees",
   "reviewer_track_scopes",
   "saved_views",
+  "request_operation_outbox",
+  "request_operations",
   "audit_log",
   "file_comments",
   "outbox_calendar_parts",
@@ -259,6 +261,14 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   },
   saved_views: {
     sql: `DELETE FROM saved_views WHERE event_id IN (${ORG_EVENTS})`,
+    bindings: ORG,
+  },
+  request_operation_outbox: {
+    sql: `DELETE FROM request_operation_outbox WHERE operation_id IN (SELECT operation_id FROM request_operations WHERE organization_id = ?)`,
+    bindings: ORG,
+  },
+  request_operations: {
+    sql: `DELETE FROM request_operations WHERE organization_id = ?`,
     bindings: ORG,
   },
   audit_log: {

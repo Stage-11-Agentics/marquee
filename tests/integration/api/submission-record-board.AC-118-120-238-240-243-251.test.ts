@@ -378,4 +378,77 @@ describe.sequential("MRQ-33 admin record and program board", () => {
     expect(JSON.parse(auditRows.results[1]!.before_json)).toMatchObject({ agenda_is_published: true, submission_is_published: true });
     expect(JSON.parse(auditRows.results[1]!.after_json)).toMatchObject({ agenda_is_published: false, submission_is_published: false });
   });
+
+  test("CONTRACT · MRQ-237 · record no-op, anomaly chip, and dashboard gauge clickthrough share publication truth", async () => {
+    const privateSession = await createSubmission({
+      kind: "session",
+      title: "MRQ-237 private gauge session",
+      submitter_person_id: SPEAKER_ID,
+      participants: [{ person_id: SPEAKER_ID, role: "speaker" }],
+      track_ids: [TRACK_IN],
+      format_id: FORMAT_ID,
+    });
+    const scheduled = await request(`/api/v1/events/${EVENT_ID}/submissions/${privateSession.id}/schedule`, {
+      method: "POST",
+      body: JSON.stringify({ starts_at: Date.UTC(2026, 9, 24, 16, 0), duration_min: 30, room_id: ROOM_ID, track_id: TRACK_IN }),
+    });
+    expect(scheduled.status).toBe(200);
+
+    const liveSession = await createSubmission({
+      kind: "session",
+      title: "MRQ-237 anomaly session",
+      submitter_person_id: SPEAKER_ID,
+      participants: [{ person_id: SPEAKER_ID, role: "speaker" }],
+      track_ids: [TRACK_IN],
+      format_id: FORMAT_ID,
+    });
+    const liveScheduled = await request(`/api/v1/events/${EVENT_ID}/submissions/${liveSession.id}/schedule`, {
+      method: "POST",
+      body: JSON.stringify({ starts_at: Date.UTC(2026, 9, 24, 17, 0), duration_min: 30, room_id: ROOM_ID, track_id: TRACK_IN }),
+    });
+    expect(liveScheduled.status).toBe(200);
+    const published = await request(`/api/v1/events/${EVENT_ID}/submissions/${liveSession.id}/publish`, { method: "POST" });
+    expect(published.status).toBe(200);
+    const auditBeforeNoOp = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM audit_log WHERE event_id = ? AND entity_id = ? AND action = 'published'",
+    ).bind(EVENT_ID, liveSession.id).first<{ count: number }>();
+    const repeated = await request(`/api/v1/events/${EVENT_ID}/submissions/${liveSession.id}/publish`, { method: "POST" });
+    expect(repeated.status).toBe(200);
+    expect(await body<{ operation: { effect: string; reason_code: string; notice: string } }>(repeated)).toMatchObject({
+      operation: { effect: "no_op", reason_code: "ALREADY_PUBLISHED", notice: "Already live — nothing changed" },
+    });
+    const auditAfterNoOp = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM audit_log WHERE event_id = ? AND entity_id = ? AND action = 'published'",
+    ).bind(EVENT_ID, liveSession.id).first<{ count: number }>();
+    expect(auditAfterNoOp).toEqual(auditBeforeNoOp);
+
+    await env.DB.prepare("UPDATE submissions SET status = 'rejected' WHERE id = ? AND event_id = ?").bind(liveSession.id, EVENT_ID).run();
+    const record = await request(`/api/v1/events/${EVENT_ID}/submissions/${liveSession.id}`);
+    expect(record.status).toBe(200);
+    expect(await body<{ publication: { classification: string; anomaly: string; reason_codes: string[] } }>(record)).toMatchObject({
+      publication: { classification: "BOARD_ANOMALY", anomaly: "rejected", reason_codes: expect.arrayContaining(["POST_PUBLISH_REVERSED"]) },
+    });
+    const board = await request(`/api/v1/events/${EVENT_ID}/board?kind=session&per_page=100`);
+    expect(board.status).toBe(200);
+    const boardBody = await body<{ data: Array<{ id: string; stage: string; slot: { is_published: boolean } | null; post_publish_anomaly: string | null }> }>(board);
+    expect(boardBody.data.find((card) => card.id === liveSession.id)).toMatchObject({
+      id: liveSession.id,
+      stage: "published",
+      slot: { is_published: true },
+      post_publish_anomaly: "rejected",
+    });
+
+    const dashboard = await request(`/api/v1/events/${EVENT_ID}/dashboard`);
+    expect(dashboard.status).toBe(200);
+    const snapshot = await body<{ metrics: Array<{ id: string; count: number; href: string }> }>(dashboard);
+    const notYetPublic = snapshot.metrics.find((metric) => metric.id === "not_yet_public");
+    const liveOnSite = snapshot.metrics.find((metric) => metric.id === "live_on_site");
+    expect(notYetPublic).toMatchObject({ href: "/submissions?kind=session&status=not_yet_public", count: 1 });
+    expect(liveOnSite?.href).toBe("/submissions?kind=session&status=live_on_site");
+    for (const metric of [notYetPublic!, liveOnSite!]) {
+      const list = await request(`/api/v1/events/${EVENT_ID}${metric.href}&per_page=100`);
+      expect(list.status).toBe(200);
+      expect((await body<{ total: number }>(list)).total).toBe(metric.count);
+    }
+  });
 });

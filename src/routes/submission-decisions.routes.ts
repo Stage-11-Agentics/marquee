@@ -7,7 +7,7 @@ import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
-import { loadSubmission, resendSubmissionDecision, writeSubmissionDecision } from "../jobs/cascade/decisions";
+import { loadSubmission, resendDecisionValidationError, resendSubmissionDecision, writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { buildDecisionPlan, refuseZeroEffect, requireCurrentDecisionPlan } from "../jobs/cascade/decision-plan-service";
 import { canTransitionSubmissionStatus } from "../lib/submission-transitions";
 import {
@@ -19,6 +19,7 @@ import {
 } from "../jobs/ai/kind-feedback";
 import { PUBLISHED_SESSION_REFUSAL } from "../lib/publication-guard";
 import { getAuth } from "../lib/auth/auth-middleware";
+import { claimRequestOperation, completeRequestOperation, dispatchRequestOperationNow, eventOperationScope, linkRequestOperationOutbox, markRequestOperationDispatchPending } from "../lib/request-operations";
 
 const eventSubmissionParams = z.object({
   eventId: z.string().min(1),
@@ -54,6 +55,14 @@ const resendDecisionResponseSchema = z
     resulting_status: z.enum(["accepted", "rejected"]),
     outbox_id: z.string().nullable(),
     outbox_inserted: z.boolean(),
+    operation: z.object({
+      operation_id: z.string(),
+      effect: z.enum(["changed", "no_op"]),
+      reason_code: z.string().nullable(),
+      notice: z.string().nullable(),
+      duplicate_skipped: z.number().int().nonnegative(),
+      dispatch_state: z.enum(["not_required", "pending", "dispatched"]),
+    }),
   })
   .openapi("SubmissionDecisionResendResult");
 
@@ -272,12 +281,31 @@ const resendDecision = defineApiRoute(
     },
     responses: {
       202: jsonResponse(resendDecisionResponseSchema, "The deliberate resend was queued."),
-      ...errorResponses([400, 401, 403, 404, 409, 422, 429, 500]),
+      ...errorResponses([400, 401, 403, 404, 409, 422, 429, 500, 503]),
     },
   },
   async (context) => {
     const { eventId, submissionId } = context.req.valid("param");
     const actor = await actorFor(context);
+    const refusal = await resendDecisionValidationError(context.env.DB, eventId, submissionId);
+    if (refusal) {
+      if (refusal === "submission not found") throw ApiError.notFound(refusal);
+      if (refusal === "only accepted or rejected decisions can be resent" || refusal === "no accepted or rejected decision exists to resend") {
+        throw ApiError.conflict(refusal);
+      }
+      throw ApiError.unprocessable(refusal);
+    }
+    const requestId = context.get("requestId") ?? crypto.randomUUID();
+    const requestOperation = await claimRequestOperation({
+      db: context.env.DB,
+      scope: await eventOperationScope(context.env.DB, eventId),
+      route: "events.submissions.decision.resend",
+      requestId,
+      actorKind: actor.kind,
+      actorPersonId: actor.personId,
+      request: { submission_id: submissionId },
+    });
+    if (requestOperation.replay) return context.json(requestOperation.replay.body, requestOperation.replay.status as 202);
     const result = await resendSubmissionDecision({
       db: context.env.DB,
       queue: context.env.MAIL_QUEUE,
@@ -285,24 +313,57 @@ const resendDecision = defineApiRoute(
       submissionId,
       actor,
       origin: new URL(context.req.url).origin,
+      dispatch: false,
     });
     if (result.outcome === "failed") {
-      if (result.error === "submission not found") throw ApiError.notFound("submission not found");
-      if (result.error === "only accepted or rejected decisions can be resent" || result.error === "no accepted or rejected decision exists to resend") {
-        throw ApiError.conflict(result.error);
+      if (result.error === "submission not found") {
+        const error = ApiError.notFound("submission not found");
+        await completeRequestOperation(context.env.DB, requestOperation.operationId, error.status, error.toEnvelope(requestId), { state: "failed", claimToken: requestOperation.claimToken });
+        throw error;
       }
-      throw ApiError.unprocessable(result.error ?? "the decision could not be resent");
+      if (result.error === "only accepted or rejected decisions can be resent" || result.error === "no accepted or rejected decision exists to resend") {
+        const error = ApiError.conflict(result.error);
+        await completeRequestOperation(context.env.DB, requestOperation.operationId, error.status, error.toEnvelope(requestId), { state: "failed", claimToken: requestOperation.claimToken });
+        throw error;
+      }
+      const error = ApiError.unprocessable(result.error ?? "the decision could not be resent");
+      await completeRequestOperation(context.env.DB, requestOperation.operationId, error.status, error.toEnvelope(requestId), { state: "failed", claimToken: requestOperation.claimToken });
+      throw error;
     }
     if (!result.decisionId || !result.resultingStatus) {
       throw new Error("resend completed without a durable decision row");
     }
-    return context.json({
+    const outboxIds = result.outboxInserted && result.outboxId ? [result.outboxId] : [];
+    const pendingResponse = {
       submission_id: result.id,
       decision_id: result.decisionId,
       resulting_status: result.resultingStatus,
       outbox_id: result.outboxId ?? null,
       outbox_inserted: result.outboxInserted,
-    }, 202);
+      operation: {
+        operation_id: requestOperation.operationId,
+        effect: outboxIds.length > 0 ? "changed" as const : "no_op" as const,
+        reason_code: outboxIds.length > 0 ? null : "DUPLICATE_SKIPPED",
+        notice: outboxIds.length > 0 ? "Queued a fresh decision notification" : "Nothing changed — the decision notification was already queued",
+        duplicate_skipped: 0,
+        dispatch_state: outboxIds.length > 0 ? "pending" as const : "not_required" as const,
+      },
+    };
+    await linkRequestOperationOutbox(context.env.DB, requestOperation.operationId, outboxIds);
+    if (outboxIds.length > 0) {
+      const dispatchAdmitted = await markRequestOperationDispatchPending(context.env.DB, requestOperation.operationId, 202, pendingResponse, outboxIds, { claimToken: requestOperation.claimToken });
+      if (!dispatchAdmitted) throw ApiError.conflict("the operation claim was reclaimed before mail dispatch", { code: "operation_in_flight", operation_id: requestOperation.operationId });
+      await dispatchRequestOperationNow(context.env.DB, context.env.MAIL_QUEUE, requestOperation.operationId, outboxIds);
+    }
+    const response = {
+      ...pendingResponse,
+      operation: {
+        ...pendingResponse.operation,
+        dispatch_state: outboxIds.length > 0 ? "dispatched" as const : "not_required" as const,
+      },
+    };
+    await completeRequestOperation(context.env.DB, requestOperation.operationId, 202, response, { outboxIds, claimToken: requestOperation.claimToken, dispatchClaimToken: requestOperation.operationId });
+    return context.json(response, 202);
   },
 );
 

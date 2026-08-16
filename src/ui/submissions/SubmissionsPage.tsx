@@ -91,6 +91,8 @@ const STATUS_OPTIONS = [
       ["accepted", "Ready to place"],
       ["scheduled", "Scheduled"],
       ["published", "Published"],
+      ["not_yet_public", "Not yet public"],
+      ["live_on_site", "Live on site"],
     ],
   },
   {

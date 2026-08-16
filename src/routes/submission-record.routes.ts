@@ -1,5 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import type { Context } from "hono";
+import type { D1Database } from "@cloudflare/workers-types";
 
 import { ApiError } from "../api/errors";
 import { newUlid } from "../api/ids";
@@ -33,6 +34,8 @@ import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-acc
 import { auditStatement, auditStatementFromSelect, writeAudit } from "../lib/audit";
 import { contentOf, isContentAction, recordTimelinePage } from "../lib/history";
 import { purgePublicEmbedCache } from "../lib/public-site";
+import { evaluatePublication, explainPublicationSelection, publicationReasonMessage } from "../lib/publication-truth";
+import { claimRequestOperation, completeRequestOperation, eventOperationScope } from "../lib/request-operations";
 import { PUBLISHED_CONTENT_REFUSAL, requirePublishedConfirmation } from "../lib/publication-guard";
 import { withSubmissionReferenceAllocation } from "../lib/submission-reference";
 import { listFormLengthRules } from "./forms.queries";
@@ -586,12 +589,13 @@ async function loadRecord(
     LEFT JOIN levels level ON level.id = s.level_id AND level.event_id = s.event_id
     LEFT JOIN waves wave ON wave.id = s.wave_id
     LEFT JOIN routing_rules routing_rule ON routing_rule.id = s.applied_rule_id AND routing_rule.event_id = s.event_id
-    LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
-    LEFT JOIN rooms room ON room.id = ai.room_id
-    LEFT JOIN buildings building ON building.id = room.building_id
+    LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.event_id = s.event_id AND ai.kind = 'session'
+    LEFT JOIN rooms room ON room.id = ai.room_id AND room.event_id = ai.event_id
+    LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id
     WHERE s.event_id = ? AND s.id = ?
   `).bind(eventId, submissionId).first<BaseRecordRow>();
   if (!row) throw ApiError.notFound("submission not found");
+  const publication = await evaluatePublication(db, eventId, submissionId);
 
   const [participants, tags, answers, tracks, decisions, reversals, evaluations, comparisons, history, rounds, criteria, reviewerOptions, decisionSends] = await Promise.all([
     db.prepare(`
@@ -865,7 +869,18 @@ async function loadRecord(
     slot,
     // Publication belongs to the agenda placement. The submission column is a
     // legacy mirror and may lag during imports or older reversals.
-    is_published: row.agenda_published === 1,
+    is_published: publication.agendaItem?.isPublished === true,
+    publication: {
+      classification: publication.classification,
+      observed_state: publication.observedState,
+      primary_reason_code: publication.primaryReasonCode,
+      reason_codes: publication.reasonCodes,
+      reason_details: publication.reasonDetails,
+      observed_revision: publication.observedRevision,
+      anomaly: publication.classification === "BOARD_ANOMALY"
+        ? publication.status === "withdrawn" ? "withdrawn" : "rejected"
+        : null,
+    },
     tracks: tracks.results.map((track) => ({ ...track, is_primary: Boolean(track.is_primary) })),
     participants: participants.results,
     answers: normalizedAnswers,
@@ -921,8 +936,8 @@ async function loadRecord(
       // reversal leaves the agenda row in place, so a withdrawn record still
       // derives to `scheduled` and a stage test would happily publish it to
       // the public site.
-      can_publish: slot !== null && !slot.is_published && row.status === "accepted" && canWriteProgram,
-      can_unpublish: slot !== null && slot.is_published && canWriteProgram,
+      can_publish: publication.classification === "READY_TO_PUBLISH" && canWriteProgram,
+      can_unpublish: publication.agendaItem?.isPublished === true && canWriteProgram,
       // The UI renders the content editor and the restore control from this one
       // field, so it must answer exactly what the write routes enforce — which
       // is not one policy but two. Drafts go to `patchDraft`, gated on
@@ -1506,6 +1521,15 @@ interface PublicationSnapshot {
   agenda_updated_at: number | null;
 }
 
+interface PublicationMutation {
+  operation_id: string;
+  effect: "changed" | "no_op";
+  reason_code: string | null;
+  notice: string | null;
+  duplicate_skipped: number;
+  dispatch_state: "not_required";
+}
+
 /**
  * Change the two publication flags as one audited state transition.
  *
@@ -1522,7 +1546,8 @@ async function setPublication(
   submissionId: string,
   published: boolean,
   actor: DecisionActor,
-): Promise<void> {
+  operationId: string,
+): Promise<PublicationMutation> {
   const current = await db.prepare(`
     SELECT
       s.status,
@@ -1543,9 +1568,23 @@ async function setPublication(
   if (published && current.status !== "accepted") {
     throw ApiError.conflict("this Session is not accepted, so it cannot be published");
   }
-
   const target = published ? 1 : 0;
-  if (current.agenda_is_published === target && current.submission_is_published === target) return;
+  if (current.agenda_is_published === target && current.submission_is_published === target) {
+    return {
+      operation_id: operationId,
+      effect: "no_op",
+      reason_code: published ? "ALREADY_PUBLISHED" : "ALREADY_IN_STATE",
+      notice: published ? "Already live — nothing changed" : "Already unpublished — nothing changed",
+      duplicate_skipped: 0,
+      dispatch_state: "not_required",
+    };
+  }
+  if (published) {
+    const truth = await evaluatePublication(db, eventId, submissionId);
+    if (truth.classification !== "READY_TO_PUBLISH") {
+      throw ApiError.conflict(publicationReasonMessage(truth.primaryReasonCode) ?? "this Session is not ready to publish");
+    }
+  }
 
   const now = Date.now();
   const agendaUpdatedAt = Math.max(now, current.agenda_updated_at + 1);
@@ -1632,6 +1671,41 @@ async function setPublication(
   if (Number(results[0]?.meta?.changes ?? 0) !== 1 || Number(results[1]?.meta?.changes ?? 0) !== 1 || Number(results[2]?.meta?.changes ?? 0) !== 1) {
     throw ApiError.conflict(`this Session changed while ${published ? "publishing" : "removing it from the public site"}; refresh and try again`);
   }
+  return {
+    operation_id: operationId,
+    effect: "changed",
+    reason_code: published ? "READY_TO_PUBLISH" : null,
+    notice: published ? "Published to the public agenda" : "Removed from the public agenda",
+    duplicate_skipped: 0,
+    dispatch_state: "not_required",
+  };
+}
+
+async function explainDirectPublicationConflict(
+  db: D1Database,
+  eventId: string,
+  submissionId: string,
+  operationId: string,
+  original: ApiError,
+): Promise<ApiError> {
+  if (original.code !== "conflict") return original;
+  const explanation = await explainPublicationSelection(db, eventId, [submissionId], {}, operationId);
+  const row = explanation.rows[0];
+  const reasonCode = original.message.includes("changed while")
+    ? "STALE_SELECTION"
+    : row?.primaryReasonCode ?? "STALE_SELECTION";
+  const notice = publicationReasonMessage(reasonCode, true) ?? original.message;
+  return ApiError.conflict(notice, {
+    operation: {
+      operation_id: operationId,
+      effect: "no_op",
+      reason_code: reasonCode,
+      notice,
+      duplicate_skipped: 0,
+      dispatch_state: "not_required",
+    },
+    ...explanation,
+  });
 }
 
 const publishSubmission = defineApiRoute(
@@ -1648,9 +1722,39 @@ const publishSubmission = defineApiRoute(
   async (context) => {
     const { eventId, submissionId } = context.req.valid("param");
     await eventFor(context.env.DB, eventId);
-    await setPublication(context.env.DB, eventId, submissionId, true, await actorFor(context));
-    await purgePublicEmbedCache(context.env.CACHE, { eventId });
-    return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+    const actor = await actorFor(context);
+    const requestId = context.get("requestId") ?? crypto.randomUUID();
+    const requestOperation = await claimRequestOperation({
+      db: context.env.DB,
+      scope: await eventOperationScope(context.env.DB, eventId),
+      route: "events.submissions.publish",
+      requestId,
+      actorKind: actor.kind,
+      actorPersonId: actor.personId,
+      request: { submission_id: submissionId },
+    });
+    if (requestOperation.replay) return context.json(requestOperation.replay.body, requestOperation.replay.status as 200);
+    let operation: PublicationMutation;
+    try {
+      operation = await setPublication(context.env.DB, eventId, submissionId, true, actor, requestOperation.operationId);
+    } catch (error: unknown) {
+      if (error instanceof ApiError) {
+        const failure = await explainDirectPublicationConflict(
+          context.env.DB,
+          eventId,
+          submissionId,
+          requestOperation.operationId,
+          error,
+        );
+        await completeRequestOperation(context.env.DB, requestOperation.operationId, failure.status, failure.toEnvelope(requestId), { state: "failed", claimToken: requestOperation.claimToken });
+        throw failure;
+      }
+      throw error;
+    }
+    if (operation.effect === "changed") await purgePublicEmbedCache(context.env.CACHE, { eventId });
+    const response = { ...(await loadRecord(context.env.DB, eventId, submissionId)), operation };
+    await completeRequestOperation(context.env.DB, requestOperation.operationId, 200, response, { claimToken: requestOperation.claimToken });
+    return context.json(response, 200);
   },
 );
 
@@ -1669,9 +1773,39 @@ const unpublishSubmission = defineApiRoute(
   async (context) => {
     const { eventId, submissionId } = context.req.valid("param");
     await eventFor(context.env.DB, eventId);
-    await setPublication(context.env.DB, eventId, submissionId, false, await actorFor(context));
-    await purgePublicEmbedCache(context.env.CACHE, { eventId });
-    return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
+    const actor = await actorFor(context);
+    const requestId = context.get("requestId") ?? crypto.randomUUID();
+    const requestOperation = await claimRequestOperation({
+      db: context.env.DB,
+      scope: await eventOperationScope(context.env.DB, eventId),
+      route: "events.submissions.unpublish",
+      requestId,
+      actorKind: actor.kind,
+      actorPersonId: actor.personId,
+      request: { submission_id: submissionId },
+    });
+    if (requestOperation.replay) return context.json(requestOperation.replay.body, requestOperation.replay.status as 200);
+    let operation: PublicationMutation;
+    try {
+      operation = await setPublication(context.env.DB, eventId, submissionId, false, actor, requestOperation.operationId);
+    } catch (error: unknown) {
+      if (error instanceof ApiError) {
+        const failure = await explainDirectPublicationConflict(
+          context.env.DB,
+          eventId,
+          submissionId,
+          requestOperation.operationId,
+          error,
+        );
+        await completeRequestOperation(context.env.DB, requestOperation.operationId, failure.status, failure.toEnvelope(requestId), { state: "failed", claimToken: requestOperation.claimToken });
+        throw failure;
+      }
+      throw error;
+    }
+    if (operation.effect === "changed") await purgePublicEmbedCache(context.env.CACHE, { eventId });
+    const response = { ...(await loadRecord(context.env.DB, eventId, submissionId)), operation };
+    await completeRequestOperation(context.env.DB, requestOperation.operationId, 200, response, { claimToken: requestOperation.claimToken });
+    return context.json(response, 200);
   },
 );
 
