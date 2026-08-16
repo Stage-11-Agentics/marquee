@@ -41,9 +41,7 @@ interface ExistingRequestOperation {
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) {
-    // Arrays retain order and multiplicity. Request-operation callers must
-    // normalize unordered selectors before claiming; the registry must never
-    // collapse two materially different request bodies into one fingerprint.
+    // Arrays retain order and multiplicity; reordering a raw selector returns 409 rather than being normalized.
     return value.map(canonicalize);
   }
   if (value && typeof value === "object") {

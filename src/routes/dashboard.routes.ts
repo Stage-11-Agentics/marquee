@@ -319,6 +319,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     note: calendarDebt.blocked.length > 0
       ? `${calendarDebt.blocked.length} recipient${calendarDebt.blocked.length === 1 ? "" : "s"} need an address first`
       : "open the agenda builder to send one batch per speaker",
+  };
   const publicationRows = publicationTruth as ReturnType<typeof classifyPublicationFact>[];
   const notYetPublic = publicationRows.filter((row) => row.classification === "READY_TO_PUBLISH").length;
   const liveOnSite = publicationRows.filter((row) => row.classification === "PUBLIC_LIVE").length;
