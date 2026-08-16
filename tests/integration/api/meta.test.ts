@@ -47,7 +47,7 @@ test("AC-106 · the document advertises both auth schemes and the shared error e
   expect(document.paths["/api/v1/me/uploads/sign"].post.operationId).toBe("signTaskUpload");
 });
 
-test("CONTRACT · MRQ-146 · concurrency claims and headers describe only agenda mutations", async () => {
+test("CONTRACT · MRQ-146 · concurrency claims and headers cover agenda and decision-plan mutations", async () => {
   const body = await (await SELF.fetch(`${ORIGIN}/api/openapi.json`)).text();
   const document = JSON.parse(body) as {
     info: { description: string };
@@ -59,11 +59,11 @@ test("CONTRACT · MRQ-146 · concurrency claims and headers describe only agenda
   };
 
   // MRQ-150 restates MRQ-146's claim in full rather than in one clause: the scope is
-  // still agenda items only, and the document names the bounded conflict cases instead.
-  expect(document.info.description).toContain("Optimistic concurrency is scoped to **agenda items**");
+  // agenda items plus decision-plan applies, and the document names the bounded conflict cases.
+  expect(document.info.description).toContain("Optimistic concurrency covers **agenda items** and decision-plan applies");
   const normalizedDescription = document.info.description.replace(/\s+/g, " ");
   expect(normalizedDescription).toContain(
-    "No operation other than the two agenda item mutations takes `If-Match`. Several mutations still refuse a concurrent change on their own terms — agenda publication, participation responses, and task completion answer `409` when the record moved underneath the request; submission decisions refuse the same stale write with `422` — so a `409` or `422` is worth handling on any write.",
+    "Bulk and single submission decision applies require the decision plan's strong ETag in `If-Match` and refuse a stale preview with `409`. Several mutations still refuse a concurrent change on their own terms — agenda publication, participation responses, and task completion answer `409` when the record moved underneath the request; decision applies can also report per-record transition drift with `422` — so a `409` or `422` is worth handling on any write.",
   );
   expect(body.match(/If-Match/g) ?? []).toHaveLength(2);
 
@@ -74,7 +74,7 @@ test("CONTRACT · MRQ-146 · concurrency claims and headers describe only agenda
     ))
     .map((operation) => operation.operationId)
     .sort();
-  expect(ifMatchOperations).toEqual(["removeAgendaItem", "updateAgendaItem"]);
+  expect(ifMatchOperations).toEqual(["bulkDecideSubmissions", "decideSubmission", "removeAgendaItem", "updateAgendaItem"]);
 
   const operations = Object.values(document.paths).flatMap((path) => Object.values(path));
   const responsesFor = (operationId: string) => operations.find((operation) => operation.operationId === operationId)?.responses ?? {};
@@ -159,6 +159,8 @@ test("CONTRACT · MRQ-150 · the document's concurrency claim matches the routes
   expect(enforcing).toEqual([
     "DELETE /api/v1/events/{eventId}/agenda/items/{itemId}",
     "PATCH /api/v1/events/{eventId}/agenda/items/{itemId}",
+    "POST /api/v1/events/{eventId}/submissions/bulk",
+    "POST /api/v1/events/{eventId}/submissions/{submissionId}/decision",
   ]);
 
   const description = (await (await SELF.fetch(`${ORIGIN}/api/openapi.json`)).json<{ info: { description: string } }>())
@@ -167,5 +169,5 @@ test("CONTRACT · MRQ-150 · the document's concurrency claim matches the routes
   expect(description).not.toContain("Mutations carry strong");
   expect(description).toContain("agenda items");
   expect(description).toContain("If-Match");
-  expect(normalizedDescription).toContain("submission decisions refuse the same stale write with `422`");
+  expect(normalizedDescription).toContain("decision applies can also report per-record transition drift with `422`");
 });

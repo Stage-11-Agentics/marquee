@@ -4,7 +4,10 @@
  * compare-and-swap primitive. D1 has no interactive transactions — every
  * mutable handler performs the version check inside the conditional write
  * itself, through this primitive. Route-level read-then-unconditional-write
- * and per-call-site CAS variants are defects.
+ * and per-call-site CAS variants are defects. The decision-plan apply route is
+ * an explicit preflight carve-out: its fingerprint rejects a changed preview,
+ * while the existing status-conditional writes remain the residual per-record
+ * guard and report transition drift as per-record failures.
  */
 import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
 

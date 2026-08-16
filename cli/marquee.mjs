@@ -36,8 +36,13 @@ const VALUE_OPTIONS = new Set([
   "--recommendation",
   "--comment",
   "--criteria",
+  "--action",
+  "--plan-fingerprint",
+  "--queue-revision",
+  "--cursor",
+  "--feedback",
 ]);
-const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue", "--tail", "--bundle", "--provision"]);
+const FLAG_OPTIONS = new Set(["--json", "--help", "--overdue", "--tail", "--bundle", "--provision", "--confirm-published"]);
 const LIST_FILTER_KEYS = new Set(["kind", "status", "track", "format", "wave", "task", "placement", "q"]);
 const REMINDER_FILTER_KEYS = new Set([
   "status",
@@ -224,6 +229,32 @@ function requireFilters(command, options, allowed) {
   const values = optionValues(options, "--filter");
   if (values.length === 0) usageError(`${command.usage} requires --filter`);
   return parseFilters(values, allowed, "filter");
+}
+
+const DECISION_PLAN_ACTIONS = new Set(["accept", "reject", "waitlist", "withdraw", "notify"]);
+
+function requireDecisionPlanAction(command, options) {
+  const action = option(options, "--action");
+  if (!action || !DECISION_PLAN_ACTIONS.has(action)) {
+    usageError(`${command.usage} requires --action accept|reject|waitlist|withdraw|notify`);
+  }
+  return action;
+}
+
+function optionalDecisionBody(options) {
+  const feedback = option(options, "--feedback");
+  return {
+    ...(feedback === undefined ? {} : { feedback_md: feedback }),
+    ...(options.has("--confirm-published") ? { confirm_published: true } : {}),
+  };
+}
+
+function requiredIntegerOption(command, options, name) {
+  const value = option(options, name);
+  if (value === undefined) usageError(`${command.usage} requires ${name}`);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) usageError(`${name} must be a non-negative integer`);
+  return parsed;
 }
 
 function csvCell(value) {
@@ -506,12 +537,59 @@ async function execute(command, arguments_, options, flags, client) {
     if (!submissionId) usageError(`${command.usage} requires a submission ID`);
     return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}`);
   }
-  if (root === "submissions" && (verb === "accept" || verb === "reject")) {
+  if (root === "submissions" && verb === "plan") {
+    const action = requireDecisionPlanAction(command, options);
+    if (action === "notify") {
+      if (optionValues(options, "--filter").length > 0) usageError("submissions plan --action notify does not take --filter");
+      return client.post(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/plan`);
+    }
     const filters = requireFilters(command, options, LIST_FILTER_KEYS);
+    return client.post(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/decision-plan`, {
+      selector: { filter: filters },
+      action,
+      ...optionalDecisionBody(options),
+    });
+  }
+  if (root === "submissions" && verb === "apply") {
+    const action = requireDecisionPlanAction(command, options);
+    if (action === "notify") {
+      const queueRevision = requiredIntegerOption(command, options, "--queue-revision");
+      const cursor = option(options, "--cursor");
+      return client.post(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/notify`,
+        { queue_revision: queueRevision },
+        cursor ? { query: { cursor } } : undefined,
+      );
+    }
+    const filters = requireFilters(command, options, LIST_FILTER_KEYS);
+    const planFingerprint = option(options, "--plan-fingerprint");
+    if (!planFingerprint) usageError(`${command.usage} requires --plan-fingerprint for decision actions`);
+    if (!/^[0-9a-f]{64}$/.test(planFingerprint)) usageError("--plan-fingerprint must be 64 lowercase hexadecimal characters");
+    const ifMatch = option(options, "--if-match");
+    if (!ifMatch) usageError(`${command.usage} requires --if-match for decision actions`);
     return client.post(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/bulk`, {
       selector: { filter: filters },
-      action: verb,
+      action,
+      plan_fingerprint: planFingerprint,
+      ...optionalDecisionBody(options),
+    }, { headers: { "if-match": ifMatch } });
+  }
+  if (root === "submissions" && (verb === "accept" || verb === "reject")) {
+    const filters = requireFilters(command, options, LIST_FILTER_KEYS);
+    const selector = { filter: filters };
+    const action = verb;
+    const body = optionalDecisionBody(options);
+    const plan = await client.post(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/decision-plan`, {
+      selector,
+      action,
+      ...body,
     });
+    return client.post(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/bulk`, {
+      selector,
+      action,
+      plan_fingerprint: plan.plan_fingerprint,
+      ...body,
+    }, { headers: { "if-match": plan.etag } });
   }
   if (root === "tasks" && verb === "list") {
     const filter = option(options, "--filter") ?? (options.has("--overdue") ? "overdue" : "all");

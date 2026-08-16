@@ -282,9 +282,17 @@ test("CONTRACT · MRQ-211 · lens two · a second organization's person-shaped a
 });
 
 test("CONTRACT · MRQ-211 · lens three · a submission's timeline reads its own audit rows as sentences, newest first", async () => {
+  const decisionBody = { recommendation: "approve", feedback_md: "Strong fit for the infra track." };
+  const planResponse = await request(`/api/v1/events/${EVENT_ID}/submissions/${SUBMISSION_ID}/decision-plan`, {
+    method: "POST",
+    body: JSON.stringify(decisionBody),
+  });
+  expect(planResponse.status).toBe(200);
+  const plan = await planResponse.json() as { plan_fingerprint: string; etag: string };
   const decided = await request(`/api/v1/events/${EVENT_ID}/submissions/${SUBMISSION_ID}/decision`, {
     method: "POST",
-    body: JSON.stringify({ recommendation: "approve", feedback_md: "Strong fit for the infra track." }),
+    headers: { "if-match": plan.etag },
+    body: JSON.stringify({ ...decisionBody, plan_fingerprint: plan.plan_fingerprint }),
   });
   expect(decided.status).toBe(200);
   const edited = await request(`/api/v1/events/${EVENT_ID}/submissions/${SUBMISSION_ID}/content`, {

@@ -109,11 +109,18 @@ async function runIcsForContext(context, eventId) {
     "Public confirmation outbox row did not target the exact ICS recipient",
   );
   const submissionId = submission.submissionId;
+  const decision = { recommendation: "approve", feedback_md: "MRQ-238 live ICS oracle" };
+
+  const plan = await requestJson(context.origin, `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/decision-plan`, {
+    method: "POST",
+    headers: context.auth,
+    body: JSON.stringify(decision),
+  });
 
   await requestJson(context.origin, `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/decision`, {
     method: "POST",
-    headers: context.auth,
-    body: JSON.stringify({ recommendation: "approve", feedback_md: "MRQ-238 live ICS oracle" }),
+    headers: { ...context.auth, "if-match": plan.etag },
+    body: JSON.stringify({ ...decision, plan_fingerprint: plan.plan_fingerprint }),
   });
 
   const agenda = await requestJson(context.origin, `/api/v1/events/${encodeURIComponent(eventId)}/agenda`, {

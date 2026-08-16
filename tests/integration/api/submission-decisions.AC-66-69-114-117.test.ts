@@ -133,13 +133,21 @@ async function seedFixture(): Promise<void> {
 }
 
 async function requestBulk(body: unknown): Promise<Response> {
+  const plan = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/decision-plan`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  expect(plan.status).toBe(200);
+  const planBody = await plan.json<{ plan_fingerprint: string; etag: string }>();
   return SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/bulk`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${TOKEN}`,
       "content-type": "application/json",
+      "if-match": planBody.etag,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...(body as Record<string, unknown>), plan_fingerprint: planBody.plan_fingerprint }),
   });
 }
 
@@ -150,13 +158,21 @@ async function requestList(query: string): Promise<Response> {
 }
 
 async function requestRecord(submissionId: string, body: unknown): Promise<Response> {
+  const plan = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/${submissionId}/decision-plan`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  expect(plan.status).toBe(200);
+  const planBody = await plan.json<{ plan_fingerprint: string; etag: string }>();
   return SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/${submissionId}/decision`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${TOKEN}`,
       "content-type": "application/json",
+      "if-match": planBody.etag,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...(body as Record<string, unknown>), plan_fingerprint: planBody.plan_fingerprint }),
   });
 }
 
@@ -267,13 +283,8 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     expect(afterRefusal).toEqual(before);
 
     const bulk = await requestBulk({ selector: { ids: ["sub-mrq19-100"] }, action: "reject" });
-    expect(bulk.status).toBe(200);
-    expect(await bulk.json<BulkResponse>()).toMatchObject({
-      selected: 1,
-      succeeded: 0,
-      failed: 1,
-      published_count: 1,
-    });
+    expect(bulk.status).toBe(409);
+    expect(await bulk.json()).toMatchObject({ error: { code: "conflict", details: { code: "zero_effect" } } });
     expect(await env.DB.prepare("SELECT status FROM submissions WHERE id = 'sub-mrq19-100'").first()).toEqual({ status: "accepted" });
 
     const cacheKey = publicEmbedCacheKey(EVENT_ID, "mrq19-sessions");
@@ -362,10 +373,8 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
       selector: { ids: [accepted?.id] },
       action: "reject",
     });
-    expect(repeated.status).toBe(200);
-    const repeatedBody = await repeated.json<BulkResponse>();
-    expect(repeatedBody.succeeded).toBe(0);
-    expect(repeatedBody.failed).toBe(1);
+    expect(repeated.status).toBe(409);
+    expect(await repeated.json()).toMatchObject({ error: { code: "conflict", details: { code: "zero_effect" } } });
     const outboxCount = await env.DB.prepare(
       "SELECT COUNT(*) AS total FROM outbox WHERE event_id = ? AND entity_id = ? AND template_key = 'rejection'",
     ).bind(EVENT_ID, accepted?.id).first<{ total: number }>();
@@ -381,11 +390,8 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
       selector: { ids: ["sub-mrq19-invalid-email"] },
       action: "accept",
     });
-    expect(response.status).toBe(200);
-    const result = await response.json<BulkResponse>();
-    expect(result.succeeded).toBe(0);
-    expect(result.failed).toBe(1);
-    expect(result.failures?.[0]?.message).toContain("valid email");
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "conflict", details: { code: "zero_effect" } } });
     const row = await env.DB.prepare(
       "SELECT status FROM submissions WHERE id = 'sub-mrq19-invalid-email'",
     ).first<{ status: string }>();

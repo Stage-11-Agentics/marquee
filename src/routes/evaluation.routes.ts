@@ -1716,6 +1716,9 @@ const promoteRound = defineApiRoute(
     const selectedIds = selector.kind === "filter"
       ? await selectSubmissionIds(context.env.DB, { eventId, ...(selector.filter as z.infer<typeof submissionFilterSchema>) })
       : [...new Set(selector.ids)];
+    if (selector.kind === "filter" && selectedIds.length > BULK_ID_LIMIT) {
+      throw ApiError.unprocessable(`selector resolves to more than ${BULK_ID_LIMIT} submissions; narrow the selection`, "selector");
+    }
     const rows = selectedIds.length === 0
       ? []
       : (await context.env.DB.prepare(`

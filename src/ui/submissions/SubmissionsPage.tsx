@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
+import type { DecisionPlanResponse } from "../../api/decision-plan";
 import type { SubmissionListItem, SubmissionNotificationAction, SubmissionTrackListItem } from "../../api/submissions";
 import {
   DEFAULT_SUBMISSION_COLUMNS,
@@ -11,7 +12,7 @@ import {
   type SubmissionColumnId,
 } from "../../lib/submission-columns";
 import { reviewCountLabel, scoreBasisLabel } from "../../lib/review-aggregate";
-import { apiFetch, errorSummary } from "../shell/api-client";
+import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { participationRoleLabel } from "../shell/identity-format";
 import { Button, PageHeader, ReviewerName } from "../shell/components";
 import type { NavigationOptions } from "../shell/router";
@@ -27,6 +28,7 @@ import {
 } from "./list-request";
 import { submissionsCsv } from "./export-csv";
 import { selectionCount } from "./selection";
+import { DecisionPlanPanel, DecisionPlanResultModal, type DecisionPlanApplyResult, type DecisionPlanSkip } from "./DecisionPlanPanel";
 import "./submissions.css";
 
 export interface ListEnvelope {
@@ -133,6 +135,14 @@ function formatMoment(value: number | null): string {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function isDecisionPlanConflict(error: unknown): boolean {
+  if (!(error instanceof MarqueeApiError) || error.code !== "conflict") return false;
+  const details = error.details;
+  if (!details || typeof details !== "object") return false;
+  const code = (details as { code?: unknown }).code;
+  return code === "stale_plan" || code === "stale_queue_revision";
 }
 
 function slotLabel(item: SubmissionListItem): string | null {
@@ -334,15 +344,25 @@ export function SubmissionsPage({
   const [viewMessage, setViewMessage] = useState("");
   const [viewBusy, setViewBusy] = useState(false);
   const [columnPanelOpen, setColumnPanelOpen] = useState(false);
-  const [notifiedSummary, setNotifiedSummary] = useState<{ total: number; sendable: number; no_valid_address: number } | null>(null);
+  const [notifiedSummary, setNotifiedSummary] = useState<{ total: number; sendable: number; no_valid_address: number; queue_revision: number } | null>(null);
   const [notifying, setNotifying] = useState(false);
   const [notifyMessage, setNotifyMessage] = useState("");
   const [notifyError, setNotifyError] = useState("");
+  const [notifyPlan, setNotifyPlan] = useState<DecisionPlanResponse | null>(null);
+  const [notifyPlanLoading, setNotifyPlanLoading] = useState(false);
+  const [notifyPlanError, setNotifyPlanError] = useState("");
+  const [notifyPlanStale, setNotifyPlanStale] = useState(false);
   const [bulkRequest, setBulkRequest] = useState<BulkAction | null>(null);
   const [bulkFeedback, setBulkFeedback] = useState("");
+  const [bulkConfirmPublished, setBulkConfirmPublished] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMessage, setBulkMessage] = useState("");
   const [bulkError, setBulkError] = useState("");
+  const [bulkPlan, setBulkPlan] = useState<DecisionPlanResponse | null>(null);
+  const [bulkPlanLoading, setBulkPlanLoading] = useState(false);
+  const [bulkPlanError, setBulkPlanError] = useState("");
+  const [bulkPlanStale, setBulkPlanStale] = useState(false);
+  const [planResult, setPlanResult] = useState<{ plan: DecisionPlanResponse; result: DecisionPlanApplyResult; skips: DecisionPlanSkip[] } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
   const [acceptedAnyTotal, setAcceptedAnyTotal] = useState<number | null>(null);
@@ -352,6 +372,7 @@ export function SubmissionsPage({
   const savedViewChipRefs = useRef(new Map<string, HTMLSpanElement>());
   const requestSequenceRef = useRef(0);
   const localSearchNavigationRef = useRef<string | null>(null);
+  const bulkPlanRefreshTimerRef = useRef<number | null>(null);
 
   const page = Number(queryValue(params, "page", "1"));
   const status = queryValue(params, "status");
@@ -413,7 +434,7 @@ export function SubmissionsPage({
       return;
     }
     const controller = new AbortController();
-    apiFetch<{ total: number; sendable: number; no_valid_address: number }>(
+    apiFetch<{ total: number; sendable: number; no_valid_address: number; queue_revision: number }>(
       `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/summary`,
       { signal: controller.signal, route: "/api/v1/events/{eventId}/submissions/not-notified/summary" },
     )
@@ -537,8 +558,13 @@ export function SubmissionsPage({
     setAllMatching(false);
     setPublishedMatchingCount(null);
     setBulkRequest(null);
+    setBulkPlan(null);
+    setNotifyPlan(null);
+    setPlanResult(null);
     setBulkMessage("");
     setBulkError("");
+    setBulkPlanError("");
+    setNotifyPlanError("");
   }, [queryIdentity]);
 
   useEffect(() => {
@@ -757,70 +783,191 @@ export function SubmissionsPage({
     return { filter };
   };
 
-  const runBulk = async (action: BulkAction) => {
-    setBulkBusy(true);
-    setBulkError("");
-    setBulkMessage("");
+  const loadBulkPlan = async (action: BulkAction, feedback: string, confirmPublished = bulkConfirmPublished) => {
+    setBulkPlanLoading(true);
+    setBulkPlanError("");
     try {
-      const result = await apiFetch<{ succeeded: number; failed: number; outbox_enqueued: number; published_count?: number }>(
-        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/bulk`,
+      const plan = await apiFetch<DecisionPlanResponse>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/decision-plan`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             selector: bulkSelector(),
             action,
+            ...(feedback.trim() ? { feedback_md: feedback.trim() } : {}),
+            ...(confirmPublished ? { confirm_published: true } : {}),
+          }),
+          route: "/api/v1/events/{eventId}/submissions/decision-plan",
+        },
+      );
+      setBulkPlan(plan);
+      setBulkPlanStale(false);
+    } catch (error: unknown) {
+      setBulkPlanError(errorSummary(error));
+    } finally {
+      setBulkPlanLoading(false);
+    }
+  };
+
+  const openBulkPlan = (action: BulkAction) => {
+    setBulkRequest(action);
+    setBulkFeedback("");
+    setBulkConfirmPublished(false);
+    setBulkPlan(null);
+    setBulkPlanError("");
+    setBulkPlanStale(false);
+    void loadBulkPlan(action, "", false);
+  };
+
+  const planRecordSkips = (plan: DecisionPlanResponse, result: DecisionPlanApplyResult): DecisionPlanSkip[] => {
+    const skippedRows = plan.action === "notify" ? [plan.rows[2], plan.rows[3]] : [plan.rows[1], plan.rows[2], plan.rows[3]];
+    const skips = skippedRows.flatMap((row) => row.records.map((record) => ({ id: record.id, title: record.title, reason: record.reason })));
+    if (!plan.template.enabled && plan.action !== "waitlist" && plan.action !== "withdraw") {
+      skips.push(...plan.rows[0].records.map((record) => ({ id: record.id, title: record.title, reason: "The decision template is disabled; this action sent nothing." })));
+    }
+    for (const item of result.results ?? []) {
+      if (item.outcome !== "failed") continue;
+      const known = plan.rows.flatMap((row) => row.records).find((record) => record.id === item.id);
+      skips.push({ id: item.id, title: known?.title ?? item.id, reason: item.error ?? "The record could not move." });
+    }
+    const seen = new Set<string>();
+    return skips.filter((skip) => {
+      const key = `${skip.id}:${skip.reason}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
+  const runBulk = async () => {
+    if (!bulkRequest || !bulkPlan) return;
+    setBulkBusy(true);
+    setBulkError("");
+    setBulkMessage("");
+    try {
+      const result = await apiFetch<DecisionPlanApplyResult & { published_count?: number }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/bulk`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", "if-match": bulkPlan.etag },
+          body: JSON.stringify({
+            selector: bulkSelector(),
+            action: bulkRequest,
+            plan_fingerprint: bulkPlan.plan_fingerprint,
             ...(bulkFeedback.trim() ? { feedback_md: bulkFeedback.trim() } : {}),
+            ...(bulkConfirmPublished ? { confirm_published: true } : {}),
           }),
           route: "/api/v1/events/{eventId}/submissions/bulk",
         },
       );
-      const verb = action === "waitlist" ? "waitlisted" : action === "accept" ? "accepted" : "rejected";
-      setBulkMessage(`${result.succeeded.toLocaleString()} ${verb}${result.failed ? ` · ${result.failed.toLocaleString()} could not move` : ""}${result.published_count ? ` · ${result.published_count.toLocaleString()} published record${result.published_count === 1 ? "" : "s"} left unchanged` : ""}${result.outbox_enqueued ? ` · ${result.outbox_enqueued.toLocaleString()} notification${result.outbox_enqueued === 1 ? "" : "s"} queued` : ""}.`);
+      const skips = planRecordSkips(bulkPlan, result);
+      if (skips.length > 0 || result.failed > 0) {
+        setPlanResult({ plan: bulkPlan, result, skips });
+      } else {
+        const verb = bulkRequest === "waitlist" ? "waitlisted" : bulkRequest === "accept" ? "accepted" : "rejected";
+        setBulkMessage(`${result.succeeded.toLocaleString()} ${verb}${result.outbox_enqueued ? ` · ${result.outbox_enqueued.toLocaleString()} notification${result.outbox_enqueued === 1 ? "" : "s"} queued` : ""}.`);
+      }
       setBulkRequest(null);
+      setBulkPlan(null);
       setBulkFeedback("");
       setSelectedIds(new Set());
       setAllMatching(false);
       setReloadKey((value) => value + 1);
     } catch (error: unknown) {
-      setBulkError(errorSummary(error));
+      if (isDecisionPlanConflict(error)) setBulkPlanStale(true);
+      else setBulkPlanError(errorSummary(error));
     } finally {
       setBulkBusy(false);
     }
   };
 
+  const openNotifyPlan = async () => {
+    setNotifyPlanLoading(true);
+    setNotifyPlanError("");
+    setNotifyPlanStale(false);
+    try {
+      const plan = await apiFetch<DecisionPlanResponse>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/plan`,
+        { method: "POST", route: "/api/v1/events/{eventId}/submissions/not-notified/plan" },
+      );
+      setNotifyPlan(plan);
+    } catch (error: unknown) {
+      setNotifyPlanError(errorSummary(error));
+    } finally {
+      setNotifyPlanLoading(false);
+    }
+  };
+
   const notifySpeakers = async () => {
+    if (!notifyPlan) return;
     setNotifying(true);
     setNotifyMessage("");
     setNotifyError("");
     try {
       let cursor: string | null = null;
+      let queueRevision = notifyPlan.queue_revision;
       let queued = 0;
+      let selected = 0;
       let skippedNoAddress = 0;
       let remaining = 0;
       do {
         const cursorQuery: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-        const result: { queued: number; skipped_no_address: number; remaining: number; next_cursor: string | null } = await apiFetch<{
+        const result: { selected: number; queued: number; skipped_no_address: number; remaining: number; next_cursor: string | null; queue_revision: number } = await apiFetch<{
+          selected: number;
           queued: number;
           skipped_no_address: number;
           remaining: number;
           next_cursor: string | null;
+          queue_revision: number;
         }>(
           `/api/v1/events/${encodeURIComponent(eventId)}/submissions/not-notified/notify${cursorQuery}`,
-          { method: "POST", route: "/api/v1/events/{eventId}/submissions/not-notified/notify" },
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ queue_revision: queueRevision }),
+            route: "/api/v1/events/{eventId}/submissions/not-notified/notify",
+          },
         );
+        selected += result.selected;
         queued += result.queued;
         skippedNoAddress += result.skipped_no_address;
         remaining = result.remaining;
+        queueRevision = result.queue_revision;
         cursor = result.next_cursor;
       } while (cursor !== null && remaining > 0);
-      setNotifyMessage(`${queued.toLocaleString()} notification${queued === 1 ? "" : "s"} queued${skippedNoAddress ? ` · ${skippedNoAddress.toLocaleString()} need an address first` : ""}${remaining ? ` · ${remaining.toLocaleString()} remain; run Notify again` : ""}.`);
+      const result: DecisionPlanApplyResult = {
+        selected,
+        succeeded: queued,
+        failed: 0,
+        state: skippedNoAddress > 0 ? "completed_with_failures" : "completed",
+      };
+      const skips = planRecordSkips(notifyPlan, result);
+      if (skips.length > 0 || skippedNoAddress > 0) setPlanResult({ plan: notifyPlan, result, skips });
+      else setNotifyMessage(`${queued.toLocaleString()} notification${queued === 1 ? "" : "s"} queued.`);
+      setNotifyPlan(null);
       setReloadKey((value) => value + 1);
     } catch (error: unknown) {
-      setNotifyError(errorSummary(error));
+      if (isDecisionPlanConflict(error)) setNotifyPlanStale(true);
+      else setNotifyPlanError(errorSummary(error));
     } finally {
       setNotifying(false);
     }
+  };
+
+  const onBulkFeedbackChange = (value: string) => {
+    setBulkFeedback(value);
+    if (!bulkRequest || !bulkPlan) return;
+    if (bulkPlanRefreshTimerRef.current !== null) window.clearTimeout(bulkPlanRefreshTimerRef.current);
+    bulkPlanRefreshTimerRef.current = window.setTimeout(() => {
+      bulkPlanRefreshTimerRef.current = null;
+      void loadBulkPlan(bulkRequest, value, bulkConfirmPublished);
+    }, 320);
+  };
+
+  const onBulkConfirmPublishedChange = (value: boolean) => {
+    setBulkConfirmPublished(value);
+    if (bulkRequest) void loadBulkPlan(bulkRequest, bulkFeedback, value);
   };
 
   useEffect(() => {
@@ -849,7 +996,7 @@ export function SubmissionsPage({
   const statusTone = statusError ? "error" : statusNotice ? "success" : "";
   const statusText = statusError || statusNotice
     || (refreshing ? "Refreshing submissions…" : "Select rows to accept, waitlist, or reject them together.");
-  const mobileSheetOpen = Boolean(selectedCount || bulkError || bulkMessage);
+  const mobileSheetOpen = Boolean(selectedCount || bulkError || bulkMessage || bulkRequest || notifyPlan || planResult);
   return <div class={`submissions-page${mobileSheetOpen ? " has-mobile-sheet" : ""}`}>
     <PageHeader
       title={notifiedQueue ? "Decided · not notified" : draftQueue ? "Drafts needing attention" : "Abstracts & sessions"}
@@ -857,7 +1004,7 @@ export function SubmissionsPage({
         ? `${envelope.total.toLocaleString()} decisions need attention · ${notifiedSummary?.sendable.toLocaleString() ?? "—"} can be notified now · ${notifiedSummary?.no_valid_address.toLocaleString() ?? "—"} need an address first.`
         : `${singleVenueName ? `${singleVenueName}. ` : ""}${envelope.total.toLocaleString()} ${draftQueue ? "drafts needing attention" : "matching records"} · rendered ${SUBMISSIONS_PAGE_SIZE} at a time for an instant response at full scale.`
         : "Loading the conference submission register…"}
-      actions={<><span class="results-export-slot">{resultsPlanId && <a class="button" href={`/api/v1/events/${encodeURIComponent(eventId)}/plans/${encodeURIComponent(resultsPlanId)}/results/export?format=csv`} download="review-results.csv" onClick={(event) => void exportScores(event)}>Export scores (CSV)</a>}</span><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifiedSummary?.sendable === 0} onClick={() => void notifySpeakers()}>{notifying ? "Queuing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
+    actions={<><span class="results-export-slot">{resultsPlanId && <a class="button" href={`/api/v1/events/${encodeURIComponent(eventId)}/plans/${encodeURIComponent(resultsPlanId)}/results/export?format=csv`} download="review-results.csv" onClick={(event) => void exportScores(event)}>Export scores (CSV)</a>}</span><button class="button export-button" disabled={exporting} onClick={exportMatching}>{exporting ? "Exporting…" : "Export"}</button>{notifiedQueue ? <Button variant="primary" disabled={notifying || notifyPlanLoading || notifiedSummary?.sendable === 0} onClick={() => void openNotifyPlan()}>{notifying ? "Queuing…" : notifyPlanLoading ? "Reviewing…" : `Notify ${notifiedSummary?.sendable.toLocaleString() ?? "—"} speakers`}</Button> : <Button variant="primary" onClick={() => navigate("/submissions/new")}>+ Add session</Button>}</>}
     />
     {/*
       Ready to place is a stage, not the decision. Its list is a true answer to
@@ -927,26 +1074,40 @@ export function SubmissionsPage({
       */}
       <div class={`submissions-mobile-sheets${mobileSheetOpen ? " has-sheet" : ""}`}>
         <div class={`table-status-bar ${selectedCount ? "selecting" : statusTone}`} aria-live="polite">
-          {selectedCount ? <><strong class="tabular">{selectedCount.toLocaleString()} selected</strong>{!allMatching && envelope && selectedCount < envelope.total ? <Button small onClick={() => setAllMatching(true)}>Select all {envelope.total.toLocaleString()} matching</Button> : <span>All matching records selected</span>}<span class="toolbar-spacer" /><span class="selection-actions">{BULK_ACTIONS.map((option) => <Button key={option.action} small variant={option.variant} disabled={bulkBusy} onClick={() => { setBulkRequest(option.action); setBulkFeedback(""); setBulkError(""); }}>{option.label}</Button>)}</span></> : <><span class="table-status-text">{statusText}</span>{refreshError && <Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}</>}
+          {selectedCount ? <><strong class="tabular">{selectedCount.toLocaleString()} selected</strong>{!allMatching && envelope && selectedCount < envelope.total ? <Button small onClick={() => setAllMatching(true)}>Select all {envelope.total.toLocaleString()} matching</Button> : <span>All matching records selected</span>}<span class="toolbar-spacer" /><span class="selection-actions">{BULK_ACTIONS.map((option) => <Button key={option.action} small variant={option.variant} disabled={bulkBusy || bulkPlanLoading} onClick={() => openBulkPlan(option.action)}>{option.label}</Button>)}</span></> : <><span class="table-status-text">{statusText}</span>{refreshError && <Button small onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}</>}
         </div>
       </div>
-      {bulkRequest && (() => {
-        const option = BULK_ACTIONS.find((entry) => entry.action === bulkRequest)!;
-        const scope = allMatching ? "matching records" : selectedCount === 1 ? "record" : "records";
-        return <div class="bulk-decision-dialog" role="group" aria-labelledby="bulk-decision-heading">
-          <div class="bulk-decision-dialog-head">
-            <div><span class="eyebrow">Confirm bulk action</span><h2 id="bulk-decision-heading">{option.question} {selectedCount.toLocaleString()} {scope}?</h2></div>
-            <button type="button" aria-label="Close bulk decision dialog" onClick={() => setBulkRequest(null)}>×</button>
-          </div>
-          <p>{option.notifies ? "Each selected speaker will receive the feedback you add in the decision email." : "A waitlist does not send a message. Any feedback you add is saved with each decision."}</p>
-          <p class="bulk-published-count">Published records selected: {publishedSelectedCount === null ? "count unavailable" : publishedSelectedCount.toLocaleString()}. They stay unchanged unless you explicitly confirm the live write.</p>
-          <label class="field"><span>Feedback for the speakers (optional)</span><textarea rows={5} value={bulkFeedback} onInput={(event) => setBulkFeedback(event.currentTarget.value)} placeholder="Share context every one of these speakers can act on." /></label>
-          <div class="bulk-decision-actions">
-            <Button type="button" onClick={() => setBulkRequest(null)} disabled={bulkBusy}>Cancel</Button>
-            <Button type="button" variant={option.variant} disabled={bulkBusy} onClick={() => void runBulk(option.action)}>{bulkBusy ? "Saving…" : `${option.confirm} ${selectedCount.toLocaleString()}`}</Button>
-          </div>
-        </div>;
-      })()}
+      {bulkRequest && <DecisionPlanPanel
+        plan={bulkPlan}
+        loading={bulkPlanLoading}
+        error={bulkPlanError}
+        stale={bulkPlanStale}
+        busy={bulkBusy}
+        feedback={bulkFeedback}
+        confirmPublished={bulkConfirmPublished}
+        publishedCount={publishedSelectedCount}
+        onFeedbackChange={onBulkFeedbackChange}
+        onConfirmPublishedChange={onBulkConfirmPublishedChange}
+        onConfirm={() => void runBulk()}
+        onClose={() => { setBulkRequest(null); setBulkPlan(null); setBulkPlanError(""); }}
+        onRefresh={() => bulkRequest && void loadBulkPlan(bulkRequest, bulkFeedback, bulkConfirmPublished)}
+      />}
+      {(notifyPlan || notifyPlanLoading || notifyPlanError || notifyPlanStale) && <DecisionPlanPanel
+        plan={notifyPlan}
+        loading={notifyPlanLoading}
+        error={notifyPlanError}
+        stale={notifyPlanStale}
+        busy={notifying}
+        feedback=""
+        confirmPublished={false}
+        publishedCount={null}
+        onFeedbackChange={() => undefined}
+        onConfirmPublishedChange={() => undefined}
+        onConfirm={() => void notifySpeakers()}
+        onClose={() => { setNotifyPlan(null); setNotifyPlanError(""); setNotifyPlanStale(false); }}
+        onRefresh={() => void openNotifyPlan()}
+      />}
+      {planResult && <DecisionPlanResultModal plan={planResult.plan} result={planResult.result} skips={planResult.skips} onClose={() => setPlanResult(null)} />}
 
       <div class="submissions-table-wrap" ref={tableWrapRef} style={tableFrameMinHeight ? { minHeight: `${tableFrameMinHeight}px` } : undefined}>
         <table class="submissions-table">

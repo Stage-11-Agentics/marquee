@@ -9,6 +9,8 @@ import type {
   SubmissionSpeakerListItem,
   SubmissionTrackListItem,
 } from "../api/submissions";
+import { BULK_ID_LIMIT } from "../api/bulk";
+import { emailValiditySql } from "../lib/email-validity";
 import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-conditions";
 import { formatEventDateTime, localParts } from "../lib/event-time";
 import { DECISION_RECIPIENT_ROLES, participantListSql, primaryParticipantSql } from "../lib/participants";
@@ -377,7 +379,7 @@ const NOTIFICATION_STATE_SQL = `CASE
   WHEN notification_outbox.status = 'sent' THEN 'sent'
   WHEN notification_outbox.id IS NOT NULL THEN 'not_delivered'
   WHEN s.last_write_source = 'airtable' THEN 'changed_in_airtable'
-  WHEN trim(${NOTIFICATION_ADDRESS_SQL}) <> '' AND ${NOTIFICATION_ADDRESS_SQL} LIKE '%@%.%' THEN 'not_delivered'
+  WHEN ${emailValiditySql(NOTIFICATION_ADDRESS_SQL)} THEN 'not_delivered'
   ELSE 'no_valid_address'
 END`;
 
@@ -871,10 +873,19 @@ export interface NotifiedSummary {
   total: number;
   sendable: number;
   no_valid_address: number;
+  queue_revision: number;
 }
 
-function emptyNotifiedSummary(): NotifiedSummary {
-  return { total: 0, sendable: 0, no_valid_address: 0 };
+async function eventQueueRevision(database: D1Database, eventId: string): Promise<number> {
+  const event = await database
+    .prepare("SELECT updated_at FROM events WHERE id = ?")
+    .bind(eventId)
+    .first<{ updated_at: number | null }>();
+  return Number(event?.updated_at ?? 0);
+}
+
+function emptyNotifiedSummary(queueRevision = 0): NotifiedSummary {
+  return { total: 0, sendable: 0, no_valid_address: 0, queue_revision: queueRevision };
 }
 
 /** Dashboard counts are intentionally the actionable subset; no-address rows stay visible in the view. */
@@ -883,6 +894,7 @@ export async function summarizeNotNotifiedSubmissions(
   eventId: string,
 ): Promise<NotifiedSummary> {
   try {
+    const queueRevision = await eventQueueRevision(database, eventId);
     const row = await database
       .prepare(`
         SELECT
@@ -901,6 +913,7 @@ export async function summarizeNotNotifiedSubmissions(
       total: countValue(row?.total),
       sendable: countValue(row?.sendable),
       no_valid_address: countValue(row?.no_valid_address),
+      queue_revision: queueRevision,
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
@@ -917,7 +930,7 @@ function countValue(value: unknown): number {
 export async function selectSubmissionIds(
   database: D1Database,
   filters: SubmissionFilter & { eventId: string },
-  options: { statusSemantics?: SubmissionStatusSemantics } = {},
+  options: { statusSemantics?: SubmissionStatusSemantics; limit?: number | null } = {},
 ): Promise<string[]> {
   const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
   const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
@@ -929,11 +942,12 @@ export async function selectSubmissionIds(
     overdueDay,
     includeTemplateProvenance,
   );
-  const includeFormMetadata = await hasColumns(database, "forms", ["id", "event_id", "status", "opens_at", "closes_at"]);
-  const source = filters.status === "not_notified" ? notificationFrom(includeFormMetadata) : submissionFrom(includeFormMetadata);
-  const result = await database
-    .prepare(`SELECT DISTINCT s.id ${source} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC`)
-    .bind(...bindings)
-    .all<{ id: string }>();
+  const source = filters.status === "not_notified" ? notificationFrom(false) : submissionFrom(false);
+  const limit = options.limit === undefined ? BULK_ID_LIMIT + 1 : options.limit;
+  const limitClause = limit === null ? "" : " LIMIT ?";
+  const statement = database.prepare(`SELECT DISTINCT s.id ${source} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC${limitClause}`);
+  const result = limit === null
+    ? await statement.bind(...bindings).all<{ id: string }>()
+    : await statement.bind(...bindings, limit).all<{ id: string }>();
   return result.results.map((row) => row.id);
 }

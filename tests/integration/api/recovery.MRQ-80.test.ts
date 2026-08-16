@@ -160,9 +160,15 @@ describe.sequential("MRQ-80 deliberate decision resend", () => {
 
   test("CONTRACT · MRQ-80 · the bulk notifier still excludes the already-sent decision after a deliberate resend", async () => {
     const before = await env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE event_id = ?").bind(EVENT_ID).first<{ total: number }>();
-    const response = await request(`/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, { method: "POST" });
+    const summary = await request(`/api/v1/events/${EVENT_ID}/submissions/not-notified/summary`);
+    const summaryBody = await summary.json<{ queue_revision: number }>();
+    const response = await request(`/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ queue_revision: summaryBody.queue_revision }),
+    });
     expect(response.status).toBe(202);
-    expect(await response.json()).toEqual({ selected: 0, queued: 0, skipped_no_address: 0, remaining: 0, next_cursor: null, outbox_ids: [] });
+    expect(await response.json()).toMatchObject({ selected: 0, queued: 0, skipped_no_address: 0, remaining: 0, next_cursor: null, outbox_ids: [] });
     const after = await env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE event_id = ?").bind(EVENT_ID).first<{ total: number }>();
     expect(after).toEqual(before);
   });

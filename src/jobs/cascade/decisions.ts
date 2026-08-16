@@ -1,6 +1,8 @@
 import type { D1Database, Queue } from "@cloudflare/workers-types";
 
 import { runBulkByIds, runBulkByIdsBatch } from "../../api/bulk";
+import { compareAndSwapResource, type ResourceVersion } from "../../api/concurrency";
+import { ApiError } from "../../api/errors";
 import { newUlid } from "../../api/ids";
 import { auditStatement, writeAudit as writeAuditRow, type AuditEntry } from "../../lib/audit";
 import type { Decision, Id } from "../../db/schema";
@@ -23,9 +25,11 @@ import { canTransitionSubmissionStatus } from "../../lib/submission-transitions"
 import { enqueueMailMessage } from "../mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../mail/idempotency";
 import { enqueueTrigger } from "../mail/triggers";
+import { isValidEmail } from "../../lib/email-validity";
+import type { DecisionPlanAction } from "./decision-plan";
 
-export type DecisionAction = "accept" | "reject" | "waitlist";
-export type BulkAction = DecisionAction | "withdraw";
+export type DecisionAction = Exclude<DecisionPlanAction, "withdraw" | "notify">;
+export type BulkAction = Exclude<DecisionPlanAction, "notify">;
 
 export interface DecisionActor {
   kind: "user" | "api_token";
@@ -117,7 +121,7 @@ export interface AcceptanceReversalResult {
   error?: string;
 }
 
-interface SubmissionContext {
+export interface SubmissionContext {
   id: Id;
   event_id: Id;
   status: string;
@@ -184,10 +188,6 @@ const DECISION_TARGETS = {
   reject: { decision: "deny", status: "rejected" },
 } as const;
 
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
 export function normalizeDecisionFeedback(value: string | null | undefined): string | null {
   const normalized = value?.replace(/\r\n?/g, "\n").trim() ?? "";
   return normalized.length > 0 ? normalized : null;
@@ -226,7 +226,7 @@ function decisionRecipientSql(column: "id" | "name" | "email"): string {
   });
 }
 
-async function loadSubmission(
+export async function loadSubmission(
   db: D1Database,
   eventId: Id,
   submissionId: Id,
@@ -252,7 +252,7 @@ async function loadSubmission(
     .first<SubmissionContext>();
 }
 
-async function loadSubmissions(
+export async function loadSubmissions(
   db: D1Database,
   eventId: Id,
   ids: readonly Id[],
@@ -513,6 +513,7 @@ export interface NotifyNotifiedResult {
   remaining: number;
   nextCursor: string | null;
   outboxIds: Id[];
+  queueRevision: number;
 }
 
 interface ExistingDecisionCandidate {
@@ -522,6 +523,47 @@ interface ExistingDecisionCandidate {
   resulting_status: "accepted" | "rejected";
   feedback_md: string | null;
   candidate_count: number;
+}
+
+async function currentEventQueueRevision(db: D1Database, eventId: Id): Promise<number> {
+  const event = await db
+    .prepare("SELECT updated_at FROM events WHERE id = ?")
+    .bind(eventId)
+    .first<{ updated_at: number | null }>();
+  return Number(event?.updated_at ?? 0);
+}
+
+/** Claim one Notify page before any retry row or queue message is created. */
+async function advanceNotifyQueueRevision(input: {
+  db: D1Database;
+  eventId: Id;
+  expectedRevision: number;
+  now: number;
+}): Promise<number> {
+  const expected: ResourceVersion = { id: input.eventId, updatedAt: input.expectedRevision };
+  const outcome = await compareAndSwapResource({
+    expected,
+    now: input.now,
+    prepareWrite: ({ expectedUpdatedAt, nextUpdatedAt }) => input.db
+      .prepare("UPDATE events SET updated_at = ? WHERE id = ? AND updated_at = ?")
+      .bind(nextUpdatedAt, input.eventId, expectedUpdatedAt),
+    readCurrent: () => input.db
+      .prepare("SELECT updated_at FROM events WHERE id = ?")
+      .bind(input.eventId)
+      .first<{ updated_at: number | null }>(),
+    versionOf: (current) => ({ id: input.eventId, updatedAt: Number(current.updated_at ?? 0) }),
+  });
+  if (outcome.kind === "updated") {
+    return Math.max(input.now, input.expectedRevision + 1);
+  }
+  if (outcome.kind === "missing") throw ApiError.notFound("event not found");
+  throw new ApiError("conflict", "The notification queue changed after you previewed it.", {
+    details: {
+      code: "stale_queue_revision",
+      queue_revision: outcome.current.updated_at,
+    },
+    headers: { ETag: outcome.etag },
+  });
 }
 
 /**
@@ -643,12 +685,25 @@ export async function notifyExistingDecisions(input: {
   queue: Queue<unknown>;
   eventId: Id;
   submissionIds: readonly Id[];
+  /** HTTP Notify supplies this from the summary/plan; internal recovery may omit it. */
+  queueRevision?: number;
   cursor?: string | null;
   now?: number;
 }): Promise<NotifyNotifiedResult> {
   const ids = [...new Set(input.submissionIds)];
-  if (ids.length === 0) return { selected: 0, queued: 0, skippedNoAddress: 0, remaining: 0, nextCursor: null, outboxIds: [] };
   const now = input.now ?? Date.now();
+  const suppliedRevision = input.queueRevision ?? await currentEventQueueRevision(input.db, input.eventId);
+  if (ids.length === 0) {
+    return {
+      selected: 0,
+      queued: 0,
+      skippedNoAddress: 0,
+      remaining: 0,
+      nextCursor: null,
+      outboxIds: [],
+      queueRevision: await currentEventQueueRevision(input.db, input.eventId),
+    };
+  }
   const cursor = input.cursor?.trim() || null;
   const submissions = await loadSubmissions(input.db, input.eventId, ids);
   const submissionsById = new Map(submissions.map((submission) => [submission.id, submission]));
@@ -698,6 +753,27 @@ export async function notifyExistingDecisions(input: {
   let selected = 0;
   let queued = 0;
   const outboxIds: Id[] = [];
+  const sendableCandidates = candidates.results.filter((candidate) => {
+    const submission = submissionsById.get(candidate.submission_id);
+    return submission !== undefined && isValidEmail(submission.person_email);
+  });
+  if (sendableCandidates.length === 0) {
+    return {
+      selected: 0,
+      queued: 0,
+      skippedNoAddress: candidates.results.length,
+      remaining,
+      nextCursor,
+      outboxIds: [],
+      queueRevision: await currentEventQueueRevision(input.db, input.eventId),
+    };
+  }
+  const queueRevision = await advanceNotifyQueueRevision({
+    db: input.db,
+    eventId: input.eventId,
+    expectedRevision: suppliedRevision,
+    now,
+  });
   for (const candidate of candidates.results) {
     const submission = submissionsById.get(candidate.submission_id);
     if (!submission || !isValidEmail(submission.person_email)) {
@@ -722,7 +798,7 @@ export async function notifyExistingDecisions(input: {
     if (result.id) outboxIds.push(result.id);
     if (result.inserted) queued += 1;
   }
-  return { selected, queued, skippedNoAddress, remaining, nextCursor, outboxIds };
+  return { selected, queued, skippedNoAddress, remaining, nextCursor, outboxIds, queueRevision };
 }
 
 export interface OnboardingCascadeResult {

@@ -3,6 +3,7 @@ import type { Context } from "hono";
 
 import {
   BULK_FAILURE_REPORT_LIMIT,
+  BULK_ID_LIMIT,
   buildBulkResult,
   bulkResultSchema,
   bulkSelectorWireSchema,
@@ -14,6 +15,8 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { notifyExistingDecisions, writeBulkSubmissionDecisions } from "../jobs/cascade/decisions";
+import { buildDecisionPlan, buildNotifyPlan, refuseZeroEffect, requireCurrentDecisionPlan } from "../jobs/cascade/decision-plan-service";
+import { decisionPlanResponseSchema } from "../api/decision-plan";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { PUBLISHED_SESSION_REFUSAL } from "../lib/publication-guard";
 import { selectSubmissionIds, submissionFilterSchema, summarizeNotNotifiedSubmissions } from "./submissions.queries";
@@ -27,6 +30,17 @@ const bulkBodySchema = z
     feedback_md: z.string().max(50_000).nullable().optional(),
     wave_id: z.string().min(1).max(200).nullable().optional(),
     confirm_published: z.boolean().optional(),
+    plan_fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strict();
+
+const bulkPlanBodySchema = z
+  .object({
+    selector: bulkSelectorWireSchema(submissionFilterSchema, submissionIdSchema),
+    action: z.enum(["accept", "reject", "waitlist", "withdraw"]),
+    feedback_md: z.string().max(50_000).nullable().optional(),
+    wave_id: z.string().min(1).max(200).nullable().optional(),
+    confirm_published: z.boolean().optional(),
   })
   .strict();
 
@@ -34,8 +48,12 @@ const notifiedSummarySchema = z.object({
   total: z.number().int().nonnegative(),
   sendable: z.number().int().nonnegative(),
   no_valid_address: z.number().int().nonnegative(),
+  queue_revision: z.number().int().nonnegative(),
 });
 const notifyQuerySchema = z.object({ cursor: z.string().min(1).max(200).optional() });
+const notifyBodySchema = z.object({
+  queue_revision: z.number().int().nonnegative(),
+}).strict();
 const notifyNotifiedResultSchema = z.object({
   selected: z.number().int().nonnegative(),
   queued: z.number().int().nonnegative(),
@@ -43,6 +61,7 @@ const notifyNotifiedResultSchema = z.object({
   remaining: z.number().int().nonnegative(),
   next_cursor: z.string().nullable(),
   outbox_ids: z.array(z.string()),
+  queue_revision: z.number().int().nonnegative(),
 });
 
 async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
@@ -60,6 +79,110 @@ async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
   return { kind: "api_token", personId: token.created_by, requestId };
 }
 
+async function resolveBulkIds(
+  database: ApiEnv["Bindings"]["DB"],
+  eventId: string,
+  rawSelector: z.infer<typeof bulkPlanBodySchema>["selector"],
+): Promise<string[]> {
+  const selector = normalizeBulkSelector(rawSelector, (id) => submissionIdSchema.safeParse(id).success);
+  if (selector.kind === "ids") return [...new Set(selector.ids)];
+  const ids = await selectSubmissionIds(database, {
+    eventId,
+    ...(selector.filter as z.infer<typeof submissionFilterSchema>),
+  });
+  if (ids.length > BULK_ID_LIMIT) {
+    throw ApiError.unprocessable(`selector resolves to more than ${BULK_ID_LIMIT} submissions; narrow the selection`, "selector");
+  }
+  return ids;
+}
+
+async function assertWaveBelongsToEvent(database: ApiEnv["Bindings"]["DB"], eventId: string, waveId: string | null | undefined): Promise<void> {
+  if (!waveId) return;
+  const wave = await database
+    .prepare("SELECT 1 AS present FROM waves WHERE id = ? AND event_id = ?")
+    .bind(waveId, eventId)
+    .first<{ present: number }>();
+  if (!wave) throw ApiError.badRequest("wave_id does not belong to this conference", "wave_id");
+}
+
+const planBulkDecision = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/submissions/decision-plan",
+    operationId: "planBulkSubmissionDecision",
+    summary: "Preview a selected submission decision",
+    description: "Build a bounded read-only decision plan with disposition rows, one rendered recipient preview, and a fingerprint for apply.",
+    tags: ["Submissions"],
+    request: {
+      params: eventParams,
+      body: { content: { "application/json": { schema: bulkPlanBodySchema } } },
+    },
+    policy: {
+      auth: { kind: "grants", grants: ["program:read"] },
+      rateLimit: { bucket: "read" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(decisionPlanResponseSchema, "The current bounded decision plan."),
+      ...errorResponses([400, 401, 403, 404, 422, 429, 500]),
+    },
+  },
+  async (context) => {
+    const { eventId } = context.req.valid("param");
+    const body = context.req.valid("json");
+    const ids = await resolveBulkIds(context.env.DB, eventId, body.selector);
+    await assertWaveBelongsToEvent(context.env.DB, eventId, body.wave_id);
+    try {
+      return context.json(await buildDecisionPlan({
+        db: context.env.DB,
+        eventId,
+        ids,
+        action: body.action,
+        feedbackMd: body.feedback_md,
+        confirmPublished: body.confirm_published === true,
+        waveId: body.wave_id,
+      }), 200);
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === "event not found") throw ApiError.notFound("event not found");
+      throw error;
+    }
+  },
+);
+
+const planNotifiedSubmissions = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/submissions/not-notified/plan",
+    operationId: "planDecidedSubmissionsNotification",
+    summary: "Preview notifications for decided submissions",
+    description: "Build the shared bounded decision plan for the Decided · not notified surface, including one rendered recipient and the current queue revision.",
+    tags: ["Submissions"],
+    request: { params: eventParams },
+    policy: {
+      auth: { kind: "grants", grants: ["program:read"] },
+      rateLimit: { bucket: "read" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(decisionPlanResponseSchema, "The current notification plan."),
+      ...errorResponses([401, 403, 404, 422, 429, 500]),
+    },
+  },
+  async (context) => {
+    const { eventId } = context.req.valid("param");
+    const ids = await selectSubmissionIds(context.env.DB, { eventId, status: "not_notified" });
+    if (ids.length > BULK_ID_LIMIT) {
+      throw ApiError.unprocessable(`notification plan is capped at ${BULK_ID_LIMIT} submissions; narrow the selection`, "selection");
+    }
+    try {
+      return context.json(await buildNotifyPlan({ db: context.env.DB, eventId, ids }), 200);
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === "event not found") throw ApiError.notFound("event not found");
+      throw error;
+    }
+  },
+);
+
 const bulkDecideSubmissions = defineApiRoute(
   {
     method: "post",
@@ -71,12 +194,13 @@ const bulkDecideSubmissions = defineApiRoute(
     tags: ["Submissions"],
     request: {
       params: eventParams,
+      headers: z.object({ "if-match": z.string().min(1).describe("The decision plan's current strong ETag.") }),
       body: { content: { "application/json": { schema: bulkBodySchema } } },
     },
     policy: {
       auth: { kind: "grants", grants: ["program:write"] },
       rateLimit: { bucket: "write" },
-      concurrency: "none",
+      concurrency: "if-match",
     },
     responses: {
       200: jsonResponse(bulkResultSchema, "The per-record bulk decision summary."),
@@ -95,14 +219,27 @@ const bulkDecideSubmissions = defineApiRoute(
         eventId,
         ...(selector.filter as z.infer<typeof submissionFilterSchema>),
       });
+      if (ids.length > BULK_ID_LIMIT) {
+        throw ApiError.unprocessable(`selector resolves to more than ${BULK_ID_LIMIT} submissions; narrow the selection`, "selector");
+      }
     }
-    if (body.wave_id) {
-      const wave = await context.env.DB
-        .prepare("SELECT 1 AS present FROM waves WHERE id = ? AND event_id = ?")
-        .bind(body.wave_id, eventId)
-        .first<{ present: number }>();
-      if (!wave) throw ApiError.badRequest("wave_id does not belong to this conference", "wave_id");
-    }
+    await assertWaveBelongsToEvent(context.env.DB, eventId, body.wave_id);
+
+    const plan = await buildDecisionPlan({
+      db: context.env.DB,
+      eventId,
+      ids,
+      action: body.action,
+      feedbackMd: body.feedback_md,
+      confirmPublished: body.confirm_published === true,
+      waveId: body.wave_id,
+    });
+    requireCurrentDecisionPlan({
+      request: context.req.raw,
+      plan,
+      planFingerprint: body.plan_fingerprint,
+    });
+    if (plan.zero_effect) refuseZeroEffect(plan);
 
     const actor = await actorFor(context);
     const operationId = newUlid();
@@ -179,7 +316,11 @@ const notifyNotifiedSubmissions = defineApiRoute(
     summary: "Queue notifications for decided submissions",
     description: "Queue a bounded batch of messages for sendable decisions while preserving the existing decision rows byte-for-byte; use next_cursor while remaining is non-zero.",
     tags: ["Submissions"],
-    request: { params: eventParams, query: notifyQuerySchema },
+    request: {
+      params: eventParams,
+      query: notifyQuerySchema,
+      body: { content: { "application/json": { schema: notifyBodySchema } } },
+    },
     policy: {
       auth: { kind: "grants", grants: ["program:write"] },
       rateLimit: { bucket: "write" },
@@ -187,18 +328,20 @@ const notifyNotifiedSubmissions = defineApiRoute(
     },
     responses: {
       202: jsonResponse(notifyNotifiedResultSchema, "Notification retry summary"),
-      ...errorResponses([401, 403, 429, 500]),
+      ...errorResponses([400, 401, 403, 409, 429, 500]),
     },
   },
   async (context) => {
     const { eventId } = context.req.valid("param");
     const { cursor } = context.req.valid("query");
-    const ids = await selectSubmissionIds(context.env.DB, { eventId, status: "not_notified" });
+    const { queue_revision: queueRevision } = context.req.valid("json");
+    const ids = await selectSubmissionIds(context.env.DB, { eventId, status: "not_notified" }, { limit: null });
     const result = await notifyExistingDecisions({
       db: context.env.DB,
       queue: context.env.MAIL_QUEUE,
       eventId,
       submissionIds: ids,
+      queueRevision,
       cursor,
     });
     return context.json({
@@ -208,8 +351,9 @@ const notifyNotifiedSubmissions = defineApiRoute(
       remaining: result.remaining,
       next_cursor: result.nextCursor,
       outbox_ids: result.outboxIds,
+      queue_revision: result.queueRevision,
     }, 202);
   },
 );
 
-export const apiRoutes = [bulkDecideSubmissions, getNotifiedSummary, notifyNotifiedSubmissions];
+export const apiRoutes = [planBulkDecision, planNotifiedSubmissions, bulkDecideSubmissions, getNotifiedSummary, notifyNotifiedSubmissions];

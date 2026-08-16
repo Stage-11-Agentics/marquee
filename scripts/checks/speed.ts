@@ -165,6 +165,15 @@ async function bulkAcceptSample(
 ): Promise<{ durationMs: number; completed: boolean; longestMainThreadTaskMs: number }> {
   await loadPage(page, baseUrl, "/submissions", ".submissions-page");
   return page.evaluate(async ({ eventId, selectedIds }) => {
+    const planResponse = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/decision-plan`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ selector: { ids: selectedIds }, action: "accept" }),
+    });
+    const plan = await planResponse.json() as { plan_fingerprint?: string; etag?: string };
+    if (!planResponse.ok || !plan.plan_fingerprint || !plan.etag) {
+      throw new Error(`bulk accept decision plan failed with ${planResponse.status}`);
+    }
     let longestMainThreadTaskMs = 0;
     const observer = typeof PerformanceObserver === "undefined" ? null : new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) longestMainThreadTaskMs = Math.max(longestMainThreadTaskMs, entry.duration);
@@ -178,8 +187,8 @@ async function bulkAcceptSample(
     const startedAt = performance.now();
     const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/bulk`, {
       method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ selector: { ids: selectedIds }, action: "accept" }),
+      headers: { "content-type": "application/json", accept: "application/json", "if-match": plan.etag },
+      body: JSON.stringify({ selector: { ids: selectedIds }, action: "accept", plan_fingerprint: plan.plan_fingerprint }),
     });
     const body = await response.json() as { state?: string; selected?: number; succeeded?: number; failed?: number };
     await new Promise<void>((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame())));
