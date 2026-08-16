@@ -235,6 +235,7 @@ test("AC-333 · confirming a co-speaker updates their own seat, and mints no pha
   // row — it inserts a SECOND one. The confirmation then lands on the phantom
   // while the real seat stays pending, and no screen says which is which.
   await env.DB.batch([
+    // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
     env.DB.prepare(
       `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
        VALUES ('sess_mrq224_seat', ?, 'owner', ?, 'fixture', NULL, ?, ?)`,
