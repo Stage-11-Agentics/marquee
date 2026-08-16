@@ -15,12 +15,12 @@ The public form, refusal paths, and builder all read one effective value.
   ruling or create a second draft-counting path.
 - The event default supplies the value for each inheriting form. It is not an
   event-wide pool or cross-form ceiling, and no such ceiling is added here.
-- Reserve migration `0031` for the additive
-  `forms.submitter_limit_inherit INTEGER NOT NULL DEFAULT 0` column when it is
-  free. `0029` is MRQ-242 and `0030` is MRQ-241. Verify this allocation before
-  implementation and again after the required rebase; if `0031` is taken,
-  choose the next free number (or a distinct same-numbered file with explicit
-  harness order), record that order, and report the chosen migration name.
+- Do not reserve a migration number in the plan. `0029` is currently MRQ-242
+  and `0030` is currently MRQ-241. At implementation/rebase time, choose the
+  next free migration number for the additive
+  `forms.submitter_limit_inherit INTEGER NOT NULL DEFAULT 0` column, record it
+  in the migration harness and handoff, and allow gaps; never back-fill a
+  missing prefix merely to make the sequence pretty.
 - Do not edit `SPEC.md`, `EVALUATION.md`, `BUILDPLAN.md`, `DESIGN.md`, or
   `sequence/USER_STORIES.md`; do not mint US/AC IDs or a claims manifest. The
   draft criteria below remain unnumbered until serialized consolidation.
@@ -65,29 +65,77 @@ The public form, refusal paths, and builder all read one effective value.
   arrives inheriting when the source inherits and then resolves against the
   destination event's default; an overridden source carries its explicit
   number. Both cases receive behavior coverage near the existing copy tests.
-- The event default is a bounded integer from 0 through 100, where 0 means
-  unlimited for every inheriting form. Missing or
-  malformed/out-of-range `event_settings.submission_default_limit` values fall
-  back to 3 without throwing on a public request. An explicit form value of 0
-  remains the existing unlimited state; inherited forms use the parsed event
-  default. The public query folds the setting into its existing event join to
-  avoid a serial D1 round-trip, then passes a synchronous event context and raw
-  form to `effectiveSubmitterLimit(event, form)`. Admin form routes read the
-  same default once at their request boundary and pass it into
+- The event default and the form override API both accept an integer from 0
+  through 100, where 0 means unlimited. Missing or malformed/out-of-range
+  `event_settings.submission_default_limit` values fall back to 3 without
+  throwing on a public request; an effective 0 never enters an at-limit path.
+  The public query folds the setting into its existing event join to avoid a
+  serial D1 round-trip, then passes a synchronous event context and raw form to
+  `effectiveSubmitterLimit(event, form)`. Admin form routes read the same
+  default once at their request boundary and pass it into
   `normalizeForm(row, eventDefault)`; listing N forms never reads settings N
   times.
-- The refusal copy keeps the ticket's exact noun, "abstracts", for both form
-  kinds in this ticket; kind-aware nouns are deferred. The CLI form registry
-  exposes the inherit state alongside the raw and effective values so the
-  agent-native surface does not diverge from the builder.
+- Capacity refusal data is shared and truthful: a single helper carries the
+  effective limit and actual non-draft, non-withdrawn count, while a path-aware
+  next-step field distinguishes new submission/save-draft paths from resumed-
+  draft submission. The common sentence names both numbers and keeps the
+  ticket's noun, "abstracts"; a resumed draft does not tell someone to use the
+  resume link they are already using, and instead says the saved draft remains
+  available and the organizer must make room. The CLI form registry exposes
+  inherit state alongside raw and effective values; readers display or compare
+  `effective_submitter_limit`, not the dormant raw field.
 - The ticket's requested builder e2e is explicitly substituted by a
   happy-dom/Preact runtime component test because browser/computer-use is held
-  by the brief. The e2e remains an orchestrator-owned follow-up, not an implied
-  claim in this handoff.
-- Forms created through the forms API inherit by default. The Sessionize
-  importer is an explicit-source compatibility path: imported forms keep their
-  source number and remain explicit rather than silently adopting the event
-  default.
+  by the brief. The browser e2e remains a named operator/intake follow-up
+  candidate; this worker cannot mint its ticket or ID and makes no e2e claim.
+- Forms created through the forms API inherit by default. The seeded demo CFP
+  is authored with `submitter_limit_inherit = 1` and no event setting row, so
+  its effective limit remains the fallback 3 while the feature is visible in
+  the evaluator path. The Sessionize importer is an explicit-source
+  compatibility path: imported forms keep their source number and remain
+  explicit rather than silently adopting the event default.
+
+## Plan-review Cycle 3 resolutions (authoritative)
+
+- The five current capacity-related 409 paths share one refusal data model with
+  `{ effectiveLimit, actualCount }`, but next-step copy is path-aware. The four
+  new-submission/save-draft paths may direct the submitter to a saved resume
+  link; the resumed-draft submit path says the draft remains saved and the
+  organizer must make room. The shared formatter is exercised in every 409
+  response body, and the GET `at_limit` state uses the new-submission wording.
+  A lowered cap with a submitter above the cap reports the true actual count,
+  not the effective limit repeated as a fake count.
+- At this plan head the five authority sites are explicitly inventoried:
+  `src/routes/public-form.shared.ts` `loadPublicForm` at-limit state (around
+  line 525), `toPublicFormState` capacity projection (around line 639), and
+  `src/routes/public-form.routes.ts` draft-cap check (around line 783), new
+  submission check (around line 1075), and resumed-draft `existingCount` check
+  (around line 1094). The five 409 throw paths are separately covered at
+  `public-form.routes.ts` around lines 766, 784, 1028, 1076, and 1095; line
+  numbers are rechecked at implementation, but these symbols and branches are
+  the contract. All enforcement remains at those sites and delegates to the
+  one resolver.
+- The form API and event-settings API both accept 0 through 100, with 0
+  explicitly documented and tested as unlimited. The builder presents the
+  same meaning for an explicit 0 override and an inherited 0 event default;
+  no scope is hidden behind a legacy-only database state.
+- Whole-object PATCH behavior is explicit and tested: the builder always sends
+  `submitter_limit_inherit` with its echoed raw field, so unrelated edits keep
+  inheritance; a generic client that echoes dormant `per_submitter_limit`
+  without the flag takes the documented explicit-override path, never a silent
+  no-op. The API test covers both the builder-shaped preserve case and the
+  flag-omitted explicit case, and asserts readers use the effective field.
+- The demo seed chore includes `scripts/seed/event.ts`'s CFP row with
+  `submitter_limit_inherit: 1`; no `submission_default_limit` seed is added,
+  preserving effective 3. `src/lib/reset-demo/reseed-demo.ts` reuses that seed
+  path and therefore preserves the same inherited behavior.
+- Migration numbering is deliberately deferred: at implementation/rebase use
+  the first free numeric prefix, record explicit harness order, permit gaps,
+  and never back-fill an absent prefix. The current 0029/0030 observations are
+  read-only context, not a reservation.
+- The authenticated builder e2e remains an operator/intake follow-up
+  candidate, named in the handoff and PR evidence when one exists. This worker
+  does not mint an ID or claim browser coverage.
 
 ## Draft acceptance scope
 
@@ -100,8 +148,13 @@ The public form, refusal paths, and builder all read one effective value.
 - A PATCH containing only `per_submitter_limit` visibly creates an explicit
   override; a new form with no capacity field stores a valid dormant 3 while
   reporting inheritance. Admin listing N forms performs one event-setting read.
+- A whole-object builder PATCH includes the inherit flag and preserves an
+  inheriting form across unrelated edits; a flag-omitted PATCH that includes
+  the raw capacity field is an explicit, observable override. Readers display
+  the effective field rather than comparing the dormant raw value.
 - Migration of a pre-existing form leaves its inherit flag off and preserves its
-  previous enforcement value; new forms start with inherit on.
+  previous enforcement value; API-created forms and the seeded CFP start with
+  inherit on, while Sessionize-imported forms retain explicit source behavior.
 - Changing the event default changes enforcement and displayed effective values
   for inheriting forms immediately, with no per-form writes and no effect on an
   explicit override.
@@ -109,10 +162,14 @@ The public form, refusal paths, and builder all read one effective value.
   `effectiveSubmitterLimit(event, form)` authority without moving those sites.
   Drafts remain excluded, while submitted/non-withdrawn abstracts still consume
   capacity.
-- At-limit state and refusal responses name the effective number and tell the
-  submitter to use the saved resume link to continue a draft. The centralized
-  sentence is used by all five current capacity-related 409 paths and asserted
-  in both the GET state and every one of those response bodies.
+- At-limit state and refusal responses name the effective limit and the true
+  actual count. All five current capacity-related 409 paths use the shared
+  limit/count data, while the resumed-draft submit path has a non-circular
+  organizer-action next step; every response body and the GET state are
+  asserted.
+- A lowered default can leave a submitter above the new cap; refusal copy says
+  the true count they have. Explicit and inherited 0 values are both tested as
+  unlimited and never produce a refusal.
 - Event settings can read and write the default through the live settings
   endpoint, and the builder always shows the effective number with explicit
   inherit, override, and clear behavior.
@@ -120,39 +177,51 @@ The public form, refusal paths, and builder all read one effective value.
 ## Implementation phases
 
 1. Establish the exact worktree/head/base, inspect the ticket and cited draft
-   reversal, and run a separate install/baseline. Confirm migration `0029` and
-   `0030` ownership from the available refs, then write, commit, push, and verify
-   this plan before source edits.
-2. Add `migrations/0031_submission_capacity.sql`, its schema-delta receipt, the
+   reversal, and run a separate install/baseline. Read the current migration
+   refs for 0029/0030, but defer choosing the next free prefix until
+   implementation/rebase; then write, commit, push, and verify this plan before
+   source edits.
+2. At implementation/rebase choose the first free migration prefix (gaps are
+   allowed and are not back-filled), then add
+   `migrations/<next-free>_submission_capacity.sql`, its schema-delta receipt, the
    migration test harness import, the `FormRow` type, the
    `CoreDefaultColumns.forms` entry, and the copy-manifest declaration. The
    migration is additive and defaults existing forms to explicit behavior;
-   copied forms carry the flag with the form.
+   copied forms carry the flag with the form. Add the seeded CFP inherit flag to
+   `scripts/seed/event.ts`; do not add an event setting row, preserving 3.
 3. Add a focused submission-capacity helper containing the setting key, default
-   parser/writer, and the sole `effectiveSubmitterLimit(event, form)` resolver.
-   Extend the event-settings GET/PATCH response and UI with a bounded
-   "Submission capacity" control, using the same upsert idiom as social settings.
+   parser/writer, the shared `{ effectiveLimit, actualCount, nextStep }` refusal
+   model, and the sole `effectiveSubmitterLimit(event, form)` resolver. Extend
+   the event-settings GET/PATCH response and UI with a bounded 0–100
+   "Submission capacity" control, using the same upsert idiom as social
+   settings; document 0 as unlimited.
 4. Extend form API rows and schemas with the inherit flag and effective value.
-   Make creation default to inheritance, preserve explicit legacy rows, and make
-   PATCH support override and clear explicitly. Render the builder control with
-   a visible effective number, an inherit/override state, an override input, and
-   a clear-to-inherit action. Keep the control in a small runtime-testable
-   component next to the existing form settings editor.
+   Align form create/PATCH bounds to 0–100, make creation default to inheritance,
+   preserve explicit legacy rows, and make PATCH support override and clear
+   explicitly. Render the builder control with a visible effective number, an
+   inherit/override state, an override input, an explicit unlimited state, and a
+   clear-to-inherit action. Keep the control in a small runtime-testable
+   component next to the existing form settings editor. Test builder-shaped
+   whole-object preservation and flag-omitted explicit override semantics.
 5. Load the event setting once at the public-form boundary and carry the
    effective value through the public form record/state. Replace every current
-   raw enforcement read in the state, draft, and submit paths with the shared
-   resolver result, leaving enforcement locations unchanged. Centralize the
-   at-limit sentence and route it through all five current capacity-related 409
-   paths so its number and saved-resume next step cannot drift.
+   raw enforcement read in the five inventoried authority sites with the shared
+   resolver result, leaving enforcement locations unchanged. Centralize truthful
+   limit-plus-actual-count data, then choose a path-aware next step for all five
+   409 paths, including a non-circular resumed-draft response.
 6. Add behavior-level integration coverage for the resolver/inheritance matrix,
-   migration preservation, immediate default changes, explicit overrides, draft
-   exclusion, all public enforcement paths, and truthful refusal copy. Add a
-   happy-dom/Preact runtime component test for builder display, override, and
+   migration preservation, immediate default changes, explicit overrides, 0 =
+   unlimited on both APIs, draft exclusion, the seeded CFP, all five authority
+   sites, all five 409 bodies, lowered-cap actual-count honesty, and the
+   path-aware resumed-draft next step. Add a happy-dom/Preact runtime component
+   test for builder display, override, unlimited, whole-object preserve, and
    clear behavior. Extend neighboring existing traced tests without minting a
-   new criterion or using source-text/CSS matching as proof.
+   new criterion or using source-text/CSS matching as proof; leave browser e2e as
+   the named operator/intake follow-up candidate.
 7. At each meaningful checkpoint, commit and push with remote-parity proof. At
    the final clean pushed head, re-check `github/main`, rebase if required,
-   rerun `npm ci` after any rebase, verify migration allocation again, run the
+   rerun `npm ci` after any rebase, choose and verify the next-free migration
+   allocation again with gaps allowed, run the
    focused tests and static checks, and report the implementation plus evidence
    to Adoption Orchestrator. Do not request a reviewer or full gate before that
    final pushed head, and stop for orchestrator sequencing.
@@ -165,8 +234,9 @@ The public form, refusal paths, and builder all read one effective value.
   focused test commands and status, and the clean pushed-head parity result.
 - Distinguish static/schema evidence from runtime integration/component evidence;
   do not claim browser, deployment, merge, or full-gate results.
-- The handoff residuals must name the unrun authenticated builder e2e explicitly;
-  the component test is not browser evidence.
+- The handoff residuals must name the unrun authenticated builder e2e explicitly
+  as an operator/intake follow-up candidate; this worker cannot mint its ticket
+  or ID. The component test is not browser evidence.
 - Report the durable plan receipt and completion/blockers to the Adoption
   Orchestrator at workspace `workspace:10`, surface `surface:513`, mailbox
   `adoption-orchestrator`. Raise a c11 flag only for an operator-action
