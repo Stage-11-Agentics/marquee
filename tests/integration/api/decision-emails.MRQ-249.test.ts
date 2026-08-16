@@ -187,6 +187,40 @@ describe.sequential("MRQ-249 decision emails", () => {
     expect(message).toContain("portal.link");
   });
 
+  test("CONTRACT · MRQ-249 · one-off follow-ups with changed copy both queue", async () => {
+    const selector = { submission_ids: [FIRST_SUBMISSION], person_ids: [SPEAKER_ID], role: "speaker" };
+    const idempotencyKey = "mrq249-follow-up";
+    const send = (subject: string, body: string) => SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/comms/send`, {
+      method: "POST",
+      headers: authHeaders({ "Idempotency-Key": idempotencyKey }),
+      body: JSON.stringify({ selector, subject, body }),
+    });
+
+    const first = await send("Follow-up", "First follow-up");
+    expect(first.status).toBe(202);
+    const firstResult = await first.json<{ queued: number; duplicate: number; outbox_ids: string[] }>();
+    expect(firstResult).toMatchObject({ queued: 1, duplicate: 0 });
+    expect(firstResult.outbox_ids).toHaveLength(1);
+
+    const changed = await send("Follow-up update", "Second follow-up");
+    expect(changed.status).toBe(202);
+    const changedResult = await changed.json<{ queued: number; duplicate: number; outbox_ids: string[] }>();
+    expect(changedResult).toMatchObject({ queued: 1, duplicate: 0 });
+    expect(changedResult.outbox_ids).toHaveLength(1);
+    expect(changedResult.outbox_ids[0]).not.toBe(firstResult.outbox_ids[0]);
+
+    const retry = await send("Follow-up update", "Second follow-up");
+    expect(retry.status).toBe(202);
+    expect(await retry.json()).toMatchObject({ queued: 0, duplicate: 1, outbox_ids: [] });
+
+    const rows = await env.DB.prepare(
+      "SELECT id, subject, text FROM outbox WHERE id IN (?, ?)",
+    ).bind(firstResult.outbox_ids[0], changedResult.outbox_ids[0]).all<{ id: string; subject: string; text: string }>();
+    expect(rows.results).toHaveLength(2);
+    expect(rows.results.map((row) => row.subject)).toEqual(expect.arrayContaining(["Follow-up", "Follow-up update"]));
+    expect(rows.results.map((row) => row.text)).toEqual(expect.arrayContaining(["First follow-up", "Second follow-up"]));
+  });
+
   test("CONTRACT · MRQ-249 · default rejection carries the event signoff and a working portal link", async () => {
     const response = await applyDecision(THIRD_SUBMISSION, {
       recommendation: "deny",

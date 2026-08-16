@@ -112,9 +112,12 @@ export const IDEMPOTENCY_REGISTRY = Object.freeze({
   customRecipient: (recipientId: Id): EntityId => entityId(recipientId),
 
   /**
-   * Ad-hoc send idempotency seed: one durable compose id per recipient. The
-   * outbox row still stores customRecipient so consumer audit joins retain the
-   * recipient's business entity; this seed is used only for the hash.
+   * Ad-hoc send idempotency seed: one durable compose id, recipient, and copy
+   * revision. The outbox row still stores customRecipient so consumer audit
+   * joins retain the recipient's business entity; this seed is used only for
+   * the hash. A retry with the same copy remains idempotent, while an edited
+   * follow-up with the same client key is a new message.
    */
-  customSend: (sendId: Id, recipientId: Id): EntityId => entityId(`custom:${sendId}:${recipientId}`),
+  customSend: (sendId: Id, recipientId: Id, subject: string, body: string): EntityId =>
+    entityId(`custom:${JSON.stringify([sendId, recipientId, subject, body])}`),
 });

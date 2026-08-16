@@ -73,7 +73,12 @@ export async function enqueueBulkReminder(input: {
           ? undefined
           : await buildIdempotencyKey(
             templateKey,
-            IDEMPOTENCY_REGISTRY.customSend(input.sendId, recipient.entityId),
+            IDEMPOTENCY_REGISTRY.customSend(
+              input.sendId,
+              recipient.entityId,
+              input.subject ?? "",
+              input.body ?? "",
+            ),
             recipient.personId,
           ),
         now: input.now,
