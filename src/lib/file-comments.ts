@@ -1,4 +1,5 @@
 import { ApiError } from "../api/errors";
+import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "./participants";
 
 export const FILE_COMMENT_OWNER_TYPE = "task_upload" as const;
 
@@ -72,7 +73,7 @@ export async function fileTaskForSpeaker(
        JOIN memberships membership
          ON membership.event_id = task.event_id
         AND membership.person_id = ?
-        AND membership.role = 'speaker'
+        AND ${roleInSql("membership", WORK_HOLDING_PARTICIPATION_ROLES)}
        WHERE task.id = ? AND task.person_id = ? AND task.kind = 'file'`,
     )
     .bind(orgId, personId, taskId, personId)

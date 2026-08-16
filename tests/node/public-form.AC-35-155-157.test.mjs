@@ -34,7 +34,12 @@ test("AC-35 + AC-36 + AC-155 + AC-156 + AC-157 · the public form has a 375px fi
   assert.match(component, /Copy resume link/);
   assert.match(component, /navigator\.clipboard/);
   assert.doesNotMatch(component, /Draft saved locally/);
-  assert.match(component, /one optional co-speaker slot/);
+  // The limit sentence still sits above the first add-person control (AC-29),
+  // but it no longer calls the remaining places "co-speaker slots": a slot now
+  // takes a moderator too, and copy that names one role while the control
+  // offers two is copy that lies about the control beneath it (MRQ-224).
+  assert.match(component, /room for one more person/);
+  assert.match(component, /public-participant-limit/);
   assert.match(styles, /\.public-save-status \{[^}]*min-width: 15ch/);
   assert.match(styles, /\.public-form-actions/);
   // The confirmation's resume link stays on the origin the submitter is looking

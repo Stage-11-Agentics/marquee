@@ -1,12 +1,14 @@
 import type { SubmissionSpeakerListItem } from "../api/submissions";
+import { WORK_HOLDING_PARTICIPATION_ROLES } from "./participants";
 
-/** Roles whose attendance makes two agenda Sessions conflict. */
-export const AGENDA_PARTICIPATION_ROLES = [
-  "speaker",
-  "co_speaker",
-  "moderator",
-  "chairperson",
-] as const;
+/**
+ * Roles whose attendance makes two agenda Sessions conflict — the on-stage
+ * population, read from the one place that defines it rather than restated
+ * here. A person cannot be in two rooms at once precisely when the conference
+ * is asking them to be in one, so this set and the work fan-out's set are the
+ * same fact and move together.
+ */
+export const AGENDA_PARTICIPATION_ROLES = WORK_HOLDING_PARTICIPATION_ROLES;
 
 export type AgendaParticipationRole = (typeof AGENDA_PARTICIPATION_ROLES)[number];
 

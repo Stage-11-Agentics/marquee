@@ -8,6 +8,7 @@ import { INSTANCE_ORGANIZER_ROLE, mintOrganizerInvite } from "../lib/auth/instan
 import { requireOrgAdmin, requireOrgOwner } from "../lib/auth/org-admin";
 import { ORG_ACTIVITY_ACTIONS } from "../lib/activity-copy";
 import { orgActivityStatement, orgActor, recordOrgActivity } from "../lib/org-activity";
+import { roleNotInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "../lib/participants";
 
 /**
  * Who can run this instance, and how the next one gets in.
@@ -318,7 +319,7 @@ const listOrganizers = defineApiRoute(
          FROM memberships m
          JOIN people p ON p.id = m.person_id
          LEFT JOIN events e ON e.id = m.event_id
-        WHERE m.org_id = ? AND m.role != 'speaker'
+        WHERE m.org_id = ? AND ${roleNotInSql("m", WORK_HOLDING_PARTICIPATION_ROLES)}
         ORDER BY m.created_at ASC, m.id ASC`,
     )
       .bind(auth.orgId)
@@ -379,7 +380,7 @@ const removeOrganizer = defineApiRoute(
     // excluded because it is not an organizer seat — the same human can hold
     // both, and removing the organizer must never touch the speaker.
     const memberships = await context.env.DB.prepare(
-      "SELECT * FROM memberships WHERE org_id = ? AND person_id = ? AND role != 'speaker'",
+      `SELECT * FROM memberships WHERE org_id = ? AND person_id = ? AND ${roleNotInSql("memberships", WORK_HOLDING_PARTICIPATION_ROLES)}`,
     )
       .bind(auth.orgId, personId)
       .all<MembershipRow>();
@@ -423,7 +424,7 @@ const removeOrganizer = defineApiRoute(
     // sign-in link, which is the same defect with a longer fuse.
     const results = await context.env.DB.batch([
       context.env.DB.prepare(
-        "DELETE FROM memberships WHERE org_id = ? AND person_id = ? AND role != 'speaker'",
+        `DELETE FROM memberships WHERE org_id = ? AND person_id = ? AND ${roleNotInSql("memberships", WORK_HOLDING_PARTICIPATION_ROLES)}`,
       ).bind(auth.orgId, personId),
       ...revokeAccessStatements(context.env.DB, {
         orgId: auth.orgId,

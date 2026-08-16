@@ -34,6 +34,7 @@ import { isMediaHost, serveInlineImageObject, serveMediaObject } from "../lib/r2
 import { verifyTurnstile } from "../lib/r2/turnstile";
 import { verifyAndComplete } from "../lib/r2/complete";
 import { publicTurnstileExempt } from "./public-form.shared";
+import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "../lib/participants";
 
 export interface UploadsEnv {
   DB: D1Database;
@@ -419,7 +420,7 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
         `SELECT membership.event_id
          FROM memberships membership
          JOIN people person ON person.id = membership.person_id AND person.org_id = membership.org_id
-         WHERE membership.person_id = ? AND membership.role IN ('speaker', 'reviewer') AND membership.event_id IS NOT NULL
+         WHERE membership.person_id = ? AND (${roleInSql("membership", WORK_HOLDING_PARTICIPATION_ROLES)} OR membership.role = 'reviewer') AND membership.event_id IS NOT NULL
          ORDER BY membership.event_id LIMIT 1`,
       ).bind(session.person_id).first<{ event_id: string }>();
       if (!membership) return uploadError(context, "forbidden", "a speaker or reviewer membership is required for a headshot upload");
@@ -890,7 +891,7 @@ const signOrganizerHeadshot = defineApiRoute(
            EXISTS (
              SELECT 1 FROM memberships membership
              WHERE membership.org_id = person.org_id AND membership.event_id = conference.id
-               AND membership.person_id = person.id AND membership.role = 'speaker'
+               AND membership.person_id = person.id AND ${roleInSql("membership", WORK_HOLDING_PARTICIPATION_ROLES)}
            )
            OR EXISTS (
              SELECT 1 FROM participations participation

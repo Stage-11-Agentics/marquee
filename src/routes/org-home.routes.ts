@@ -1,4 +1,5 @@
 import { z } from "@hono/zod-openapi";
+import { roleNotInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "../lib/participants";
 
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
@@ -385,7 +386,7 @@ export async function readStaleSeatAttention(db: D1Database, orgId: string, toda
        JOIN events event ON event.id = seat.event_id AND event.org_id = seat.org_id
       WHERE seat.org_id = ?
         AND seat.event_id IS NOT NULL
-        AND seat.role != 'speaker'
+        AND ${roleNotInSql("seat", WORK_HOLDING_PARTICIPATION_ROLES)}
         AND event.ends_on < ?
       ORDER BY event.ends_on ASC, seat.id ASC
       LIMIT ${ATTENTION_LIMIT}`,

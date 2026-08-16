@@ -302,3 +302,7 @@
    load: "Complete" holds the space "Load more" leaves. */
 .org-activity-foot { align-items: center; border-top: 1px solid var(--line); display: flex; justify-content: space-between; margin-top: 12px; min-height: 34px; padding-top: 12px; }
 @media (max-width: 720px) { .org-activity-row { grid-template-columns: 1fr; row-gap: 4px; } .org-activity-meta { grid-template-columns: 1fr; row-gap: 2px; } }
+
+/* Who a task is aimed at. One chip whatever the answer, at one width, so
+   narrowing a template never moves the row beneath it. */
+.task-role-badge { background: var(--sunk); border: 1px dashed var(--line); border-radius: 999px; color: var(--muted); font-size: 10.5px; overflow: hidden; padding: 2px 8px; text-align: center; text-overflow: ellipsis; white-space: nowrap; width: 168px; }

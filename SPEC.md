@@ -264,8 +264,9 @@ Writer: Settings → API tokens; `marquee auth login` does not mint, it consumes
 
 ### 3.7 Speaker onboarding — the chase (moat M2/M3)
 
-**`task_templates`** — `event_id`, `name`, `kind` ∈ `acknowledge\|file\|form` (AC-47), `description`, `due_at` or `due_offset_days`, `form_id` NULL (form tasks), `file_config` JSON (`accept[]`, `maxBytes` — AC-146), `position`, `auto_assign` bool.
+**`task_templates`** — `event_id`, `name`, `kind` ∈ `acknowledge\|file\|form` (AC-47), `description`, `due_at` or `due_offset_days`, `form_id` NULL (form tasks), `file_config` JSON (`accept[]`, `maxBytes` — AC-146), `position`, `auto_assign` bool, **`applies_to_roles` JSON array (AC-330)**.
 Writer: Event settings → Tasks. Reader: acceptance cascade, chase-board columns.
+**`applies_to_roles` defaults to the four on-stage roles** — `speaker`, `co_speaker`, `moderator`, `chairperson` — which is the population the fan-out reaches, so an existing conference keeps its behaviour with no backfill. "Upload your slides" goes to everyone on stage; "Sign the speaker release" goes to whom the organizer says. It has no CHECK behind it (SQLite cannot add one without rebuilding the table), so an absent, malformed, or empty value **reads as the full set rather than as nobody**: a template that silently reaches no one is invisible on every organizer surface, while one that reaches everyone is obvious the moment it is wrong. It copies **verbatim** in the conference-copy manifest (§ Amendment 20 / MRQ-129) — dropping it would reset an organizer's targeting inside an operation that reports success.
 
 **`speaker_tasks`** — `event_id`, `person_id`, `submission_id` NULL, `template_id`, `title`, `kind`, `description`, `due_at`, `status` ∈ `open\|done`, `completed_at`, **`cancelled_at` NULL (Amendment 15)**, `response_json`, `attachment_id` NULL.
 **Cancellation is a nullable timestamp, not a third `status` value (AC-264).** Null means the task still matters; set means it stopped mattering, and when. This is deliberate: adding `'cancelled'` to the status enum would leave every existing `status='open'` read site — chase board, portal list, overdue trigger, comms selector — silently including work nobody wants, until each is separately found and fixed. Inverting it into a predicate (`cancelled_at IS NULL`) makes an unconverted read site wrong in review rather than wrong in production, and it carries *when*, which an enum does not. Same shape as `magic_links.used_at` and `imports.undone_at`. **`completed_at` is never written, cleared, or overwritten by a cancellation** — finished homework survives by construction. Writer: the un-accept cascade (cancel branch) and the acceptance reconciliation (restore). Reader: every count and every trigger, all of which filter on it.
@@ -510,6 +511,8 @@ The baseline CFP visibly includes title, abstract, attendee outcome, format, **o
 **Why the on-screen link** (F-10): `competition-requirements.md` §3 has the judge open the form in incognito, submit as a speaker, *then log in as that speaker*. A judge who types `test@test.com` — the overwhelmingly likely behaviour on a demo — submits successfully and has no route into that speaker's portal, because `[Enter as speaker]` lands a different, seeded speaker. That breaks the continuity between loop steps 5 and 6. **Note for sign-off: the v1.4 prototype does not yet render this affordance**; it is one line of spec and one e2e assertion under AC-38, and the prototype should be shown carrying it before the fidelity rule binds.
 
 **Submit failure** (F-11): a 5xx, a Turnstile challenge failure, a rate-limit 429 (reachable per-IP by AC-232), or a dropped connection mid-submit renders an **inline banner above the submit row** — never a blank page, never a lost form. It **preserves every entered value**, offers retry, and states that the draft is saved. `PHILOSOPHY.md` 1: a save that fails, says so. This is the one screen where a public stranger meets a failure, and its copy is read aloud at **C3** alongside the validation failures.
+**Who is presenting (AC-329, AC-270):** a participant section, not a fixed pair of fields. The primary speaker is named from the speaker card the organizer placed in the builder; below it, repeatable slots each carrying a **fixed-width role select** (`Speaker` / `Co-speaker` / `Moderator` — a panel is a moderator plus co-speakers, so no new `participations.role` value is minted and the CHECK constraint is untouched). Slots reserve their height and the add control sits below a list that grows only downwards, so adding or removing a person moves nothing already on screen. The speaker-limit sentence stays **before** the first add-person control (AC-29). `forms.max_speakers` is the honest ceiling: the shape holds what the number says, so it is no longer clamped to the two slots a fixed pair could hold. Above the primary card, **"I'm submitting on behalf of someone else"** splits the submitter's own name and address from the speaker's; with it off, behaviour is exactly as it was. The roster is stored on `submissions.participants_json` so a resumed draft restores the people already named, and forms still carrying the older `co_speaker_*` pair read as one list entry rather than as two extra text boxes.
+**Intake trust (AC-332):** a public submitter naming somebody else **creates that person if absent and never edits them if present**. The record matches on `(org_id, email)`, so overwriting would let an unauthenticated stranger rename an organizer's existing contact — silently, with the submitter seeing a success page. The scoped `cospeaker_profile` link remains the one write path to a named person's own bio and headshot.
 **Mobile:** every field type including file upload operable at 375 px, no horizontal scroll, focused field never behind the keyboard (AC-155, AC-156).
 **Turnstile is verified server-side before the write commits and before any upload presign is issued; a missing, replayed, or invalid token is rejected with no side effects (AC-231).** Precisely: it gates **draft creation, the submit, and every presign**. Autosave `PATCH …/drafts/:token` carries no challenge — the single-use-issued resume token is its authorization, and it is rate-limited per token in KV. This is the intended shape of "before any public write commits"; a literal per-keystroke challenge would make AC-41 unusable, and quietly dropping Turnstile from an endpoint would leave an unmarked hole in a Tier A guardrail. This criterion is inside Tier A's no-waiver set — R19 puts an open write endpoint on the public internet for four days with a public repo pointing at it.
 **Budget:** cold load → interactive p95 ≤ 1000 ms.
@@ -580,11 +583,11 @@ Each is specified here and demonstrated as a real route, overlay, modal, or stat
 | Screen | Route | ACs |
 |---|---|---|
 | Global search results overlay (⌘K / `/`) | overlay | AC-101 – AC-104 |
-| Admin submission record (detail, participants, answers, scores per round, applied routing rule, history) | `/submissions/:id` | AC-100, AC-120, AC-136, AC-224 |
+| Admin submission record (detail, participants with their roles labelled, answers, scores per round, applied routing rule, history) | `/submissions/:id` | AC-100, AC-120, AC-136, AC-224, **AC-271** |
 | Admin create submission (abstract or session, bypass-evaluation toggle) | `/submissions/new` | AC-118, AC-119 |
 | Un-accept cascade dialog (enumerates portal tasks, scheduled emails, calendar invites; cancel/retain each) | modal | AC-121 – AC-124 |
 | Comms: templates, triggers on/off, outbox log with rendered previews and delivery outcome | `/comms` | AC-125 – AC-131, AC-189 |
-| Task templates | `/settings/tasks` | AC-46, AC-47 |
+| Task templates, each row showing which roles it is assigned to as fixed-width chips | `/settings/tasks` | AC-46, AC-47, **AC-330** |
 | Import from Sessionize (upload → column mapping with first-rows preview → run → per-row outcomes → undo), **entry point named on the empty-event screen and in the README** | `/import` | AC-109 – AC-113 |
 | Settings → Airtable (base link, both row counts, last sync, outbox depth, Sync now, live log, webhook-expiry warning) | `/settings/airtable` | **AC-228, AC-229** |
 | Settings → API tokens | `/settings/api` | AC-107 |
@@ -684,13 +687,27 @@ The words on screen are the words a program team already uses (`PHILOSOPHY.md` 6
 
 `AC-170 – AC-224` are post-competition. The schema carries them where carrying them is nearly free and retrofitting is not: the **complete status enum including `waitlisted`** (AC-176), the **`(person, submission, role)` triple** (AC-222, AC-224, and it gates AC-77/AC-153 in scope), **org-level people** (AC-212), **round-aware evaluation** (a third round is data), **per-event reviewer scope enforced from the first migration** (AC-214), and `agenda_items.kind='break'`. No UI ships for them and the auditor does not test them.
 
-### Named known limitation — the submitter and the speaker are the same person *(Amendment 15)*
+### Named known limitation — per-person answers *(Amendment 29)*
+
+**What ships:** form answers are talk-level. A form asking "what is your dietary requirement?" collects one answer for the submission, not one per participant, so a panel of four returns one dietary requirement and an organizer has to chase the other three by hand.
+
+**What is already modeled:** per-person *properties* live on `people` (bio, headshot, title, company, socials, pronouns, dietary/accessibility) and are collected through each person's own scoped profile link, which every participant now receives. What is absent is per-person *answers to this form's questions*. The direction is a `person_field_values` table, deliberately **not** a `participant_id` on `submission_answers`: the answer belongs to the person across the conference, not to their seat on one talk.
+
+**Why it is named here rather than fixed:** it is a schema addition with its own intake and portal surfaces, and nothing in the walkthrough loop depends on it. `EVALUATION.md` gate 19b names it so a judge meets a documented deferral rather than a live discovery.
+
+### Superseded known limitation — the submitter and the speaker are the same person *(Amendment 15, closed by Amendment 29)*
+
+**This limitation is closed.** The public form carries the on-behalf-of disclosure (AC-270), confirmation and decision mail go to the submitter while tasks, profile requests, the portal link and the calendar invite go to the people holding the work (AC-271), and a submitter who holds no speaker role opens a portal with no task list (AC-272). The paragraph below is kept as the record of what the deferral said while it stood.
+
+<details><summary>The limitation as it was named</summary>
 
 **What ships:** the public CFP collects one email address, under `Primary speaker`. Whoever fills the form becomes both the submitter and the speaker on the record. So when an assistant submits on behalf of their director, every downstream artifact — confirmation, portal magic link, task assignments, the decision email, and the calendar invite — goes to the assistant, and the person who actually has to do the work is never contacted.
 
 **What is already modeled:** `submissions.submitter_person_id` is a real column, `participations.role` already includes `submitter` alongside `speaker`, `people` is org-level and keyed by email, `speaker_tasks.person_id` is per-person, and auth is a per-person magic link. **`AC-223` and `AC-224` already specify the correct behaviour** — confirmation and status mail to the submitter, task and profile requests to the speaker, both on the record with roles labelled — and sit in the post-competition band above. Two addresses would therefore mean two `people` rows and two independent portals, with no session or login ambiguity; the only genuinely new surface is a submitter who holds no speaker role opening the portal, which needs one honest empty state rather than a state-model change.
 
 **Why it is named here rather than fixed:** ruled extra credit (2026-08-10). This paragraph and `EVALUATION.md` gate 19 exist so it is a *documented deferral with AC numbers* rather than something a judge discovers live. Drafted criteria are held unminted in `sequence/research/state-model-gaps.md` Part 2; mint from AC-270 if the if-capacity band opens.
+
+</details>
 
 ---
 
@@ -1102,3 +1119,80 @@ fails closed per invite, remains active, and is visible as a bounded failure;
 valid recipients in the same batch continue. `abandoned` is the terminal
 retry state. Conference deletion and import undo remain the deliberate
 no-CANCEL paths named in the MRQ-228 contract.
+
+---
+
+## Amendment 29 — the participant model, finished *(2026-08-16, MRQ-224)*
+
+*Mints **US-95** and **AC-329 – AC-336**, and promotes the reserved **US-82 /
+AC-270 – AC-272** band out of reserve. Next mint after this amendment is
+**AC-337 / US-96**. Post-deadline; the live competition count and tier
+arithmetic are unchanged.*
+
+The record, the agenda, the conflict engine and the public site have understood
+several people per submission since MRQ-139. Everything downstream of that
+stopped: three work fan-outs each carried their own literal role list and
+disagreed, so a moderator standing on the published agenda received no calendar
+invite, held no membership row, and could not sign in to their own portal —
+while the conflict engine had been counting them as on stage the whole time. And
+the public form could not collect them at all.
+
+**One role authority.** `src/lib/participants.ts` names the population once.
+`WORK_HOLDING_PARTICIPATION_ROLES` is the four on-stage roles and is what the
+task fan-out and the event-membership bridge read.
+`CALENDAR_PARTICIPATION_ROLES` derives from it and adds the submitter, because
+AC-328 binds a calendar-recipient `submitter` by name. `PROGRAM_PRIMACY_ROLES`
+and `DECISION_RECIPIENT_ROLES` are the same ladder read from opposite ends, and
+`primaryParticipantSql()` replaces five hand-written copies of it.
+
+**The decision ladder inverts.** It preferred the speaker and fell back to the
+submitter — the exact inverse of AC-223. For the ordinary CFP submission, where
+one person holds both roles, the two orders are indistinguishable, which is why
+it survived; it becomes visible only in the case AC-223 exists for. The
+Decided-not-notified view and the delivery-health read follow the same ladder,
+so `no_valid_address` means *the recipient we would mail has no address* rather
+than *some participant does not*.
+
+**Design decisions, ruled and closed.** No `panelist` enum value — a panel is a
+moderator plus co-speakers, so the vocabulary is UI-only and the SQLite CHECK is
+never rebuilt. No `is_primary` column — the primacy ladder is one exported
+function instead. Answers stay talk-level; per-person answers become the named
+known limitation in §10.
+
+**A membership is a seat, not a claim to be a speaker** *(operator ruling,
+2026-08-16, resolving MRQ-224 against MRQ-111)*.
+
+Every accepted on-stage role gets a `memberships` row, because that row is what
+gates speaker-portal sign-in, headshot ownership, the onboarding person list and
+the comms audience. **Participation role is the speaker-ness authority**, and
+surfaces that mean "speaker" filter on role — never on a membership existing.
+
+The two facts could not both be told while `memberships.role` admitted only
+`speaker`: seating a moderator meant calling them one, and the roster reads this
+table, so portal access implied a roster row. Migration 0028 therefore widens
+`memberships.role` to mirror the on-stage half of `participations.role`
+(`co_speaker`, `moderator`, `chairperson`), and the acceptance cascade writes
+the role the seat was earned in. A person who speaks on one session and
+moderates another is seated as a `speaker`: declaration order in
+`WORK_HOLDING_PARTICIPATION_ROLES` is the precedence, so a second role never
+takes someone off the roster they belong on.
+
+Readers divide by what they mean, and the division is the contract:
+
+| Meaning | Predicate | Sites |
+|---|---|---|
+| has a seat here | `role IN (…on-stage…)` | portal sign-in, portal submission access, headshot ownership, task-assignee union |
+| is a speaker here | `role IN ('speaker','co_speaker')` | the roster, the comms speaker audience, the Sessionize import |
+| is staff here | `role NOT IN (…on-stage…)` | organization people, person access, organization home |
+
+The staff row is the one that was silent before: `role <> 'speaker'` admitted
+every on-stage role the moment the vocabulary widened. `scope-resolution.ts`
+seats all three new roles at exactly `speaker`'s rank with exactly `speaker`'s
+grants — a seat carries the holder's own portal and their own profile, nothing
+more.
+
+`participations.submission_id` is `NOT NULL`, so an organizer adding a speaker
+before there is a session has no participation for the roster to read. Their
+`speaker` seat is the only evidence there is, and it stands — which is why the
+roster keeps a membership half at all rather than becoming purely
+participation-derived.

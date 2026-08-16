@@ -5,6 +5,13 @@ import { newUlid } from "../../api/ids";
 import { auditStatement, writeAudit as writeAuditRow, type AuditEntry } from "../../lib/audit";
 import type { Decision, Id } from "../../db/schema";
 import { sha256Hex } from "../../lib/auth/random-token";
+import {
+  DECISION_RECIPIENT_ROLES,
+  primaryParticipantSql,
+  readTaskAppliesToRoles,
+  roleInSql,
+  WORK_HOLDING_PARTICIPATION_ROLES,
+} from "../../lib/participants";
 import { acceptedSpeakerMembershipStatements } from "../../lib/speaker-membership";
 import { purgePublicEmbedCache, type PublicEmbedCache } from "../../lib/public-site";
 import { PUBLISHED_SESSION_REFUSAL } from "../../lib/publication-guard";
@@ -123,16 +130,46 @@ interface SubmissionContext {
 }
 
 interface TaskCandidate {
+  applies_to_roles: string | null;
   existing_cancelled_at: number | null;
   existing_status: "open" | "done" | null;
   task_id: Id | null;
   template_id: Id;
   submission_id: Id;
   person_id: Id;
+  participation_role: string;
   title: string;
   kind: "acknowledge" | "file" | "form";
   description: string;
   due_at: number;
+}
+
+/**
+ * One row per template, submission, and person — never per *role*.
+ *
+ * The candidate query joins participations, so a person holding two roles on
+ * the same submission arrives twice. That was already the ordinary case (the
+ * public form stores its submitter as both `submitter` and `speaker`) and it is
+ * about to be commoner still, because a moderator can also be a co-speaker. The
+ * task set is keyed on the triple, so the second row is a duplicate assignment,
+ * not a second task.
+ *
+ * Role targeting is applied here rather than in SQL. `applies_to_roles` is JSON
+ * with no CHECK behind it, and `json_each` over a malformed value raises inside
+ * the acceptance batch — turning one bad template into a failed acceptance for
+ * every submission in it. `readTaskAppliesToRoles` degrades to the default
+ * instead, and it is the same function the write path and the organizer's
+ * screen read, so the three cannot disagree about what a template targets.
+ */
+function targetedTaskCandidates(rows: readonly TaskCandidate[]): TaskCandidate[] {
+  const chosen = new Map<string, TaskCandidate>();
+  for (const row of rows) {
+    const targeted: ReadonlySet<string> = new Set(readTaskAppliesToRoles(row.applies_to_roles));
+    if (!targeted.has(row.participation_role)) continue;
+    const key = `${row.template_id}\u0000${row.submission_id}\u0000${row.person_id}`;
+    if (!chosen.has(key)) chosen.set(key, row);
+  }
+  return [...chosen.values()];
 }
 
 function taskCancellationReason(outcome: "withdrawn" | "rejected"): string {
@@ -163,6 +200,32 @@ function decisionTarget(action: DecisionAction): {
   return DECISION_TARGETS[action];
 }
 
+/**
+ * The one person a decision is addressed to, as SQL.
+ *
+ * The ladder used to prefer the speaker and fall back to the submitter — the
+ * exact inverse of AC-223, which says confirmation and status mail goes to the
+ * submitter while tasks and profile requests go to the speaker. For the
+ * ordinary CFP submission, where one person holds both roles, the two orders
+ * are indistinguishable; that is why it survived. It only becomes visible in
+ * the case AC-223 exists for: a comms manager submitting for an executive, who
+ * then never learns the abstract was accepted.
+ *
+ * `submitter` is the outer query's join on `submissions.submitter_person_id`,
+ * so a submission with no participation rows at all still has a recipient.
+ * There is exactly one call per column and one email per submission: fanning a
+ * decision across four participants would turn one decision into four emails
+ * nobody asked for.
+ */
+function decisionRecipientSql(column: "id" | "name" | "email"): string {
+  return primaryParticipantSql({
+    submissionId: "s.id",
+    column,
+    order: DECISION_RECIPIENT_ROLES,
+    fallback: `submitter.${column}`,
+  });
+}
+
 async function loadSubmission(
   db: D1Database,
   eventId: Id,
@@ -178,36 +241,9 @@ async function loadSubmission(
                    AND live_agenda.kind = 'session'
                    AND live_agenda.is_published = 1
               ) AS agenda_published,
-              COALESCE((
-                SELECT speaker.id
-                FROM participations speaker_part
-                JOIN people speaker ON speaker.id = speaker_part.person_id
-                WHERE speaker_part.submission_id = s.id
-                  AND speaker_part.role IN ('speaker', 'submitter')
-                ORDER BY CASE speaker_part.role WHEN 'speaker' THEN 0 ELSE 1 END,
-                         speaker_part.position ASC, speaker_part.id ASC
-                LIMIT 1
-              ), submitter.id) AS person_id,
-              COALESCE((
-                SELECT speaker.name
-                FROM participations speaker_part
-                JOIN people speaker ON speaker.id = speaker_part.person_id
-                WHERE speaker_part.submission_id = s.id
-                  AND speaker_part.role IN ('speaker', 'submitter')
-                ORDER BY CASE speaker_part.role WHEN 'speaker' THEN 0 ELSE 1 END,
-                         speaker_part.position ASC, speaker_part.id ASC
-                LIMIT 1
-              ), submitter.name) AS person_name,
-              COALESCE((
-                SELECT speaker.email
-                FROM participations speaker_part
-                JOIN people speaker ON speaker.id = speaker_part.person_id
-                WHERE speaker_part.submission_id = s.id
-                  AND speaker_part.role IN ('speaker', 'submitter')
-                ORDER BY CASE speaker_part.role WHEN 'speaker' THEN 0 ELSE 1 END,
-                         speaker_part.position ASC, speaker_part.id ASC
-                LIMIT 1
-              ), submitter.email) AS person_email
+              ${decisionRecipientSql("id")} AS person_id,
+              ${decisionRecipientSql("name")} AS person_name,
+              ${decisionRecipientSql("email")} AS person_email
        FROM submissions s
        JOIN people submitter ON submitter.id = s.submitter_person_id
        WHERE s.event_id = ? AND s.id = ?`,
@@ -233,36 +269,9 @@ async function loadSubmissions(
                    AND live_agenda.kind = 'session'
                    AND live_agenda.is_published = 1
               ) AS agenda_published,
-              COALESCE((
-                SELECT speaker.id
-                FROM participations speaker_part
-                JOIN people speaker ON speaker.id = speaker_part.person_id
-                WHERE speaker_part.submission_id = s.id
-                  AND speaker_part.role IN ('speaker', 'submitter')
-                ORDER BY CASE speaker_part.role WHEN 'speaker' THEN 0 ELSE 1 END,
-                         speaker_part.position ASC, speaker_part.id ASC
-                LIMIT 1
-              ), submitter.id) AS person_id,
-              COALESCE((
-                SELECT speaker.name
-                FROM participations speaker_part
-                JOIN people speaker ON speaker.id = speaker_part.person_id
-                WHERE speaker_part.submission_id = s.id
-                  AND speaker_part.role IN ('speaker', 'submitter')
-                ORDER BY CASE speaker_part.role WHEN 'speaker' THEN 0 ELSE 1 END,
-                         speaker_part.position ASC, speaker_part.id ASC
-                LIMIT 1
-              ), submitter.name) AS person_name,
-              COALESCE((
-                SELECT speaker.email
-                FROM participations speaker_part
-                JOIN people speaker ON speaker.id = speaker_part.person_id
-                WHERE speaker_part.submission_id = s.id
-                  AND speaker_part.role IN ('speaker', 'submitter')
-                ORDER BY CASE speaker_part.role WHEN 'speaker' THEN 0 ELSE 1 END,
-                         speaker_part.position ASC, speaker_part.id ASC
-                LIMIT 1
-              ), submitter.email) AS person_email
+              ${decisionRecipientSql("id")} AS person_id,
+              ${decisionRecipientSql("name")} AS person_name,
+              ${decisionRecipientSql("email")} AS person_email
        FROM submissions s
        JOIN people submitter ON submitter.id = s.submitter_person_id
        WHERE s.event_id = ?
@@ -338,6 +347,7 @@ export async function reconcileTaskSet(
     .prepare(
       `SELECT DISTINCT tt.id AS template_id, s.id AS submission_id, p.id AS person_id,
               tt.name AS title, tt.kind, tt.description,
+              tt.applies_to_roles, part.role AS participation_role,
               existing.id AS task_id, existing.status AS existing_status,
               existing.cancelled_at AS existing_cancelled_at,
               COALESCE(tt.due_at, ? + (tt.due_offset_days * 86400000)) AS due_at
@@ -345,7 +355,7 @@ export async function reconcileTaskSet(
        JOIN submissions s ON s.event_id = tt.event_id
        JOIN participations part
          ON part.submission_id = s.id
-        AND part.role IN ('speaker', 'submitter')
+        AND ${roleInSql("part", WORK_HOLDING_PARTICIPATION_ROLES)}
        JOIN people p ON p.id = part.person_id
        LEFT JOIN speaker_tasks existing
          ON existing.template_id = tt.id
@@ -360,7 +370,7 @@ export async function reconcileTaskSet(
     .bind(now, eventId, idsJson)
     .all<TaskCandidate>();
 
-  for (const candidate of candidates.results) {
+  for (const candidate of targetedTaskCandidates(candidates.results)) {
     if (candidate.task_id) {
       if (candidate.existing_status === "open" && candidate.existing_cancelled_at !== null) {
         const restoredResult = await db

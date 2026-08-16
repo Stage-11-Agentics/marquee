@@ -11,6 +11,7 @@ import { getAuth } from "../lib/auth/auth-middleware";
 import { revokeAccessStatements, revokeConferenceAccessStatements } from "../lib/auth/access-revocation";
 import { requireOrgAdmin } from "../lib/auth/org-admin";
 import { errorFields } from "../lib/observability/log";
+import { roleNotInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "../lib/participants";
 
 /**
  * Ending a person's relationship with one conference — and, separately, ending
@@ -187,7 +188,7 @@ const previewConferenceRemoval = defineApiRoute(
       .bind(eventId, personId)
       .first<{ total: number }>();
     const seat = await context.env.DB.prepare(
-      "SELECT 1 AS present FROM memberships WHERE org_id = ? AND person_id = ? AND role != 'speaker' LIMIT 1",
+      `SELECT 1 AS present FROM memberships WHERE org_id = ? AND person_id = ? AND ${roleNotInSql("memberships", WORK_HOLDING_PARTICIPATION_ROLES)} LIMIT 1`,
     )
       .bind(orgId, personId)
       .first<{ present: number }>();

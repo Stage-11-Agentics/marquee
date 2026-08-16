@@ -1246,4 +1246,46 @@ calendar using the same identity and meeting details as the invite I received,
 
 `EVALUATION.md` §2.11 owns the verification rows. Post-deadline band; no gate count changes. Built by MRQ-228.
 
-**Next mint: AC-329.**
+**Next mint: AC-329.** *(Superseded by Amendment 29 below, which mints AC-329 – AC-336 and promotes the reserved AC-270 – AC-272 band; next mint is now AC-337.)*
+
+---
+
+## Amendment 29 — the participant model, finished *(2026-08-16, MRQ-224)*
+
+Two stories land here. **US-82 is not new** — it and `AC-270 – AC-272` have sat
+reserved since the 2026-08-10 ruling that held them unminted, drafted in
+`sequence/research/state-model-gaps.md` Part 2. This amendment promotes that band
+out of reserve because the build now exists, and mints **US-95** and
+**AC-329 – AC-336** beside it. This is a post-deadline band; it does not change
+the live competition count or tier arithmetic. **AC-337 – AC-342 and US-96
+belong to MRQ-242** and are not used here.
+
+### US-82 · The person who has to do the work is the person who gets asked *(promoted from reserve)*
+
+**As** someone submitting on behalf of a speaker, **I want** the speaker to
+receive their own portal, tasks and calendar invite, **so that** the person who
+has to do the work is the person who gets asked.
+
+- **AC-270**: The public form offers *"I'm submitting on behalf of someone else."* When on, it collects the submitter's own name and email separately from the speaker's and creates two `people` rows and two `participations` rows (`submitter`, `speaker`). When off, behaviour is exactly as today.
+- **AC-271**: Confirmation and decision mail goes to the submitter; task assignment, profile requests, the portal magic link and the calendar invite go to the people holding the work. Both appear on the record with their role labelled. Exactly one decision email is sent per submission whatever the number of participants. *(This is AC-223 + AC-224, promoted out of the post-competition band.)*
+- **AC-272**: A submitter who holds no speaker role opens a portal showing their submissions' status and no task list, stating plainly that the speaker holds the homework. **Satisfied by MRQ-160/MRQ-162 before this amendment; recorded, not rebuilt.**
+
+### US-95 · Everyone on stage is treated as being on stage *(new, post-deadline)*
+
+**As an** organizer running panels, **I want** every person on a session to be
+collected, chased, invited and published in the role they actually hold, **so
+that** a moderator is not a person the system quietly forgets.
+
+- **AC-329**: The public form collects participants as a repeatable list with a role select (Speaker / Co-speaker / Moderator), replacing the fixed `speaker_*` / `co_speaker_*` pair. `forms.max_speakers` is the honest ceiling and is no longer clamped to what a fixed pair could hold; the speaker-limit sentence stays before the first add-person control (AC-29). A resumed draft restores the people already named, and a form still carrying the old `co_speaker_*` fields keeps working with nobody lost.
+- **AC-330**: `task_templates.applies_to_roles` targets a template at named on-stage roles, defaulting to all four. The acceptance cascade honours it, the restore path stays idempotent per template/submission/person, the chase board inherits the truth through the existing owed predicate, and each template row in Settings › Tasks shows its targeting as fixed-width chips. An absent or malformed value reads as the full set, never as nobody.
+- **AC-331**: `applies_to_roles` copies verbatim when a conference is copied into a new year. A clone that dropped it would reset every narrowed template to the default inside an operation that reports success; the MRQ-129 schema-drift guard fails when the manifest omits it.
+- **AC-332**: A public submitter naming another person creates that person if absent and never edits them if present. An existing organization contact's name, title, company and bio survive a stranger typing their address into a public form; the scoped `cospeaker_profile` link remains the only write path to their own profile.
+- **AC-333**: Task assignment, calendar invites and event membership read one declared role set rather than three literal lists. A moderator on an accepted session therefore holds tasks per AC-330, receives the session's calendar invite, and holds the membership row that gates portal sign-in. Alignment is asserted by enumeration, not by behaviour alone. **A membership row is a seat at the event, not a claim to be a speaker** (operator ruling, 2026-08-16): it carries the role the seat was earned in, surfaces meaning "speaker" filter on that role rather than on a membership existing, and surfaces meaning "staff" exclude the on-stage roles rather than testing `<> 'speaker'`. A person seated for two sessions keeps their most speaking-forward role, so moderating a second panel never takes a speaker off the roster.
+- **AC-334**: The decision recipient is the submitter, with the on-stage roles as the fallback ladder — the inverse of the order that shipped. The Decided · not notified view and the delivery-health read resolve the same recipient, so `no_valid_address` names the participant the cascade would actually have mailed.
+- **AC-335**: Two people shared across the same overlapping pair of sessions raise two person-conflicts, not one. A panel makes two shared names ordinary, and an organizer who resolves the person a single flag named must not be told the schedule is clear while the second clash stands.
+- **AC-336**: The public participant projection carries `participation.role`, and a published session card renders the label where the role is not `speaker`. Embeds inherit it; a plain talk's card is unchanged.
+
+`EVALUATION.md` §2.12 owns the verification rows. Post-deadline band; no gate
+count changes. Built by MRQ-224.
+
+**Next mint: AC-337.**

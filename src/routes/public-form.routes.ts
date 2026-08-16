@@ -23,7 +23,14 @@ import {
   answerAttachmentId,
   advertisedMaxSpeakers,
   answerText,
-  collectableParticipantSlots,
+  formCollectsParticipants,
+  legacyParticipantsFromAnswers,
+  readOnBehalfOf,
+  readParticipantSlots,
+  readParticipantList,
+  readParticipantRoster,
+  writeParticipantRoster,
+  type PublicParticipantRoster,
   countFormForPerson,
   emailFromAnswers,
   findEventContext,
@@ -40,7 +47,7 @@ import {
   upsertPublicPerson,
   vendorAffiliation,
 } from "./public-form.shared";
-import type { PublicFormState } from "./public-form.types";
+import { PUBLIC_PARTICIPANT_ROLES, type PublicFormState } from "./public-form.types";
 import {
   assertRoutingPoolAllowed,
   selectSubmissionRouting,
@@ -50,16 +57,54 @@ import {
 const publicParams = z.object({ slug: z.string().min(1).max(160) });
 const draftParams = publicParams.extend({ token: z.string().min(20).max(256) });
 const answersSchema = z.record(z.string(), z.unknown()).default({});
+/**
+ * The people this submission says will present, beyond the primary speaker.
+ *
+ * Roles are an enum rather than free text: an applicant naming themselves
+ * "chairperson" would be claiming a program decision the conference has not
+ * made. The cap is generous and exists only so one request cannot mint an
+ * unbounded number of `people` rows; the form's own `max_speakers` is the limit
+ * a submitter is actually shown, and is enforced at Submit.
+ */
+const participantEntrySchema = z.object({
+  // Deliberately not `.min(1)`. A blank half of a slot is an ordinary state
+  // mid-typing, and rejecting it at the schema layer would answer a submitter
+  // who typed a name and no address with a generic 400 instead of the sentence
+  // `requiredSubmissionIssues` writes — which names the slot and says what to
+  // do about it. Autosave tolerates the gap; Submit refuses it.
+  name: z.string().trim().max(200),
+  email: z.string().trim().max(320),
+  role: z.enum(PUBLIC_PARTICIPANT_ROLES),
+});
+const participantListSchema = z.array(participantEntrySchema).max(50);
+const onBehalfOfSchema = z.object({
+  name: z.string().trim().max(200),
+  email: z.string().trim().max(320),
+}).nullable();
+
 const draftBodySchema = z.object({
   answers: answersSchema.optional(),
   email: z.string().trim().max(320).optional(),
   turnstileToken: z.string().optional(),
   turnstile_token: z.string().optional(),
+  participants: participantListSchema.optional(),
+  on_behalf_of: onBehalfOfSchema.optional(),
 });
 const submitBodySchema = draftBodySchema.extend({
   resumeToken: z.string().min(20).max(256).optional(),
   resume_token: z.string().min(20).max(256).optional(),
 });
+/**
+ * Editing an already-submitted abstract deliberately does not take a roster.
+ *
+ * The submitter edit window (MRQ-170) exists so a typo in the title or abstract
+ * does not need an organizer. Changing who is presenting after the committee
+ * has the record is a different act with different consequences — invitations
+ * already sent, tasks already minted, a person already told they are speaking —
+ * and it belongs to the organizer's participants panel, which records who made
+ * the change. Accepting the field here and quietly not persisting it would be
+ * worse than refusing it.
+ */
 const submittedEditBodySchema = z.object({ answers: answersSchema.optional() });
 
 const publicFieldSchema = z.object({
@@ -107,6 +152,12 @@ const publicFormSchema = z.object({
     resume_url: z.string().nullable(), portal_url: z.string().nullable(),
   }).nullable(),
   message: z.string().nullable(),
+  participants: z.array(z.object({
+    name: z.string(),
+    email: z.string(),
+    role: z.enum(PUBLIC_PARTICIPANT_ROLES),
+  })),
+  on_behalf_of: z.object({ name: z.string(), email: z.string() }).nullable(),
 }).openapi("PublicForm");
 
 const issueSchema = z.object({ fieldKey: z.string(), message: z.string() });
@@ -188,16 +239,87 @@ function answerMap(body: { answers?: Record<string, unknown> }): Record<string, 
   return body.answers ?? {};
 }
 
+/**
+ * The roster this request is asserting.
+ *
+ * A body that names neither key is not asserting an empty roster — an older
+ * client, or an autosave that only carried answers, would otherwise silently
+ * delete every participant the submitter had already added. Absent means
+ * "unchanged", so the roster already on the submission is carried forward.
+ */
+function rosterFromBody(
+  body: { participants?: unknown; on_behalf_of?: unknown },
+  current: PublicParticipantRoster,
+  answers: Record<string, unknown>,
+): PublicParticipantRoster {
+  // A client that names nobody has not necessarily named nobody: a form still
+  // carrying the old `co_speaker_*` pair sends that person as two answers, and
+  // reading them here is what keeps those forms working unchanged.
+  //
+  // The fallback is gated on `stored`, not on the list being empty. Those are
+  // different facts: a submission that has never had a roster written may read
+  // the legacy answers, but one whose stored roster is empty has had its
+  // participants deliberately removed, and falling back there would resurrect
+  // them from answers that are still on the row and no longer rendered.
+  // `current.typed` first even when nothing is stored: for a legacy form it was
+  // already computed from the submission's OWN answers, while `answers` is the
+  // request's — and the same request wipes the stored ones. Falling back to the
+  // request only when the submission has nothing of its own cannot lose anyone.
+  const carried = current.typed.length > 0
+    ? current.typed
+    : readParticipantSlots(legacyParticipantsFromAnswers(answers));
+  const typed = body.participants === undefined
+    ? (current.stored ? current.typed : carried)
+    : readParticipantSlots(body.participants);
+  return {
+    participants: readParticipantList(typed),
+    onBehalfOf: body.on_behalf_of === undefined ? current.onBehalfOf : readOnBehalfOf(body.on_behalf_of),
+    typed,
+    stored: true,
+  };
+}
+
+/**
+ * Every entry a submitter typed, complete or not.
+ *
+ * `readParticipantList` drops half-filled slots so autosave is never blocked
+ * mid-typing; Submit is where the difference has to become a sentence, or a
+ * name typed without an address would vanish with no explanation at all.
+ */
+/** Something was typed into this object, but not enough of it to be a person. */
+function isHalfTyped(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const fields = Object.values(value as Record<string, unknown>);
+  return fields.some((field) => typeof field === "string" && field.trim() !== "")
+    && fields.some((field) => typeof field !== "string" || field.trim() === "");
+}
+
+/**
+ * Slots the submitter started and did not finish.
+ *
+ * Read from the resolved roster rather than the request body, so a resumed
+ * draft carrying a half-typed slot is refused at Submit even when the client
+ * omits the key. Autosave is never blocked — the submitter is mid-sentence, and
+ * the slot is stored as typed so it survives a save.
+ */
+function incompleteParticipantSlots(slots: readonly { name: string; email: string }[]): number {
+  return slots.filter((slot) => !slot.name.trim() || !normalisePublicEmail(slot.email)).length;
+}
+
 function requiredSubmissionIssues(
   fields: readonly FormFieldView[],
   answers: Record<string, unknown>,
   form: { min_speakers: number; max_speakers: number },
+  roster: PublicParticipantRoster,
+  raw: { participants?: unknown; on_behalf_of?: unknown },
 ): Array<{ fieldKey: string; message: string }> {
-  if (collectableParticipantSlots(fields) === null) return [];
+  if (!formCollectsParticipants(fields)) return [];
   const primaryPresent = Boolean(answerText(answers, "speaker_name") || normalisePublicEmail(answers.speaker_email));
-  const coName = answerText(answers, "co_speaker_name");
-  const coEmail = normalisePublicEmail(answers.co_speaker_email);
-  const participantCount = (primaryPresent ? 1 : 0) + (coName && coEmail ? 1 : 0);
+  // Deduped by address, because that is what `insertParticipationRows` will do.
+  // Counting raw entries refused a submitter for a roster that was about to
+  // collapse under the ceiling anyway.
+  const distinctParticipants = new Set(roster.participants.map((entry) => entry.email.toLowerCase()));
+  const participantCount = (primaryPresent ? 1 : 0) + distinctParticipants.size;
   if (participantCount < Number(form.min_speakers)) {
     return [{ fieldKey: "speaker_name", message: "Add at least one participant before sending this abstract, then try again." }];
   }
@@ -206,11 +328,11 @@ function requiredSubmissionIssues(
   if (participantCount > advertisedMaxSpeakers(Number(form.max_speakers), fields)) {
     return [{ fieldKey: "speaker_name", message: "Remove an extra participant so the conference limit is respected, then try again." }];
   }
-  if (answers.co_speaker_name && !answers.co_speaker_email) {
-    return [{ fieldKey: "co_speaker_email", message: "Add a contact address for the additional participant, then try again." }];
+  if (isHalfTyped(raw.on_behalf_of) || (raw.on_behalf_of !== undefined && raw.on_behalf_of !== null && roster.onBehalfOf === null)) {
+    return [{ fieldKey: "on_behalf_of", message: "Add your own name and a contact address the conference team can reply to, then try again." }];
   }
-  if (answers.co_speaker_email && !answers.co_speaker_name) {
-    return [{ fieldKey: "co_speaker_name", message: "Add a name for the additional participant, then try again." }];
+  if (incompleteParticipantSlots(roster.typed) > 0) {
+    return [{ fieldKey: "participants", message: "Give every added participant a name and a contact address, then try again." }];
   }
   return [];
 }
@@ -260,39 +382,116 @@ async function resolveDomainReferences(
 type InsertedParticipant = {
   id: string;
   person: PersonRow;
-  role: "speaker" | "co_speaker";
+  role: "speaker" | "co_speaker" | "moderator";
   position: number;
 };
 
+/**
+ * The two identities a submission has, which are usually one person.
+ *
+ * `submitter` is who the conference writes back to — the address on the
+ * confirmation, and later on the decision (AC-223). `speaker` is who holds the
+ * work: the tasks, the profile request, the portal link, the calendar invite.
+ * With the on-behalf-of disclosure off they are the same row, which is exactly
+ * what shipped before this and remains the ordinary CFP submission.
+ */
+interface IntakeIdentities {
+  submitter: PersonRow;
+  speaker: PersonRow;
+}
+
+/**
+ * Resolve both identities from the answers and the disclosure.
+ *
+ * Trust is the load-bearing argument. The submitter is the authority on their
+ * own name and profile; the speaker they named is not theirs to rewrite, so an
+ * existing record for that address is left untouched.
+ */
+async function resolveIntakeIdentities(input: {
+  db: D1Database;
+  orgId: string;
+  submitter: PersonRow;
+  answers: Record<string, unknown>;
+  roster: PublicParticipantRoster;
+  now: number;
+}): Promise<IntakeIdentities> {
+  if (input.roster.onBehalfOf === null) return { submitter: input.submitter, speaker: input.submitter };
+  const speakerEmail = normalisePublicEmail(input.answers.speaker_email);
+  const speakerName = answerText(input.answers, "speaker_name");
+  if (!speakerEmail || !speakerName) return { submitter: input.submitter, speaker: input.submitter };
+  const speaker = await upsertPublicPerson({
+    db: input.db,
+    // Supplied by the event context, never by the request.
+    orgId: input.orgId,
+    email: speakerEmail,
+    name: speakerName,
+    company: answerText(input.answers, "speaker_company"),
+    title: answerText(input.answers, "speaker_role"),
+    bio: answerText(input.answers, "biography"),
+    trust: "named_by_other",
+    now: input.now,
+  });
+  return { submitter: input.submitter, speaker };
+}
+
+/**
+ * Rewrite the submission's participation rows from the roster it is carrying.
+ *
+ * One `submitter` row, one `speaker` row, and one row per person the submitter
+ * added. Positions follow the order the submitter arranged them in, because
+ * that order is what the program surfaces sort by and the applicant is the only
+ * one who knows it.
+ *
+ * The returned list is everyone who needs their own scoped invitation: the
+ * people named by somebody else, who have a profile to complete and no other
+ * way in. A submitter who is also the speaker is not among them — they already
+ * hold the resume link.
+ */
 async function insertParticipationRows(
   db: D1Database,
   submissionId: string,
-  primary: PersonRow,
+  identities: IntakeIdentities,
   answers: Record<string, unknown>,
+  roster: PublicParticipantRoster,
   eventOrgId: string,
   now: number,
-): Promise<{ coSpeaker: InsertedParticipant | null }> {
-  const participants: Array<{ person: PersonRow; role: "speaker" | "co_speaker"; position: number }> = [];
-  const primaryName = answerText(answers, "speaker_name");
-  if (primaryName || answers.speaker_email) participants.push({ person: primary, role: "speaker", position: 0 });
-  const coEmail = normalisePublicEmail(answers.co_speaker_email);
-  const coName = answerText(answers, "co_speaker_name");
-  if (coEmail && coName) {
-    const coPerson = await upsertPublicPerson({
+): Promise<{ invitees: InsertedParticipant[] }> {
+  const participants: Array<{ person: PersonRow; role: InsertedParticipant["role"]; position: number; invite: boolean }> = [];
+  const primaryNamed = Boolean(answerText(answers, "speaker_name") || answers.speaker_email);
+  if (primaryNamed) {
+    participants.push({
+      person: identities.speaker,
+      role: "speaker",
+      position: 0,
+      invite: identities.speaker.id !== identities.submitter.id,
+    });
+  }
+  // One row per person, whatever the roster says. Two entries can resolve to the
+  // same record — the submitter listing themselves again, or one address typed
+  // into two slots — and a second participation row for the same person on the
+  // same submission is not a second person: it is a duplicate the record, the
+  // agenda, and the chase board would each have to dedupe for themselves. The
+  // first entry wins, so the role the submitter chose first is the one kept.
+  const seen = new Set<string>([identities.submitter.id, identities.speaker.id]);
+  for (const [index, entry] of roster.participants.entries()) {
+    const person = await upsertPublicPerson({
       // This argument is intentionally supplied by the event context, not the request.
       db,
       orgId: eventOrgId,
-      email: coEmail,
-      name: coName,
+      email: entry.email,
+      name: entry.name,
+      trust: "named_by_other",
       now,
     });
-    participants.push({ person: coPerson, role: "co_speaker", position: 1 });
+    if (seen.has(person.id)) continue;
+    seen.add(person.id);
+    participants.push({ person, role: entry.role, position: index + 1, invite: true });
   }
   const statements = [db.prepare("DELETE FROM participations WHERE submission_id = ?").bind(submissionId)];
   statements.push(db.prepare(
     `INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at)
      VALUES (?, ?, ?, 'submitter', 0, 'confirmed', ?, ?)`,
-  ).bind(crypto.randomUUID(), submissionId, primary.id, now, now));
+  ).bind(crypto.randomUUID(), submissionId, identities.submitter.id, now, now));
   const insertedParticipants = participants.map((participant) => ({ ...participant, id: crypto.randomUUID() }));
   for (const participant of insertedParticipants) {
     statements.push(db.prepare(
@@ -301,7 +500,55 @@ async function insertParticipationRows(
     ).bind(participant.id, submissionId, participant.person.id, participant.role, participant.position, now, now));
   }
   await db.batch(statements);
-  return { coSpeaker: insertedParticipants.find((participant) => participant.role === "co_speaker") ?? null };
+  return { invitees: insertedParticipants.filter((participant) => participant.invite) };
+}
+
+/**
+ * Write the roster and the participation rows it implies, in that order.
+ *
+ * `participants_json` is the material a resumed draft is rebuilt from, so it is
+ * stored even where an intake decision later collapses two entries into one
+ * person: the submitter should find what they typed, not what the record made
+ * of it.
+ */
+async function persistParticipantRoster(
+  db: D1Database,
+  input: {
+    submissionId: string;
+    orgId: string;
+    submitter: PersonRow;
+    answers: Record<string, unknown>;
+    roster: PublicParticipantRoster;
+    now: number;
+  },
+): Promise<{ identities: IntakeIdentities; invitees: InsertedParticipant[] }> {
+  const identities = await resolveIntakeIdentities({
+    db,
+    orgId: input.orgId,
+    submitter: input.submitter,
+    answers: input.answers,
+    roster: input.roster,
+    now: input.now,
+  });
+  const inserted = await insertParticipationRows(
+    db,
+    input.submissionId,
+    identities,
+    input.answers,
+    input.roster,
+    input.orgId,
+    input.now,
+  );
+  await db
+    .prepare("UPDATE submissions SET participants_json = ?, updated_at = ? WHERE id = ?")
+    .bind(writeParticipantRoster(input.roster), input.now, input.submissionId)
+    .run();
+  return { identities, invitees: inserted.invitees };
+}
+
+/** What the invitation calls the seat, in the applicant's own vocabulary. */
+function invitationRoleNoun(role: InsertedParticipant["role"]): string {
+  return role === "moderator" ? "the moderator" : role === "speaker" ? "the speaker" : "a co-speaker";
 }
 
 async function enqueueCoSpeakerInvitation(
@@ -326,9 +573,10 @@ async function enqueueCoSpeakerInvitation(
   });
   const exchangeUrl = `${publicOrigin(context.req.url)}/api/v1/auth/exchange?token=${encodeURIComponent(link.token)}`;
   const addedBy = input.addedBy.trim() || "The conference submitter";
+  const seat = invitationRoleNoun(input.participant.role);
   const subject = "Complete your conference speaker profile";
-  const text = `${addedBy} added you as a co-speaker on “${input.submissionTitle}” for ${input.conferenceName}.\n\nAdd your bio and headshot here: ${exchangeUrl}`;
-  const html = `<p>${escapeHtml(addedBy)} added you as a co-speaker on <strong>${escapeHtml(input.submissionTitle)}</strong> for ${escapeHtml(input.conferenceName)}.</p><p><a href="${escapeHtml(exchangeUrl)}">Add your bio and headshot</a></p>`;
+  const text = `${addedBy} added you as ${seat} on “${input.submissionTitle}” for ${input.conferenceName}.\n\nAdd your bio and headshot here: ${exchangeUrl}`;
+  const html = `<p>${escapeHtml(addedBy)} added you as ${escapeHtml(seat)} on <strong>${escapeHtml(input.submissionTitle)}</strong> for ${escapeHtml(input.conferenceName)}.</p><p><a href="${escapeHtml(exchangeUrl)}">Add your bio and headshot</a></p>`;
   const invitation = await enqueueOutbox({
     db: context.env.DB,
     eventId: input.eventId,
@@ -347,9 +595,12 @@ async function enqueueCoSpeakerInvitation(
     now: input.now,
   });
   if (invitation.inserted) await enqueueMailMessage(context.env.MAIL_QUEUE, invitation.id);
+  // Keyed on the participation row, not on its role: the same scoped invite now
+  // reaches a moderator and an on-behalf-of speaker, and a role predicate here
+  // would silently skip stamping theirs.
   await context.env.DB.prepare(
     `UPDATE participations SET invited_at = ?, updated_at = ?
-     WHERE id = ? AND submission_id = ? AND person_id = ? AND role = 'co_speaker'`,
+     WHERE id = ? AND submission_id = ? AND person_id = ?`,
   ).bind(input.now, input.now, input.participant.id, input.submissionId, input.participant.person.id).run();
 }
 
@@ -516,7 +767,14 @@ async function createDraft(
 
   const raw = rawAnswersFromBody(answerMap(body), body.email);
   const projected = projectPublicAnswers(base.fields, raw);
-  const email = emailFromAnswers(projected.projected.answers) ?? normalisePublicEmail(body.email);
+  const roster = rosterFromBody(body, base.roster, raw);
+  // The draft's owner is the person the resume link belongs to, and the
+  // disclosure is what says who that is. Deriving it from `speaker_email`
+  // instead — as this did — mailed the private resume link to a third party the
+  // submitter had merely named, and set `submitter_person_id` to them, which
+  // every AC-270/AC-271 guarantee downstream then inherited.
+  const speakerEmail = emailFromAnswers(projected.projected.answers) ?? normalisePublicEmail(body.email);
+  const email = roster.onBehalfOf?.email ?? speakerEmail;
   if (!email) throw ApiError.unprocessable("Enter an address where the conference team can reach you, then choose Save draft.", "email");
   const event = await findEventContext(context.env.DB, base.form.event_id);
   if (!event) throw ApiError.notFound("This conference is no longer available.");
@@ -525,14 +783,19 @@ async function createDraft(
   if (base.form.per_submitter_limit > 0 && knownPerson && await countFormForPerson(context.env.DB, base.form.id, knownPerson.id) >= Number(base.form.per_submitter_limit)) {
     throw ApiError.conflict("Your abstract limit is full. Use a saved resume link to continue an existing draft.");
   }
-  const person = await upsertPublicPerson({
+  // `knownPerson ??`, never an unconditional upsert. This route is the one
+  // unauthenticated write door to `people`: a stranger POSTing a draft that
+  // names an existing contact's address must not rewrite that contact's name
+  // and profile. From here the resume token is the credential, and autosave —
+  // which holds it — may update the owner's own record.
+  const person = knownPerson ?? await upsertPublicPerson({
     db: context.env.DB,
     orgId: event.org_id,
     email,
-    name: answerText(projected.projected.answers, "speaker_name") ?? email,
-    company: answerText(projected.projected.answers, "speaker_company"),
-    title: answerText(projected.projected.answers, "speaker_role"),
-    bio: answerText(projected.projected.answers, "biography"),
+    name: roster.onBehalfOf?.name ?? answerText(projected.projected.answers, "speaker_name") ?? email,
+    company: roster.onBehalfOf ? null : answerText(projected.projected.answers, "speaker_company"),
+    title: roster.onBehalfOf ? null : answerText(projected.projected.answers, "speaker_role"),
+    bio: roster.onBehalfOf ? null : answerText(projected.projected.answers, "biography"),
     now,
   });
   const submissionId = crypto.randomUUID();
@@ -550,7 +813,14 @@ async function createDraft(
     JSON.stringify(projected.projected.answers), now, now,
   ).run();
   await replaceProjectedAnswers(context.env.DB, submissionId, base.fields, projected.projected.answers, now);
-  await insertParticipationRows(context.env.DB, submissionId, person, projected.projected.answers, event.org_id, now);
+  await persistParticipantRoster(context.env.DB, {
+    submissionId,
+    orgId: event.org_id,
+    submitter: person,
+    answers: projected.projected.answers,
+    roster,
+    now,
+  });
 
   const resumeUrl = `${publicOrigin(context.req.url)}/f/${encodeURIComponent(slug)}?resume=${encodeURIComponent(resumeToken)}`;
   const mail = await enqueueAuthMail(context.env.DB, {
@@ -584,18 +854,47 @@ async function autosaveDraft(
   const now = Date.now();
   const event = await findEventContext(context.env.DB, base.form.event_id);
   if (!event) throw ApiError.notFound("This conference is no longer available.");
-  const person = await upsertPublicPerson({
+  // The draft's own owner, by id. Re-deriving them from an address in the
+  // request let a changed `speaker_email` walk the write onto a different
+  // person's record; the resume token names exactly one submission, and that
+  // submission names exactly one submitter. Holding the token is what makes
+  // this an authorized profile write rather than a stranger's.
+  const person = await context.env.DB
+    .prepare("SELECT * FROM people WHERE id = ?")
+    .bind(base.submission.submitter_person_id)
+    .first<PersonRow>();
+  if (!person) throw ApiError.notFound("This draft is no longer available.");
+  const roster = rosterFromBody(body, base.roster, raw);
+  // The disclosure is recorded on the draft and applied at submit, where the
+  // record's submitter is set. Moving it here would rewrite the owner of a
+  // draft on a timer, mid-typing.
+  //
+  // But the profile fields branch on it exactly as `createDraft` and the submit
+  // handler do. Under the disclosure the speaker card describes somebody else,
+  // and writing it here filed an executive's name, bio, company and title
+  // against their comms manager's own record — on every autosave, so within
+  // seconds of the box being ticked. Submit could not heal it either: it finds
+  // the submitter by address and short-circuits the upsert, so the wrong
+  // identity was permanent.
+  await upsertPublicPerson({
     db: context.env.DB,
     orgId: event.org_id,
-    email: (await findPersonByEmail(context.env.DB, event.org_id, base.email ?? ""))?.email ?? base.email ?? "draft@local.test",
-    name: answerText(projected.projected.answers, "speaker_name") ?? base.email ?? "Conference participant",
-    company: answerText(projected.projected.answers, "speaker_company"),
-    title: answerText(projected.projected.answers, "speaker_role"),
-    bio: answerText(projected.projected.answers, "biography"),
+    email: person.email,
+    name: roster.onBehalfOf?.name ?? answerText(projected.projected.answers, "speaker_name") ?? person.name,
+    company: roster.onBehalfOf ? null : answerText(projected.projected.answers, "speaker_company"),
+    title: roster.onBehalfOf ? null : answerText(projected.projected.answers, "speaker_role"),
+    bio: roster.onBehalfOf ? null : answerText(projected.projected.answers, "biography"),
     now,
   });
   await replaceProjectedAnswers(context.env.DB, base.submission.id, base.fields, projected.projected.answers, now);
-  await insertParticipationRows(context.env.DB, base.submission.id, person, projected.projected.answers, event.org_id, now);
+  await persistParticipantRoster(context.env.DB, {
+    submissionId: base.submission.id,
+    orgId: event.org_id,
+    submitter: person,
+    answers: projected.projected.answers,
+    roster,
+    now,
+  });
   await context.env.DB.prepare(
     `UPDATE submissions SET title = ?, abstract = ?, vendor_affiliation = ?, last_saved_at = ?,
      search_blob = ?, updated_at = ? WHERE id = ? AND status = 'draft'`,
@@ -640,7 +939,7 @@ async function editSubmittedSubmission(
   const projected = projectPublicAnswers(base.fields, raw);
   const domainIssues = [
     ...projected.issues,
-    ...requiredSubmissionIssues(base.fields, projected.projected.answers, base.form),
+    ...requiredSubmissionIssues(base.fields, projected.projected.answers, base.form, base.roster, {}),
   ];
   if (domainIssues.length > 0) {
     throw ApiError.unprocessable("Add the requested details, then choose Save changes again.", undefined, { issues: domainIssues });
@@ -682,6 +981,20 @@ async function editSubmittedSubmission(
     }),
   ]);
   await replaceProjectedAnswers(context.env.DB, base.submission.id, base.fields, projected.projected.answers, now);
+  // Write the roster through unchanged. This path takes no roster from the
+  // request and does not mean to, but `replaceProjectedAnswers` deletes every
+  // answer and re-inserts only the served set — which no longer includes the
+  // legacy `co_speaker_*` pair. On a form still carrying it, the first edit
+  // would destroy the only record of that person before anything had migrated
+  // them into `participants_json`: the page would then report no participants
+  // while the participation row still existed, and a form with
+  // `min_speakers >= 2` would refuse every later edit forever, on a screen with
+  // no participant control to satisfy it. Every other path migrates before it
+  // wipes; this makes that true here too.
+  await context.env.DB
+    .prepare("UPDATE submissions SET participants_json = ?, updated_at = ? WHERE id = ?")
+    .bind(writeParticipantRoster(base.roster), now, base.submission.id)
+    .run();
   return formResponse(context, slug, token, base.email ?? emailFromAnswers(projected.projected.answers) ?? undefined);
 }
 
@@ -716,16 +1029,26 @@ async function handlePublicSubmission(
 
   const raw = rawAnswersFromBody(answerMap(body), body.email);
   const projected = projectPublicAnswers(base.fields, raw);
+  // `raw`, not the projected answers: the legacy `co_speaker_*` pair is no
+  // longer part of the served field set, so projection drops it. A form still
+  // carrying those fields sends its co-speaker as two answers, and this is the
+  // one read that turns them into a roster entry.
+  const roster = rosterFromBody(body, base.roster, raw);
   const domainIssues = [
     ...projected.issues,
-    ...requiredSubmissionIssues(base.fields, projected.projected.answers, base.form),
+    ...requiredSubmissionIssues(base.fields, projected.projected.answers, base.form, roster, body),
   ];
   const event = await findEventContext(context.env.DB, base.form.event_id);
   if (!event) throw ApiError.notFound("This conference is no longer available.");
   const references = await resolveDomainReferences(context.env.DB, base.form.event_id, base.fields, projected.projected.answers);
   domainIssues.push(...publicIssues(references.issues));
-  const email = emailFromAnswers(projected.projected.answers) ?? normalisePublicEmail(body.email);
-  if (!email) domainIssues.push({ fieldKey: "speaker_email", message: "Enter an address where the conference team can reach you, then try again." });
+  // Two addresses, usually one value. `speakerEmail` is who will present;
+  // `email` is who the conference writes back to, which the on-behalf-of
+  // disclosure separates (AC-270/AC-271). With the disclosure off they are the
+  // same string and every path below behaves exactly as it did.
+  const speakerEmail = emailFromAnswers(projected.projected.answers) ?? normalisePublicEmail(body.email);
+  const email = roster.onBehalfOf?.email ?? speakerEmail;
+  if (!speakerEmail) domainIssues.push({ fieldKey: "speaker_email", message: "Enter an address where the conference team can reach you, then try again." });
   if (domainIssues.length > 0) {
     throw ApiError.unprocessable("Add the requested details, then choose Submit again.", undefined, { issues: domainIssues });
   }
@@ -737,20 +1060,33 @@ async function handlePublicSubmission(
   });
   const now = Date.now();
   const existing = base.submission;
-  const existingPerson = existing
-    ? await context.env.DB.prepare("SELECT * FROM people WHERE id = ?").bind(existing.submitter_person_id).first<PersonRow>()
-    : await findPersonByEmail(context.env.DB, event.org_id, email!);
+  // Who the record's submitter is: whoever `email` names, which the disclosure
+  // decides. Resolving from the draft's owner instead — as this did — made the
+  // record permanently disagree with the mail: a submitter who ticks "on behalf
+  // of someone else" at Submit having saved a draft without it filed the
+  // abstract under the speaker, and one who UNTICKS it kept the discloser as
+  // submitter while the confirmation went to the speaker. Both directions have
+  // to follow the box, so both read the same address.
+  //
+  // `email` is always present by here — a missing speaker address pushed a
+  // domain issue above and the throw is unconditional — so there is no
+  // draft-owner fallback arm. One existed and could never run.
+  const existingPerson = await findPersonByEmail(context.env.DB, event.org_id, email!);
   if (!existing && base.form.per_submitter_limit > 0 && existingPerson && await countFormForPerson(context.env.DB, base.form.id, existingPerson.id) >= Number(base.form.per_submitter_limit)) {
     throw ApiError.conflict("Your abstract limit is full. Use a saved resume link to continue an existing draft.");
   }
+  // The submitter's own profile fields come from the speaker card only when the
+  // submitter *is* the speaker. Under the disclosure those fields describe
+  // somebody else, and writing them here would file an executive's bio against
+  // their comms manager's record.
   const person = existingPerson ?? await upsertPublicPerson({
     db: context.env.DB,
     orgId: event.org_id,
     email: email!,
-    name: answerText(projected.projected.answers, "speaker_name") ?? email!,
-    company: answerText(projected.projected.answers, "speaker_company"),
-    title: answerText(projected.projected.answers, "speaker_role"),
-    bio: answerText(projected.projected.answers, "biography"),
+    name: roster.onBehalfOf?.name ?? answerText(projected.projected.answers, "speaker_name") ?? email!,
+    company: roster.onBehalfOf ? null : answerText(projected.projected.answers, "speaker_company"),
+    title: roster.onBehalfOf ? null : answerText(projected.projected.answers, "speaker_role"),
+    bio: roster.onBehalfOf ? null : answerText(projected.projected.answers, "biography"),
     now,
   });
   if (!person) throw new Error("submission owner disappeared");
@@ -796,11 +1132,11 @@ async function handlePublicSubmission(
     await context.env.DB.prepare(
       `UPDATE submissions SET title = ?, abstract = ?, status = 'submitted', origin = 'public',
        format_id = ?, primary_track_id = ?, vendor_affiliation = ?, submitted_at = ?,
-       last_saved_at = ?, search_blob = ?, applied_rule_id = ?, updated_at = ?
+       last_saved_at = ?, search_blob = ?, applied_rule_id = ?, submitter_person_id = ?, updated_at = ?
        WHERE id = ? AND status = 'draft'`,
     ).bind(
       title, abstract, references.formatId, references.trackIds[0] ?? null, vendor, now,
-      now, JSON.stringify(projected.projected.answers), routing.ruleId, now, submissionId,
+      now, JSON.stringify(projected.projected.answers), routing.ruleId, person.id, now, submissionId,
     ).run();
   } else {
     await context.env.DB.prepare(
@@ -853,18 +1189,28 @@ async function handlePublicSubmission(
   await context.env.DB.batch(intakeRows);
   await replaceProjectedAnswers(context.env.DB, submissionId, base.fields, projected.projected.answers, now);
   await persistTracks(context.env.DB, submissionId, references.trackIds, now);
-  const insertedParticipants = await insertParticipationRows(context.env.DB, submissionId, person, projected.projected.answers, event.org_id, now);
+  const intake = await persistParticipantRoster(context.env.DB, {
+    submissionId,
+    orgId: event.org_id,
+    submitter: person,
+    answers: projected.projected.answers,
+    roster,
+    now,
+  });
   await moveAttachments(context.env.DB, submissionId, existing?.id ?? null, projected.projected.answers);
   await writeRoutingPoolAssignment(context.env.DB, submissionId, routing, now);
 
-  if (insertedParticipants.coSpeaker) {
+  // One scoped invitation per person somebody else named — the co-speakers, the
+  // moderator, and under the disclosure the speaker too. Each is the authority
+  // on their own bio and headshot, and this link is how they exercise it.
+  for (const invitee of intake.invitees) {
     await enqueueCoSpeakerInvitation(context, {
       eventId: base.form.event_id,
       conferenceName: event.name,
       submissionId,
       submissionTitle: title,
-      addedBy: answerText(projected.projected.answers, "speaker_name") ?? person.name,
-      participant: insertedParticipants.coSpeaker,
+      addedBy: roster.onBehalfOf?.name ?? answerText(projected.projected.answers, "speaker_name") ?? person.name,
+      participant: invitee,
       now,
     });
   }

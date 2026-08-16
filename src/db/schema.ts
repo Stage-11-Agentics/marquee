@@ -22,13 +22,24 @@ export interface ApiTokenScopes {
 }
 
 export const EVENT_STATUSES = ["draft", "live"] as const;
+/**
+ * `memberships.role` is two vocabularies in one column: staff seats, and the
+ * on-stage seats that mirror `participations.role` (migration 0028). A
+ * membership is a seat at the event, not a claim to be a speaker — every
+ * accepted on-stage role has one because that row gates portal sign-in, and it
+ * records which role earned it so speaker-only surfaces can tell them apart.
+ */
 export const MEMBERSHIP_ROLES = [
   "owner",
   "program_lead",
   "ops",
   "reviewer",
   "speaker",
+  "co_speaker",
+  "moderator",
+  "chairperson",
 ] as const;
+
 export const MAGIC_LINK_PURPOSES = [
   "login",
   "draft_resume",
@@ -533,6 +544,8 @@ export interface SubmissionRow extends MutableRecord {
   last_saved_at: EpochMilliseconds | null;
   last_write_source: LastWriteSource;
   origin: SubmissionOrigin;
+  /** The participant roster the public form was filled in with; see migration 0028. */
+  participants_json: JsonText | null;
   primary_track_id: Id | null;
   resume_token_hash: string | null;
   search_blob: string;
@@ -690,6 +703,8 @@ export interface AgendaItemRow extends MutableRecord {
 }
 
 export interface TaskTemplateRow extends MutableRecord {
+  /** JSON array of participation roles this template is assigned to. */
+  applies_to_roles: JsonText;
   auto_assign: 0 | 1;
   description: string;
   due_at: EpochMilliseconds | null;

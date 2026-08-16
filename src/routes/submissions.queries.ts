@@ -11,7 +11,7 @@ import type {
 } from "../api/submissions";
 import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-conditions";
 import { localParts } from "../lib/event-time";
-import { participantListSql } from "../lib/participants";
+import { DECISION_RECIPIENT_ROLES, participantListSql, primaryParticipantSql } from "../lib/participants";
 import { reviewAggregateColumns } from "../lib/review-aggregate";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import {
@@ -349,19 +349,16 @@ LEFT JOIN outbox notification_outbox
     LIMIT 1
   )`;
 
-const NOTIFICATION_ADDRESS_SQL = `COALESCE((
-  SELECT speaker.email
-  FROM participations speaker_part
-  JOIN people speaker ON speaker.id = speaker_part.person_id
-  WHERE speaker_part.submission_id = s.id
-    AND speaker_part.role IN ('speaker', 'submitter')
-  ORDER BY CASE speaker_part.role WHEN 'speaker' THEN 0 ELSE 1 END,
-           speaker_part.position ASC,
-           speaker_part.id ASC
-  LIMIT 1
-), (
-  SELECT submitter.email FROM people submitter WHERE submitter.id = s.submitter_person_id
-))`;
+// The address the decision cascade would have written to, read back through
+// the same ladder rather than a second copy of it: `no_valid_address` has to
+// mean "the recipient we would mail has no address", not "some participant
+// does not".
+const NOTIFICATION_ADDRESS_SQL = primaryParticipantSql({
+  submissionId: "s.id",
+  column: "email",
+  order: DECISION_RECIPIENT_ROLES,
+  fallback: "(SELECT fallback_submitter.email FROM people fallback_submitter WHERE fallback_submitter.id = s.submitter_person_id)",
+});
 
 const NOTIFICATION_STATE_SQL = `CASE
   WHEN latest_decision.id IS NULL THEN NULL

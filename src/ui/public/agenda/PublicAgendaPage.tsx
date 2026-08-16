@@ -5,6 +5,7 @@ import { SocialBadges } from "../../social/SocialBadges";
 import SOCIAL_BADGE_STYLES from "../../social/social-badge.css?raw";
 import { sessionCalendarLinks, sessionDirectionsUrl } from "../../../lib/public-calendar";
 import { PUBLIC_SPEAKER_EMPTY_LABEL } from "../../../lib/participants";
+import { participationRoleLabel } from "../../shell/identity-format";
 import { starCountLabel } from "../../../lib/star-beacons";
 import {
   publicAbstractSnippet,
@@ -85,6 +86,11 @@ export const PUBLIC_SITE_STYLES = `
 .public-session-title a:hover, .public-session-title a:focus-visible { color: var(--public-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .public-speakers { min-height: 20px; margin: 8px 0 0; color: var(--public-muted); font-size: 12px; }
 .public-speaker-empty { display: inline-block; min-height: 20px; line-height: 20px; white-space: nowrap; }
+/* The participation role, set apart from the job title beside it. Both used to
+   render through the same class, which made 'Moderator - Ana Reyes - Principal
+   Engineer, Northwind' three identical spans and told a reader nothing about
+   which of them was the seat on this stage. */
+.public-participation-role { color: var(--public-ink); font-weight: 600; white-space: nowrap; }
 .public-speakers a { text-decoration: underline; text-decoration-color: var(--public-rule); text-underline-offset: 3px; }
 .public-speakers a:hover, .public-speakers a:focus-visible { color: var(--public-accent); }
 .public-speaker-role { color: var(--public-soft); }
@@ -616,6 +622,17 @@ function speakerRole(speaker: PublicSpeakerSummary): string {
   return [speaker.title, speaker.company].filter(Boolean).join(", ");
 }
 
+/**
+ * How this person is on this stage, where it is not simply "speaker".
+ *
+ * A panel reads as four equal names without it, and the one thing an attendee
+ * wants from a panel listing is which of them is running it. `role` is null for
+ * a speaker, so a plain talk's card is byte-for-byte what it was.
+ */
+function participationLabel(speaker: PublicSpeakerSummary): string | null {
+  return speaker.role ? participationRoleLabel(speaker.role) : null;
+}
+
 export function PublicSpeakerEmpty(): JSX.Element {
   return <span class="public-speaker-empty">{PUBLIC_SPEAKER_EMPTY_LABEL}</span>;
 }
@@ -627,6 +644,7 @@ function SpeakerLine({ session }: { session: PublicSession }): JSX.Element {
       {session.speakers.length > 0 ? session.speakers.map((speaker, index) => (
         <span key={speaker.id}>
           {index > 0 ? " · " : ""}
+          {participationLabel(speaker) ? <span class="public-participation-role">{participationLabel(speaker)} — </span> : null}
           <a href={speakerHref(speaker.slug)}>{speaker.name}</a>
           {speakerRole(speaker) ? <span class="public-speaker-role"> — {speakerRole(speaker)}</span> : null}
         </span>
@@ -1083,7 +1101,7 @@ export function PublicSessionPage({ event, venue, session, origin, starCounts = 
           <div class="public-speaker-list">
             {session.speakers.length > 0 ? session.speakers.map((speaker) => (
               <a class="public-speaker-link" href={speakerHref(speaker.slug)} key={speaker.id}>
-                <span><strong>{speaker.name}</strong><small>{[speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</small></span><span aria-hidden="true">→</span>
+                <span><strong>{speaker.name}</strong><small>{[participationLabel(speaker), speaker.title, speaker.company].filter(Boolean).join(" · ") || "Speaker"}</small></span><span aria-hidden="true">→</span>
               </a>
             )) : <PublicSpeakerEmpty />}
           </div>
@@ -1109,7 +1127,10 @@ export function PublicSpeakerAvatar({
   speaker,
   className,
 }: {
-  speaker: PublicSpeakerSummary;
+  // Named fields, not the whole summary: an avatar needs a name and a headshot,
+  // and asking for a participation role it will never draw would keep the
+  // person-scoped directory and speaker page from passing their own rows.
+  speaker: Pick<PublicSpeakerSummary, "name" | "headshotUrl">;
   className?: string;
 }): JSX.Element {
   const classes = ["public-avatar", className].filter(Boolean).join(" ");

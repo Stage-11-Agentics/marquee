@@ -62,6 +62,15 @@ export interface PublicSpeakerSummary {
   bio: string | null;
   headshotUrl: string | null;
   socialLinks: string[];
+  /**
+   * The participation role, where it is not `speaker`.
+   *
+   * A session card that reads "Ana Reyes" beside three other names does not say
+   * that Ana is moderating it, and a panel is exactly the session where that
+   * matters most. Null for a speaker, so the ordinary card is unchanged and
+   * every renderer can treat the label as optional rather than conditional.
+   */
+  role: string | null;
 }
 
 export interface PublicSession {
@@ -122,11 +131,19 @@ export interface PublicSpeakerDirectoryData {
 
 export type PublicSpeakerDirectoryView = "gallery" | "list";
 
-export interface PublicSpeakerDirectoryEntry extends PublicSpeakerSummary {
+/**
+ * A person across the whole conference, so `role` is dropped rather than
+ * carried: someone can moderate one session and speak at another, and printing
+ * one of those beside their name in a directory would be a coin toss the reader
+ * has no way to see. Role is a fact about a seat on a session, and it renders
+ * where sessions do.
+ */
+export interface PublicSpeakerDirectoryEntry extends Omit<PublicSpeakerSummary, "role"> {
   sessionCount: number;
 }
 
-export interface PublicSpeaker extends PublicSpeakerSummary {
+/** Same reasoning: the speaker page lists their sessions, and the role rides with each. */
+export interface PublicSpeaker extends Omit<PublicSpeakerSummary, "role"> {
   sessions: Array<Pick<PublicSession, "id" | "slug" | "title" | "day" | "date" | "time" | "roomLabel">>;
 }
 
@@ -457,6 +474,7 @@ export function parseSpeakers(value: string): PublicSpeakerSummary[] {
         speaker.is_demo === 1 || speaker.is_demo === true,
       ),
       socialLinks: parseSocialLinks(typeof speaker.social_links === "string" ? speaker.social_links : undefined),
+      role: typeof speaker.role === "string" && speaker.role !== "speaker" ? speaker.role : null,
     }];
   });
 }
@@ -570,6 +588,7 @@ function sessionRowsQuery(
             bio: "speaker.bio",
             is_demo: "speaker.is_demo",
             social_links: "speaker.social_links",
+            role: "participation.role",
           },
         })} AS speakers_json,
         COALESCE((

@@ -50,6 +50,35 @@ export interface PublicFormConfirmation {
   portal_url: string | null;
 }
 
+/**
+ * The roles a public submitter may name someone in.
+ *
+ * A panel is a moderator plus co-speakers rather than a role of its own, so
+ * this list is deliberately short: an applicant naming a "chairperson" would be
+ * claiming a program decision the conference has not made, and `speaker` is the
+ * primary card rather than a slot anyone adds.
+ */
+export const PUBLIC_PARTICIPANT_ROLES = ["co_speaker", "moderator"] as const;
+
+export type PublicParticipantRole = (typeof PUBLIC_PARTICIPANT_ROLES)[number];
+
+/** One additional person a submitter named, as the form holds them. */
+export interface PublicFormParticipant {
+  name: string;
+  email: string;
+  role: PublicParticipantRole;
+}
+
+/**
+ * "I'm submitting on behalf of someone else": the submitter's own identity,
+ * kept apart from the speaker's. Null means the two are the same person, which
+ * is the ordinary case and is exactly what shipped before.
+ */
+export interface PublicFormOnBehalfOf {
+  name: string;
+  email: string;
+}
+
 export interface PublicFormState {
   conference: {
     name: string;
@@ -84,4 +113,7 @@ export interface PublicFormState {
   turnstile_site_key: string | null;
   confirmation: PublicFormConfirmation | null;
   message: string | null;
+  /** Everyone beyond the primary speaker, in the order the submitter added them. */
+  participants: PublicFormParticipant[];
+  on_behalf_of: PublicFormOnBehalfOf | null;
 }

@@ -5,6 +5,7 @@ import { buildingGeo, sessionLocation } from "../../lib/venue-geometry";
 import { enqueueMailMessage } from "../mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../mail/idempotency";
 import { enqueueOutbox, enqueueSmokeHarnessMail } from "../mail/outbox";
+import { CALENDAR_PARTICIPATION_ROLES, roleInSql } from "../../lib/participants";
 import { MAX_CALENDAR_CANCELLATION_ATTEMPTS } from "./limits";
 import {
   buildCalendarMail,
@@ -239,6 +240,13 @@ async function sessionFor(db: D1Database, eventId: Id, submissionId: Id): Promis
     .first<CalendarSessionRow>();
 }
 
+/**
+ * Everyone this session's invite is addressed to.
+ *
+ * `CALENDAR_PARTICIPATION_ROLES` is the whole definition: every on-stage role
+ * plus the submitter. Before it, the list read `(speaker, submitter)` and a
+ * moderator standing on the published agenda received no invite at all.
+ */
 async function recipientsFor(db: D1Database, submissionId: Id): Promise<CalendarRecipientRow[]> {
   const rows = await db
     .prepare(
@@ -246,7 +254,7 @@ async function recipientsFor(db: D1Database, submissionId: Id): Promise<Calendar
        FROM participations participation
        JOIN people person ON person.id = participation.person_id
        WHERE participation.submission_id = ?
-         AND participation.role IN ('speaker', 'submitter')
+         AND ${roleInSql("participation", CALENDAR_PARTICIPATION_ROLES)}
        ORDER BY participation.position ASC, person.id ASC`,
     )
     .bind(submissionId)

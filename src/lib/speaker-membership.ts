@@ -32,22 +32,35 @@
  * roster is an organizer act and wants its own control.
  */
 import { newUlid } from "../api/ids";
+import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "./participants";
+import { ON_STAGE_MEMBERSHIP_ROLES } from "./roster-source";
 
 export interface SpeakerMembershipInput {
   orgId: string;
   eventId: string;
   personId: string;
   now: number;
+  /**
+   * The role the seat was earned in. Defaults to `speaker`, which is what every
+   * organizer-facing writer means: "Add speaker", the Sessionize import, and
+   * the roster status control are all declaring a speaker, and there is often
+   * no participation to read a role from. Only the acceptance cascade passes
+   * something else, because only it knows the participation the seat came from.
+   */
+  role?: MembershipSeatRole;
   /** Stamped when the organizer is inviting rather than merely recording. */
   invitedAt?: number | null;
 }
+
+/** The on-stage seat vocabulary `memberships.role` accepts (migration 0028). */
+export type MembershipSeatRole = (typeof ON_STAGE_MEMBERSHIP_ROLES)[number];
 
 export function speakerMembershipStatement(db: D1Database, input: SpeakerMembershipInput): D1PreparedStatement {
   return db
     .prepare(
       `INSERT INTO memberships
          (id, org_id, event_id, person_id, role, confirmation_status, confirmed_at, invited_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'speaker', 'pending', NULL, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?, ?)
        ON CONFLICT (org_id, event_id, person_id, role) WHERE event_id IS NOT NULL
        DO UPDATE SET
          invited_at = COALESCE(memberships.invited_at, excluded.invited_at),
@@ -61,6 +74,7 @@ export function speakerMembershipStatement(db: D1Database, input: SpeakerMembers
       input.orgId,
       input.eventId,
       input.personId,
+      input.role ?? "speaker",
       input.invitedAt ?? null,
       input.now,
       input.now,
@@ -68,9 +82,13 @@ export function speakerMembershipStatement(db: D1Database, input: SpeakerMembers
 }
 
 /**
- * Bridge every speaker and co-speaker of the given accepted submissions into
- * the event's membership list. Called from the acceptance cascade, where the
+ * Bridge every on-stage participant of the given accepted submissions into the
+ * event's membership list. Called from the acceptance cascade, where the
  * conference has just committed to these people.
+ *
+ * The population is `WORK_HOLDING_PARTICIPATION_ROLES`, not a list spelled out
+ * here: a moderator the conference has accepted needs the portal seat this row
+ * gates exactly as much as a speaker does.
  *
  * The person set is read first and the rows are then built through `newUlid`
  * rather than minted by an `INSERT … SELECT`: membership ids are ULIDs
@@ -87,20 +105,72 @@ export async function acceptedSpeakerMembershipStatements(
   if (ids.length === 0) return [];
   const event = await db.prepare("SELECT org_id FROM events WHERE id = ?").bind(eventId).first<{ org_id: string }>();
   if (!event) return [];
+  // The seat carries the role it was earned in, and a person on two sessions
+  // keeps the most speaking-forward of them: someone who speaks on one talk and
+  // moderates another is a speaker of this conference, and a seat that recorded
+  // `moderator` would take them off its roster. Declaration order in
+  // `WORK_HOLDING_PARTICIPATION_ROLES` is that precedence.
+  const rank = WORK_HOLDING_PARTICIPATION_ROLES
+    .map((role, index) => `WHEN '${role}' THEN ${index}`)
+    .join(" ");
   const people = await db
     .prepare(
-      `SELECT DISTINCT part.person_id
+      `SELECT part.person_id, part.role
        FROM participations part
        JOIN submissions submission ON submission.id = part.submission_id
        WHERE submission.event_id = ?
          AND submission.status = 'accepted'
-         AND part.role IN ('speaker', 'co_speaker')
+         AND ${roleInSql("part", WORK_HOLDING_PARTICIPATION_ROLES)}
          AND submission.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+         AND part.id = (
+           SELECT ranked.id
+           FROM participations ranked
+           JOIN submissions ranked_submission ON ranked_submission.id = ranked.submission_id
+           WHERE ranked.person_id = part.person_id
+             AND ranked_submission.event_id = submission.event_id
+             AND ranked_submission.status = 'accepted'
+             AND ${roleInSql("ranked", WORK_HOLDING_PARTICIPATION_ROLES)}
+           ORDER BY CASE ranked.role ${rank} ELSE ${WORK_HOLDING_PARTICIPATION_ROLES.length} END,
+                    ranked.id ASC
+           LIMIT 1
+         )
        ORDER BY part.person_id ASC`,
     )
     .bind(eventId, JSON.stringify(ids))
-    .all<{ person_id: string }>();
+    .all<{ person_id: string; role: MembershipSeatRole }>();
   return people.results.map((row) =>
-    speakerMembershipStatement(db, { orgId: event.org_id, eventId, personId: row.person_id, now }),
+    speakerMembershipStatement(db, { orgId: event.org_id, eventId, personId: row.person_id, role: row.role, now }),
   );
+}
+
+/**
+ * The on-stage role this person's seat at this event was earned in.
+ *
+ * Every organizer-facing write to a seat has to target the row that exists, not
+ * the one it assumes. `memberships` is unique on `(org, event, person, role)`,
+ * so writing `speaker` for someone the acceptance cascade seated as
+ * `co_speaker` does not update their row — it mints a SECOND, phantom seat, and
+ * every predicate keyed on the role then reads whichever one it happened to
+ * name. A confirmation lands on the phantom while the real seat stays pending,
+ * and nothing on any screen says which is which.
+ *
+ * `speaker` is the answer when there is no seat yet, because the only writer
+ * that reaches this without one is an organizer declaring a speaker.
+ */
+export async function earnedSeatRole(
+  db: D1Database,
+  eventId: string,
+  personId: string,
+): Promise<MembershipSeatRole> {
+  const row = await db
+    .prepare(
+      `SELECT role FROM memberships
+       WHERE event_id = ? AND person_id = ?
+         AND ${roleInSql("memberships", WORK_HOLDING_PARTICIPATION_ROLES)}
+       ORDER BY CASE role ${WORK_HOLDING_PARTICIPATION_ROLES.map((role, index) => `WHEN '${role}' THEN ${index}`).join(" ")} ELSE ${WORK_HOLDING_PARTICIPATION_ROLES.length} END
+       LIMIT 1`,
+    )
+    .bind(eventId, personId)
+    .first<{ role: MembershipSeatRole }>();
+  return row?.role ?? "speaker";
 }

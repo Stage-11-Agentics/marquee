@@ -6,6 +6,8 @@
  * query narrows to it whenever a caller passes `event_id`. Keeping the
  * definition here is what lets those be the same query instead of two.
  */
+import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "./participants";
+
 
 /**
  * The submission states that make someone a speaker of this conference.
@@ -17,6 +19,24 @@
  */
 export const ROSTER_SUBMISSION_STATUSES = ["submitted", "in_review", "accepted", "waitlisted"] as const;
 
+/**
+ * The roles that make someone a speaker of this conference, as opposed to
+ * someone with a seat at it. This is the speaker-ness authority; membership is
+ * the seat authority, and the two are deliberately different populations.
+ */
+export const ROSTER_PARTICIPATION_ROLES = ["speaker", "co_speaker"] as const;
+
+/**
+ * The seat roles a membership row may carry for someone on stage.
+ *
+ * `memberships.role` is a union of two vocabularies: staff seats (`owner`,
+ * `program_lead`, `ops`, `reviewer`) and on-stage seats, which mirror
+ * `participations.role`. Predicates that mean "staff" must exclude this set
+ * rather than testing `role <> 'speaker'`, which silently admitted every
+ * on-stage role the moment the vocabulary widened.
+ */
+export const ON_STAGE_MEMBERSHIP_ROLES = WORK_HOLDING_PARTICIPATION_ROLES;
+
 const ROSTER_STATUS_LIST = ROSTER_SUBMISSION_STATUSES.map((status) => `'${status}'`).join(", ");
 
 /**
@@ -26,19 +46,30 @@ const ROSTER_STATUS_LIST = ROSTER_SUBMISSION_STATUSES.map((status) => `'${status
  * routes. Organization Home passes a correlated event column instead, so its
  * season counts use this exact population without running one query per row.
  * The expression is internal SQL, never request input.
+ *
+ * **A membership row is a seat at this event, not a claim to be a speaker**
+ * (operator ruling, 2026-08-16). Every accepted on-stage role now gets one,
+ * because that row is what gates portal sign-in — so the row carries the role
+ * it was earned in, and this reads that role rather than the row's existence.
+ * A moderator is seated and is not a speaker; an organizer who adds a speaker
+ * by hand writes `speaker`, and their declaration stands because
+ * `participations.submission_id` is NOT NULL and there is no session yet for a
+ * participation to be written against.
  */
 export function speakerRosterPersonSource(eventIdExpression = "?"): string {
   return `
   SELECT person_id FROM memberships
-   WHERE event_id = ${eventIdExpression} AND role = 'speaker'
+   WHERE event_id = ${eventIdExpression}
+     AND ${roleInSql("memberships", ROSTER_PARTICIPATION_ROLES)}
   UNION
   SELECT part.person_id FROM participations part
     JOIN submissions rostered ON rostered.id = part.submission_id
-   WHERE rostered.event_id = ${eventIdExpression} AND part.role IN ('speaker', 'co_speaker')
+   WHERE rostered.event_id = ${eventIdExpression}
+     AND ${roleInSql("part", ROSTER_PARTICIPATION_ROLES)}
      AND rostered.status IN (${ROSTER_STATUS_LIST})`;
 }
 
-/** Both bindings are the event id. */
+/** Both bindings are the event id: the correlated subqueries add none. */
 export const SPEAKER_ROSTER_PERSON_SOURCE = speakerRosterPersonSource();
 
 /**

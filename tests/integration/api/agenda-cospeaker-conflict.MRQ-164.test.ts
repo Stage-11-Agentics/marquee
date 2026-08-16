@@ -137,6 +137,49 @@ describe.sequential("MRQ-164 co-speaker double-booking", () => {
     }
   });
 
+  test("AC-335, AC-336 · MRQ-224 · two people shared across one overlapping pair raise two flags, not one", async () => {
+    // The panel case. Marcus already co-speaks on the CI talk and speaks on the
+    // lightning talk; Priya now moderates the lightning talk while speaking on
+    // the CI talk. One overlapping pair, two double-booked people.
+    //
+    // The detector used to emit `sharedPeople[0]` and stop, so an organizer who
+    // moved the person it named was told the schedule was clear while the
+    // second clash stood — and a panel is four people, which makes two shared
+    // names the ordinary case rather than the exotic one. On unfixed main this
+    // finds one flag and fails.
+    const added = await request(`/api/v1/events/${DEMO_EVENT_ID}/submissions/sub-164-lightning/participants`, {
+      method: "POST",
+      body: JSON.stringify({ name: "Priya Raman", email: "priya@mrq164.test", role: "moderator" }),
+    });
+    expect(added.status).toBe(201);
+
+    const snapshot = await (await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`)).json<{
+      sessions: Array<{ id: string; title: string }>;
+      conflicts: Array<{ kind: string; person_id?: string; session_ids: string[] }>;
+    }>();
+    const ci = snapshot.sessions.find((session) => session.title === "Taming 40-Minute CI")!;
+    const lightning = snapshot.sessions.find((session) => session.title === "Lightning: Agents in Production Q&A")!;
+    const pair = snapshot.conflicts.filter((conflict) =>
+      conflict.kind === "person"
+      && conflict.session_ids.includes(ci.id)
+      && conflict.session_ids.includes(lightning.id),
+    );
+    expect(pair.map((conflict) => conflict.person_id).sort())
+      .toEqual(["person-marcus-164", "person-priya-164"].sort());
+
+    // And the audience is told which of them is running the room. The public
+    // projection carries participation.role, so a panel stops reading as four
+    // equal names; a plain speaker's card is unchanged because role is null.
+    const published = await request(`/api/v1/events/${DEMO_EVENT_ID}/submissions/sub-164-lightning/publish`, { method: "POST" });
+    expect(published.status).toBe(200);
+    const payload = await (await request("/api/v1/public/agenda?event=aie-nyc-2026")).json<{
+      sessions: Array<{ title: string; speakers: Array<{ name: string; role: string | null }> }>;
+    }>();
+    const session = payload.sessions.find((entry) => entry.title === "Lightning: Agents in Production Q&A")!;
+    expect(session.speakers.find((speaker) => speaker.name === "Priya Raman")?.role).toBe("moderator");
+    expect(session.speakers.find((speaker) => speaker.name === "Marcus Okafor")?.role).toBe(null);
+  });
+
   test("CONTRACT · a sponsor contact is not auto-published when a distinct speaker is supplied", async () => {
     const created = await request(`/api/v1/events/${DEMO_EVENT_ID}/submissions`, {
       method: "POST",
