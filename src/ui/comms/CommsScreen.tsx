@@ -211,11 +211,15 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
     setAudienceLoading(true);
     setAudienceLoaded(false);
     request<AudienceResult>(audiencePath(eventId, filters), "/api/v1/events/{eventId}/comms/audience")
-      .then((result) => { if (!cancelled) setAudience(result); })
+      .then((result) => {
+        if (cancelled) return;
+        setAudience(result);
+        setAudienceLoaded(true);
+      })
       .catch((reason: unknown) => {
         if (!cancelled) setError(errorSummary(reason));
       })
-      .finally(() => { if (!cancelled) { setAudienceLoading(false); setAudienceLoaded(true); } });
+      .finally(() => { if (!cancelled) setAudienceLoading(false); });
     return () => { cancelled = true; };
   }, [eventId, filters.format, filters.status, filters.task_state, filters.track]);
 

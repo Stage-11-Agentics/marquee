@@ -170,6 +170,22 @@ test("MRQ-244 · communications names the acceptance prerequisite before offerin
   expect(root.querySelector('a[href="/submissions"]')?.textContent).toBe("Open submissions");
 });
 
+test("MRQ-244 · communications does not call an audience failure an empty prerequisite", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (input: unknown) => {
+    const url = requestUrl(input);
+    if (url.includes("/comms/audience")) return { ok: false, status: 503, headers: { get: () => null }, json: async () => ({}) } as unknown as Response;
+    if (url.includes("/templates")) return okResponse({ data: [] });
+    if (url.includes("/outbox")) return okResponse({ data: [] });
+    return okResponse({});
+  }));
+
+  mount(h(CommsScreen, { eventId: "evt-truth" }));
+  await settle();
+
+  expect(root.querySelector(".comms-prerequisite")).toBeNull();
+  expect(root.querySelector('[role="alert"]')?.textContent).toContain("unexpected problem");
+});
+
 test("MRQ-244 · agenda empty state opens the unfiltered submissions surface", async () => {
   const snapshot = {
     event: { id: "evt-truth", name: "Truth Conf", starts_on: "2026-09-01", ends_on: "2026-09-02", timezone: "UTC" },
