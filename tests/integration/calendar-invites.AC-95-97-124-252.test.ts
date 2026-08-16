@@ -51,6 +51,33 @@ test("AC-95, AC-96, AC-97, AC-124, AC-252, AC-262 · request update cancel keeps
   expect(await publicResponse.text()).toBe(outbox.results[2]?.ics_body);
 });
 
+test("MRQ-228 regression · an invite remains cancellable after its agenda row is unscheduled", async () => {
+  await sendCalendarInvites({
+    db: env.DB,
+    eventId: EVENT_ID,
+    queue: env.MAIL_QUEUE,
+    submissionId: SUBMISSION_ID,
+    now: NOW,
+  });
+  await env.DB.prepare("DELETE FROM agenda_items WHERE event_id = ? AND submission_id = ?").bind(EVENT_ID, SUBMISSION_ID).run();
+
+  const cancelled = await cancelCalendarInvites({
+    db: env.DB,
+    eventId: EVENT_ID,
+    queue: env.MAIL_QUEUE,
+    submissionId: SUBMISSION_ID,
+    now: NOW + 1_000,
+  });
+
+  expect(cancelled).toHaveLength(1);
+  expect(cancelled[0]).toMatchObject({ method: "CANCEL", sequence: 1 });
+  const outbox = await env.DB
+    .prepare("SELECT ics_body FROM outbox WHERE event_id = ? ORDER BY created_at ASC")
+    .bind(EVENT_ID)
+    .all<{ ics_body: string }>();
+  expect(outbox.results.at(-1)?.ics_body).toContain("METHOD:CANCEL");
+});
+
 test("CONTRACT · MRQ-238 · only the explicit smoke harness opts calendar mail into always-live delivery", async () => {
   const first = await sendCalendarInvites({
     db: env.DB,
