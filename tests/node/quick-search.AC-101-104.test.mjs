@@ -92,6 +92,10 @@ test("AC-103 · the speed gate measures ten real keystroke-to-painted queries at
   assert.match(speed, /global-search-painted/);
   assert.match(speed, /final keystroke/);
   assert.match(speed, /searchValues\.length/);
+  assert.match(speed, /primeQuickSearch/);
+  assert.match(speed, /single post-priming ten-query pass/);
+  assert.match(speed, /samples\.global-search-painted\.priming/);
+  assert.match(speed, /discarded priming raw first-hit value/);
 });
 
 test("AC-104 · fuzzy name/title matching normalizes diacritics and preserves canonical record hrefs", () => {
