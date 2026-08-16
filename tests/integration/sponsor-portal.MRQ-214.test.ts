@@ -385,6 +385,28 @@ test("CONTRACT · completing 'Name your speaker' fills the Session and seats the
   expect(Number(participations?.n)).toBe(1);
 });
 
+test("CONTRACT · MRQ-230 · a sponsor content write-back refuses a live Session before completion", async () => {
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO rooms (id, event_id, building_id, name, capacity, position, created_at, updated_at) VALUES ('room_mrq214_live', ?, 'bld_mrq214', 'Live room', 100, 0, ?, ?)")
+      .bind(EVENT_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at) VALUES ('agenda_mrq214_live', ?, ?, 'session', ?, 30, 'room_mrq214_live', 1, ?, ?)")
+      .bind(EVENT_ID, SILVER_SESSION, NOW + DAY, NOW, NOW),
+    env.DB.prepare("UPDATE submissions SET is_published = 1 WHERE id = ?").bind(SILVER_SESSION),
+  ]);
+  const completion = await post("/api/v1/me/tasks/tsk_mrq214_content/complete", MONA, {
+    answers: { session_description: "This live rewrite must be refused." },
+  });
+  expect(completion.status).toBe(409);
+  expect(await completion.json()).toMatchObject({
+    error: {
+      code: "conflict",
+      message: "This session is live on the conference site. Unpublish it or reverse the acceptance to change its outcome.",
+    },
+  });
+  expect(await env.DB.prepare("SELECT abstract FROM submissions WHERE id = ?").bind(SILVER_SESSION).first()).toEqual({ abstract: null });
+  expect(await env.DB.prepare("SELECT status FROM speaker_tasks WHERE id = 'tsk_mrq214_content'").first()).toEqual({ status: "open" });
+});
+
 test("CONTRACT · completing the session-content deliverable fills the Session's description", async () => {
   const completion = await post("/api/v1/me/tasks/tsk_mrq214_content/complete", MONA, {
     answers: { session_description: "A ten-minute teardown of what passed audit and what did not." },

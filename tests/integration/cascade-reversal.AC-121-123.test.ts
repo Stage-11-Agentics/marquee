@@ -66,10 +66,10 @@ async function seedFixture(): Promise<void> {
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO submissions
-        (id, event_id, kind, title, status, origin, submitter_person_id, decided_at, decided_by_person_id, created_at, updated_at)
+        (id, event_id, kind, title, status, origin, submitter_person_id, decided_at, decided_by_person_id, is_published, created_at, updated_at)
        VALUES
-        ('sub-cancel', 'evt-reversal', 'session', 'Cancel this acceptance', 'accepted', 'public', 'person-reversal-speaker', ?, 'person-reversal-actor', ?, ?),
-        ('sub-retain', 'evt-reversal', 'session', 'Retain this acceptance', 'accepted', 'public', 'person-reversal-speaker', ?, 'person-reversal-actor', ?, ?)`,
+        ('sub-cancel', 'evt-reversal', 'session', 'Cancel this acceptance', 'accepted', 'public', 'person-reversal-speaker', ?, 'person-reversal-actor', 1, ?, ?),
+        ('sub-retain', 'evt-reversal', 'session', 'Retain this acceptance', 'accepted', 'public', 'person-reversal-speaker', ?, 'person-reversal-actor', 1, ?, ?)`,
     ).bind(NOW, NOW, NOW, NOW, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
@@ -145,8 +145,8 @@ test("AC-121, AC-122, AC-123 · cancel choices mutate task, email, calendar, and
     calendarCancelled: 1,
   });
 
-  const submission = await env.DB.prepare("SELECT status, decided_at, decided_by_person_id FROM submissions WHERE id = 'sub-cancel'").first<{ status: string; decided_at: number; decided_by_person_id: string }>();
-  expect(submission).toEqual({ status: "rejected", decided_at: NOW + 2_000, decided_by_person_id: ACTOR.personId });
+  const submission = await env.DB.prepare("SELECT status, decided_at, decided_by_person_id, is_published FROM submissions WHERE id = 'sub-cancel'").first<{ status: string; decided_at: number; decided_by_person_id: string; is_published: number }>();
+  expect(submission).toEqual({ status: "rejected", decided_at: NOW + 2_000, decided_by_person_id: ACTOR.personId, is_published: 0 });
   const tasks = await env.DB.prepare("SELECT id, status, cancelled_at, due_at FROM speaker_tasks WHERE submission_id = 'sub-cancel' ORDER BY id").all<{ id: string; status: string; cancelled_at: number | null; due_at: number }>();
   expect(tasks.results).toEqual([
     { id: "task-cancel-done", status: "done", cancelled_at: null, due_at: NOW + 7 * 86_400_000 },
@@ -285,8 +285,8 @@ test("AC-121, AC-122, AC-123 · retain choices leave every selected row active w
     now: NOW + 4_000,
   });
   expect(result).toMatchObject({ outcome: "succeeded", resultingStatus: "withdrawn", tasksCancelled: 0, emailsCancelled: 0, calendarCancelled: 0 });
-  const submission = await env.DB.prepare("SELECT status, decided_at, decided_by_person_id FROM submissions WHERE id = 'sub-retain'").first<{ status: string; decided_at: number; decided_by_person_id: string }>();
-  expect(submission).toEqual({ status: "withdrawn", decided_at: NOW + 4_000, decided_by_person_id: ACTOR.personId });
+  const submission = await env.DB.prepare("SELECT status, decided_at, decided_by_person_id, is_published FROM submissions WHERE id = 'sub-retain'").first<{ status: string; decided_at: number; decided_by_person_id: string; is_published: number }>();
+  expect(submission).toEqual({ status: "withdrawn", decided_at: NOW + 4_000, decided_by_person_id: ACTOR.personId, is_published: 0 });
   const task = await env.DB.prepare("SELECT status, cancelled_at FROM speaker_tasks WHERE id = 'task-retain-open'").first<{ status: string; cancelled_at: number | null }>();
   expect(task).toEqual({ status: "open", cancelled_at: null });
   const retainAudit = await env.DB.prepare(

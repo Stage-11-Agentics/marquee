@@ -440,6 +440,21 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect((await unchanged.json<{ submission: { title: string } }>()).submission.title).not.toBe("Speaker B must not edit speaker A");
   });
 
+  test("CONTRACT · MRQ-230 · a speaker cannot rewrite a live session's public content", async () => {
+    const response = await request(`/api/v1/me/submissions/sub-portal-public/talk`, {
+      method: "PATCH",
+      body: JSON.stringify({ title: "A speaker cannot silently replace this live title" }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: "conflict",
+        message: "This session is live on the conference site. Unpublish it or reverse the acceptance to change its outcome.",
+      },
+    });
+    expect(await env.DB.prepare("SELECT title FROM submissions WHERE id = 'sub-portal-public'").first()).toEqual({ title: "Public profile session" });
+  });
+
   test("AC-237 · speaker talk edits record actor and time, close with the form, and reopen only by organizer control", async () => {
     const first = await request(`/api/v1/me/submissions/${SUBMISSION_ID}/talk`, { method: "PATCH", body: JSON.stringify({ title: "Updated conference talk", description: "Updated description" }) });
     expect(first.status).toBe(200);
