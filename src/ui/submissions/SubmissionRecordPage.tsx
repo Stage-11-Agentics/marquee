@@ -32,6 +32,8 @@ const PARTICIPANT_DELETE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissi
 const SEARCH_ROUTE = "/api/v1/events/{eventId}/search";
 const TIMELINE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/timeline";
 const NOTES_ROUTE = "/api/v1/submissions/{submissionId}/notes";
+const NOTES_CARD_GRID_ROWS = "220px 126px";
+const NOTES_CONTENT_VIEWPORT = "220px";
 
 export interface SubmissionScheduleDraft {
   starts_at: string;
@@ -165,6 +167,32 @@ export function SubmissionNotesBody({
     <div class="record-note-head"><strong>{note.author_name}</strong><span>{moment(note.created_at)}</span></div>
     <p>{note.body}</p>
   </li>)}</ol>;
+}
+
+export function SubmissionNotesCardBody({
+  state,
+  notes,
+  error,
+  onRetry,
+  compose,
+}: {
+  state: SubmissionNotesState;
+  notes: SubmissionNote[];
+  error: string;
+  onRetry?: () => void;
+  compose: JSX.Element;
+}): JSX.Element {
+  return <div class="record-notes-card-body" style={{ gridTemplateRows: NOTES_CARD_GRID_ROWS }}>
+    <div class="record-notes-content" style={{ height: NOTES_CONTENT_VIEWPORT, maxHeight: NOTES_CONTENT_VIEWPORT, minHeight: NOTES_CONTENT_VIEWPORT, overflowY: "auto" }}><SubmissionNotesBody state={state} notes={notes} error={error} onRetry={onRetry} /></div>
+    {compose}
+  </div>;
+}
+
+export function EvaluationEmptyState({ navigate }: { navigate: (target: string) => void }): JSX.Element {
+  return <div class="record-evaluation-empty">
+    <span class="subtle">No evaluation rounds configured.</span>
+    <Button small variant="primary" onClick={() => navigate("/evaluation")}>Set up evaluation</Button>
+  </div>;
 }
 
 /**
@@ -1040,10 +1068,13 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         {record.actions.can_decide && <Card><CardHeader title="Record action"><span class={record.decisions.length > 0 ? "record-decision-cue" : "subtle"}>{decidedNote(record.decisions[0])}</span></CardHeader><CardBody><div class="record-action-row">{record.status !== "accepted" && <Button variant="primary" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("approve"); setFeedbackDraft(""); }}>Accept</Button>}{record.status !== "waitlisted" && <Button disabled={Boolean(busy)} onClick={() => { setDecisionRequest("maybe"); setFeedbackDraft(""); }}>Maybe</Button>}{record.status !== "rejected" && <Button variant="danger" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("deny"); setFeedbackDraft(""); }}>Reject</Button>}<span class="subtle">Feedback (optional) is saved with the decision; accepted and rejected decisions also include it in the speaker email.</span></div></CardBody></Card>}
         {decisionRequest && <div class="record-decision-dialog" role="group" aria-labelledby="record-decision-heading"><div class="record-decision-dialog-head"><div><span class="eyebrow">Confirm record action</span><h2 id="record-decision-heading">{decisionRequest === "approve" ? "Accept this submission?" : decisionRequest === "maybe" ? "Waitlist this submission?" : "Reject this submission?"}</h2></div><button type="button" aria-label="Close decision dialog" onClick={() => setDecisionRequest(null)}>×</button></div><p>{decisionRequest === "maybe" ? "A waitlist does not send a message. Any feedback you add is saved with the decision." : "Feedback is optional. If you add it, the speaker will see the same words in the decision email."}</p><label class="field"><span>Feedback for the speaker (optional)</span><textarea rows={6} value={feedbackDraft} onInput={(event) => setFeedbackDraft(event.currentTarget.value)} placeholder="Share context the speaker can act on." /></label><div class="record-action-row"><Button type="button" onClick={() => setDecisionRequest(null)}>Cancel</Button><Button type="button" variant={decisionRequest === "deny" ? "danger" : "primary"} disabled={Boolean(busy)} onClick={() => void decide()}>{busy ? "Saving…" : decisionRequest === "approve" ? "Accept and notify" : decisionRequest === "maybe" ? "Waitlist" : "Reject and notify"}</Button></div></div>}
         {record.decisions.length > 0 && <Card><CardHeader title="Decision history"><span class="tabular">{record.decisions.length}</span></CardHeader><CardBody><div class="record-decision-list">{record.decisions.map((decision) => <article class="record-decision" key={decision.id}><div class="record-decision-head"><strong>{decision.kind === "reversal" ? `Acceptance reversed · ${statusLabel(decision.resulting_status)}` : statusLabel(decision.resulting_status)}</strong><span>{decision.decided_by_name || "Conference team"} · {moment(decision.decided_at)}</span></div><p>{decision.note || decision.feedback_md || "No feedback recorded."}</p></article>)}</div></CardBody></Card>}
-        {record.actions.can_view_notes && <Card class="record-notes-card"><CardHeader title="Internal notes"><span class="subtle">Staff only · never sent</span></CardHeader><CardBody><div class="record-notes-card-body">
-          <div class="record-notes-content"><SubmissionNotesBody state={notesState} notes={notes} error={notesLoadError} onRetry={() => setNotesReloadKey((value) => value + 1)} /></div>
-          <form class="record-notes-compose" onSubmit={(event) => void appendSubmissionNote(event)}><label class="field"><span>Add internal note</span><textarea rows={3} maxLength={5000} value={notesDraft} onInput={(event) => { setNotesDraft(event.currentTarget.value); setNotesWriteError(""); }} placeholder="Keep context for the conference team." /></label><div class="record-action-row"><span class={`record-inline-message ${notesWriteError ? "error" : ""}`} role={notesWriteError ? "alert" : undefined}>{notesWriteError || " "}</span><Button small variant="primary" type="submit" disabled={notesBusy || notesState === "loading"}>{notesBusy ? "Saving…" : "Save note"}</Button></div></form>
-        </div></CardBody></Card>}
+        {record.actions.can_view_notes && <Card class="record-notes-card"><CardHeader title="Internal notes"><span class="subtle">Staff only · never sent</span></CardHeader><CardBody><SubmissionNotesCardBody
+          state={notesState}
+          notes={notes}
+          error={notesLoadError}
+          onRetry={() => setNotesReloadKey((value) => value + 1)}
+          compose={<form class="record-notes-compose" onSubmit={(event) => void appendSubmissionNote(event)}><label class="field"><span>Add internal note</span><textarea rows={3} maxLength={5000} value={notesDraft} onInput={(event) => { setNotesDraft(event.currentTarget.value); setNotesWriteError(""); }} placeholder="Keep context for the conference team." /></label><div class="record-action-row"><span class={`record-inline-message ${notesWriteError ? "error" : ""}`} role={notesWriteError ? "alert" : undefined}>{notesWriteError || " "}</span><Button small variant="primary" type="submit" disabled={notesBusy || notesState === "loading"}>{notesBusy ? "Saving…" : "Save note"}</Button></div></form>}
+        /></CardBody></Card>}
         {record.actions.can_resend_decision && <Card><CardHeader title="Decision delivery"><span class="subtle">The decision is already recorded.</span></CardHeader><CardBody>
           <p class="record-delivery-copy">If the speaker did not receive this decision, correct the address on their speaker record, then send the decision again.</p>
           {/* The address the last attempt used, named on the card. Without it
@@ -1128,7 +1159,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           {round.comparisons.length > 0 && <div class="record-round-evidence"><small>{round.comparisons.length} comparison result{round.comparisons.length === 1 ? "" : "s"}</small></div>}
           {round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong><ReviewerName name={reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name} kind={assignment.reviewer_kind} /></strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" aria-label={`Remove ${reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name} from ${round.name}`} disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}
           <div class="record-assignment-add"><div class="record-assignment-picker"><select aria-label={`Assign reviewer for ${round.name}`} value={selectedReviewers[round.id] ?? ""} onChange={(event) => setSelectedReviewers({ ...selectedReviewers, [round.id]: event.currentTarget.value })}><option value="">Assign reviewer…</option>{record.evaluation.reviewer_options.map((reviewer) => <option value={reviewer.id}>{reviewerNames.get(reviewer.id) ?? reviewer.name}{reviewer.kind === "agent" ? " · Agent" : ""}</option>)}</select>{record.evaluation.reviewer_options.find((reviewer) => reviewer.id === selectedReviewers[round.id])?.kind === "agent" && <Chip class="assignment-agent-chip">Agent</Chip>}</div><Button small disabled={!selectedReviewers[round.id] || Boolean(busy)} onClick={() => void assign(round.id)}>Assign</Button></div>{/* The refusal answers beside the control that asked, and the record stays on screen. */}<span class={`record-inline-message ${actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "error" : ""}`} role={actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "alert" : undefined}>{actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? actionError.message : " "}</span>
-        </section>) : <div class="record-evaluation-empty"><span class="subtle">No evaluation rounds configured.</span><Button small variant="primary" onClick={() => navigate("/evaluation")}>Set up evaluation</Button></div>}</div></CardBody></Card>
+        </section>) : <EvaluationEmptyState navigate={navigate} />}</div></CardBody></Card>
       </aside>
     </div>
   </div>;
