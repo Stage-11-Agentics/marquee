@@ -1027,6 +1027,7 @@ export async function writeAcceptanceReversal(
       queue: input.queue,
       now,
       smokeHarness: input.smokeHarness,
+      idempotencyKeys: calendarBatch?.idempotencyKeys,
     })
     : [];
   // Keep the legacy submission flag and the agenda projection in one durable

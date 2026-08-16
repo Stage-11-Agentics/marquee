@@ -91,12 +91,9 @@ export async function applyMigrations(): Promise<void> {
     ).first();
     await env.DB.batch(WIPE_ORDER.map((table) => env.DB.prepare(`DELETE FROM ${table}`)));
     if (calendarTruthApplied) {
-      // Production demo reset deliberately preserves these durable calendar
-      // records. Test files need an isolated starting floor instead.
-      await env.DB.batch([
-        env.DB.prepare("DELETE FROM calendar_cancellations"),
-        env.DB.prepare("DELETE FROM calendar_sequence_ledger"),
-      ]);
+      // WIPE_ORDER already clears both calendar tables for test isolation.
+      // Production reset deliberately preserves the ledger through its null
+      // DELETE_PLANS entry; this helper is intentionally a different path.
     } else {
       for (const statement of splitStatements(calendarTruthMigrationSql)) {
         await env.DB.prepare(`${statement};`).run();

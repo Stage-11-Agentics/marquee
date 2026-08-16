@@ -1689,15 +1689,15 @@ const removeParticipant = defineApiRoute(
     }
     const actor = await actorFor(context);
     const now = Date.now();
-    const speakerRole = participation.role === "speaker" || participation.role === "co_speaker";
-    const stillReceivesCalendar = speakerRole
+    const calendarRecipientRole = participation.role === "speaker" || participation.role === "submitter";
+    const stillReceivesCalendar = calendarRecipientRole
       ? await context.env.DB.prepare(
         `SELECT 1 FROM participations
           WHERE submission_id = ? AND person_id = ? AND role IN ('speaker', 'submitter') AND id <> ?
           LIMIT 1`,
       ).bind(submissionId, participation.person_id, participationId).first()
       : true;
-    const calendarBatch = speakerRole && !stillReceivesCalendar
+    const calendarBatch = calendarRecipientRole && !stillReceivesCalendar
       ? await prepareCalendarCancellationBatch({
         db: context.env.DB,
         eventId,
@@ -1721,8 +1721,13 @@ const removeParticipant = defineApiRoute(
         requestId: actor.requestId,
       }),
     ]);
-    if (calendarBatch && calendarBatch.intents.length > 0) {
-      await drainCalendarCancellations({ db: context.env.DB, queue: context.env.MAIL_QUEUE, now });
+    if (calendarBatch && calendarBatch.idempotencyKeys.length > 0) {
+      await drainCalendarCancellations({
+        db: context.env.DB,
+        queue: context.env.MAIL_QUEUE,
+        now,
+        idempotencyKeys: calendarBatch.idempotencyKeys,
+      });
     }
     return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
   },

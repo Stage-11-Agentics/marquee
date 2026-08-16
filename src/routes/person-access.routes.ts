@@ -245,7 +245,8 @@ const removeFromConference = defineApiRoute(
       }));
     }
     const calendarStatements = calendarBatches.flatMap((batch) => batch.statements);
-    const hasCalendarIntents = calendarBatches.some((batch) => batch.intents.length > 0);
+    const calendarKeys = calendarBatches.flatMap((batch) => batch.idempotencyKeys);
+    const hasCalendarIntents = calendarKeys.length > 0;
 
     // One transaction. Authority, work, and every credential end together:
     // a request that failed between the participation delete and the task
@@ -292,7 +293,12 @@ const removeFromConference = defineApiRoute(
     ]);
 
     if (hasCalendarIntents) {
-      await drainCalendarCancellations({ db: context.env.DB, queue: context.env.MAIL_QUEUE, now });
+      await drainCalendarCancellations({
+        db: context.env.DB,
+        queue: context.env.MAIL_QUEUE,
+        now,
+        idempotencyKeys: calendarKeys,
+      });
     }
 
     // After the participations are gone, so the reconciler sees the truth: it

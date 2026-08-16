@@ -9,6 +9,7 @@ import {
   sendCalendarInvites,
 } from "../../src/jobs/calendar/invites";
 import { processMailOutbox, type MailProvider } from "../../src/jobs/mail/consumer";
+import { MAX_CALENDAR_CANCELLATION_ATTEMPTS } from "../../src/jobs/calendar/limits";
 import { applyMigrations } from "./apply-migrations";
 
 const EVENT_ID = "evt_calendar";
@@ -83,6 +84,67 @@ test("CONTRACT · MRQ-228 · an invite remains cancellable after its agenda row 
     .bind(EVENT_ID)
     .all<{ ics_body: string }>();
   expect(outbox.results.at(-1)?.ics_body).toContain("METHOD:CANCEL");
+});
+
+test("CONTRACT · MRQ-228 · a missing snapshot fails one invite closed without aborting its batch", async () => {
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 'marquee', ?, ?)").bind("person_calendar_legacy", "org_calendar", "legacy@example.com", "Legacy Invitee", NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 1, ?, ?)").bind("participation_calendar_legacy", SUBMISSION_ID, "person_calendar_legacy", NOW, NOW),
+  ]);
+  const invites = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW });
+  const valid = invites.find((invite) => invite.person_id === PERSON_ID)!;
+  const legacy = invites.find((invite) => invite.person_id === "person_calendar_legacy")!;
+  await env.DB.prepare("UPDATE calendar_invites SET request_snapshot = NULL WHERE uid = ?").bind(valid.uid).run();
+
+  const deliveries = await cancelCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW + 1_000 });
+  expect(deliveries).toMatchObject([{ method: "CANCEL", uid: legacy.uid }]);
+  expect(deliveries).toHaveLength(1);
+  const failed = await env.DB.prepare(
+    "SELECT status, attempts, last_error FROM calendar_cancellations WHERE uid = ?",
+  ).bind(valid.uid).first<{ status: string; attempts: number; last_error: string }>();
+  expect(failed).toMatchObject({ status: "failed", last_error: "calendar cancellation snapshot unavailable for " + valid.uid });
+  expect(failed?.attempts).toBeGreaterThanOrEqual(1);
+  expect((await env.DB.prepare("SELECT status FROM calendar_invites WHERE uid = ?").bind(valid.uid).first<{ status: string }>())?.status).toBe("active");
+  expect((await env.DB.prepare("SELECT status FROM calendar_invites WHERE uid = ?").bind(legacy.uid).first<{ status: string }>())?.status).toBe("cancelled");
+});
+
+test("CONTRACT · MRQ-228 · a reversal drain returns only the cancellation intents it created", async () => {
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 'marquee', ?, ?)").bind("person_calendar_other", "org_calendar", "other@example.com", "Other Invitee", NOW, NOW),
+    env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'session', ?, 'accepted', 'admin', ?, ?, ?)").bind("submission_calendar_other", EVENT_ID, "Other session", PERSON_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)").bind("participation_calendar_other", "submission_calendar_other", "person_calendar_other", NOW, NOW),
+    env.DB.prepare("INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at) VALUES (?, ?, ?, 'session', ?, 30, ?, 0, ?, ?)").bind("agenda_calendar_other", EVENT_ID, "submission_calendar_other", Date.parse("2026-09-09T20:00:00.000Z"), "room_calendar", NOW, NOW),
+  ]);
+  await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW });
+  const other = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: "submission_calendar_other", now: NOW });
+  const deliveries = await cancelCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW + 1_000 });
+  expect(deliveries).toHaveLength(1);
+  expect(deliveries[0]?.uid).not.toBe(other[0]?.uid);
+  expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM calendar_cancellations WHERE uid = ?").bind(other[0]!.uid).first<{ count: number }>())?.count).toBe(0);
+});
+
+test("CONTRACT · MRQ-228 · fail-closed cancellation rows abandon at the cap and cannot starve healthy rows", async () => {
+  const first = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW });
+  await cancelCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW + 1_000 });
+  const poisoned = await env.DB.prepare("SELECT idempotency_key FROM calendar_cancellations WHERE uid = ?").bind(first[0]!.uid).first<{ idempotency_key: string }>();
+  await env.DB.prepare("UPDATE calendar_cancellations SET status = 'failed', snapshot_json = '{}' WHERE uid = ?").bind(first[0]!.uid).run();
+  for (let attempt = 0; attempt < MAX_CALENDAR_CANCELLATION_ATTEMPTS + 2; attempt += 1) {
+    await drainCalendarCancellations({ db: env.DB, queue: env.MAIL_QUEUE, now: NOW + 2_000 + attempt, limit: 1, idempotencyKeys: [poisoned!.idempotency_key] });
+  }
+  const poisonedRow = await env.DB.prepare("SELECT status, attempts FROM calendar_cancellations WHERE uid = ?").bind(first[0]!.uid).first<{ status: string; attempts: number }>();
+  expect(poisonedRow).toEqual({ status: "abandoned", attempts: MAX_CALENDAR_CANCELLATION_ATTEMPTS });
+
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 'marquee', ?, ?)").bind("person_calendar_healthy", "org_calendar", "healthy@example.com", "Healthy Invitee", NOW, NOW),
+    env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'session', ?, 'accepted', 'admin', ?, ?, ?)").bind("submission_calendar_healthy", EVENT_ID, "Healthy session", PERSON_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)").bind("participation_calendar_healthy", "submission_calendar_healthy", "person_calendar_healthy", NOW, NOW),
+    env.DB.prepare("INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at) VALUES (?, ?, ?, 'session', ?, 30, ?, 0, ?, ?)").bind("agenda_calendar_healthy", EVENT_ID, "submission_calendar_healthy", Date.parse("2026-09-09T20:00:00.000Z"), "room_calendar", NOW, NOW),
+  ]);
+  const healthy = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: "submission_calendar_healthy", now: NOW });
+  const batch = await prepareCalendarCancellationBatch({ db: env.DB, eventId: EVENT_ID, submissionId: "submission_calendar_healthy", now: NOW + 3_000 });
+  await env.DB.batch(batch.statements);
+  const healthyDelivery = await drainCalendarCancellations({ db: env.DB, queue: env.MAIL_QUEUE, now: NOW + 3_000, limit: 1 });
+  expect(healthyDelivery).toMatchObject([{ method: "CANCEL", uid: healthy[0]!.uid }]);
 });
 
 test("CONTRACT · MRQ-228 · cancellation material stays on the delivered snapshot after live rows change", async () => {

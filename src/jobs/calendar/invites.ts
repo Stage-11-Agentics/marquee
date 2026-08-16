@@ -5,6 +5,7 @@ import { buildingGeo, sessionLocation } from "../../lib/venue-geometry";
 import { enqueueMailMessage } from "../mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../mail/idempotency";
 import { enqueueOutbox, enqueueSmokeHarnessMail } from "../mail/outbox";
+import { MAX_CALENDAR_CANCELLATION_ATTEMPTS } from "./limits";
 import {
   buildCalendarMail,
   calendarUid,
@@ -66,7 +67,7 @@ interface CalendarCancellationRow {
   person_id: Id | null;
   sequence: number;
   snapshot_json: string;
-  status: "queued" | "sent" | "suppressed" | "failed";
+  status: "queued" | "sent" | "suppressed" | "failed" | "abandoned";
   to_email: string;
   uid: string;
   updated_at: number;
@@ -114,6 +115,8 @@ interface CalendarCancellationIntent {
 }
 
 export interface CalendarCancellationBatch {
+  /** Keys admitted by this caller, including per-invite failures. */
+  idempotencyKeys: readonly string[];
   intents: readonly CalendarCancellationIntent[];
   statements: D1PreparedStatement[];
 }
@@ -315,6 +318,7 @@ async function queueCalendarMaterial(input: {
   smokeHarness?: boolean;
   uid: string;
   requeueExisting?: boolean;
+  enqueueMessage?: boolean;
 }): Promise<{ material: CalendarMailMaterial; outboxId: Id; inserted: boolean }> {
   const material = buildCalendarMail(eventInputFromSnapshot(input.snapshot, {
     dtstamp: input.dtstamp,
@@ -346,7 +350,7 @@ async function queueCalendarMaterial(input: {
   // A request can be interrupted after the idempotent outbox INSERT and before
   // its queue send. Re-admit an existing queued row on the resumed run; the
   // outbox key keeps this a delivery retry, not a second calendar revision.
-  if (outbox.inserted || input.requeueExisting || existing?.status === "queued") {
+  if (input.enqueueMessage !== false && (outbox.inserted || input.requeueExisting || existing?.status === "queued")) {
     await enqueueMailMessage(input.queue, outbox.id);
   }
   return { material, outboxId: outbox.id, inserted: outbox.inserted };
@@ -447,7 +451,16 @@ async function recordRequest(input: {
   ]);
 }
 
-/** Queue one REQUEST per speaker/submitter, preserving one UID per recipient. */
+/**
+ * Queue one REQUEST per calendar recipient, preserving one UID per recipient.
+ *
+ * There is intentionally no materiality comparison here: every explicit
+ * re-POST is a new revision, as required by the current calendar contract.
+ * A future schedule-update stream may add that policy without changing the
+ * immutable snapshot or cancellation machinery below. Organizer identity also
+ * remains the fixed Marquee identity until organization mail wiring is owned by
+ * its contract; REQUEST and CANCEL already share the stamped value.
+ */
 export async function sendCalendarInvites(input: {
   db: D1Database;
   eventId: Id;
@@ -544,6 +557,57 @@ function guardExistsSql(guard: CalendarCancellationGuard | undefined): { sql: st
   };
 }
 
+function cancellationFailureReason(
+  invite: CalendarInviteRow,
+  snapshot: CalendarRequestSnapshot | null,
+): string | null {
+  if (!snapshot) return "calendar cancellation snapshot unavailable";
+  if (snapshot.organizer.email.trim().toLowerCase() !== invite.organizer_email.trim().toLowerCase()) {
+    return "calendar cancellation organizer mismatch";
+  }
+  if (!validEmail(snapshot.attendee.email)) return "calendar cancellation attendee is invalid";
+  return null;
+}
+
+function failedCancellationStatement(input: {
+  db: D1Database;
+  eventId: Id;
+  idempotencyKey: string;
+  invite: CalendarInviteRow;
+  now: number;
+  reason: string;
+  sequence: number;
+  guard?: CalendarCancellationGuard;
+  submissionId: Id;
+}): D1PreparedStatement {
+  const guarded = guardExistsSql(input.guard);
+  const existsBindings = guarded.bindings.map((binding, index) => index === 1 ? input.submissionId : binding);
+  // A malformed or missing snapshot has no trustworthy recipient or calendar
+  // material. Keep the failure durable with explicit sentinels, but do not
+  // mutate the invite or ledger and never attempt to enqueue it.
+  return input.db.prepare(
+    `INSERT OR IGNORE INTO calendar_cancellations
+      (id, idempotency_key, event_id, person_id, uid, sequence, to_email, organizer_email,
+       snapshot_json, cancelled_at, status, attempts, outbox_id, last_error, created_at, updated_at)
+     SELECT ?, ?, ?, ?, ?, ?, '', ?, ?, ?, 'failed', 1, NULL, ?, ?, ?
+     WHERE 1 = 1${guarded.sql}`,
+  ).bind(
+    crypto.randomUUID(),
+    input.idempotencyKey,
+    input.eventId,
+    input.invite.person_id,
+    input.invite.uid,
+    input.sequence,
+    input.invite.organizer_email,
+    input.invite.request_snapshot ?? "{}",
+    input.now,
+    input.reason,
+    input.now,
+    input.now,
+    ...existsBindings,
+  );
+}
+
 /**
  * Prepare cancellation intent + invite/ledger statements. Callers that delete
  * an agenda row append that DELETE to the same db.batch, making the intent
@@ -558,6 +622,7 @@ export async function prepareCalendarCancellationBatch(input: {
   guard?: CalendarCancellationGuard;
 }): Promise<CalendarCancellationBatch> {
   const invites = await activeInvitesForCancellation(input);
+  const idempotencyKeys: string[] = [];
   const intents: CalendarCancellationIntent[] = [];
   const statements: D1PreparedStatement[] = [];
   for (const invite of invites) {
@@ -565,15 +630,29 @@ export async function prepareCalendarCancellationBatch(input: {
     // must never consult mutable session or person rows: those rows may have
     // been edited, removed, or reassigned since the calendar client received
     // the invitation. Legacy rows without a stamped REQUEST fail closed.
-    const snapshot = parseCalendarRequestSnapshot(invite.request_snapshot);
-    if (!snapshot) throw new Error(`calendar cancellation snapshot unavailable for ${invite.uid}`);
-    if (snapshot.organizer.email.trim().toLowerCase() !== invite.organizer_email.trim().toLowerCase()) {
-      throw new Error(`calendar cancellation organizer mismatch for ${invite.uid}`);
-    }
-    if (!validEmail(snapshot.attendee.email)) throw new Error(`calendar cancellation attendee is invalid for ${invite.uid}`);
     const ledger = await ledgerFor(input.db, invite.uid);
     const sequence = nextSequence(invite.sequence, ledger);
     const idempotencyKey = String(IDEMPOTENCY_REGISTRY.calendarCancellation(invite.uid, sequence));
+    idempotencyKeys.push(idempotencyKey);
+    const snapshot = parseCalendarRequestSnapshot(invite.request_snapshot);
+    const failure = cancellationFailureReason(invite, snapshot);
+    if (failure) {
+      statements.push(failedCancellationStatement({
+        db: input.db,
+        eventId: input.eventId,
+        idempotencyKey,
+        invite,
+        now: input.now,
+        reason: `${failure} for ${invite.uid}`,
+        sequence,
+        guard: input.guard,
+        submissionId: input.submissionId,
+      }));
+      continue;
+    }
+    // cancellationFailureReason proves this is non-null, while keeping the
+    // branch explicit for TypeScript and future validation changes.
+    if (!snapshot) continue;
     const intent: CalendarCancellationIntent = {
       eventId: input.eventId,
       idempotencyKey,
@@ -618,7 +697,7 @@ export async function prepareCalendarCancellationBatch(input: {
       ).bind(sequence, input.now, invite.id, ...existsBindings),
     );
   }
-  return { intents, statements };
+  return { idempotencyKeys, intents, statements };
 }
 
 function cancellationResult(row: CalendarCancellationRow, inserted: boolean): CalendarDeliveryResult {
@@ -630,6 +709,20 @@ function cancellationResult(row: CalendarCancellationRow, inserted: boolean): Ca
     sequence: row.sequence,
     uid: row.uid,
   };
+}
+
+async function markCancellationFailed(
+  db: D1Database,
+  row: CalendarCancellationRow,
+  now: number,
+  error: string,
+): Promise<void> {
+  await db.prepare(
+    `UPDATE calendar_cancellations
+     SET status = CASE WHEN attempts + 1 >= ? THEN 'abandoned' ELSE 'failed' END,
+         attempts = attempts + 1, last_error = ?, updated_at = ?
+     WHERE id = ? AND status IN ('queued', 'failed') AND attempts < ?`,
+  ).bind(MAX_CALENDAR_CANCELLATION_ATTEMPTS, error, now, row.id, MAX_CALENDAR_CANCELLATION_ATTEMPTS).run();
 }
 
 /**
@@ -644,19 +737,30 @@ export async function drainCalendarCancellations(input: {
   now?: number;
   smokeHarness?: boolean;
   limit?: number;
+  /** Request paths pass only the intents they created; cron omits this. */
+  idempotencyKeys?: readonly string[];
 }): Promise<CalendarDeliveryResult[]> {
   const now = input.now ?? Date.now();
+  if (input.idempotencyKeys?.length === 0) return [];
+  const keyFilter = input.idempotencyKeys === undefined
+    ? ""
+    : ` AND idempotency_key IN (${input.idempotencyKeys.map(() => "?").join(", ")})`;
+  const bindings: (string | number)[] = [
+    MAX_CALENDAR_CANCELLATION_ATTEMPTS,
+    ...(input.idempotencyKeys ?? []),
+    input.limit ?? 100,
+  ];
   const rows = await input.db
     .prepare(
       `SELECT attempts, cancelled_at, event_id, id, idempotency_key, last_error,
               organizer_email, outbox_id, person_id, sequence, snapshot_json, status,
               to_email, uid, updated_at
        FROM calendar_cancellations
-       WHERE status IN ('queued', 'failed')
+       WHERE status IN ('queued', 'failed') AND attempts < ?${keyFilter}
        ORDER BY updated_at ASC, id ASC
        LIMIT ?`,
     )
-    .bind(input.limit ?? 100)
+    .bind(...bindings)
     .all<CalendarCancellationRow>();
   const result: CalendarDeliveryResult[] = [];
   for (const row of rows.results) {
@@ -672,21 +776,15 @@ export async function drainCalendarCancellations(input: {
     }
     const snapshot = parseCalendarRequestSnapshot(row.snapshot_json);
     if (!snapshot) {
-      await input.db.prepare(
-        "UPDATE calendar_cancellations SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?",
-      ).bind("calendar cancellation snapshot is invalid", now, row.id).run();
+      await markCancellationFailed(input.db, row, now, row.last_error ?? "calendar cancellation snapshot is invalid");
       continue;
     }
     if (snapshot.attendee.email.trim().toLowerCase() !== row.to_email.trim().toLowerCase()) {
-      await input.db.prepare(
-        "UPDATE calendar_cancellations SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?",
-      ).bind("calendar attendee does not match the outbox recipient", now, row.id).run();
+      await markCancellationFailed(input.db, row, now, "calendar attendee does not match the outbox recipient");
       continue;
     }
     if (snapshot.organizer.email.trim().toLowerCase() !== row.organizer_email.trim().toLowerCase()) {
-      await input.db.prepare(
-        "UPDATE calendar_cancellations SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?",
-      ).bind("calendar organizer does not match the REQUEST snapshot", now, row.id).run();
+      await markCancellationFailed(input.db, row, now, "calendar organizer does not match the REQUEST snapshot");
       continue;
     }
 
@@ -722,17 +820,21 @@ export async function drainCalendarCancellations(input: {
         snapshot,
         smokeHarness: input.smokeHarness,
         uid: row.uid,
+        enqueueMessage: false,
       });
       outbox = { id: delivery.outboxId, status: "queued" };
       inserted = delivery.inserted;
-    } else {
-      await enqueueMailMessage(input.queue, outbox.id);
     }
-    await input.db.prepare(
+    const admitted = await input.db.prepare(
       `UPDATE calendar_cancellations
        SET status = 'queued', attempts = attempts + 1, outbox_id = ?, last_error = NULL, updated_at = ?
-       WHERE id = ?`,
-    ).bind(outbox.id, now, row.id).run();
+       WHERE id = ? AND status IN ('queued', 'failed') AND attempts < ?`,
+    ).bind(outbox.id, now, row.id, MAX_CALENDAR_CANCELLATION_ATTEMPTS).run();
+    if ((admitted.meta.changes ?? 0) !== 1) continue;
+    // The cancellation row is queued before the message is admitted. A fast
+    // consumer can therefore write sent/suppressed/failed without this route
+    // clobbering that terminal result back to queued.
+    await enqueueMailMessage(input.queue, outbox.id);
     result.push(cancellationResult({ ...row, outbox_id: outbox.id }, inserted));
   }
   return result;
@@ -765,6 +867,7 @@ export async function cancelCalendarInvites(input: {
     origin: input.origin,
     queue: input.queue,
     smokeHarness: input.smokeHarness,
+    idempotencyKeys: batch.idempotencyKeys,
   });
 }
 

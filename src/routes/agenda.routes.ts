@@ -535,6 +535,7 @@ const removeAgendaItem = defineApiRoute(
     const current = await readAgendaItemVersion(context.env.DB, eventId, itemId);
     if (!current) throw ApiError.notFound();
     const now = Date.now();
+    const actor = await publicationActor(context);
     const calendarBatch = current.kind === "session" && current.submission_id !== null
       ? await prepareCalendarCancellationBatch({
         db: context.env.DB,
@@ -546,6 +547,29 @@ const removeAgendaItem = defineApiRoute(
       : null;
     const results = await context.env.DB.batch([
       ...(calendarBatch?.statements ?? []),
+      auditStatementFromSelect(context.env.DB, {
+        eventId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "agenda_item_unscheduled",
+        entityType: "agenda_item",
+        entityId: itemId,
+        before: {
+          kind: current.kind,
+          submission_id: current.submission_id,
+          starts_at: current.starts_at,
+          duration_min: current.duration_min,
+          room_id: current.room_id,
+          track_id: current.track_id,
+          is_published: current.is_published === 1,
+        },
+        after: { scheduled: false },
+        now,
+        requestId: actor.requestId,
+      }, `
+        FROM agenda_items item
+        WHERE item.id = ? AND item.event_id = ? AND item.updated_at = ?
+      `, itemId, eventId, expected.updatedAt),
       context.env.DB.prepare(
         "DELETE FROM agenda_items WHERE id = ? AND event_id = ? AND updated_at = ?",
       ).bind(itemId, eventId, expected.updatedAt),
@@ -558,8 +582,13 @@ const removeAgendaItem = defineApiRoute(
         headers: { ETag: strongEtag(latest.id, latest.updated_at) },
       });
     }
-    if (calendarBatch && calendarBatch.intents.length > 0) {
-      await drainCalendarCancellations({ db: context.env.DB, queue: context.env.MAIL_QUEUE, now });
+    if (calendarBatch && calendarBatch.idempotencyKeys.length > 0) {
+      await drainCalendarCancellations({
+        db: context.env.DB,
+        queue: context.env.MAIL_QUEUE,
+        now,
+        idempotencyKeys: calendarBatch.idempotencyKeys,
+      });
     }
     return context.body(null, 204);
   },

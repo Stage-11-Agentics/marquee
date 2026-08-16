@@ -118,7 +118,7 @@ export const OUTBOX_BOUNCE_SUBTYPES = [
   "General",
 ] as const;
 export const CALENDAR_METHODS = ["REQUEST", "CANCEL"] as const;
-export const CALENDAR_CANCELLATION_STATUSES = ["queued", "sent", "suppressed", "failed"] as const;
+export const CALENDAR_CANCELLATION_STATUSES = ["queued", "sent", "suppressed", "failed", "abandoned"] as const;
 export const WEBHOOK_EVENT_TYPES = [
   "submission.created",
   "submission.status_changed",

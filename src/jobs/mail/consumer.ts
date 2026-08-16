@@ -4,6 +4,7 @@ import type { OutboxRow } from "../../db/schema";
 import { writeAudit } from "../../lib/audit";
 import { demoMailAllowlistFor, normalizeAllowlistEmail } from "../../lib/demo-mail-allowlist";
 import { RESEND_MAIL_FROM } from "../../lib/mail/config";
+import { MAX_CALENDAR_CANCELLATION_ATTEMPTS } from "../calendar/limits";
 import { enqueueOverdueTaskReminderRows, enqueuePreCloseReminderRows } from "./triggers";
 
 export const MAIL_MESSAGE_TYPE = "mail_outbox";
@@ -169,11 +170,17 @@ async function syncCalendarCancellation(
   error: string | null = null,
 ): Promise<void> {
   if (row.template_key !== "calendar_cancel" || row.entity_id === null) return;
+  const cancellation = status === "failed"
+    ? await db.prepare("SELECT attempts FROM calendar_cancellations WHERE idempotency_key = ?").bind(row.entity_id).first<{ attempts: number }>()
+    : null;
+  const durableStatus = status === "failed" && (cancellation?.attempts ?? 0) >= MAX_CALENDAR_CANCELLATION_ATTEMPTS
+    ? "abandoned"
+    : status;
   await db.prepare(
     `UPDATE calendar_cancellations
      SET status = ?, last_error = ?, updated_at = ?
      WHERE idempotency_key = ?`,
-  ).bind(status, error, now, row.entity_id).run();
+  ).bind(durableStatus, error, now, row.entity_id).run();
 }
 
 async function suppressRow(db: D1Database, row: OutboxRow, now: number): Promise<void> {
