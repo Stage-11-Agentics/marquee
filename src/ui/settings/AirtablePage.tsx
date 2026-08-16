@@ -441,7 +441,7 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
     try {
       let continuation: MirroredTableName | null = "submissions";
       while (continuation) {
-        const response = await apiFetch<{ data: MirrorSetupResponse }>(MAPPING_ROUTE, {
+        const response: { data: MirrorSetupResponse } = await apiFetch<{ data: MirrorSetupResponse }>(MAPPING_ROUTE, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ ...mapping, base_id: baseId || status?.base_id || "", token, intent: "adopt", continuation }),
@@ -555,7 +555,7 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
         {tables.length === 0 && <div class="airtable-empty-mapping"><strong>No tables returned</strong><span>This base is ready for the three canonical mirror tables.</span></div>}
         <div class="airtable-mapping-fields">{TABLE_ORDER.map((table) => <label class="field" key={table}><span>{TABLE_LABELS[table]}</span><select value={mapping[table]} onChange={(event) => setMapping((current) => ({ ...current, [table]: event.currentTarget.value }))}><option value="">Choose a table</option>{tables.map((candidate) => <option value={candidate.id} key={candidate.id}>{candidate.name}</option>)}</select></label>)}</div>
         <AirtableSetupProgress readiness={readiness} progress={progress} />
-        {!mappingComplete && readiness?.needs_provisioning && readiness.provisionable && <div class="airtable-provision-offer"><span>Fewer than three distinct conformant roles are ready.</span><Button onClick={() => void provisionTables()} disabled={pending !== null || token.trim().length === 0 || (baseId || status.base_id || "").trim().length === 0}>{pending === "provision" ? "Preparing tables…" : "Create the three tables for me"}</Button></div>}
+        {!mappingComplete && readiness?.needs_provisioning && readiness.provisionable && <div class="airtable-provision-offer"><span>Fewer than three distinct conformant roles are ready.</span><Button onClick={() => void provisionTables()} disabled={pending !== null || token.trim().length === 0 || (baseId || status?.base_id || "").trim().length === 0}>{pending === "provision" ? "Preparing tables…" : "Create the three tables for me"}</Button></div>}
         <div class="airtable-form-actions"><Button variant="primary" onClick={() => void mapTables()} disabled={pending !== null || tables.length === 0 || token.trim().length === 0 || !mappingComplete}>{pending === "mapping" ? "Turning on…" : "Turn on mirror"}</Button></div>
       </CardBody>
     </section>}
