@@ -187,7 +187,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
   test("AC-43 · the status hero data is the first portal submission and carries the current status and wave", async () => {
     const { response, body } = await portal();
     expect(response.status).toBe(200);
-    expect(body.submissions[0]).toMatchObject({ status: "in_review", wave: "Wave 2", status_label: "In Review" });
+    expect(body.submissions[0]).toMatchObject({ status: "in_review", wave: "Wave 2", status_label: "Under review", status_tone: "" });
   });
 
   test("AC-44 · a pre-decision speaker receives a concrete next-wave date instead of a bare pending state", async () => {

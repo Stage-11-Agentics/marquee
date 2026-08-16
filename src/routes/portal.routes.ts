@@ -30,6 +30,7 @@ import {
   isFieldApplicable,
   projectApplicableAnswers,
 } from "../lib/form-conditions";
+import { portalStatusProjection } from "../lib/portal-status";
 import { listFormFields } from "./forms.queries";
 import { sponsorContactTaskAccess } from "../lib/sponsors/task-access";
 import { applySponsorWriteback } from "../lib/sponsors/session-writeback";
@@ -235,13 +236,6 @@ function eventDateTime(event: EventProjection, startsAt: number | null): { day: 
     date: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: event.timezone }).format(date),
     time: new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: event.timezone }).format(date),
   };
-}
-
-function statusLabel(status: string): string {
-  return status
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }
 
 /**
@@ -778,12 +772,14 @@ function submissionView(event: EventProjection, row: SubmissionProjection, showB
   const waveName = row.wave_name ?? (row.wave_decision_on ? "Next wave" : null);
   const building = arrivalBuildingFor(row);
   const arrival = row.arrival ?? null;
+  const status = portalStatusProjection("speaker", row.status);
   return {
     id: row.id,
     title: row.title,
     description: row.abstract,
     status: row.status,
-    status_label: statusLabel(row.status),
+    status_label: status.label,
+    status_tone: status.tone,
     format: row.format_name ?? "—",
     wave: waveName,
     wave_decision_on: row.wave_decision_on,

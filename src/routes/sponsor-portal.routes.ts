@@ -25,6 +25,7 @@ import { dealLineChips } from "../lib/sponsors/deal-line";
 import { sponsorHandbookChapters } from "../lib/sponsors/handbook";
 import { roomDisplayLabel } from "../lib/venues";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
+import { portalStatusProjection } from "../lib/portal-status";
 import { listPortalTasks } from "./portal-tasks.queries";
 
 const sponsorshipQuery = z.object({ sponsorshipId: z.string().min(1).optional() });
@@ -322,10 +323,6 @@ function boothFor(sponsorship: SponsorshipRow) {
   };
 }
 
-function statusLabel(status: string): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
 async function sponsorPortalSnapshot(
   context: import("hono").Context<ApiEnv>,
   auth: SessionAuth,
@@ -361,6 +358,7 @@ async function sponsorPortalSnapshot(
   const sessions = await sessionsFor(db, sponsorship, showBuildingComparison);
   const booth = boothFor(sponsorship);
 
+  const status = portalStatusProjection("sponsor", sponsorship.status);
   return {
     seat: "sponsor_contact" as const,
     event: {
@@ -376,7 +374,8 @@ async function sponsorPortalSnapshot(
     sponsorship: {
       id: sponsorship.sponsorship_id,
       status: sponsorship.status,
-      status_label: statusLabel(sponsorship.status),
+      status_label: status.label,
+      status_tone: status.tone,
       tier: sponsorship.tier_name,
       passes: sponsorship.passes,
       company: {

@@ -163,5 +163,19 @@ describe.sequential("MRQ-34 saved views and draft attention queue", () => {
     expect(edited.status).toBe(200);
     expect((await json<{ status: string; title: string }>(edited))).toMatchObject({ status: "draft", title: "Saved draft content" });
     expect((await env.DB.prepare("SELECT status FROM submissions WHERE id = ?").bind(DRAFT_ID).first<{ status: string }>())?.status).toBe("draft");
+
+    const projected = await request(`/api/v1/events/${EVENT_ID}/submissions/${DRAFT_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        answers: [
+          { field_id: "field_mrq_34_gate", value_text: "No" },
+          { field_id: "field_mrq_34_hidden", value_text: "must not be stored while hidden" },
+        ],
+      }),
+    }, formAdminCookie);
+    expect(projected.status).toBe(200);
+    const stored = await env.DB.prepare("SELECT field_id, value_text FROM submission_answers WHERE submission_id = ? ORDER BY field_id")
+      .bind(DRAFT_ID).all<{ field_id: string; value_text: string | null }>();
+    expect(stored.results).toEqual([{ field_id: "field_mrq_34_gate", value_text: "No" }]);
   });
 });

@@ -61,13 +61,12 @@ test("CONTRACT · public answer projection and direct answer writers have an exp
     tally(projectionCalls),
     [
       // MRQ-214 MOVED one of portal.routes.ts's two projections into the task
-      // projection both portals now share. The total is unchanged at five: no new
-      // consumer of the projection was added, and the sponsor portal reads answers
-      // through this same call rather than growing its own.
+      // projection both portals now share. The draft editor is also a consumer:
+      // it uses the same projection before replacing a draft's answer rows.
       { file: "src/routes/portal-tasks.queries.ts", count: 1 },
       { file: "src/routes/portal.routes.ts", count: 1 },
       { file: "src/routes/public-form.shared.ts", count: 1 },
-      { file: "src/routes/submission-record.routes.ts", count: 1 },
+      { file: "src/routes/submission-record.routes.ts", count: 2 },
       { file: "src/ui/public/form/PublicForm.tsx", count: 1 },
     ],
     "projection call-site inventory changed; re-audit every consumer before adding or moving a writer. Observed: "

@@ -1237,24 +1237,37 @@ const patchDraft = defineApiRoute(
 
     if (body.answers !== undefined) {
       if (!submission.form_id) throw ApiError.unprocessable("a draft without a form cannot accept field answers", "answers");
-      const fields = await context.env.DB.prepare("SELECT id, key, condition FROM form_fields WHERE form_id = ? ORDER BY position, id").bind(submission.form_id).all<{ id: string; key: string; condition: string | null }>();
+      const fields = await context.env.DB.prepare("SELECT id, key, required, type, config, condition FROM form_fields WHERE form_id = ? ORDER BY position, id").bind(submission.form_id).all<{
+        id: string;
+        key: string;
+        required: 0 | 1;
+        type: string;
+        config: string | null;
+        condition: string | null;
+      }>();
       const fieldsById = new Map(fields.results.map((field) => [field.id, field]));
+      const rawAnswers: Record<string, unknown> = {};
       for (const answer of body.answers) {
         const field = fieldsById.get(answer.field_id);
         if (!field) throw ApiError.unprocessable("every answer field must belong to this draft's form", "answers");
+        rawAnswers[field.key] = answer.value_json === undefined ? answer.value_text ?? null : answer.value_json;
       }
+      const projection = projectApplicableAnswers(fields.results, rawAnswers);
+      // This is still a draft: incomplete visible answers remain valid draft
+      // state, while the queue derives the missing-field attention from the
+      // same projection. Persist only its normalized, currently applicable map.
+      const fieldsByKey = new Map(fields.results.map((field) => [field.key, field]));
       statements.push(context.env.DB.prepare("DELETE FROM submission_answers WHERE submission_id = ?").bind(submissionId));
-      for (const answer of body.answers) {
-        const field = fieldsById.get(answer.field_id);
+      for (const [key, value] of Object.entries(projection.answers)) {
+        const field = fieldsByKey.get(key);
         if (!field) continue;
-        if (answer.value_text === undefined && answer.value_json === undefined) continue;
         statements.push(context.env.DB.prepare(`
           INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `).bind(
           newUlid(), submissionId, field.id,
-          answer.value_text ?? null,
-          answer.value_json === undefined ? null : JSON.stringify(answer.value_json),
+          typeof value === "string" ? value : null,
+          typeof value === "string" ? null : JSON.stringify(value),
           now, now,
         ));
       }

@@ -26,6 +26,7 @@ import type { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 
 import { SPONSOR_WRITEBACK_TEMPLATE_IDS } from "../../lib/sponsors/deliverable-templates";
+import type { PortalStatusTone } from "../../lib/portal-status";
 import type { VenueBuildingInput } from "../../lib/venues";
 import { MAP_HEIGHT, VenueMap } from "../venues/VenueMap";
 import {
@@ -81,6 +82,7 @@ type SponsorSnapshot = {
     id: string;
     status: string;
     status_label: string;
+    status_tone?: PortalStatusTone;
     tier: string | null;
     passes: number;
     company: { id: string; name: string; website: string | null; blurb: string | null };
@@ -465,7 +467,7 @@ function SponsorPortalPage(): JSX.Element {
         </div>
       </div>
 
-      <section class="sponsor-hero" aria-labelledby="sponsor-hero-heading">
+      <section class="sponsor-hero" data-status-tone={sponsorship.status_tone ?? ""} aria-labelledby="sponsor-hero-heading">
         <div>
           <div class="sponsor-hero-eyebrow">{sponsorship.tier ? `${sponsorship.tier} sponsor` : "Sponsor"} · {sponsorship.status_label}</div>
           <h1 id="sponsor-hero-heading">{sponsorship.company.name}</h1>

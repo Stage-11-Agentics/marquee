@@ -165,6 +165,7 @@ export function PublicForm({ initial }: PublicFormProps) {
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const firstRender = useRef(true);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  const pageErrorRef = useRef<HTMLDivElement | null>(null);
   const draftEmailRef = useRef<HTMLInputElement | null>(null);
   const preserveDraftOnBlur = useRef(false);
   const turnstileHost = useRef<HTMLElement | null>(null);
@@ -236,6 +237,44 @@ export function PublicForm({ initial }: PublicFormProps) {
     () => state.fields.filter((field) => isFieldApplicable(field, answers)),
     [state.fields, answers],
   );
+
+  /**
+   * A refusal is a navigation event, not just a message. Scroll the first
+   * offending control into view and put keyboard/screen-reader focus on it so
+   * the person can recover without hunting through a long form.
+   */
+  function focusErrorBanner() {
+    window.setTimeout(() => {
+      const banner = pageErrorRef.current;
+      if (!banner) return;
+      banner.focus({ preventScroll: true });
+      banner.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    }, 0);
+  }
+
+  function focusFirstInvalidField(keys: readonly string[]) {
+    // The server's issue order is not the form's order: cross-field checks can
+    // append participant and reference failures after the field validator has
+    // already reported earlier controls. Choose from the rendered field list
+    // so the first recovery target is stable in document order.
+    const firstKey = visibleFields.find((field) => keys.includes(field.key))?.key;
+    if (!firstKey) {
+      // A form-level refusal, or an issue for a conditional field that is not
+      // currently rendered, has no honest control to focus. Put the recovery
+      // message itself in the keyboard and screen-reader path instead.
+      focusErrorBanner();
+      return;
+    }
+    window.setTimeout(() => {
+      const field = fieldRefs.current[firstKey];
+      if (!field) {
+        focusErrorBanner();
+        return;
+      }
+      field.focus({ preventScroll: true });
+      field.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    }, 0);
+  }
 
   useEffect(() => {
     if (typeof document === "undefined" || typeof window === "undefined") return;
@@ -339,7 +378,7 @@ export function PublicForm({ initial }: PublicFormProps) {
     setErrors(next);
     const first = visibleFields.find((field) => next[field.key]);
     if (first) {
-      window.setTimeout(() => fieldRefs.current[first.key]?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+      focusFirstInvalidField([first.key]);
       return false;
     }
     return true;
@@ -553,6 +592,9 @@ export function PublicForm({ initial }: PublicFormProps) {
         for (const issue of issues) if (issue.fieldKey && issue.message) next[issue.fieldKey] = issue.message;
         setErrors(next);
       }
+      if (error instanceof MarqueeApiError && error.status === 422) {
+        focusFirstInvalidField(issues.flatMap((issue) => issue.fieldKey ? [issue.fieldKey] : []));
+      }
       setPageError(publicErrorMessage(error));
     } finally { setBusy(false); }
   }
@@ -592,7 +634,7 @@ export function PublicForm({ initial }: PublicFormProps) {
       control = <select id={`public-${field.key}`} ref={ref as never} value={typeof value === "string" ? value : ""} onChange={(event) => setAnswer(field.key, (event.currentTarget as HTMLSelectElement).value)} aria-invalid={Boolean(error)}><option value="">Choose one</option>{options.map((option) => <option value={option}>{option}</option>)}</select>;
     } else if (field.type === "multi_select") {
       const selected = Array.isArray(value) ? value : [];
-      control = <div class="public-option-list" ref={ref as never}>{options.map((option) => <label class="public-option"><input type="checkbox" checked={selected.includes(option)} onChange={(event) => { const next = (event.currentTarget as HTMLInputElement).checked ? [...selected, option] : selected.filter((item) => item !== option); setAnswer(field.key, next); }} />{option}</label>)}</div>;
+      control = <div class="public-option-list" ref={ref as never} tabIndex={-1}>{options.map((option) => <label class="public-option"><input type="checkbox" checked={selected.includes(option)} onChange={(event) => { const next = (event.currentTarget as HTMLInputElement).checked ? [...selected, option] : selected.filter((item) => item !== option); setAnswer(field.key, next); }} />{option}</label>)}</div>;
     } else if (field.type === "file") {
       const existing = typeof value === "object" && value !== null && "filename" in value ? String((value as { filename: unknown }).filename) : null;
       const acceptList = Array.isArray(field.config.accept) ? field.config.accept.filter((entry): entry is string => typeof entry === "string") : [];
@@ -655,7 +697,7 @@ export function PublicForm({ initial }: PublicFormProps) {
     : closed
       ? "This form is not accepting answers right now, so its fields are closed for editing."
       : "Your answers stay here while you work. A resume link goes to the address you enter.";
-  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at !== null && !publicFormIsEffectivelyClosed(state) && <span>Closes {formatEventDateTime(state.form.closes_at, state.conference.timezone)}</span>}<span class={`public-save-status${saveStatus ? " has-value" : ""}`} aria-live="polite" aria-hidden={!saveStatus}>{saveStatus}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}{!editingSubmitted && state.state === "submitted" && state.submission_edit_reason ? <div class="public-notice alarm" role="status">{state.submission_edit_reason}</div> : null}<div class={`public-error${pageError ? " has-message" : ""}`} role={pageError ? "alert" : undefined} aria-hidden={!pageError}>{pageError ?? " "}</div><form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div>{collectsParticipants && <p class="public-participant-limit">Include at least {minimumParticipants}; this form has {coSpeakerSlots}.</p>}<fieldset class="public-form-fields" disabled={closed}>{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} ref={(node) => { turnstileHost.current = node as HTMLElement | null; }} dangerouslySetInnerHTML={{ __html: "" }} /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></fieldset>{state.resume_url && <div class="public-draft-resume" role="status"><strong>{editingSubmitted ? "Private edit link" : "Private resume link"}</strong><span>{resumeCopy}</span><div class="public-draft-resume-actions"><a class="public-resume-link" href={resumePath ?? "#"}>{resumePath}</a><button class="public-copy-link" type="button" onClick={() => { void copyResumeLink(); }}>{copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy resume link"}</button></div></div>}<div class="public-form-footer"><div class="public-form-footer-copy">{draftEmailPrompt && !state.resume_token && !closed && <div class="public-draft-email"><label for="public-draft-email">Contact address for your resume link</label><input id="public-draft-email" ref={draftEmailRef} type="email" value={answerEmail(answers)} onInput={(event) => setAnswer("speaker_email", (event.currentTarget as HTMLInputElement).value)} /><span>We will send a private link here so you can return to this draft.</span></div>}<span class="public-security">{securityCopy}</span></div><div class="public-form-actions"><button class="public-save-draft" type="button" data-save-draft onMouseDown={() => { preserveDraftOnBlur.current = true; }} onClick={() => { void saveDraft(); }} disabled={busy || closed || editingSubmitted}>Save draft</button><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : editingSubmitted ? "Save changes" : "Submit abstract"}</button></div></div></form></main><PublicFooter /></div>;
+  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at !== null && !publicFormIsEffectivelyClosed(state) && <span>Closes {formatEventDateTime(state.form.closes_at, state.conference.timezone)}</span>}<span class={`public-save-status${saveStatus ? " has-value" : ""}`} aria-live="polite" aria-hidden={!saveStatus}>{saveStatus}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}{!editingSubmitted && state.state === "submitted" && state.submission_edit_reason ? <div class="public-notice alarm" role="status">{state.submission_edit_reason}</div> : null}<div class={`public-error${pageError ? " has-message" : ""}`} ref={pageErrorRef} role={pageError ? "alert" : undefined} tabIndex={-1} aria-hidden={!pageError}>{pageError ?? " "}</div><form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div>{collectsParticipants && <p class="public-participant-limit">Include at least {minimumParticipants}; this form has {coSpeakerSlots}.</p>}<fieldset class="public-form-fields" disabled={closed}>{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} ref={(node) => { turnstileHost.current = node as HTMLElement | null; }} dangerouslySetInnerHTML={{ __html: "" }} /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></fieldset>{state.resume_url && <div class="public-draft-resume" role="status"><strong>{editingSubmitted ? "Private edit link" : "Private resume link"}</strong><span>{resumeCopy}</span><div class="public-draft-resume-actions"><a class="public-resume-link" href={resumePath ?? "#"}>{resumePath}</a><button class="public-copy-link" type="button" onClick={() => { void copyResumeLink(); }}>{copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy resume link"}</button></div></div>}<div class="public-form-footer"><div class="public-form-footer-copy">{draftEmailPrompt && !state.resume_token && !closed && <div class="public-draft-email"><label for="public-draft-email">Contact address for your resume link</label><input id="public-draft-email" ref={draftEmailRef} type="email" value={answerEmail(answers)} onInput={(event) => setAnswer("speaker_email", (event.currentTarget as HTMLInputElement).value)} /><span>We will send a private link here so you can return to this draft.</span></div>}<span class="public-security">{securityCopy}</span></div><div class="public-form-actions"><button class="public-save-draft" type="button" data-save-draft onMouseDown={() => { preserveDraftOnBlur.current = true; }} onClick={() => { void saveDraft(); }} disabled={busy || closed || editingSubmitted}>Save draft</button><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : editingSubmitted ? "Save changes" : "Submit abstract"}</button></div></div></form></main><PublicFooter /></div>;
 }
 
 function PublicHeader({ state }: { state: PublicFormState }) {

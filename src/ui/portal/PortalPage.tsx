@@ -4,6 +4,7 @@ import type { JSX } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../../lib/auth/draft-resume-copy";
+import { portalStatusProjection, type PortalStatusTone } from "../../lib/portal-status";
 import { participationRoleLabel } from "../shell/identity-format";
 import { seedId } from "../../lib/ids";
 import type { VenueBuildingInput } from "../../lib/venues";
@@ -42,6 +43,7 @@ type PortalSubmission = {
   description: string | null;
   status: string;
   status_label: string;
+  status_tone?: PortalStatusTone;
   format: string;
   wave: string | null;
   wave_decision_on: string | null;
@@ -698,7 +700,7 @@ function ArrivalCard({ slot, timezone }: { slot: NonNullable<PortalSubmission["s
 function StatusHero({ submission, index, timezone, onRefresh }: { submission: PortalSubmission; index: number; timezone: string; onRefresh: () => Promise<void> }): JSX.Element {
   const statusText = `${submission.status_label}${submission.wave ? ` · ${submission.wave}` : ""}`;
   const titleId = `portal-status-heading-${submission.id}`;
-  return <section class={`portal-status-hero ${index > 0 ? "secondary" : ""}`} aria-labelledby={titleId}><span class="eyebrow">{index === 0 ? "Current status" : "Submission status"}</span>{index === 0 ? <h1 id={titleId}>{statusText}</h1> : <h2 id={titleId}>{statusText}</h2>}<div class="portal-status-meta"><div class="portal-status-copy"><strong title={submission.title}>{submission.title}</strong><br />{submission.format} · {submission.wave_decision_on ? `next decision ${submission.wave_decision_on}` : "status is current"}</div>{submission.slot ? <div class="portal-slot"><small>Schedule</small><span>{formatDay(submission.slot.day)} · {submission.slot.date} · {submission.slot.time}</span><span>{submission.slot.room}</span>{!submission.slot.is_published ? <span class="portal-slot-note">Not yet public</span> : null}</div> : <div class="portal-slot"><small>Schedule</small><span>—</span></div>}</div>{submission.slot ? <ArrivalCard slot={submission.slot} timezone={timezone} /> : null}<ParticipationActions submission={submission} onRefresh={onRefresh} /></section>;
+  return <section class={`portal-status-hero ${index > 0 ? "secondary" : ""}`} data-status-tone={submission.status_tone ?? ""} aria-labelledby={titleId}><span class="eyebrow">{index === 0 ? "Current status" : "Submission status"}</span>{index === 0 ? <h1 id={titleId}>{statusText}</h1> : <h2 id={titleId}>{statusText}</h2>}<div class="portal-status-meta"><div class="portal-status-copy"><strong title={submission.title}>{submission.title}</strong><br />{submission.format} · {submission.wave_decision_on ? `next decision ${submission.wave_decision_on}` : "status is current"}</div>{submission.slot ? <div class="portal-slot"><small>Schedule</small><span>{formatDay(submission.slot.day)} · {submission.slot.date} · {submission.slot.time}</span><span>{submission.slot.room}</span>{!submission.slot.is_published ? <span class="portal-slot-note">Not yet public</span> : null}</div> : <div class="portal-slot"><small>Schedule</small><span>—</span></div>}</div>{submission.slot ? <ArrivalCard slot={submission.slot} timezone={timezone} /> : null}<ParticipationActions submission={submission} onRefresh={onRefresh} /></section>;
 }
 
 /** A `YYYY-MM-DD` decision date, read as a calendar day rather than an instant. */
@@ -721,9 +723,7 @@ function submitterHeadline(status: string): string {
 }
 
 function submitterStatusLabel(status: string): string {
-  if (status === "waitlisted") return "Maybe";
-  if (status === "submitted") return "Submitted · awaiting review";
-  return status.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+  return portalStatusProjection("speaker", status).label;
 }
 
 function isSubmitterAwaitingReview(status: string): boolean {
