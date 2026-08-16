@@ -505,6 +505,7 @@ export async function buildAnnouncePlan(input: {
     etag: strongEtag(fingerprint, 0),
     queue_revision: Number(event.updated_at),
     selected: ids.length,
+    kind_feedback_enabled: false,
     zero_effect: plan.zero_effect,
   };
 }
