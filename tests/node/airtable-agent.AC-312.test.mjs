@@ -45,7 +45,7 @@ test("AC-312 · an agent completes connect, verify, map, and confirm through the
 
   try {
     const connect = await runCli(url, "mirror", "connect", "--base-id", "app_agent", "--airtable-token", "pat_agent_secret");
-    const mapping = await runCli(url, "mirror", "map", "--set", "submissions=tbl_submissions", "--set", "speaker_tasks=tbl_tasks", "--set", "people=tbl_people", "--airtable-token", "pat_agent_secret");
+    const mapping = await runCli(url, "mirror", "map", "--base-id", "app_agent", "--set", "submissions=tbl_submissions", "--set", "speaker_tasks=tbl_tasks", "--set", "people=tbl_people", "--airtable-token", "pat_agent_secret");
     const status = await runCli(url, "mirror", "status");
     const sync = await runCli(url, "mirror", "sync");
     const disconnect = await runCli(url, "mirror", "disconnect");
@@ -70,6 +70,7 @@ test("AC-312 · an agent completes connect, verify, map, and confirm through the
       submissions: "tbl_submissions",
       speaker_tasks: "tbl_tasks",
       people: "tbl_people",
+      base_id: "app_agent",
       token: "pat_agent_secret",
       intent: "adopt",
       continuation: "submissions",

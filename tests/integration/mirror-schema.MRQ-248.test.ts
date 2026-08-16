@@ -46,15 +46,17 @@ function actionEnvironment(fake: FakeAirtableTransport): MirrorActionEnvironment
 }
 
 function tableFor(role: MirroredTable, id: string, name = MIRROR_TABLE_SCHEMA[role].name): AirtableTable {
+  const fields = MIRROR_TABLE_SCHEMA[role].fields.map((field, index) => ({
+    id: `fld_${id}_${index}`,
+    name: field.name,
+    type: field.type,
+    ...(field.options === undefined ? {} : { options: structuredClone(field.options) }),
+  }));
   return {
     id,
     name,
-    fields: MIRROR_TABLE_SCHEMA[role].fields.map((field, index) => ({
-      id: `fld_${id}_${index}`,
-      name: field.name,
-      type: field.type,
-      ...(field.options === undefined ? {} : { options: structuredClone(field.options) }),
-    })),
+    primaryFieldId: fields[0]?.id,
+    fields,
   };
 }
 
@@ -122,14 +124,22 @@ async function verifyConnection(fake: FakeAirtableTransport, intent: "verify" | 
   return result;
 }
 
-async function mapAll(fake: FakeAirtableTransport, mapping: MirrorMappingInput, clock = clockAt()) {
+async function mapAll(
+  fake: FakeAirtableTransport,
+  mapping: MirrorMappingInput,
+  clock = clockAt(),
+  baseId = BASE_ID,
+  token = TOKEN,
+) {
   let continuation: MirroredTable | null = "submissions";
   let result: Awaited<ReturnType<typeof mapMirror>> | null = null;
   while (continuation) {
     result = await mapMirror(actionEnvironment(fake), {
       mapping,
       orgId: ORG_ID,
-      token: TOKEN,
+      baseId,
+      setByPersonId: PERSON_ID,
+      token,
       intent: "adopt",
       continuation,
       now: NOW,
@@ -158,6 +168,9 @@ test("MRQ-248 · schema keys, preferred shapes, and canonical record values are 
       expect(field.acceptedTypes.every((type) => airtableValueMatchesType(type, field.representative))).toBe(true);
     }
   }
+  const wrongPrimary = tableFor("submissions", "tbl_wrong_primary", "Submissions");
+  wrongPrimary.primaryFieldId = wrongPrimary.fields!.find((field) => field.name === "title")?.id;
+  expect(ensureMirrorSchema("submissions", wrongPrimary, "adopt").issues[0]).toMatchObject({ code: "primary_field_conflict" });
   expect(airtableValueMatchesType("checkbox", 1)).toBe(false);
   expect(airtableValueMatchesType("dateTime", NOW)).toBe(false);
   expect(airtableValueMatchesType("multipleAttachments", [{ url: "https://example.test", content_type: "text/plain" }])).toBe(false);
@@ -190,6 +203,7 @@ test("MRQ-248 · verify is advisory, fresh/default bases offer explicit provisio
   const verified = await verifyConnection(fake, "verify", undefined, clock);
   expect(verified.needsProvisioning).toBe(true);
   expect(verified.readiness.roles.map((role) => role.state)).toEqual(["missing", "missing", "missing"]);
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM mirror_credentials").first<{ count: number }>()).toMatchObject({ count: 0 });
   const provisioned = await verifyConnection(fake, "provision", undefined, clock);
   expect(provisioned.needsProvisioning).toBe(false);
   expect(fake.tables.find((table) => table.id === "tbl_table_1")).toMatchObject({ name: "Table 1", fields: [] });
@@ -203,7 +217,8 @@ test("MRQ-248 · verify is advisory, fresh/default bases offer explicit provisio
     expect.objectContaining({ role: "speaker_tasks", outcome: "created" }),
     expect.objectContaining({ role: "people", outcome: "created" }),
   ]));
-  expect(created.map((call) => call.at).every((at, index, values) => index === 0 || at - values[index - 1] >= 250)).toBe(true);
+  const metadataCalls = fake.calls.filter((call) => call.kind === "schema" || call.kind === "create_table");
+  expect(metadataCalls.map((call) => call.at).every((at, index, values) => index === 0 || at - values[index - 1] >= 250)).toBe(true);
 });
 
 test("MRQ-248 · submitted differently named IDs are authoritative and map without createTable", async () => {
@@ -224,6 +239,43 @@ test("MRQ-248 · submitted differently named IDs are authoritative and map witho
   expect(fake.calls.filter((call) => call.kind === "create_webhook")).toHaveLength(1);
 });
 
+test("MRQ-248 · verify never clears the active mapping; replacement state changes only at final adoption", async () => {
+  const currentTables = fullTables({ submissions: "tbl_current_submissions", speaker_tasks: "tbl_current_tasks", people: "tbl_current_people" });
+  const currentFake = new FakeAirtableTransport(() => NOW, { tables: currentTables });
+  await verifyConnection(currentFake);
+  await mapAll(currentFake, mappingFor(currentTables));
+
+  const replacementTables = fullTables({ submissions: "tbl_replacement_submissions", speaker_tasks: "tbl_replacement_tasks", people: "tbl_replacement_people" });
+  const replacementFake = new FakeAirtableTransport(() => NOW, { tables: replacementTables });
+  const verified = await connectMirror(actionEnvironment(replacementFake), {
+    baseId: "app_mrq248_replacement",
+    orgId: ORG_ID,
+    setByPersonId: PERSON_ID,
+    token: "pat_mrq248_replacement",
+    intent: "verify",
+    now: NOW,
+  });
+  expect(verified.ok).toBe(true);
+  expect(await env.DB.prepare("SELECT base_id FROM mirror_credentials WHERE org_id = ?").bind(ORG_ID).first()).toMatchObject({ base_id: BASE_ID });
+  expect(await env.DB.prepare("SELECT table_name, airtable_table_id FROM mirror_state ORDER BY table_name").all()).toMatchObject({
+    results: [
+      { table_name: "people", airtable_table_id: "tbl_current_people" },
+      { table_name: "speaker_tasks", airtable_table_id: "tbl_current_tasks" },
+      { table_name: "submissions", airtable_table_id: "tbl_current_submissions" },
+    ],
+  });
+
+  await mapAll(replacementFake, mappingFor(replacementTables), clockAt(), "app_mrq248_replacement", "pat_mrq248_replacement");
+  expect(await env.DB.prepare("SELECT base_id FROM mirror_credentials WHERE org_id = ?").bind(ORG_ID).first()).toMatchObject({ base_id: "app_mrq248_replacement" });
+  expect(await env.DB.prepare("SELECT table_name, airtable_table_id FROM mirror_state ORDER BY table_name").all()).toMatchObject({
+    results: [
+      { table_name: "people", airtable_table_id: "tbl_replacement_people" },
+      { table_name: "speaker_tasks", airtable_table_id: "tbl_replacement_tasks" },
+      { table_name: "submissions", airtable_table_id: "tbl_replacement_submissions" },
+    ],
+  });
+});
+
 test("MRQ-248 · adoption is resumable and retry-safe after a rate-limited fifth field call", async () => {
   const submissions = tableFor("submissions", "tbl_partial_submissions", "Organizer submissions");
   submissions.fields = [
@@ -242,6 +294,8 @@ test("MRQ-248 · adoption is resumable and retry-safe after a rate-limited fifth
   const first = await mapMirror(actionEnvironment(fake), {
     mapping,
     orgId: ORG_ID,
+    baseId: BASE_ID,
+    setByPersonId: PERSON_ID,
     token: TOKEN,
     intent: "adopt",
     continuation: "submissions",
@@ -257,6 +311,8 @@ test("MRQ-248 · adoption is resumable and retry-safe after a rate-limited fifth
   const retry = await mapMirror(actionEnvironment(fake), {
     mapping,
     orgId: ORG_ID,
+    baseId: BASE_ID,
+    setByPersonId: PERSON_ID,
     token: TOKEN,
     intent: "adopt",
     continuation: "submissions",
@@ -285,6 +341,8 @@ test("MRQ-248 · computed and incomplete single-select fields conflict before we
   const result = await mapMirror(actionEnvironment(fake), {
     mapping,
     orgId: ORG_ID,
+    baseId: BASE_ID,
+    setByPersonId: PERSON_ID,
     token: TOKEN,
     continuation: "submissions",
   });
@@ -314,6 +372,8 @@ test("MRQ-248 · schema.bases:write copy is safe, and exact-name conflicts recov
   const scopeResult = await mapMirror(actionEnvironment(scopeFake), {
     mapping: mappingFor(scopeFake.tables),
     orgId: ORG_ID,
+    baseId: BASE_ID,
+    setByPersonId: PERSON_ID,
     token: TOKEN,
     continuation: "submissions",
   });

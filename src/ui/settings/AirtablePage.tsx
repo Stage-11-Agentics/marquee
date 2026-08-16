@@ -44,6 +44,7 @@ interface MirrorProgress {
   state: "idle" | "created" | "adopted" | "conflict" | "complete";
   expected_field_count: number;
   conformant_field_count: number;
+  fields: { name: string; state: "pending" | "created" | "adopted" | "conflict" }[];
   missing_fields: string[];
   conflicts: unknown[];
 }
@@ -151,6 +152,16 @@ function mappingFromReadiness(
   return initialMapping(tables);
 }
 
+function mappingFromActions(
+  actions: readonly { role: MirroredTableName; table_id: string }[] | undefined,
+): Record<MirroredTableName, string> | null {
+  if (!actions) return null;
+  const byRole = new Map(actions.map((action) => [action.role, action.table_id]));
+  const values = TABLE_ORDER.map((role) => byRole.get(role) ?? "");
+  if (values.some((value) => !value) || new Set(values).size !== TABLE_ORDER.length) return null;
+  return Object.fromEntries(TABLE_ORDER.map((role) => [role, byRole.get(role)!])) as Record<MirroredTableName, string>;
+}
+
 function idleProgress(readiness: MirrorReadiness | null): MirrorProgress[] {
   return TABLE_ORDER.map((role) => {
     const expected = readiness?.roles.find((candidate) => candidate.role === role)?.expected_field_count ?? 0;
@@ -161,6 +172,7 @@ function idleProgress(readiness: MirrorReadiness | null): MirrorProgress[] {
       state: "idle",
       expected_field_count: expected,
       conformant_field_count: 0,
+      fields: [],
       missing_fields: [],
       conflicts: [],
     };
@@ -263,6 +275,7 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
   const [mapping, setMapping] = useState<Record<MirroredTableName, string>>({ submissions: "", speaker_tasks: "", people: "" });
   const [readiness, setReadiness] = useState<MirrorReadiness | null>(null);
   const [progress, setProgress] = useState<MirrorProgress[]>([]);
+  const [setupActive, setSetupActive] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -311,6 +324,7 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
       setReadiness(response.data.readiness);
       setMapping(mappingFromReadiness(response.data.tables, response.data.readiness));
       setProgress(response.data.progress ?? idleProgress(response.data.readiness));
+      setSetupActive(true);
       setNotice(response.data.needs_provisioning
         ? "Connection verified. Choose existing tables or create the three canonical tables."
         : "Connection verified. Review the three table choices, then turn on the mirror.");
@@ -331,12 +345,17 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
       const response = await apiFetch<{ data: MirrorSetupResponse }>(CONNECT_ROUTE, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token, base_id: baseId || status?.base_id || "", intent: "provision" }),
+        body: JSON.stringify({
+          token,
+          base_id: baseId || status?.base_id || "",
+          intent: "provision",
+          mapping,
+        }),
         route: CONNECT_ROUTE,
       });
       setTables(response.data.tables);
       setReadiness(response.data.readiness);
-      setMapping(mappingFromReadiness(response.data.tables, response.data.readiness));
+      setMapping(mappingFromActions(response.data.table_actions) ?? mappingFromReadiness(response.data.tables, response.data.readiness));
       setProgress(response.data.progress ?? idleProgress(response.data.readiness));
       setNotice("Canonical tables are ready. Review the selected IDs, then turn on the mirror.");
       record("Canonical mirror tables created or adopted");
@@ -357,7 +376,7 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
         const response = await apiFetch<{ data: MirrorSetupResponse }>(MAPPING_ROUTE, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ...mapping, token, intent: "adopt", continuation }),
+          body: JSON.stringify({ ...mapping, base_id: baseId || status?.base_id || "", token, intent: "adopt", continuation }),
           route: MAPPING_ROUTE,
         });
         setTables(response.data.tables);
@@ -365,6 +384,10 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
         setProgress(response.data.progress ?? idleProgress(response.data.readiness));
         continuation = response.data.continuation ?? null;
       }
+      setSetupActive(false);
+      setTables([]);
+      setReadiness(null);
+      setProgress([]);
       setNotice("The mirror is on. Local changes will queue for Airtable and signed Airtable edits will come back through the allowlist.");
       record("Three table mapping saved; mirror switched on");
       await loadStatus();
@@ -410,6 +433,7 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
       setTables([]);
       setReadiness(null);
       setProgress([]);
+      setSetupActive(false);
       setToken("");
       setMapping({ submissions: "", speaker_tasks: "", people: "" });
       await loadStatus();
@@ -446,7 +470,7 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
         <Chip tone={status?.configured ? "success" : "warning"}>{status?.configured ? "connected" : "not connected"}</Chip>
       </CardHeader>
       <CardBody>
-        <p class="airtable-lede">Paste an Airtable personal access token with access to this base. Marquee verifies the schema before storing an encrypted credential; the token is never shown again.</p>
+        <p class="airtable-lede">Paste an Airtable personal access token with access to this base. Marquee verifies the schema first and stores the encrypted credential only when the final table mapping turns the mirror on.</p>
         <form class="settings-fields airtable-connect-form" onSubmit={(event) => void connect(event)}>
           <label class="field"><span>Airtable personal access token</span><input type="password" value={token} onInput={(event) => setToken(event.currentTarget.value)} placeholder={status?.configured ? "Paste a replacement token to rotate" : "pat…"} autoComplete="new-password" /></label>
           <label class="field"><span>Base ID</span><input value={baseId || status?.base_id || ""} onInput={(event) => setBaseId(event.currentTarget.value)} placeholder="app…" /></label>
@@ -456,7 +480,7 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
       </CardBody>
     </section>
 
-    {status?.configured && !status.mapped && <section class="card airtable-mapping-card">
+    {setupActive && <section class="card airtable-mapping-card">
       <CardHeader title="Choose the three tables"><span class="subtle">The mapping is the on-switch</span></CardHeader>
       <CardBody>
         <p class="airtable-lede">Choose existing tables first. Marquee uses the submitted table IDs exactly; it creates canonical tables only when you explicitly ask it to.</p>
@@ -468,7 +492,7 @@ export function AirtablePage({ navigate }: { navigate: (target: string) => void 
       </CardBody>
     </section>}
 
-    {status?.configured && status.mapped && <AirtableHealthCard
+    {status?.configured && status.mapped && !setupActive && <AirtableHealthCard
       status={status}
       pending={pending}
       expiry={expiry}

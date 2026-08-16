@@ -102,13 +102,14 @@ export const COMMAND_REGISTRY = [
   },
   {
     path: ["mirror", "map"],
-    usage: "marquee mirror map --set submissions=<table-id> --set speaker_tasks=<table-id> --set people=<table-id> --airtable-token <token> [--provision]",
+    usage: "marquee mirror map --base-id <base-id> --set submissions=<table-id> --set speaker_tasks=<table-id> --set people=<table-id> --airtable-token <token> [--provision]",
     summary: "Adopt the submitted table IDs, validate one table per continuation, and turn the mirror on.",
     operations: ["mapMirrorTables"],
     skill: "airtable",
     set: ["submissions", "speaker_tasks", "people"],
     options: [
       SET_OPTION,
+      { name: "--base-id <base-id>", description: "Airtable base ID for this mapping request." },
       { name: "--airtable-token <token>", description: "Re-send the Airtable token for every schema-adoption continuation." },
       { name: "--provision", description: "Use explicit provision intent while filling fields on the submitted tables." },
     ],

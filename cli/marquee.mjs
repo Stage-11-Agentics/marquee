@@ -414,6 +414,8 @@ async function execute(command, arguments_, options, flags, client) {
       });
     }
     if (verb === "map") {
+      const baseId = option(options, "--base-id");
+      if (!baseId) usageError(`${command.usage} requires --base-id`);
       const airtableToken = option(options, "--airtable-token");
       if (!airtableToken) usageError(`${command.usage} requires --airtable-token`);
       const mapping = requireSetValues(command, options);
@@ -422,6 +424,7 @@ async function execute(command, arguments_, options, flags, client) {
       while (continuation) {
         response = await client.post("/api/v1/mirror/mapping", {
           ...mapping,
+          base_id: baseId,
           token: airtableToken,
           intent: flags.has("--provision") ? "provision" : "adopt",
           continuation,

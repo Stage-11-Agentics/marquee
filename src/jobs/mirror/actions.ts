@@ -73,6 +73,10 @@ export interface MirrorTableProgress {
   state: "idle" | "created" | "adopted" | "conflict" | "complete";
   expected_field_count: number;
   conformant_field_count: number;
+  fields: readonly {
+    name: string;
+    state: "pending" | "created" | "adopted" | "conflict";
+  }[];
   missing_fields: readonly string[];
   conflicts: readonly MirrorSchemaIssue[];
 }
@@ -206,6 +210,7 @@ interface ProviderFailureContext {
   mutation?: "createTable" | "createField" | "createWebhook";
   table?: MirroredTable;
   tableId?: string;
+  field?: string;
 }
 
 function failureForProvider(error: unknown, context: ProviderFailureContext): MirrorConnectionFailure {
@@ -223,13 +228,14 @@ function failureForProvider(error: unknown, context: ProviderFailureContext): Mi
   }
   if ((status === 401 || status === 403) && (context.mutation === "createTable" || context.mutation === "createField")) {
     const target = context.table
-      ? `${context.table}${context.tableId ? ` (${context.tableId})` : ""}`
+      ? `${context.table}${context.tableId ? ` (${context.tableId})` : ""}${context.field ? ` field “${context.field}”` : ""}`
       : "the selected Airtable table";
+    const action = context.operation === "provision" ? "provisioning" : "adopting";
     return {
       ok: false,
       field: "tables",
       code: "provider_forbidden",
-      message: `Airtable denied schema.bases:write while preparing ${target}. Grant that scope to create the declared schema, then retry.`,
+      message: `Airtable denied schema.bases:write while ${action} ${target}. Grant that scope to create the declared schema, then retry.`,
     };
   }
   return {
@@ -359,6 +365,7 @@ function progressFor(
   mapping: Partial<MirrorMappingInput>,
   operation: MirrorSchemaOperation,
   completedRole?: MirroredTable,
+  createdFields?: ReadonlyMap<MirroredTable, ReadonlySet<string>>,
 ): MirrorTableProgress[] {
   const byId = tablesById(tables);
   return MIRRORED_TABLES.map((role) => {
@@ -367,6 +374,20 @@ function progressFor(
     const inspection = table ? ensureMirrorSchema(role, table, operation) : null;
     const issues = inspection?.issues ?? [];
     const missingFields = inspection?.missingFields.map((field) => field.name) ?? [];
+    const missing = new Set(missingFields);
+    const created = createdFields?.get(role);
+    const fields = MIRROR_TABLE_SCHEMA[role].fields.map((field) => ({
+      name: field.name,
+      state: !tableId
+        ? "pending"
+        : missing.has(field.name)
+        ? "pending"
+        : issues.some((issue) => issue.field === field.name)
+          ? "conflict"
+          : created?.has(field.name)
+            ? "created"
+            : "adopted",
+    } as const));
     const state: MirrorTableProgress["state"] = !tableId
       ? "idle"
       : issues.length > 0
@@ -381,6 +402,7 @@ function progressFor(
       state,
       expected_field_count: MIRROR_FIELD_COUNTS[role],
       conformant_field_count: conformantFieldCount(role, table, operation),
+      fields,
       missing_fields: missingFields,
       conflicts: issues,
     };
@@ -409,14 +431,21 @@ function schemaFailure(
   };
 }
 
-async function persistVerifiedCredential(
+async function finalizeMirrorConnection(
   env: MirrorActionEnvironment,
-  input: { baseId: string; orgId: string; setByPersonId: string; token: string; now: number },
+  input: {
+    baseId: string;
+    orgId: string;
+    setByPersonId: string;
+    token: string;
+    webhookSecret: string;
+    webhookId: string;
+    webhookExpiresAt: number;
+    tableIds: Record<MirroredTable, string>;
+    localCounts: ReadonlyMap<MirroredTable, number>;
+    now: number;
+  },
 ): Promise<void> {
-  const existing = await env.DB.prepare(
-    "SELECT base_id FROM mirror_credentials WHERE org_id = ?",
-  ).bind(input.orgId).first<{ base_id: string }>();
-  const baseChanged = existing?.base_id !== input.baseId;
   const tokenCiphertext = await encryptMirrorSecret(input.token, env.MIRROR_CREDENTIAL_SECRET!);
   const fingerprint = await tokenFingerprint(input.token);
   const credentialId = newUlid(input.now);
@@ -424,13 +453,10 @@ async function persistVerifiedCredential(
     `INSERT INTO mirror_credentials
       (id, org_id, token_ciphertext, webhook_secret_ciphertext, token_fingerprint,
        base_id, set_at, set_by_person_id, last_verified_at, last_error, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, NULL, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
      ON CONFLICT(org_id) DO UPDATE SET
        token_ciphertext = excluded.token_ciphertext,
-       webhook_secret_ciphertext = CASE
-         WHEN mirror_credentials.base_id = excluded.base_id THEN mirror_credentials.webhook_secret_ciphertext
-         ELSE NULL
-       END,
+       webhook_secret_ciphertext = excluded.webhook_secret_ciphertext,
        token_fingerprint = excluded.token_fingerprint,
        base_id = excluded.base_id,
        set_at = excluded.set_at,
@@ -442,6 +468,7 @@ async function persistVerifiedCredential(
     credentialId,
     input.orgId,
     tokenCiphertext,
+    await encryptMirrorSecret(input.webhookSecret, env.MIRROR_CREDENTIAL_SECRET!),
     fingerprint,
     input.baseId,
     input.now,
@@ -450,14 +477,26 @@ async function persistVerifiedCredential(
     input.now,
     input.now,
   )];
-  if (baseChanged) {
-    statements.push(env.DB.prepare(
-      `UPDATE mirror_state
-          SET airtable_table_id = NULL, cursor = NULL, webhook_id = NULL,
-              webhook_expires_at = NULL, updated_at = ?
-        WHERE table_name IN ('submissions', 'speaker_tasks', 'people')`,
-    ).bind(input.now));
-  }
+  statements.push(
+    env.DB.prepare(
+      "DELETE FROM mirror_state WHERE table_name IN ('submissions', 'speaker_tasks', 'people')",
+    ),
+    ...MIRRORED_TABLES.map((tableName) => env.DB.prepare(
+      `INSERT INTO mirror_state
+        (id, table_name, airtable_table_id, cursor, webhook_id, webhook_expires_at,
+         last_sync_at, local_row_count, remote_row_count, last_error, created_at, updated_at)
+       VALUES (?, ?, ?, NULL, ?, ?, NULL, ?, 0, NULL, ?, ?)`,
+    ).bind(
+      newUlid(input.now),
+      tableName,
+      input.tableIds[tableName],
+      input.webhookId,
+      input.webhookExpiresAt,
+      input.localCounts.get(tableName) ?? 0,
+      input.now,
+      input.now,
+    )),
+  );
   await env.DB.batch(statements);
 }
 
@@ -469,13 +508,7 @@ function providerClock(options?: MirrorClockOptions): MirrorClock {
 }
 
 async function provisionTables(
-  env: MirrorActionEnvironment,
   input: {
-    baseId: string;
-    orgId: string;
-    setByPersonId: string;
-    token: string;
-    now: number;
     mapping?: Partial<MirrorMappingInput>;
     tables: readonly AirtableTable[];
     transport: AirtableTransport;
@@ -496,6 +529,7 @@ async function provisionTables(
   const selected: Partial<MirrorMappingInput> = {};
   const working = [...input.tables];
   const tableActions: MirrorTableAction[] = [];
+  const createdFields = new Map<MirroredTable, ReadonlySet<string>>();
   for (const role of MIRRORED_TABLES) {
     const submittedId = mappingValue(mapping, role);
     if (submittedId) {
@@ -514,15 +548,25 @@ async function provisionTables(
       continue;
     }
     try {
+      const declaredFields = createTableFields(role);
       const created = await input.transport.createTable({
         name: MIRROR_TABLE_SCHEMA[role].name,
-        fields: createTableFields(role),
+        fields: declaredFields,
       });
       selected[role] = created.table.id;
       tableActions.push({ role, table_id: created.table.id, outcome: "created" });
+      createdFields.set(role, new Set(declaredFields.map((field) => field.name)));
       working.push(created.table);
     } catch (error) {
-      return failureForProvider(error, { operation: "provision", mutation: "createTable", table: role });
+      const failure = failureForProvider(error, { operation: "provision", mutation: "createTable", table: role });
+      return {
+        ...failure,
+        details: {
+          ...(typeof failure.details === "object" && failure.details ? failure.details : {}),
+          progress: progressFor(working, selected, "provision", undefined, createdFields),
+          continuation: role,
+        },
+      };
     }
   }
 
@@ -538,15 +582,8 @@ async function provisionTables(
     const inspection = ensureMirrorSchema(role, tableId ? finalById.get(tableId) : undefined, "provision");
     if (!inspection.conformant) return schemaFailure(inspection, progressFor(finalTables, selected, "provision"), "provision");
   }
-  await persistVerifiedCredential(env, {
-    baseId: input.baseId,
-    orgId: input.orgId,
-    setByPersonId: input.setByPersonId,
-    token: input.token,
-    now: input.now,
-  });
   const readiness = readinessFor(finalTables);
-  const provisionProgress = progressFor(finalTables, selected, "provision").map((row) => {
+  const provisionProgress = progressFor(finalTables, selected, "provision", undefined, createdFields).map((row) => {
     const action = tableActions.find((candidate) => candidate.role === row.role);
     return action ? { ...row, state: action.outcome as "created" | "adopted" } : row;
   });
@@ -584,7 +621,6 @@ export async function connectMirror(
   }
 
   const clock = providerClock(input.clock);
-  const now = input.now ?? clock.now();
   const limiter = new MirrorTokenBucket(clock);
   const transport = providerFor(env, token, baseId, limiter);
   let tables: readonly AirtableTable[];
@@ -595,12 +631,7 @@ export async function connectMirror(
   }
   const intent = input.intent ?? "verify";
   if (intent === "provision") {
-    return provisionTables(env, {
-      baseId,
-      orgId: input.orgId,
-      setByPersonId: input.setByPersonId,
-      token,
-      now,
+    return provisionTables({
       mapping: input.mapping,
       tables,
       transport,
@@ -613,7 +644,6 @@ export async function connectMirror(
       message: "Submit the selected table IDs to the mapping step to adopt them.",
     };
   }
-  await persistVerifiedCredential(env, { baseId, orgId: input.orgId, setByPersonId: input.setByPersonId, token, now });
   const readiness = readinessFor(tables);
   return { ok: true, tables, readiness, needsProvisioning: readiness.needs_provisioning };
 }
@@ -624,6 +654,8 @@ export async function mapMirror(
     mapping: MirrorMappingInput;
     orgId: string;
     webhookUrl?: string;
+    baseId?: string;
+    setByPersonId?: string;
     now?: number;
     clock?: MirrorClockOptions;
     token?: string;
@@ -635,15 +667,23 @@ export async function mapMirror(
   if (mappingError) return mappingError;
   const selected = selectedTableIds(input.mapping)!;
   const intent = input.intent ?? "adopt";
-  const credential = await readMirrorCredential(env.DB, env, input.orgId);
-  if (!credential) return { ok: false, field: "configuration", message: "Connect Airtable before mapping its tables." };
   if (!nonEmpty(env.MIRROR_CREDENTIAL_SECRET)) {
     return { ok: false, field: "configuration", message: "The deployment is missing MIRROR_CREDENTIAL_SECRET." };
   }
   const clock = providerClock(input.clock);
   const limiter = new MirrorTokenBucket(clock);
-  const providerToken = nonEmpty(input.token) ?? credential.token;
-  const transport = providerFor(env, providerToken, credential.baseId, limiter);
+  const credential = await readMirrorCredential(env.DB, env, input.orgId);
+  const providerToken = nonEmpty(input.token) ?? credential?.token;
+  const providerBaseId = nonEmpty(input.baseId) ?? credential?.baseId;
+  const setByPersonId = nonEmpty(input.setByPersonId) ?? credential?.setByPersonId;
+  if (!providerToken || !providerBaseId || !setByPersonId) {
+    return {
+      ok: false,
+      field: "configuration",
+      message: "Resend the Airtable token and base ID to continue schema adoption; no credential is stored until the mirror is fully on.",
+    };
+  }
+  const transport = providerFor(env, providerToken, providerBaseId, limiter);
   let tables: readonly AirtableTable[];
   try {
     tables = (await transport.readBaseSchema()).tables;
@@ -667,6 +707,9 @@ export async function mapMirror(
   const currentInspection = initialInspections[currentIndex];
   let workingTables = [...tables];
   let createdField = false;
+  const createdFields = new Map<MirroredTable, ReadonlySet<string>>();
+  const currentCreatedFields = new Set<string>();
+  createdFields.set(currentRole, currentCreatedFields);
   for (const field of currentInspection.missingFields) {
     try {
       const result = await transport.createField({
@@ -674,6 +717,7 @@ export async function mapMirror(
         ...createFieldPayload(field),
       });
       createdField = true;
+      currentCreatedFields.add(field.name);
       workingTables = workingTables.map((table) => table.id === currentInspection.tableId
         ? { ...table, fields: [...table.fields ?? [], result.field] }
         : table);
@@ -683,20 +727,20 @@ export async function mapMirror(
         mutation: "createField",
         table: currentRole,
         tableId: currentInspection.tableId,
+        field: field.name,
       });
       return {
         ...failure,
         details: {
           ...(typeof failure.details === "object" && failure.details ? failure.details : {}),
-          progress: progressFor(workingTables, input.mapping, intent),
+          progress: progressFor(workingTables, input.mapping, intent, undefined, createdFields),
           continuation: currentRole,
         },
       };
     }
   }
-
   const nextRole = MIRRORED_TABLES[currentIndex + 1] ?? null;
-  const currentProgress = progressFor(workingTables, input.mapping, intent, createdField || currentInspection.conformant ? currentRole : undefined);
+  const currentProgress = progressFor(workingTables, input.mapping, intent, createdField || currentInspection.conformant ? currentRole : undefined, createdFields);
   if (nextRole) {
     const readiness = readinessFor(workingTables);
     return {
@@ -732,54 +776,30 @@ export async function mapMirror(
   if (!webhook.macSecretBase64) return { ok: false, field: "configuration", message: "Airtable did not return a webhook signature secret." };
 
   const now = input.now ?? clock.now();
-  const credentialSecret = nonEmpty(env.MIRROR_CREDENTIAL_SECRET);
-  if (!credentialSecret) return { ok: false, field: "configuration", message: "The deployment is missing MIRROR_CREDENTIAL_SECRET." };
-  const webhookCiphertext = await encryptMirrorSecret(webhook.macSecretBase64, credentialSecret);
   const states = await Promise.all(MIRRORED_TABLES.map(async (tableName) => {
     const local = await env.DB.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).first<{ count: number }>();
     return { tableName, localCount: Number(local?.count ?? 0) };
   }));
   const stateByName = new Map(states.map((state) => [state.tableName, state.localCount]));
-  const newTokenCiphertext = input.token
-    ? await encryptMirrorSecret(providerToken, credentialSecret)
-    : null;
-  const newFingerprint = input.token ? await tokenFingerprint(providerToken) : null;
-  const statements = [
-    env.DB.prepare(
-      `UPDATE mirror_credentials
-          SET webhook_secret_ciphertext = ?,
-              token_ciphertext = COALESCE(?, token_ciphertext),
-              token_fingerprint = COALESCE(?, token_fingerprint),
-              last_verified_at = ?, last_error = NULL, updated_at = ?
-        WHERE org_id = ?`,
-    ).bind(webhookCiphertext, newTokenCiphertext, newFingerprint, now, now, input.orgId),
-    env.DB.prepare(
-      "DELETE FROM mirror_state WHERE table_name IN ('submissions', 'speaker_tasks', 'people')",
-    ),
-    ...MIRRORED_TABLES.map((tableName) => env.DB.prepare(
-      `INSERT INTO mirror_state
-        (id, table_name, airtable_table_id, cursor, webhook_id, webhook_expires_at,
-         last_sync_at, local_row_count, remote_row_count, last_error, created_at, updated_at)
-       VALUES (?, ?, ?, NULL, ?, ?, NULL, ?, 0, NULL, ?, ?)`,
-    ).bind(
-      newUlid(now),
-      tableName,
-      selected[tableName],
-      webhook.id,
-      webhook.expirationTime,
-      stateByName.get(tableName) ?? 0,
-      now,
-      now,
-    )),
-  ];
-  await env.DB.batch(statements);
+  await finalizeMirrorConnection(env, {
+    baseId: providerBaseId,
+    orgId: input.orgId,
+    setByPersonId,
+    token: providerToken,
+    webhookSecret: webhook.macSecretBase64,
+    webhookId: webhook.id,
+    webhookExpiresAt: webhook.expirationTime,
+    tableIds: selected,
+    localCounts: stateByName,
+    now,
+  });
   const readiness = readinessFor(finalTables);
   return {
     ok: true,
     tables: finalTables,
     readiness,
     needsProvisioning: readiness.needs_provisioning,
-    progress: progressFor(finalTables, input.mapping, intent, currentRole),
+    progress: progressFor(finalTables, input.mapping, intent, currentRole, createdFields),
     continuation: null,
     complete: true,
     tableActions: MIRRORED_TABLES.map((role) => ({ role, table_id: selected[role], outcome: "adopted" as const })),

@@ -209,7 +209,7 @@ export const MIRROR_SINGLE_SELECT_VALUES: Readonly<Record<string, readonly strin
 };
 
 export interface MirrorSchemaIssue {
-  code: "unknown_schema" | "missing_field" | "type_conflict" | "single_select_choices" | "shape_conflict";
+  code: "unknown_schema" | "missing_field" | "type_conflict" | "single_select_choices" | "shape_conflict" | "primary_field_conflict";
   operation: MirrorSchemaOperation;
   table: MirroredTable;
   tableId: string;
@@ -295,6 +295,20 @@ export function ensureMirrorSchema(
   const byName = new Map(candidate.fields.map((field) => [field.name, field]));
   const missingFields: MirrorSchemaField[] = [];
   const issues: MirrorSchemaIssue[] = [];
+  if (candidate.primaryFieldId !== undefined) {
+    const primary = candidate.fields.find((field) => field.id === candidate.primaryFieldId);
+    if (primary?.name !== "marquee_id") {
+      issues.push({
+        code: "primary_field_conflict",
+        operation,
+        table,
+        tableId,
+        tableName,
+        field: primary?.name ?? "primary field",
+        recovery: `Airtable table “${tableName}” must use “marquee_id” as its primary field; choose a table with that primary field or create a new canonical table.`,
+      });
+    }
+  }
   for (const field of definition.fields) {
     const actual = byName.get(field.name);
     if (!actual) {

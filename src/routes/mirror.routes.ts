@@ -31,6 +31,7 @@ const mappingInput = z.object({
   people: z.string().trim().min(1),
   submissions: z.string().trim().min(1),
   speaker_tasks: z.string().trim().min(1),
+  base_id: z.string().trim().min(1).optional(),
   token: z.string().trim().min(1).optional(),
   intent: z.enum(["adopt", "provision"]).default("adopt"),
   continuation: z.enum(["submissions", "speaker_tasks", "people"]).nullable().optional(),
@@ -73,6 +74,10 @@ const progress = z.object({
   state: z.enum(["idle", "created", "adopted", "conflict", "complete"]),
   expected_field_count: z.number().int().positive(),
   conformant_field_count: z.number().int().nonnegative(),
+  fields: z.array(z.object({
+    name: z.string(),
+    state: z.enum(["pending", "created", "adopted", "conflict"]),
+  })),
   missing_fields: z.array(z.string()),
   conflicts: z.array(z.unknown()),
 });
@@ -191,7 +196,7 @@ const connect = defineApiRoute(
     path: "/api/v1/mirror/connect",
     operationId: "connectMirror",
     summary: "Connect an Airtable base",
-    description: "Verify the token and base schema before persisting an encrypted Airtable credential.",
+    description: "Verify the token and base schema without changing the current credential or mirror state; final mapping persists the on-switch.",
     tags: ["Mirror"],
     request: { body: { content: { "application/json": { schema: connectInput } } } },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
@@ -246,6 +251,8 @@ const mapping = defineApiRoute(
         speaker_tasks: body.speaker_tasks,
       } as MirrorMappingInput,
       orgId: auth.orgId,
+      baseId: body.base_id,
+      setByPersonId: await actorPersonId(context, auth),
       token: body.token,
       intent: body.intent,
       continuation: body.continuation,
@@ -254,7 +261,7 @@ const mapping = defineApiRoute(
     const status = await readMirrorStatus(context.env.DB, environment(context), auth.orgId);
     return context.json({
       data: {
-        base_id: status.baseId!,
+        base_id: status.baseId ?? body.base_id ?? "",
         mapped: status.mapped,
         tables: tableSummaries(result.tables),
         needs_provisioning: result.needsProvisioning,

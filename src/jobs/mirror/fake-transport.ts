@@ -115,6 +115,7 @@ export class FakeAirtableTransport implements AirtableTransport {
         ...structuredClone(field),
       })),
     };
+    table.primaryFieldId = table.fields?.[0]?.id;
     this.tables.push(table);
     this.calls.push({ kind: "create_table", name, fields: structuredClone(fields), tableId, at: this.clock() });
     return { table: structuredClone(table) };

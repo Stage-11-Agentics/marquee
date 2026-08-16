@@ -16,6 +16,7 @@ export interface AirtableTableField {
 export interface AirtableTable {
   id: string;
   name: string;
+  primaryFieldId?: string;
   fields?: readonly AirtableTableField[];
 }
 
@@ -155,6 +156,7 @@ interface SchemaResponse {
 interface TableResponse {
   id?: string;
   name?: string;
+  primaryFieldId?: string;
   fields?: AirtableTableField[];
 }
 
@@ -229,6 +231,7 @@ export function createFetchAirtableTransport(options: AirtableTransportOptions):
         table: {
           id: payload.id,
           name: payload.name,
+          ...(payload.primaryFieldId === undefined ? {} : { primaryFieldId: payload.primaryFieldId }),
           fields: payload.fields ?? [],
         },
       };

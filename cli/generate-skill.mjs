@@ -82,15 +82,15 @@ openssl rand -base64 32
 npx wrangler secret put MIRROR_CREDENTIAL_SECRET
 \`\`\`
 
-Use Settings → Airtable for the screen flow, or run the same API-backed flow from a terminal. The Marquee bearer token authenticates these commands; the Airtable personal access token is passed only to the connect command and is stored encrypted after schema verification:
+Use Settings → Airtable for the screen flow, or run the same API-backed flow from a terminal. The Marquee bearer token authenticates these commands; the Airtable personal access token is re-sent on every schema-adoption continuation and is stored encrypted only when the final mapping turns the mirror on:
 
 \`\`\`sh
 node cli/marquee.mjs mirror connect --base-id "$AIRTABLE_BASE_ID" --airtable-token "$AIRTABLE_TOKEN" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
-node cli/marquee.mjs mirror map --set submissions="$AIRTABLE_SUBMISSIONS_TABLE_ID" --set speaker_tasks="$AIRTABLE_TASKS_TABLE_ID" --set people="$AIRTABLE_PEOPLE_TABLE_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs mirror map --base-id "$AIRTABLE_BASE_ID" --set submissions="$AIRTABLE_SUBMISSIONS_TABLE_ID" --set speaker_tasks="$AIRTABLE_TASKS_TABLE_ID" --set people="$AIRTABLE_PEOPLE_TABLE_ID" --airtable-token "$AIRTABLE_TOKEN" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 node cli/marquee.mjs mirror status --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 \`\`\`
 
-Connect verifies the base schema before persisting anything. Mapping is the on-switch. Status reports the base link, both row counts as of the last sync, queued and stuck work, and webhook expiry; it never returns the provider token. \`mirror sync\` queues reconciliation, and \`mirror disconnect\` explicitly removes the webhook, credential, state, and pending feed:
+Connect verifies the base schema without changing the current credential or mirror state. Mapping is the on-switch: only its final three-table validation and webhook registration persist the credential and state. Status reports the base link, both row counts as of the last sync, queued and stuck work, and webhook expiry; it never returns the provider token. \`mirror sync\` queues reconciliation, and \`mirror disconnect\` explicitly removes the webhook, credential, state, and pending feed:
 
 \`\`\`sh
 node cli/marquee.mjs mirror sync --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
