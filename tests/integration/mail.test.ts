@@ -397,7 +397,7 @@ test("MRQ-247 · draft reminders are submitter-grained, per-draft, and do not re
     env.DB.prepare("INSERT INTO submissions (id, event_id, form_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES ('draft_mail_one', 'evt_mail', 'form_mail', 'abstract', 'Draft One', 'draft', 'public', 'per_mail', ?, ?), ('draft_mail_two', 'evt_mail', 'form_mail', 'abstract', 'Draft Two', 'draft', 'public', 'per_mail', ?, ?)").bind(NOW, NOW, NOW, NOW),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_draft_on_behalf', 'draft_mail_one', 'per_mail_on_behalf', 'speaker', 0, ?, ?)").bind(NOW, NOW),
     env.DB.prepare("INSERT INTO form_fields (id, form_id, key, label, type, required, position, config, created_at, updated_at) VALUES ('field_draft_title', 'form_mail', 'session_title', 'Session title', 'short_text', 1, 0, '{}', ?, ?), ('field_draft_abstract', 'form_mail', 'abstract', 'Abstract', 'long_text', 1, 1, '{}', ?, ?)").bind(NOW, NOW, NOW, NOW),
-    env.DB.prepare("INSERT INTO submission_answers (id, submission_id, field_id, value_text, created_at, updated_at) VALUES ('answer_draft_two_title', 'draft_mail_two', 'field_draft_title', 'Draft Two', ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO submission_answers (id, submission_id, field_id, value_text, created_at, updated_at) VALUES ('answer_draft_two_title', 'draft_mail_two', 'field_draft_title', 'Draft Two', ?, ?), ('answer_draft_two_abstract', 'draft_mail_two', 'field_draft_abstract', 'Complete abstract', ?, ?)").bind(NOW, NOW, NOW, NOW),
   ]);
 
   const generic = await selectPreCloseReminderCandidates(env.DB, NOW + 24 * 60 * 60_000);
@@ -409,7 +409,7 @@ test("MRQ-247 · draft reminders are submitter-grained, per-draft, and do not re
     ["draft_mail_two", "per_mail"],
   ]);
   expect(drafts[0]?.data["draft.missing_fields"]).toBe("Session title, Abstract");
-  expect(drafts[1]?.data["draft.missing_fields"]).toBe("Abstract");
+  expect(drafts[1]?.data["draft.missing_fields"]).toBe("nothing — all required fields are complete");
 
   const first = await enqueueDraftCloseReminderRows(env.DB, NOW + 24 * 60 * 60_000);
   expect(first).toHaveLength(2);
@@ -422,7 +422,7 @@ test("MRQ-247 · draft reminders are submitter-grained, per-draft, and do not re
     { entity_id: "draft_mail_two", person_id: "per_mail", text: expect.stringContaining("Draft Two") },
   ]);
   expect(outbox.results[0]?.text).toContain("Session title, Abstract");
-  expect(outbox.results[1]?.text).toContain("Abstract");
+  expect(outbox.results[1]?.text).toContain("nothing — all required fields are complete");
   const links = await env.DB.prepare(
     "SELECT person_id, purpose, redirect_to, used_at FROM magic_links WHERE event_id = 'evt_mail' AND purpose = 'draft_resume' ORDER BY redirect_to",
   ).all<{ person_id: string; purpose: string; redirect_to: string; used_at: number | null }>();

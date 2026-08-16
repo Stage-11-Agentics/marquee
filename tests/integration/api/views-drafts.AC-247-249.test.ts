@@ -148,9 +148,9 @@ describe.sequential("MRQ-34 saved views and draft attention queue", () => {
     ]);
     const revealedQueue = await request(`/api/v1/events/${EVENT_ID}/submissions?status=draft&per_page=50`);
     expect(revealedQueue.status).toBe(200);
-    expect(await json<{ total: number; data: Array<{ id: string; title: string; last_saved_at: number | null; submitter: { email: string }; missing_fields: string[] }> }>(revealedQueue)).toMatchObject({
+    expect(await json<{ total: number; data: Array<{ id: string; title: string; last_saved_at: number | null; submitter: { email: string }; missing_fields: string[]; close_label: string; form_closed: boolean; form_actionable: boolean }> }>(revealedQueue)).toMatchObject({
       total: 1,
-      data: [{ id: DRAFT_ID, title: "Secret draft content", submitter: { email: "speaker@mrq-34.example" }, missing_fields: ["Private context"] }],
+      data: [{ id: DRAFT_ID, title: "Secret draft content", submitter: { email: "speaker@mrq-34.example" }, missing_fields: ["Private context"], close_label: "No close date", form_closed: false, form_actionable: true }],
     });
 
     for (const cookie of [reviewerCookie, speakerCookie]) {

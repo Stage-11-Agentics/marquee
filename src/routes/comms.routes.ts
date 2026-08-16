@@ -19,7 +19,7 @@ import {
 } from "../jobs/mail/templates";
 import { renderAdHocMail, renderMail, type MergeData } from "../jobs/mail/render";
 import { mergeDataForRecipient, firstName } from "../jobs/mail/merge-data";
-import { mergeFieldErrorMessage, unknownMergeFieldsForCommunicationTemplate } from "../lib/mail-merge-fields";
+import { mergeFieldErrorMessage, unknownMergeFieldsForCommunication, unknownMergeFieldsForCommunicationTemplate } from "../lib/mail-merge-fields";
 import {
   DEMO_MAIL_ALLOWLIST_LIMIT,
   demoMailAllowlistForOrgEvent,

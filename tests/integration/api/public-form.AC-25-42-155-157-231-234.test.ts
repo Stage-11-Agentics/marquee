@@ -329,6 +329,8 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(resumeMail?.to_email).toBe("draft@example.com");
     expect(resumeMail?.subject).toBe("Continue your conference abstract");
     expect(resumeMail?.text).toContain(`/f/public-cfp?resume=${draft.resume_token}`);
+    expect(resumeMail?.text).toContain("This call closes on");
+    expect(resumeMail?.text).toContain("America/New_York");
 
     await env.DB.prepare(
       `INSERT INTO attachments
