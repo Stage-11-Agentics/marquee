@@ -31,6 +31,7 @@ const PARTICIPANTS_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/
 const PARTICIPANT_DELETE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/participants/{participationId}";
 const SEARCH_ROUTE = "/api/v1/events/{eventId}/search";
 const TIMELINE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/timeline";
+const NOTES_ROUTE = "/api/v1/submissions/{submissionId}/notes";
 
 export interface SubmissionScheduleDraft {
   starts_at: string;
@@ -126,7 +127,44 @@ interface RecordData {
   history_total: number;
   history_next_cursor: string | null;
   history_has_more: boolean;
-  actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_unpublish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean; can_edit_participants: boolean; can_override_scores: boolean };
+  actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_unpublish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean; can_edit_participants: boolean; can_override_scores: boolean; can_view_notes: boolean };
+}
+
+export interface SubmissionNote {
+  id: string;
+  submission_id: string;
+  body: string;
+  author_person_id: string;
+  author_name: string;
+  created_at: number;
+}
+
+export type SubmissionNotesState = "loading" | "ready" | "error";
+
+export function SubmissionNotesBody({
+  state,
+  notes,
+  error,
+  onRetry,
+}: {
+  state: SubmissionNotesState;
+  notes: SubmissionNote[];
+  error: string;
+  onRetry?: () => void;
+}): JSX.Element {
+  if (state === "loading") {
+    return <div class="record-notes-state"><span class="subtle">Loading internal notes…</span></div>;
+  }
+  if (state === "error") {
+    return <div class="record-notes-state"><span class="record-notes-error" role="alert">{error}</span>{onRetry && <Button small onClick={onRetry}>Try notes again</Button>}</div>;
+  }
+  if (notes.length === 0) {
+    return <div class="record-notes-state"><strong>No internal notes yet.</strong><small>Staff context only; never sent to speakers or outbound mail.</small></div>;
+  }
+  return <ol class="record-notes-list">{notes.map((note) => <li class="record-note" key={note.id}>
+    <div class="record-note-head"><strong>{note.author_name}</strong><span>{moment(note.created_at)}</span></div>
+    <p>{note.body}</p>
+  </li>)}</ol>;
 }
 
 /**
@@ -192,6 +230,19 @@ function isRefusal(error: unknown): boolean {
   return error instanceof MarqueeApiError
     && error.status >= 400 && error.status < 500
     && error.status !== 404 && error.status !== 401;
+}
+
+export function isMissingDecisionEmail(error: unknown): boolean {
+  return error instanceof MarqueeApiError
+    && error.code === "unprocessable"
+    && /no valid email address/i.test(error.message);
+}
+
+export function DecisionEmailRecovery({ speakerName, onOpen }: { speakerName: string; onOpen: () => void }): JSX.Element {
+  return <>
+    <span>No usable email address is on file for {speakerName}. Add one before sending this decision.</span>
+    <Button small onClick={onOpen}>Open speaker record</Button>
+  </>;
 }
 
 /**
@@ -525,7 +576,14 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantEmail, setNewParticipantEmail] = useState("");
   const [participantError, setParticipantError] = useState("");
-  const [actionError, setActionError] = useState<{ action: string; message: string } | null>(null);
+  const [actionError, setActionError] = useState<{ action: string; message: string; kind?: "missing-decision-email" } | null>(null);
+  const [notes, setNotes] = useState<SubmissionNote[]>([]);
+  const [notesState, setNotesState] = useState<SubmissionNotesState>("loading");
+  const [notesLoadError, setNotesLoadError] = useState("");
+  const [notesDraft, setNotesDraft] = useState("");
+  const [notesWriteError, setNotesWriteError] = useState("");
+  const [notesBusy, setNotesBusy] = useState(false);
+  const [notesReloadKey, setNotesReloadKey] = useState(0);
 
   // The record opens with the newest page of its timeline; older pages are
   // fetched beside it and dropped whenever the record reloads, because a write
@@ -578,6 +636,52 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
       .catch((error: unknown) => { if (!controller.signal.aborted) { setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) }); setBusy(""); } });
     return () => controller.abort();
   }, [eventId, submissionId, reloadKey]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setNotesState("loading");
+    setNotesLoadError("");
+    setNotesWriteError("");
+    setNotesDraft("");
+    apiFetch<{ notes: SubmissionNote[] }>(`/api/v1/submissions/${encodeURIComponent(submissionId)}/notes`, { signal: controller.signal, route: NOTES_ROUTE })
+      .then((payload) => {
+        if (controller.signal.aborted) return;
+        setNotes(payload.notes);
+        setNotesState("ready");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setNotesLoadError(errorSummary(error));
+        setNotesState("error");
+      });
+    return () => controller.abort();
+  }, [eventId, submissionId, notesReloadKey]);
+
+  const appendSubmissionNote = async (event: Event) => {
+    event.preventDefault();
+    const body = notesDraft.trim();
+    if (!body) {
+      setNotesWriteError("Write an internal note before saving.");
+      return;
+    }
+    setNotesBusy(true);
+    setNotesWriteError("");
+    try {
+      const response = await apiFetch<{ note: SubmissionNote }>(`/api/v1/submissions/${encodeURIComponent(submissionId)}/notes`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body }),
+        route: NOTES_ROUTE,
+      });
+      setNotes((current) => [response.note, ...current]);
+      setNotesState("ready");
+      setNotesDraft("");
+    } catch (error: unknown) {
+      setNotesWriteError(errorSummary(error));
+    } finally {
+      setNotesBusy(false);
+    }
+  };
 
   /** The create screen's picker, on the record: same search, same debounce. */
   useEffect(() => {
@@ -682,7 +786,11 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     return writeThenRefresh(name,
       () => apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}${path}`, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) }, route }).then(() => undefined),
       (error) => {
-        if (isRefusal(error)) setActionError({ action: name, message: errorSummary(error) });
+        if (isRefusal(error)) setActionError({
+          action: name,
+          message: errorSummary(error),
+          ...(name === "approve" || name === "deny") && isMissingDecisionEmail(error) ? { kind: "missing-decision-email" } : {},
+        });
         else setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) });
       });
   };
@@ -911,7 +1019,9 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     {/* An assignment refusal answers inside the evaluation panel; every other
         declined action answers here, where the record is still on screen. */}
     {actionError && !actionError.action.startsWith("assign-") && !actionError.action.startsWith("remove-")
-      && <div class="record-refusal" role="alert"><strong>That action was not applied</strong><span>{actionError.message}</span></div>}
+      && <div class="record-refusal" role="alert"><strong>That action was not applied</strong>{actionError.kind === "missing-decision-email"
+        ? <DecisionEmailRecovery speakerName={speakerParticipant?.name ?? "this speaker"} onOpen={() => navigate(speakerRecordHref)} />
+        : <span>{actionError.message}</span>}</div>}
     <div class="record-layout">
       <div class="record-main stack">
         <Card><CardBody><div class="record-summary"><div><span class="eyebrow">Program record</span><h2>{record.title}</h2><p>{record.abstract || "—"}</p></div><div class="record-summary-meta"><Chip>{statusLabel(record.status)}</Chip><span class="tabular">{record.time_in_stage}</span><span>{record.bypass_evaluation ? "Evaluation bypassed" : "Evaluation required"}</span></div></div><div class="record-meta-grid"><span><small>Origin</small><strong>{statusLabel(record.origin)}</strong></span><span><small>Submitted</small><strong>{moment(record.submitted_at)}</strong></span><span><small>Format</small><strong>{record.format?.name ?? "—"}</strong></span><span><small>Wave</small><strong>{record.wave?.name ?? "—"}</strong></span><span><small>Routing rule</small><strong>{record.routing?.name ?? "—"}</strong></span><span class="record-publication-status"><small>Public status</small><strong>{record.is_published ? "Live on the public site" : "Not yet public"}</strong><span>{record.is_published ? "Visible to attendees." : record.slot ? "Scheduled; publication is still off." : "Needs a room and time before it can go public."}</span></span></div>{record.slot && <div class="record-slot"><div class="record-slot-summary"><strong>{record.slot.day} · {record.slot.time} · {record.slot.room}</strong><span>{record.slot.building} · {record.slot.duration_min} min</span></div><div class="record-slot-publication"><Chip class="record-publication-chip" tone={record.slot.is_published ? "success" : "warning"}>{record.slot.is_published ? "Live on the public site" : "Not yet public"}</Chip><div class="record-publication-action" aria-live="polite">{publicationRequest ? <PublicationConfirmation publicationRequest={publicationRequest} hasSpeakingParticipant={hasSpeakingParticipant} busy={busy} onConfirm={() => void changePublication(publicationRequest === "publish")} onCancel={() => setPublicationRequest(null)} /> : publicationAction ? <Button type="button" small class="record-publication-trigger" variant={publicationAction === "publish" ? "primary" : "danger"} disabled={Boolean(busy)} onClick={() => setPublicationRequest(publicationAction)}>{publicationAction === "publish" ? "Publish this session" : "Remove from public site"}</Button> : <span class="record-publication-action-placeholder" aria-hidden="true" />}</div></div></div>}</CardBody></Card>
@@ -930,6 +1040,10 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         {record.actions.can_decide && <Card><CardHeader title="Record action"><span class={record.decisions.length > 0 ? "record-decision-cue" : "subtle"}>{decidedNote(record.decisions[0])}</span></CardHeader><CardBody><div class="record-action-row">{record.status !== "accepted" && <Button variant="primary" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("approve"); setFeedbackDraft(""); }}>Accept</Button>}{record.status !== "waitlisted" && <Button disabled={Boolean(busy)} onClick={() => { setDecisionRequest("maybe"); setFeedbackDraft(""); }}>Maybe</Button>}{record.status !== "rejected" && <Button variant="danger" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("deny"); setFeedbackDraft(""); }}>Reject</Button>}<span class="subtle">Feedback (optional) is saved with the decision; accepted and rejected decisions also include it in the speaker email.</span></div></CardBody></Card>}
         {decisionRequest && <div class="record-decision-dialog" role="group" aria-labelledby="record-decision-heading"><div class="record-decision-dialog-head"><div><span class="eyebrow">Confirm record action</span><h2 id="record-decision-heading">{decisionRequest === "approve" ? "Accept this submission?" : decisionRequest === "maybe" ? "Waitlist this submission?" : "Reject this submission?"}</h2></div><button type="button" aria-label="Close decision dialog" onClick={() => setDecisionRequest(null)}>×</button></div><p>{decisionRequest === "maybe" ? "A waitlist does not send a message. Any feedback you add is saved with the decision." : "Feedback is optional. If you add it, the speaker will see the same words in the decision email."}</p><label class="field"><span>Feedback for the speaker (optional)</span><textarea rows={6} value={feedbackDraft} onInput={(event) => setFeedbackDraft(event.currentTarget.value)} placeholder="Share context the speaker can act on." /></label><div class="record-action-row"><Button type="button" onClick={() => setDecisionRequest(null)}>Cancel</Button><Button type="button" variant={decisionRequest === "deny" ? "danger" : "primary"} disabled={Boolean(busy)} onClick={() => void decide()}>{busy ? "Saving…" : decisionRequest === "approve" ? "Accept and notify" : decisionRequest === "maybe" ? "Waitlist" : "Reject and notify"}</Button></div></div>}
         {record.decisions.length > 0 && <Card><CardHeader title="Decision history"><span class="tabular">{record.decisions.length}</span></CardHeader><CardBody><div class="record-decision-list">{record.decisions.map((decision) => <article class="record-decision" key={decision.id}><div class="record-decision-head"><strong>{decision.kind === "reversal" ? `Acceptance reversed · ${statusLabel(decision.resulting_status)}` : statusLabel(decision.resulting_status)}</strong><span>{decision.decided_by_name || "Conference team"} · {moment(decision.decided_at)}</span></div><p>{decision.note || decision.feedback_md || "No feedback recorded."}</p></article>)}</div></CardBody></Card>}
+        {record.actions.can_view_notes && <Card class="record-notes-card"><CardHeader title="Internal notes"><span class="subtle">Staff only · never sent</span></CardHeader><CardBody><div class="record-notes-card-body">
+          <div class="record-notes-content"><SubmissionNotesBody state={notesState} notes={notes} error={notesLoadError} onRetry={() => setNotesReloadKey((value) => value + 1)} /></div>
+          <form class="record-notes-compose" onSubmit={(event) => void appendSubmissionNote(event)}><label class="field"><span>Add internal note</span><textarea rows={3} maxLength={5000} value={notesDraft} onInput={(event) => { setNotesDraft(event.currentTarget.value); setNotesWriteError(""); }} placeholder="Keep context for the conference team." /></label><div class="record-action-row"><span class={`record-inline-message ${notesWriteError ? "error" : ""}`} role={notesWriteError ? "alert" : undefined}>{notesWriteError || " "}</span><Button small variant="primary" type="submit" disabled={notesBusy || notesState === "loading"}>{notesBusy ? "Saving…" : "Save note"}</Button></div></form>
+        </div></CardBody></Card>}
         {record.actions.can_resend_decision && <Card><CardHeader title="Decision delivery"><span class="subtle">The decision is already recorded.</span></CardHeader><CardBody>
           <p class="record-delivery-copy">If the speaker did not receive this decision, correct the address on their speaker record, then send the decision again.</p>
           {/* The address the last attempt used, named on the card. Without it
@@ -1014,7 +1128,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           {round.comparisons.length > 0 && <div class="record-round-evidence"><small>{round.comparisons.length} comparison result{round.comparisons.length === 1 ? "" : "s"}</small></div>}
           {round.reviewers.map((assignment) => <div class="record-assignment" key={assignment.assignment_id}><span><strong><ReviewerName name={reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name} kind={assignment.reviewer_kind} /></strong><small>{assignment.coverage.reviewed}/{assignment.coverage.assigned} reviewed</small></span><Button small variant="ghost" aria-label={`Remove ${reviewerNames.get(assignment.reviewer_person_id) ?? assignment.reviewer_name} from ${round.name}`} disabled={Boolean(busy)} onClick={() => void removeAssignment(round.id, assignment.assignment_id)}>Remove</Button></div>)}
           <div class="record-assignment-add"><div class="record-assignment-picker"><select aria-label={`Assign reviewer for ${round.name}`} value={selectedReviewers[round.id] ?? ""} onChange={(event) => setSelectedReviewers({ ...selectedReviewers, [round.id]: event.currentTarget.value })}><option value="">Assign reviewer…</option>{record.evaluation.reviewer_options.map((reviewer) => <option value={reviewer.id}>{reviewerNames.get(reviewer.id) ?? reviewer.name}{reviewer.kind === "agent" ? " · Agent" : ""}</option>)}</select>{record.evaluation.reviewer_options.find((reviewer) => reviewer.id === selectedReviewers[round.id])?.kind === "agent" && <Chip class="assignment-agent-chip">Agent</Chip>}</div><Button small disabled={!selectedReviewers[round.id] || Boolean(busy)} onClick={() => void assign(round.id)}>Assign</Button></div>{/* The refusal answers beside the control that asked, and the record stays on screen. */}<span class={`record-inline-message ${actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "error" : ""}`} role={actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? "alert" : undefined}>{actionError && (actionError.action === `assign-${round.id}` || actionError.action.startsWith("remove-")) ? actionError.message : " "}</span>
-        </section>) : <span class="subtle">No evaluation rounds configured</span>}</div></CardBody></Card>
+        </section>) : <div class="record-evaluation-empty"><span class="subtle">No evaluation rounds configured.</span><Button small variant="primary" onClick={() => navigate("/evaluation")}>Set up evaluation</Button></div>}</div></CardBody></Card>
       </aside>
     </div>
   </div>;
