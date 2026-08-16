@@ -19,6 +19,7 @@ export const SUBMISSION_COLUMN_REGISTRY = [
   { id: "updated", label: "Last updated", required: false },
   { id: "origin", label: "Origin", required: false },
   { id: "missing", label: "Missing fields", required: false },
+  { id: "close", label: "Form close", required: false },
 ] as const;
 
 export type SubmissionColumnId = (typeof SUBMISSION_COLUMN_REGISTRY)[number]["id"];

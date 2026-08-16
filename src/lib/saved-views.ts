@@ -61,7 +61,7 @@ export const BUILT_IN_SAVED_VIEWS: readonly BuiltInSavedView[] = [
       q: "",
       filters: { status: "draft" },
       sort: "updated",
-      columns: ["title", "speakers", "status", "updated", "missing"],
+      columns: ["title", "speakers", "status", "updated", "missing", "close"],
     }),
     created_at: null,
     updated_at: null,

@@ -100,13 +100,27 @@ test("CONTRACT · A-5 has one enumerated session writer path and cookie-safe emb
   // beside magic links — is the outcome A-5 exists to prevent. It reuses the
   // same `purpose: "login"` mint, behind `requireProgram(..., write)`, and
   // refuses any address that resolves to a program-staff seat.
+  // The fourth issuer is the draft-close reminder (MRQ-247). It is enumerated
+  // here rather than excused: the hourly scheduler mints a person-bound,
+  // submission-bound public-form capability so a speaker can return to one
+  // saved draft. It never enters the session-producing exchange — the
+  // `draft_resume` purpose is deliberately absent there — and the public-form
+  // resolver re-binds event, form, submission, and submitter from the
+  // server-minted redirect before it returns a record. Its purpose and exact
+  // redirect are positive-controlled below; this is a new credential path and
+  // must stay visible to A-5 reviewers.
   assert.deepEqual(magicMintCalls.map(({ file }) => file).sort(), [
+    "src/jobs/mail/triggers.ts",
     "src/lib/auth/instance-claim.ts",
     "src/lib/auth/instance-claim.ts",
     "src/routes/auth.routes.ts",
     "src/routes/evaluation.routes.ts",
     "src/routes/public-form.routes.ts",
   ]);
+  const mailTriggers = modules.find(({ path }) => path === "src/jobs/mail/triggers.ts");
+  assert.ok(mailTriggers);
+  assert.match(mailTriggers.source, /purpose: "draft_resume"/);
+  assert.match(mailTriggers.source, /redirectTo: draftResumeRedirectTo\(candidate\.formSlug, candidate\.submissionId\)/);
   const evaluationRoutes = modules.find(({ path }) => path === "src/routes/evaluation.routes.ts");
   assert.ok(evaluationRoutes);
   // The invitation may only mint for someone who holds no program-staff role,

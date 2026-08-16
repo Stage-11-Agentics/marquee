@@ -10,7 +10,7 @@ import type {
   SubmissionTrackListItem,
 } from "../api/submissions";
 import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-conditions";
-import { localParts } from "../lib/event-time";
+import { formatEventDateTime, localParts } from "../lib/event-time";
 import { DECISION_RECIPIENT_ROLES, participantListSql, primaryParticipantSql } from "../lib/participants";
 import { reviewAggregateColumns } from "../lib/review-aggregate";
 import { submissionReferenceSearchPatterns, submissionReferenceSearchSql } from "../lib/submission-reference";
@@ -222,6 +222,9 @@ interface SubmissionQueryRow {
   pinned_building_count: number | null;
   form_id?: string | null;
   last_saved_at?: number | null;
+  form_closes_at?: number | null;
+  form_opens_at?: number | null;
+  form_status?: "draft" | "open" | "closed" | null;
   submitter_id?: string | null;
   submitter_name?: string | null;
   submitter_email?: string | null;
@@ -316,12 +319,16 @@ function filterParts(
   return { where: clauses.join(" AND "), bindings };
 }
 
-const FROM = `FROM submissions s
+const BASE_FROM = `FROM submissions s
 JOIN events event ON event.id = s.event_id
 LEFT JOIN formats format ON format.id = s.format_id
 LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
 LEFT JOIN rooms room ON room.id = ai.room_id
 LEFT JOIN buildings building ON building.id = room.building_id`;
+
+function submissionFrom(includeFormMetadata: boolean): string {
+  return `${BASE_FROM}${includeFormMetadata ? "\nLEFT JOIN forms form ON form.id = s.form_id AND form.event_id = s.event_id" : ""}`;
+}
 
 /**
  * The notification view is deliberately a read-time join. The latest
@@ -330,7 +337,8 @@ LEFT JOIN buildings building ON building.id = room.building_id`;
  * demo-mode suppression is settled by design, so the view closes when the
  * decision has reached a terminal notification outcome.
  */
-const NOTIFICATION_FROM = `${FROM}
+function notificationFrom(includeFormMetadata: boolean): string {
+  return `${submissionFrom(includeFormMetadata)}
 LEFT JOIN submission_decisions latest_decision
   ON latest_decision.id = (
     SELECT candidate.id
@@ -351,6 +359,7 @@ LEFT JOIN outbox notification_outbox
              candidate.id DESC
     LIMIT 1
   )`;
+}
 
 // The address the decision cascade would have written to, read back through
 // the same ladder rather than a second copy of it: `no_valid_address` has to
@@ -401,6 +410,16 @@ function toItem(row: SubmissionQueryRow): SubmissionListItem {
     : row.agenda_published === 1
       ? "published"
       : "scheduled";
+  const closesAt = row.form_closes_at ?? null;
+  const formClosed = row.form_status === "closed" || (closesAt !== null && closesAt <= Date.now());
+  const formActionable = row.form_status === "open"
+    && !formClosed
+    && (row.form_opens_at === null || row.form_opens_at === undefined || row.form_opens_at <= Date.now());
+  const closeLabel = closesAt === null
+    ? row.form_status === "closed" ? "Closed — no close date — no longer actionable" : "No close date"
+    : formClosed
+      ? `Closed ${formatEventDateTime(closesAt, row.timezone)} — no longer actionable`
+      : `Closes ${formatEventDateTime(closesAt, row.timezone)}`;
   return {
     id: row.id,
     reference_code: row.reference_code,
@@ -429,6 +448,10 @@ function toItem(row: SubmissionQueryRow): SubmissionListItem {
     last_saved_at: row.last_saved_at ?? null,
     updated_at: row.updated_at,
     origin: row.origin,
+    closes_at: closesAt,
+    close_label: closeLabel,
+    form_closed: formClosed,
+    form_actionable: formActionable,
     missing_fields: [],
     submitter: row.submitter_id && row.submitter_name && row.submitter_email
       ? { id: row.submitter_id, name: row.submitter_name, email: row.submitter_email }
@@ -571,6 +594,7 @@ async function reviewQueryCapabilities(database: D1Database): Promise<ReviewQuer
 function itemSelect(
   includeVenueDisclosure: boolean,
   reviewCapabilities: ReviewQueryCapabilities,
+  includeFormMetadata: boolean,
 ): string {
   const agentReviews = reviewCapabilities.includeAgentReviews
     ? agentReviewsSelect(reviewCapabilities.includeOverrides)
@@ -616,6 +640,7 @@ function itemSelect(
   room.name AS room,
   building.name AS building,
   event.timezone,
+  ${includeFormMetadata ? "form.closes_at AS form_closes_at, form.opens_at AS form_opens_at, form.status AS form_status," : "NULL AS form_closes_at, NULL AS form_opens_at, NULL AS form_status,"}
   ai.is_published AS agenda_published, ${includeVenueDisclosure ? `(SELECT COUNT(DISTINCT pinned_building.id)
     FROM buildings pinned_building
     WHERE pinned_building.event_id = event.id
@@ -647,20 +672,24 @@ function answerPresent(value: unknown): boolean {
   return true;
 }
 
-/**
- * Derive the attention fields for drafts from the form schema and answers.
- * Applicability is intentionally delegated to the one shared evaluator; the
- * queue must never turn every required field into a missing field.
- */
-async function addDraftMetadata(
-  database: D1Database,
-  rows: SubmissionQueryRow[],
-): Promise<SubmissionListItem[]> {
-  const items = rows.map(toItem);
-  const draftRows = rows.filter((row) => row.form_id);
-  if (draftRows.length === 0) return items;
+export interface DraftMetadataInput {
+  id: string;
+  form_id: string | null;
+}
 
-  const formIds = [...new Set(draftRows.map((row) => row.form_id).filter((id): id is string => Boolean(id)))];
+/**
+ * Compute condition-aware missing fields for a whole scan in two batched
+ * reads. The mail scheduler uses this same seam as the Drafts queue so an
+ * empty missing list is meaningful rather than a reason to skip the reminder.
+ */
+export async function missingFieldsForDrafts(
+  database: D1Database,
+  rows: readonly DraftMetadataInput[],
+): Promise<Map<string, string[]>> {
+  const result = new Map(rows.map((row) => [row.id, [] as string[]]));
+  const draftRows = rows.filter((row): row is DraftMetadataInput & { form_id: string } => Boolean(row.form_id));
+  if (draftRows.length === 0) return result;
+  const formIds = [...new Set(draftRows.map((row) => row.form_id))];
   const submissionIds = draftRows.map((row) => row.id);
   const formPlaceholders = formIds.map(() => "?").join(",");
   const submissionPlaceholders = submissionIds.map(() => "?").join(",");
@@ -691,15 +720,34 @@ async function addDraftMetadata(
     current[answer.key] = answerValue(answer);
     answersBySubmission.set(answer.submission_id, current);
   }
+  for (const row of draftRows) {
+    const answerMap = answersBySubmission.get(row.id) ?? {};
+    result.set(row.id, (fieldsByForm.get(row.form_id) ?? [])
+      .filter((field) => field.required === 1 && isFieldApplicable(field, answerMap) && !answerPresent(answerMap[field.key]))
+      .map((field) => field.label));
+  }
+  return result;
+}
+
+/**
+ * Derive the attention fields for drafts from the form schema and answers.
+ * Applicability is intentionally delegated to the one shared evaluator; the
+ * queue must never turn every required field into a missing field.
+ */
+async function addDraftMetadata(
+  database: D1Database,
+  rows: SubmissionQueryRow[],
+): Promise<SubmissionListItem[]> {
+  const items = rows.map(toItem);
+  const draftRows = rows.filter((row) => row.form_id);
+  if (draftRows.length === 0) return items;
+
+  const missingBySubmission = await missingFieldsForDrafts(database, draftRows.map((row) => ({ id: row.id, form_id: row.form_id ?? null })));
   const itemById = new Map(items.map((item) => [item.id, item]));
   for (const row of draftRows) {
     const item = itemById.get(row.id);
     if (!item || !row.form_id) continue;
-    const answerMap = answersBySubmission.get(row.id) ?? {};
-    const missing = (fieldsByForm.get(row.form_id) ?? [])
-      .filter((field) => field.required === 1 && isFieldApplicable(field, answerMap) && !answerPresent(answerMap[field.key]))
-      .map((field) => field.label);
-    item.missing_fields = missing;
+    item.missing_fields = missingBySubmission.get(row.id) ?? [];
     item.last_saved_at = row.last_saved_at ?? null;
     item.submitter = row.submitter_id && row.submitter_name && row.submitter_email
       ? { id: row.submitter_id, name: row.submitter_name, email: row.submitter_email }
@@ -720,15 +768,16 @@ async function listDraftsNeedingAttention(
   const includeTemplateProvenance = filters.task === "overdue" && await hasSpeakerTaskTemplateProvenance(database);
   const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay, includeTemplateProvenance);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
+  const includeFormMetadata = await hasColumns(database, "forms", ["id", "event_id", "status", "opens_at", "closes_at"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
   const rows = await database.prepare(`
-    SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities)},
+    SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities, includeFormMetadata)},
       s.form_id,
       s.last_saved_at,
       submitter.id AS submitter_id,
       submitter.name AS submitter_name,
       submitter.email AS submitter_email
-    ${FROM}
+    ${submissionFrom(includeFormMetadata)}
     JOIN people submitter ON submitter.id = s.submitter_person_id
     WHERE ${where}
     ORDER BY ${stableOrder}
@@ -763,11 +812,12 @@ export async function listSubmissions(
   const includeTemplateProvenance = filters.task === "overdue" && await hasSpeakerTaskTemplateProvenance(database);
   const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay, includeTemplateProvenance);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
+  const includeFormMetadata = await hasColumns(database, "forms", ["id", "event_id", "status", "opens_at", "closes_at"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
-  const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${FROM} WHERE ${where}`).bind(...bindings);
+  const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${submissionFrom(includeFormMetadata)} WHERE ${where}`).bind(...bindings);
   const data = database.prepare(`
-    SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities)}
-    ${FROM}
+    SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities, includeFormMetadata)}
+    ${submissionFrom(includeFormMetadata)}
     WHERE ${where}
     ORDER BY ${stableOrder}
     LIMIT ? OFFSET ?
@@ -777,7 +827,7 @@ export async function listSubmissions(
     return { ...envelope, data: envelope.data.map(toItem) };
   }
   const published = await database
-    .prepare(`SELECT COUNT(DISTINCT CASE WHEN ai.is_published = 1 THEN s.id END) AS published_count ${FROM} WHERE ${where}`)
+    .prepare(`SELECT COUNT(DISTINCT CASE WHEN ai.is_published = 1 THEN s.id END) AS published_count ${submissionFrom(includeFormMetadata)} WHERE ${where}`)
     .bind(...bindings)
     .first<{ published_count: number }>();
   return {
@@ -799,14 +849,15 @@ async function listNotNotifiedSubmissions(
   const includeTemplateProvenance = filters.task === "overdue" && await hasSpeakerTaskTemplateProvenance(database);
   const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay, includeTemplateProvenance);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
+  const includeFormMetadata = await hasColumns(database, "forms", ["id", "event_id", "status", "opens_at", "closes_at"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
   const count = database
-    .prepare(`SELECT COUNT(DISTINCT s.id) AS total ${NOTIFICATION_FROM} WHERE ${where}`)
+    .prepare(`SELECT COUNT(DISTINCT s.id) AS total ${notificationFrom(includeFormMetadata)} WHERE ${where}`)
     .bind(...bindings);
   const data = database
     .prepare(`
-      SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities)}, ${NOTIFICATION_SELECT}
-      ${NOTIFICATION_FROM}
+      SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities, includeFormMetadata)}, ${NOTIFICATION_SELECT}
+      ${notificationFrom(includeFormMetadata)}
       WHERE ${where}
       ORDER BY ${stableOrder}
       LIMIT ? OFFSET ?
@@ -840,7 +891,7 @@ export async function summarizeNotNotifiedSubmissions(
           COUNT(CASE WHEN notification_state = 'no_valid_address' THEN 1 END) AS no_valid_address
         FROM (
           SELECT ${NOTIFICATION_STATE_SQL} AS notification_state
-          ${NOTIFICATION_FROM}
+          ${notificationFrom(false)}
           WHERE s.event_id = ? AND ${NOTIFICATION_GAP_PREDICATE}
         ) notification_summary
       `)
@@ -878,7 +929,8 @@ export async function selectSubmissionIds(
     overdueDay,
     includeTemplateProvenance,
   );
-  const source = filters.status === "not_notified" ? NOTIFICATION_FROM : FROM;
+  const includeFormMetadata = await hasColumns(database, "forms", ["id", "event_id", "status", "opens_at", "closes_at"]);
+  const source = filters.status === "not_notified" ? notificationFrom(includeFormMetadata) : submissionFrom(includeFormMetadata);
   const result = await database
     .prepare(`SELECT DISTINCT s.id ${source} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC`)
     .bind(...bindings)

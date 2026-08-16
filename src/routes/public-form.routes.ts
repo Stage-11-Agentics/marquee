@@ -14,7 +14,7 @@ import { findTemplate } from "../jobs/mail/templates";
 import { enqueueAuthMail } from "../lib/auth/auth-mail";
 import { auditStatement } from "../lib/audit";
 import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../lib/auth/draft-resume-copy";
-import { mintMagicLink, mintMagicLink as issueParticipantMagicLink } from "../lib/auth/magic-links";
+import { mintMagicLink, mintMagicLink as issueParticipantMagicLink, promoteMagicLinkToResumeCapability } from "../lib/auth/magic-links";
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
 import { verifyTurnstile } from "../lib/r2/turnstile";
 import { submitterEditability } from "../lib/submission-editing";
@@ -839,6 +839,13 @@ async function createDraft(
   });
 
   const resumeUrl = `${publicOrigin(context.req.url)}/f/${encodeURIComponent(slug)}?resume=${encodeURIComponent(resumeToken)}`;
+  const closeCopy = base.form.closes_at === null
+    ? "the call's closing date"
+    : new Intl.DateTimeFormat("en-US", {
+      dateStyle: "long",
+      timeStyle: "short",
+      timeZone: event.timezone,
+    }).format(Number(base.form.closes_at));
   const mail = await enqueueAuthMail(context.env.DB, {
     eventId: base.form.event_id,
     personId: person.id,
@@ -846,8 +853,8 @@ async function createDraft(
     templateKey: "draft_resume",
     entityId: IDEMPOTENCY_REGISTRY.draftResume(submissionId),
     subject: PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT,
-    text: `${PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT} here: ${resumeUrl}`,
-    html: `<p><a href="${resumeUrl}">${PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT}</a></p>`,
+    text: `${PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT} here: ${resumeUrl}\n\nThis call closes on ${closeCopy} (${event.timezone}).`,
+    html: `<p><a href="${resumeUrl}">${PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT}</a></p><p>This call closes on ${escapeHtml(closeCopy)} (${escapeHtml(event.timezone)}).</p>`,
     now,
   });
   await enqueueMailMessage(context.env.MAIL_QUEUE, mail);
@@ -864,6 +871,9 @@ async function autosaveDraft(
   const base = await loadPublicForm(context.env.DB, slug, { resumeToken: token });
   if (!base || !base.submission || base.submission.status !== "draft") {
     throw ApiError.forbidden("Use the resume link that belongs to this abstract, then try again.");
+  }
+  if (publicFormIsClosed(base.form)) {
+    throw ApiError.conflict("This call is closed. Answers and files can no longer be changed.");
   }
   const raw = rawAnswersFromBody(answerMap(body), body.email);
   const projected = projectPublicAnswers(base.fields, raw);
@@ -1196,6 +1206,9 @@ async function handlePublicSubmission(
         now, now, JSON.stringify(projected.projected.answers), routing.ruleId, now, now,
       ),
     ]);
+  }
+  if (base.resumeSource === "magic" && base.resumeMagicLinkId !== null) {
+    await promoteMagicLinkToResumeCapability(context.env.DB, base.resumeMagicLinkId, now);
   }
   // The first two moments of MRQ-211's submission timeline. Everything that
   // happens to a record afterwards — decided, reversed, mailed — already writes

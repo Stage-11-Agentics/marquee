@@ -26,6 +26,8 @@ export const MERGE_FIELDS = [
   "task.due_date",
   "form.closes_at",
   "auth.link",
+  "draft.resume_link",
+  "draft.missing_fields",
   "decision.feedback",
   "decision.resulting_status",
   "decision.recommendation",
@@ -40,7 +42,8 @@ export type MergeField = (typeof MERGE_FIELDS)[number];
  * that internal-only field out of both its palette and its send validator.
  */
 export const COMMUNICATION_MERGE_FIELDS = MERGE_FIELDS.filter(
-  (field): field is Exclude<MergeField, "auth.link"> => field !== "auth.link",
+  (field): field is Exclude<MergeField, "auth.link" | "draft.resume_link"> =>
+    field !== "auth.link" && field !== "draft.resume_link",
 );
 
 /** The one token grammar used by both extraction and rendering. */
@@ -68,6 +71,22 @@ export function unknownMergeFields(...sources: Array<string | null | undefined>)
 
 export function unknownMergeFieldsForCommunication(...sources: Array<string | null | undefined>): string[] {
   return mergeFieldsIn(...sources).filter((field) => !COMMUNICATION_MERGE_FIELD_SET.has(field));
+}
+
+/**
+ * The draft-close editor is a keyed automated context, not the general
+ * composer. Its private resume capability may be authored only while editing
+ * that one trigger; the palette and every other communication key retain the
+ * ordinary credential-free validator.
+ */
+export function unknownMergeFieldsForCommunicationTemplate(
+  templateKey: string | undefined,
+  ...sources: Array<string | null | undefined>
+): string[] {
+  const unknown = unknownMergeFieldsForCommunication(...sources);
+  return templateKey === "draft_close_reminder"
+    ? unknown.filter((field) => field !== "draft.resume_link")
+    : unknown;
 }
 
 export function mergeFieldErrorMessage(fields: readonly string[]): string {

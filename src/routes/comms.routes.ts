@@ -19,7 +19,7 @@ import {
 } from "../jobs/mail/templates";
 import { renderAdHocMail, renderMail, type MergeData } from "../jobs/mail/render";
 import { mergeDataForRecipient, firstName } from "../jobs/mail/merge-data";
-import { mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../lib/mail-merge-fields";
+import { mergeFieldErrorMessage, unknownMergeFieldsForCommunication, unknownMergeFieldsForCommunicationTemplate } from "../lib/mail-merge-fields";
 import {
   DEMO_MAIL_ALLOWLIST_LIMIT,
   demoMailAllowlistForOrgEvent,
@@ -218,6 +218,20 @@ function rejectUnknownMergeFields(subject: string, body: string): void {
   const unknown = unknownMergeFieldsForCommunication(subject, body);
   if (unknown.length > 0) throw ApiError.badRequest(mergeFieldErrorMessage(unknown), "template");
 }
+
+/**
+ * The draft reminder editor is the one communication authoring context that
+ * may name a resume capability. It is still excluded from the shared palette
+ * and validator; this narrow exception is keyed to the automated template so
+ * a custom or generic compose cannot turn a credential token into mail.
+ */
+function rejectUnknownMergeFieldsForTemplate(templateKey: string, subject: string, body: string): void {
+  const rejected = unknownMergeFieldsForCommunicationTemplate(templateKey, subject, body);
+  if (rejected.length > 0) throw ApiError.badRequest(mergeFieldErrorMessage(rejected), "template");
+}
+
+const DRAFT_RESUME_PREVIEW_PLACEHOLDER = "(a private resume link is generated for each speaker at send time)";
+const DRAFT_MISSING_FIELDS_PREVIEW_PLACEHOLDER = "session title and abstract";
 
 async function commsActor(
   context: Parameters<NonNullable<ApiRouteEntry["handler"]>>[0],
@@ -744,7 +758,7 @@ const createTemplate = defineApiRoute(
     requireComms(context, eventId, true);
     const body = context.req.valid("json");
     if (!(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(body.key)) throw ApiError.badRequest("unknown template key", "key");
-    rejectUnknownMergeFields(body.subject, body.body_md);
+    rejectUnknownMergeFieldsForTemplate(body.key, body.subject, body.body_md);
     const now = Date.now();
     const id = crypto.randomUUID();
     try {
@@ -796,7 +810,7 @@ const updateTemplate = defineApiRoute(
     if (!(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(nextKey)) throw ApiError.badRequest("unknown template key", "key");
     const nextSubject = body.subject ?? current.subject;
     const nextBody = body.body_md ?? current.body_md;
-    rejectUnknownMergeFields(nextSubject, nextBody);
+    rejectUnknownMergeFieldsForTemplate(nextKey, nextSubject, nextBody);
     const now = Date.now();
     if (fallbackId) {
       await context.env.DB.prepare(
@@ -851,13 +865,24 @@ const previewComms = defineApiRoute(
         role: body.role,
       }))[0]
       : undefined;
-    const data: MergeData = selected
+    let data: MergeData = selected
       ? mergeDataFor(selected)
       : { "speaker.first_name": firstName(recipient.name), "speaker.name": recipient.name, "speaker.email": recipient.email };
     if (body.template_key) {
       if (!(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(body.template_key)) throw ApiError.badRequest("unknown template key", "template_key");
       const template = await findTemplate(context.env.DB, eventId, body.template_key);
-      const rendered = renderMail(template, data);
+      if (body.template_key === "draft_close_reminder") {
+        data = {
+          ...data,
+          "submission.title": data["submission.title"] ?? "your session",
+          "form.closes_at": data["form.closes_at"] ?? "the published call close date",
+          "draft.resume_link": DRAFT_RESUME_PREVIEW_PLACEHOLDER,
+          "draft.missing_fields": DRAFT_MISSING_FIELDS_PREVIEW_PLACEHOLDER,
+        };
+      }
+      const rendered = body.subject !== undefined && body.body !== undefined
+        ? renderAdHocMail(body.subject, body.body, data)
+        : renderMail(template, data);
       return context.json({ ...rendered, to_email: recipient.email }, 200);
     }
     if (body.subject === undefined || body.body === undefined) throw ApiError.badRequest("preview requires template_key or subject and body");
@@ -893,6 +918,9 @@ const sendComms = defineApiRoute(
     }
     if (body.template_key && !(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(body.template_key)) {
       throw ApiError.badRequest("unknown template key", "template_key");
+    }
+    if (body.template_key === "draft_close_reminder") {
+      throw ApiError.badRequest("draft_close_reminder is automated and requires a draft-bound context", "template_key");
     }
     if (body.template_key) {
       const template = await findTemplate(context.env.DB, eventId, body.template_key);

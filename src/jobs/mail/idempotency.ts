@@ -49,6 +49,9 @@ export const IDEMPOTENCY_REGISTRY = Object.freeze({
   /** Pre-close reminder: one form-closing action per form and recipient. */
   preCloseReminder: (formId: Id): EntityId => entityId(formId),
 
+  /** Draft-close reminder: one reminder per draft submission and recipient. */
+  draftCloseReminder: (submissionId: Id): EntityId => entityId(submissionId),
+
   /** Overdue reminder: one overdue action per speaker-task row and recipient. */
   overdueTaskReminder: (taskId: Id): EntityId => entityId(taskId),
 

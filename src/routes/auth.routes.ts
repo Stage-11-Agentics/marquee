@@ -328,7 +328,13 @@ const exchangeMagicLink = defineApiRoute(
     const token = context.req.query("token");
     if (!token) return rejectMagicLink(context, "Missing token");
     const now = Date.now();
-    const purposes = ["login", "draft_resume", "cospeaker_profile", "task_link", "portal_invite"] as const;
+    // `draft_resume` is deliberately absent: it is a public-form-only
+    // capability, not a sign-in credential. The reminder URL goes directly to
+    // `/f/:slug?resume=...`, where the resolver binds event, form, submission,
+    // and submitter. A live mq_session does not change that public path, while
+    // this exchange refusal leaves the link unspent and cannot replace the
+    // existing session.
+    const purposes = ["login", "cospeaker_profile", "task_link", "portal_invite"] as const;
 
     // The browser may already hold a live session for a different seat. Read
     // the link first: refusing a credential after spending it strands the

@@ -8,6 +8,7 @@ import {
   type ProjectedFormAnswers,
 } from "../lib/form-conditions";
 import { sha256Hex } from "../lib/auth/random-token";
+import { readMagicLink } from "../lib/auth/magic-links";
 import { submitterEditability } from "../lib/submission-editing";
 import {
   DEFAULT_SUBMISSION_LIMIT,
@@ -50,6 +51,8 @@ export interface PublicFormRecord {
   files: PublicFormFile[];
   email: string | null;
   resumeToken: string | null;
+  resumeSource: "none" | "raw" | "magic";
+  resumeMagicLinkId: string | null;
   resumeMissed: boolean;
   lastSavedAt: number | null;
   submittedAt: number | null;
@@ -363,6 +366,69 @@ async function findResumeSubmission(
     .first<SubmissionRow>();
 }
 
+export interface PublicFormResumeResolution {
+  submission: SubmissionRow | null;
+  source: "none" | "raw" | "magic";
+  magicLinkId: string | null;
+}
+
+/** The only redirect shape minted for a draft reminder magic link. */
+export function draftResumeRedirectTo(formSlug: string, submissionId: string): string {
+  return `/f/${encodeURIComponent(formSlug)}?submission=${encodeURIComponent(submissionId)}`;
+}
+
+function submissionIdFromDraftResumeRedirect(redirectTo: string, formSlug: string): string | null {
+  if (!redirectTo.startsWith("/") || redirectTo.startsWith("//")) return null;
+  try {
+    const url = new URL(redirectTo, "https://marquee.invalid");
+    if (url.pathname !== `/f/${encodeURIComponent(formSlug)}`) return null;
+    const entries = [...url.searchParams.entries()];
+    if (entries.length !== 1 || entries[0]?.[0] !== "submission") return null;
+    const submissionId = entries[0][1];
+    return /^[A-Za-z0-9_-]+$/.test(submissionId) ? submissionId : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve a public-form capability without applying a write-state gate.
+ * Raw resume hashes win, and the reminder link is consulted only on a raw
+ * miss. Magic-link identity is bound to the event, form, submission, and its
+ * submitter before any submitted/outcome/closed record is returned.
+ */
+export async function resolvePublicFormResume(
+  db: D1Database,
+  form: Pick<FormRow, "id" | "event_id">,
+  formSlug: string,
+  resumeToken: string | undefined,
+  now = Date.now(),
+): Promise<PublicFormResumeResolution> {
+  const credential = resumeToken?.trim();
+  if (!credential) return { submission: null, source: "none", magicLinkId: null };
+
+  const rawSubmission = await findResumeSubmission(db, form.id, credential);
+  if (rawSubmission) return { submission: rawSubmission, source: "raw", magicLinkId: null };
+
+  const state = await readMagicLink(db, credential, now, { purposes: ["draft_resume"] });
+  if (state.status !== "live" || state.link.event_id !== form.event_id || state.link.person_id === null) {
+    return { submission: null, source: "none", magicLinkId: null };
+  }
+  const submissionId = submissionIdFromDraftResumeRedirect(state.link.redirect_to, formSlug);
+  if (!submissionId) return { submission: null, source: "none", magicLinkId: null };
+  const submission = await db
+    .prepare(
+      `SELECT * FROM submissions
+       WHERE id = ? AND event_id = ? AND form_id = ? AND submitter_person_id = ?
+       LIMIT 1`,
+    )
+    .bind(submissionId, form.event_id, form.id, state.link.person_id)
+    .first<SubmissionRow>();
+  return submission
+    ? { submission, source: "magic", magicLinkId: state.link.id }
+    : { submission: null, source: "none", magicLinkId: null };
+}
+
 /**
  * One sentence about the receipt, in the tense the outbox actually supports.
  * Shared so the banner and the confirmation panel cannot drift apart.
@@ -491,7 +557,10 @@ async function countForEmail(
   return Number(row?.total ?? 0);
 }
 
-export function publicFormIsClosed(form: FormRow, now = Date.now()): boolean {
+export function publicFormIsClosed(
+  form: Pick<FormRow, "status" | "opens_at" | "closes_at">,
+  now = Date.now(),
+): boolean {
   return form.status !== "open"
     || (form.opens_at !== null && Number(form.opens_at) > now)
     || (form.closes_at !== null && Number(form.closes_at) <= now);
@@ -532,7 +601,8 @@ export async function loadPublicForm(
   // all see the same field set. Filtering only at the render layer would leave
   // a required legacy field enforced by a control nobody can see.
   const fields = collectableFields(await listFormFields(db, form.id));
-  const submission = await findResumeSubmission(db, form.id, options.resumeToken);
+  const resume = await resolvePublicFormResume(db, form, slug, options.resumeToken, options.now ?? Date.now());
+  const submission = resume.submission;
   const answers = submission ? await readAnswers(db, submission.id) : {};
   const files = await readFiles(db, submission);
   const email = normalisePublicEmail(options.email) ?? emailFromAnswers(answers) ?? (submission
@@ -569,6 +639,8 @@ export async function loadPublicForm(
     files,
     email,
     resumeToken: submission ? options.resumeToken?.trim() || null : null,
+    resumeSource: resume.source,
+    resumeMagicLinkId: resume.magicLinkId,
     resumeMissed: Boolean(options.resumeToken?.trim()) && submission === null,
     lastSavedAt: asNumber(submission?.last_saved_at),
     submittedAt: asNumber(submission?.submitted_at),
@@ -773,11 +845,11 @@ export async function replaceProjectedAnswers(
 export async function findEventContext(
   db: D1Database,
   eventId: string,
-): Promise<{ id: string; org_id: string; name: string; demo_mode: number } | null> {
+): Promise<{ id: string; org_id: string; name: string; timezone: string; demo_mode: number } | null> {
   return db
-    .prepare("SELECT id, org_id, name, demo_mode FROM events WHERE id = ?")
+    .prepare("SELECT id, org_id, name, timezone, demo_mode FROM events WHERE id = ?")
     .bind(eventId)
-    .first<{ id: string; org_id: string; name: string; demo_mode: number }>();
+    .first<{ id: string; org_id: string; name: string; timezone: string; demo_mode: number }>();
 }
 
 /**

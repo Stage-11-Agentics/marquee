@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { SELF } from "cloudflare:test";
 
 import { applyMigrations, env } from "../apply-migrations";
+import { createSession } from "../../../src/lib/auth/auth-sessions";
+import { mintMagicLink } from "../../../src/lib/auth/magic-links";
+import { sha256Hex } from "../../../src/lib/auth/random-token";
+import { revokeConferenceAccessStatements } from "../../../src/lib/auth/access-revocation";
+import { draftResumeRedirectTo, loadPublicForm } from "../../../src/routes/public-form.shared";
 import {
   DRAFT_AUTOSAVE_LIMIT,
   DRAFT_AUTOSAVE_WINDOW_SECONDS,
@@ -325,6 +330,8 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(resumeMail?.to_email).toBe("draft@example.com");
     expect(resumeMail?.subject).toBe("Continue your conference abstract");
     expect(resumeMail?.text).toContain(`/f/public-cfp?resume=${draft.resume_token}`);
+    expect(resumeMail?.text).toContain("This call closes on");
+    expect(resumeMail?.text).toContain("America/New_York");
 
     await env.DB.prepare(
       `INSERT INTO attachments
@@ -374,6 +381,128 @@ describe.sequential("MRQ-15 public conference form", () => {
     }
     const limited = await request(`/api/v1/public/forms/public-cfp/drafts/${draft.resume_token}`, { method: "PATCH", body: JSON.stringify({ answers: { speaker_name: "Draft Speaker" } }) });
     expect(limited.status).toBe(429);
+  });
+
+  test("CONTRACT · MRQ-247 · reminder resolution promotes the same reusable link, preserves raw resume, and revocation kills only the promoted capability", async () => {
+    const created = await request("/api/v1/public/forms/public-cfp/drafts", {
+      method: "POST",
+      body: JSON.stringify({ turnstileToken: nextTurnstileToken(), answers: { speaker_name: "Reminder Speaker", speaker_email: "reminder@example.com" } }),
+    });
+    expect(created.status).toBe(201);
+    const draft = await json<{ resume_token: string; draft_id: string }>(created);
+    const submitter = await env.DB.prepare("SELECT submitter_person_id AS id FROM submissions WHERE id = ?").bind(draft.draft_id).first<{ id: string }>();
+    expect(submitter?.id).toBeTruthy();
+    const reminder = await mintMagicLink(env.DB, {
+      personId: submitter!.id,
+      eventId: EVENT_ID,
+      purpose: "draft_resume",
+      redirectTo: draftResumeRedirectTo("public-cfp", draft.draft_id),
+    });
+    const before = await loadPublicForm(env.DB, "public-cfp", { resumeToken: reminder.token });
+    expect(before).toMatchObject({ state: "resumed", submission: { id: draft.draft_id }, resumeSource: "magic" });
+
+    const submitted = await request("/api/v1/public/forms/public-cfp/submissions", {
+      method: "POST",
+      body: JSON.stringify({
+        resumeToken: reminder.token,
+        answers: {
+          title: "Reminder-bound submission",
+          speaker_name: "Reminder Speaker",
+          speaker_email: "reminder@example.com",
+          tracks: ["Agents"],
+          vendor_content: "No",
+        },
+      }),
+    });
+    expect(submitted.status).toBe(201);
+    const submittedBody = await json<{ confirmation: { resume_url: string } }>(submitted);
+    expect(new URL(submittedBody.confirmation.resume_url).searchParams.get("resume")).toBe(reminder.token);
+    const followed = await request(`/api/v1/public/forms/public-cfp${new URL(submittedBody.confirmation.resume_url).search}`);
+    expect((await json<{ state: string; confirmation: { resume_url: string } }>(followed))).toMatchObject({ state: "submitted", confirmation: { resume_url: expect.stringContaining("resume=") } });
+
+    const rawHashBefore = await env.DB.prepare("SELECT resume_token_hash FROM submissions WHERE id = ?").bind(draft.draft_id).first<{ resume_token_hash: string | null }>();
+    expect(rawHashBefore?.resume_token_hash).toBe(await sha256Hex(draft.resume_token));
+    const promoted = await env.DB.prepare("SELECT expires_at, used_at FROM magic_links WHERE id = ?").bind(reminder.id).first<{ expires_at: number; used_at: number | null }>();
+    expect(promoted).toEqual({ expires_at: Number.MAX_SAFE_INTEGER, used_at: null });
+
+    const magicEdit = await request(`/api/v1/public/forms/public-cfp/submissions/${encodeURIComponent(reminder.token)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ answers: { title: "Edited through reminder" } }),
+    });
+    expect(magicEdit.status).toBe(200);
+    const rawEdit = await request(`/api/v1/public/forms/public-cfp/submissions/${encodeURIComponent(draft.resume_token)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ answers: { title: "Edited through raw token" } }),
+    });
+    expect(rawEdit.status).toBe(200);
+
+    await env.DB.prepare("UPDATE submissions SET status = 'accepted' WHERE id = ?").bind(draft.draft_id).run();
+    await env.DB.prepare("UPDATE forms SET status = 'closed' WHERE id = ?").bind(FORM_ID).run();
+    const afterOriginalTtl = await loadPublicForm(env.DB, "public-cfp", {
+      resumeToken: reminder.token,
+      now: Date.now() + 31 * 24 * 60 * 60_000,
+    });
+    expect(afterOriginalTtl).toMatchObject({ state: "submitted", submission: { id: draft.draft_id }, submissionOutcome: "accepted", resumeSource: "magic" });
+
+    await env.DB.batch(revokeConferenceAccessStatements(env.DB, { personId: submitter!.id, eventId: EVENT_ID, now: Date.now() }));
+    const revoked = await loadPublicForm(env.DB, "public-cfp", { resumeToken: reminder.token });
+    expect(revoked?.submission).toBeNull();
+    expect(revoked?.resumeSource).toBe("none");
+    const rawStillWorks = await loadPublicForm(env.DB, "public-cfp", { resumeToken: draft.resume_token, now: Date.now() + 31 * 24 * 60 * 60_000 });
+    expect(rawStillWorks).toMatchObject({ state: "submitted", submission: { id: draft.draft_id }, submissionOutcome: "accepted", resumeSource: "raw" });
+  });
+
+  test("CONTRACT · MRQ-247 · the direct reminder URL resolves beside an unrelated live session without changing it", async () => {
+    const created = await request("/api/v1/public/forms/public-cfp/drafts", {
+      method: "POST",
+      body: JSON.stringify({ turnstileToken: nextTurnstileToken(), answers: { speaker_name: "Cookie Speaker", speaker_email: "cookie-speaker@example.com" } }),
+    });
+    expect(created.status).toBe(201);
+    const draft = await json<{ draft_id: string; resume_token: string }>(created);
+    const submitter = await env.DB
+      .prepare("SELECT submitter_person_id AS id FROM submissions WHERE id = ?")
+      .bind(draft.draft_id)
+      .first<{ id: string }>();
+    expect(submitter?.id).toBeTruthy();
+
+    const unrelatedPersonId = "per_public_form_live_session";
+    await env.DB.prepare(
+      `INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at)
+       VALUES (?, 'org_public_form', 'live-session@example.com', 'Live Session', 0, 'marquee', ?, ?)`,
+    ).bind(unrelatedPersonId, NOW, NOW).run();
+    const liveSession = await createSession(env.DB, {
+      personId: unrelatedPersonId,
+      roleHint: "speaker",
+      userAgent: "mrq-247-public-form-live-session",
+    });
+    const beforeSession = await env.DB
+      .prepare("SELECT id, person_id, role_hint, expires_at, revoked_at, created_at, updated_at FROM auth_sessions WHERE id = ?")
+      .bind(liveSession.id)
+      .first();
+
+    const reminder = await mintMagicLink(env.DB, {
+      personId: submitter!.id,
+      eventId: EVENT_ID,
+      purpose: "draft_resume",
+      redirectTo: draftResumeRedirectTo("public-cfp", draft.draft_id),
+      now: NOW,
+    });
+    const response = await request(`/f/public-cfp?resume=${encodeURIComponent(reminder.token)}`, {
+      headers: { cookie: `mq_session=${liveSession.id}` },
+    });
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain('"state":"resumed"');
+    expect(html).toContain(`"draft_id":"${draft.draft_id}"`);
+    expect(response.headers.get("set-cookie")).toBeNull();
+
+    const afterSession = await env.DB
+      .prepare("SELECT id, person_id, role_hint, expires_at, revoked_at, created_at, updated_at FROM auth_sessions WHERE id = ?")
+      .bind(liveSession.id)
+      .first();
+    expect(afterSession).toEqual(beforeSession);
+    const link = await env.DB.prepare("SELECT used_at FROM magic_links WHERE id = ?").bind(reminder.id).first<{ used_at: number | null }>();
+    expect(link?.used_at).toBeNull();
   });
 
   test("AC-34 + AC-37 + AC-38 + AC-39 + AC-234 · confirmation, tracks, participants, limit, close, and reopen are real states", async () => {

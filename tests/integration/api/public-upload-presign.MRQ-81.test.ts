@@ -14,6 +14,8 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { app } from "../../../src/index";
+import { mintMagicLink } from "../../../src/lib/auth/magic-links";
+import { draftResumeRedirectTo } from "../../../src/routes/public-form.shared";
 import { applyMigrations, env } from "../apply-migrations";
 
 const ORIGIN = "https://marquee.stage11.dev";
@@ -191,6 +193,40 @@ describe.sequential("MRQ-81 public upload presign", () => {
     turnstile(true);
     const wrongResume = await sign({ draftId: draft.draftId, resumeToken: "not-the-resume-token-for-this-draft" }, { fieldKey: "headshot", filename: "headshot.png", contentType: "image/png" });
     expect(wrongResume.status).toBe(403);
+  });
+
+  test("CONTRACT · MRQ-247 · public upload accepts both raw and submission-bound reminder capabilities while open", async () => {
+    const draft = await createDraft();
+    const submitter = await env.DB.prepare("SELECT submitter_person_id AS id FROM submissions WHERE id = ?").bind(draft.draftId).first<{ id: string }>();
+    const reminder = await mintMagicLink(env.DB, {
+      personId: submitter!.id,
+      eventId: EVENT_ID,
+      purpose: "draft_resume",
+      redirectTo: draftResumeRedirectTo("presign-cfp", draft.draftId),
+    });
+    expect((await sign(draft, { fieldKey: "headshot", filename: "raw.png", contentType: "image/png" })).status).toBe(200);
+    expect((await sign({ draftId: draft.draftId, resumeToken: reminder.token }, { fieldKey: "headshot", filename: "reminder.png", contentType: "image/png" })).status).toBe(200);
+  });
+
+  test("CONTRACT · MRQ-247 · closed-form uploads say the call is closed for raw and reminder capabilities", async () => {
+    const draft = await createDraft();
+    const submitter = await env.DB.prepare("SELECT submitter_person_id AS id FROM submissions WHERE id = ?").bind(draft.draftId).first<{ id: string }>();
+    const reminder = await mintMagicLink(env.DB, {
+      personId: submitter!.id,
+      eventId: EVENT_ID,
+      purpose: "draft_resume",
+      redirectTo: draftResumeRedirectTo("presign-cfp", draft.draftId),
+    });
+    await env.DB.prepare("UPDATE forms SET status = 'closed' WHERE id = ?").bind(FORM_ID).run();
+    for (const token of [draft.resumeToken, reminder.token]) {
+      const response = await sign({ draftId: draft.draftId, resumeToken: token }, { fieldKey: "headshot", filename: "closed.png", contentType: "image/png" });
+      const body = await response.text();
+      expect(response.status).toBe(403);
+      expect(body).toContain("This call is closed");
+      expect(body).toContain("files can no longer be changed");
+      expect(body).not.toContain("resume token does not match draft");
+      expect(body).not.toContain("invalid token");
+    }
   });
 
   test("CONTRACT · a submission continuing its own draft rides that draft's security check, and nothing else does", async () => {

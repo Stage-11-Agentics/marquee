@@ -12,6 +12,7 @@ import { beforeEach, expect, test } from "vitest";
 import { app } from "../../src/index";
 import { createSession } from "../../src/lib/auth/auth-sessions";
 import { mintMagicLink } from "../../src/lib/auth/magic-links";
+import { sha256Hex } from "../../src/lib/auth/random-token";
 import {
   DEMO_ORGANIZER_PERSON_ID,
   demoFixtureRows,
@@ -238,6 +239,53 @@ test("CONTRACT · MRQ-133 · a link minted through the door exchanges into a ses
   expect(response.status).toBe(302);
   expect(response.headers.get("location")).toBe("/reviewer");
   expect(response.headers.get("set-cookie")).toMatch(/mq_session=/);
+});
+
+test("CONTRACT · MRQ-247 · draft-resume capabilities cannot enter the session-producing auth exchange", async () => {
+  await seedRealInstance();
+  const minted = await mintMagicLink(env.DB, {
+    personId: PERSON,
+    eventId: OLDER_EVENT,
+    purpose: "draft_resume",
+    redirectTo: "/f/cfp?submission=draft-auth",
+  });
+  const response = await app.request(`/api/v1/auth/exchange?token=${minted.token}`, {
+    headers: { accept: "application/json" },
+  }, env);
+  expect(response.status).toBe(401);
+  expect(await response.json()).toEqual({
+    error: {
+      code: "magic_link_invalid",
+      message: "This sign-in link has expired or was already used",
+    },
+  });
+  const row = await env.DB.prepare("SELECT used_at FROM magic_links WHERE token_hash = ?").bind(await sha256Hex(minted.token)).first<{ used_at: number | null }>();
+  expect(row?.used_at).toBeNull();
+
+  const liveSession = await createSession(env.DB, {
+    personId: PERSON,
+    roleHint: "reviewer",
+    userAgent: "mrq-247-live-session",
+  });
+  const beforeSession = await env.DB
+    .prepare("SELECT id, person_id, role_hint, expires_at, revoked_at, created_at, updated_at FROM auth_sessions WHERE id = ?")
+    .bind(liveSession.id)
+    .first();
+  const liveResponse = await app.request(`/api/v1/auth/exchange?token=${minted.token}`, {
+    headers: {
+      accept: "application/json",
+      cookie: `mq_session=${liveSession.id}`,
+    },
+  }, env);
+  expect(liveResponse.status).toBe(401);
+  expect(liveResponse.headers.get("set-cookie")).toBeNull();
+  const afterSession = await env.DB
+    .prepare("SELECT id, person_id, role_hint, expires_at, revoked_at, created_at, updated_at FROM auth_sessions WHERE id = ?")
+    .bind(liveSession.id)
+    .first();
+  expect(afterSession).toEqual(beforeSession);
+  const liveRow = await env.DB.prepare("SELECT used_at FROM magic_links WHERE id = ?").bind(minted.id).first<{ used_at: number | null }>();
+  expect(liveRow?.used_at).toBeNull();
 });
 
 async function signinPage(init: RequestInit = {}, overrides: Record<string, unknown> = {}): Promise<string> {

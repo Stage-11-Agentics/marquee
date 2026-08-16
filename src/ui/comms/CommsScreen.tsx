@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { COMMUNICATION_MERGE_FIELDS, mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../../lib/mail-merge-fields";
+import { COMMUNICATION_MERGE_FIELDS, mergeFieldErrorMessage, unknownMergeFieldsForCommunicationTemplate } from "../../lib/mail-merge-fields";
+import { TRIGGER_TEMPLATE_KEYS } from "../../lib/mail-template-keys";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { idempotencyKeyForCompose } from "../shell/compose-idempotency";
@@ -76,15 +77,7 @@ interface Filters {
   task_state: "" | "open" | "done";
 }
 
-const TRIGGER_KEYS = [
-  "submission_confirmation",
-  "form_closing_reminder",
-  "added_to_submission",
-  "acceptance",
-  "rejection",
-  "task_assigned",
-  "task_overdue",
-] as const;
+const TRIGGER_KEYS = TRIGGER_TEMPLATE_KEYS;
 async function request<T>(path: string, route: string, init: RequestInit = {}): Promise<T> {
   return apiFetch<T>(path, {
     ...init,
@@ -170,7 +163,10 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
     && (subject !== activeTemplate.subject || body !== activeTemplate.body_md);
   const selectedRecipient = audience.data[0] ?? null;
   const selector = useMemo(() => selectorFor(filters), [filters]);
-  const unknownFields = useMemo(() => unknownMergeFieldsForCommunication(subject, body), [body, subject]);
+  const unknownFields = useMemo(
+    () => unknownMergeFieldsForCommunicationTemplate(mode === "template" ? selectedKey : undefined, subject, body),
+    [body, mode, selectedKey, subject],
+  );
   const mergeFieldWarning = unknownFields.length > 0 ? mergeFieldErrorMessage(unknownFields) : " ";
 
   useEffect(() => {
@@ -234,7 +230,13 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
     setPreviewError(null);
     const previewPayload = mode === "template" && !templateDirty
       ? { person_id: selectedRecipient.person_id, submission_id: selectedRecipient.submission_id, template_key: selectedKey }
-      : { person_id: selectedRecipient.person_id, submission_id: selectedRecipient.submission_id, subject, body };
+      : {
+        person_id: selectedRecipient.person_id,
+        submission_id: selectedRecipient.submission_id,
+        ...(mode === "template" ? { template_key: selectedKey } : {}),
+        subject,
+        body,
+      };
     request<Preview>(`/api/v1/events/${eventId}/comms/preview`, "/api/v1/events/{eventId}/comms/preview", {
       method: "POST",
       body: JSON.stringify(previewPayload),

@@ -7,10 +7,10 @@ import { listCommsAudience, listCommsRecipientsForSubmissionIds } from "../../sr
 import { processMailOutbox, runMailSchedule, type MailProvider } from "../../src/jobs/mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../../src/jobs/mail/idempotency";
 import { enqueueOutbox, enqueuePublicFormConfirmation, enqueueSmokeHarnessMail, buildIdempotencyKey } from "../../src/jobs/mail/outbox";
-import { isMailScheduleCron, selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "../../src/jobs/mail/schedule";
+import { isMailScheduleCron, selectDraftCloseReminderCandidates, selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "../../src/jobs/mail/schedule";
 import { mergeDataForRecipient } from "../../src/jobs/mail/merge-data";
-import { enqueueBulkReminder, enqueuePreCloseReminders, enqueueTrigger } from "../../src/jobs/mail/triggers";
-import { findTemplate, renderStoredTemplate, TRIGGER_TEMPLATE_KEYS } from "../../src/jobs/mail/templates";
+import { enqueueBulkReminder, enqueueDraftCloseReminderRows, enqueuePreCloseReminders, enqueueTrigger } from "../../src/jobs/mail/triggers";
+import { COMMUNICATION_TEMPLATE_KEYS, findTemplate, renderStoredTemplate, TRIGGER_TEMPLATE_KEYS } from "../../src/jobs/mail/templates";
 import { renderMail } from "../../src/jobs/mail/render";
 import { dueAtFromDateInput } from "../../src/lib/task-due";
 import { applyMigrations, env } from "./apply-migrations";
@@ -36,13 +36,16 @@ afterEach(async () => {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM email_templates WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM outbox WHERE event_id = 'evt_mail'"),
+    env.DB.prepare("DELETE FROM magic_links WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM event_settings WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM audit_log WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM speaker_tasks WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM task_templates WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM submission_tracks WHERE submission_id IN (SELECT id FROM submissions WHERE event_id = 'evt_mail')"),
     env.DB.prepare("DELETE FROM participations WHERE submission_id IN (SELECT id FROM submissions WHERE event_id = 'evt_mail')"),
+    env.DB.prepare("DELETE FROM submission_answers WHERE submission_id IN (SELECT id FROM submissions WHERE event_id = 'evt_mail')"),
     env.DB.prepare("DELETE FROM submissions WHERE event_id = 'evt_mail'"),
+    env.DB.prepare("DELETE FROM form_fields WHERE form_id IN (SELECT id FROM forms WHERE event_id = 'evt_mail')"),
     env.DB.prepare("DELETE FROM forms WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM formats WHERE event_id = 'evt_mail'"),
     env.DB.prepare("DELETE FROM tracks WHERE event_id = 'evt_mail'"),
@@ -318,7 +321,7 @@ test("AC-93 · preview does not resolve a person outside the requested event", a
   expect(await response.json()).not.toHaveProperty("to_email");
 });
 
-test("AC-125 · G3 · all seven automated triggers plus bulk are suppressed before delivery in demo mode", async () => {
+test("AC-125 · G3 · all automated triggers plus bulk are suppressed before delivery in demo mode", async () => {
   const ids: string[] = [];
   for (const [index, templateKey] of TRIGGER_TEMPLATE_KEYS.entries()) {
     const result = await enqueueTrigger({
@@ -345,9 +348,9 @@ test("AC-125 · G3 · all seven automated triggers plus bulk are suppressed befo
   });
   ids.push(...bulk.map((row) => row.id));
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbox").first<{ n: number }>();
-  expect(count?.n).toBe(8);
+  expect(count?.n).toBe(ids.length);
   const fake = provider();
-  expect(await processMailOutbox(env.DB, env, ids, { provider: fake, now: NOW, sleep: async () => undefined })).toEqual({ sent: 0, suppressed: 8, failed: 0 });
+  expect(await processMailOutbox(env.DB, env, ids, { provider: fake, now: NOW, sleep: async () => undefined })).toEqual({ sent: 0, suppressed: ids.length, failed: 0 });
   expect(fake.batches).toHaveLength(0);
   expect(fake.singles).toHaveLength(0);
   const statusRows = await env.DB.prepare(
@@ -357,7 +360,7 @@ test("AC-125 · G3 · all seven automated triggers plus bulk are suppressed befo
     status: "suppressed",
     send_policy: "demo_safe",
     suppressed_reason: "demo_mode_not_allowlisted",
-    count: 8,
+    count: ids.length,
   }]);
   console.log("MRQ-45 demo matrix: outbox_rows=" + (count?.n ?? 0) + " suppressed=" + (statusRows.results[0]?.count ?? 0) + " sent=0 provider_batches=" + fake.batches.length + " provider_singles=" + fake.singles.length);
 });
@@ -386,6 +389,54 @@ test("AC-127 · the pre-close schedule fires at the configured offset and not be
   expect(await enqueuePreCloseReminders(env.DB, NOW + 23 * 60 * 60_000)).toBe(0);
   expect(await enqueuePreCloseReminders(env.DB, NOW + 24 * 60 * 60_000)).toBe(1);
   expect(await enqueuePreCloseReminders(env.DB, NOW + 25 * 60 * 60_000)).toBe(0);
+});
+
+test("CONTRACT · MRQ-247 · draft reminders are submitter-grained, per-draft, and do not require missing fields", async () => {
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail_on_behalf', 'org_mail', 'on-behalf@example.com', 'Grace Hopper', ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO submissions (id, event_id, form_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES ('draft_mail_one', 'evt_mail', 'form_mail', 'abstract', 'Draft One', 'draft', 'public', 'per_mail', ?, ?), ('draft_mail_two', 'evt_mail', 'form_mail', 'abstract', 'Draft Two', 'draft', 'public', 'per_mail', ?, ?)").bind(NOW, NOW, NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_draft_on_behalf', 'draft_mail_one', 'per_mail_on_behalf', 'speaker', 0, ?, ?)").bind(NOW, NOW),
+    env.DB.prepare("INSERT INTO form_fields (id, form_id, key, label, type, required, position, config, created_at, updated_at) VALUES ('field_draft_title', 'form_mail', 'session_title', 'Session title', 'short_text', 1, 0, '{}', ?, ?), ('field_draft_abstract', 'form_mail', 'abstract', 'Abstract', 'long_text', 1, 1, '{}', ?, ?)").bind(NOW, NOW, NOW, NOW),
+    env.DB.prepare("INSERT INTO submission_answers (id, submission_id, field_id, value_text, created_at, updated_at) VALUES ('answer_draft_two_title', 'draft_mail_two', 'field_draft_title', 'Draft Two', ?, ?), ('answer_draft_two_abstract', 'draft_mail_two', 'field_draft_abstract', 'Complete abstract', ?, ?)").bind(NOW, NOW, NOW, NOW),
+  ]);
+
+  const generic = await selectPreCloseReminderCandidates(env.DB, NOW + 24 * 60 * 60_000);
+  expect(generic.map((candidate) => candidate.personId)).toEqual(["per_mail_on_behalf"]);
+
+  const drafts = await selectDraftCloseReminderCandidates(env.DB, NOW + 24 * 60 * 60_000);
+  expect(drafts.map((candidate) => [candidate.submissionId, candidate.personId])).toEqual([
+    ["draft_mail_one", "per_mail"],
+    ["draft_mail_two", "per_mail"],
+  ]);
+  expect(drafts[0]?.data["draft.missing_fields"]).toBe("Session title, Abstract");
+  expect(drafts[1]?.data["draft.missing_fields"]).toBe("nothing — all required fields are complete");
+
+  const first = await enqueueDraftCloseReminderRows(env.DB, NOW + 24 * 60 * 60_000);
+  expect(first).toHaveLength(2);
+  expect(first.every((row) => row.inserted)).toBe(true);
+  const outbox = await env.DB.prepare(
+    "SELECT entity_id, person_id, text FROM outbox WHERE template_key = 'draft_close_reminder' ORDER BY entity_id",
+  ).all<{ entity_id: string; person_id: string; text: string }>();
+  expect(outbox.results).toEqual([
+    { entity_id: "draft_mail_one", person_id: "per_mail", text: expect.stringContaining("Draft One") },
+    { entity_id: "draft_mail_two", person_id: "per_mail", text: expect.stringContaining("Draft Two") },
+  ]);
+  expect(outbox.results[0]?.text).toContain("Session title, Abstract");
+  expect(outbox.results[1]?.text).toContain("nothing — all required fields are complete");
+  const links = await env.DB.prepare(
+    "SELECT person_id, purpose, redirect_to, used_at FROM magic_links WHERE event_id = 'evt_mail' AND purpose = 'draft_resume' ORDER BY redirect_to",
+  ).all<{ person_id: string; purpose: string; redirect_to: string; used_at: number | null }>();
+  expect(links.results).toHaveLength(2);
+  expect(links.results.every((link) => link.person_id === "per_mail" && link.purpose === "draft_resume" && link.used_at === null)).toBe(true);
+  expect(links.results.map((link) => link.redirect_to)).toEqual([
+    "/f/cfp?submission=draft_mail_one",
+    "/f/cfp?submission=draft_mail_two",
+  ]);
+
+  const second = await enqueueDraftCloseReminderRows(env.DB, NOW + 25 * 60 * 60_000);
+  expect(second).toHaveLength(2);
+  expect(second.every((row) => !row.inserted)).toBe(true);
+  expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE template_key = 'draft_close_reminder'").first<{ total: number }>()).toEqual({ total: 2 });
 });
 
 test("CONTRACT · MRQ-201 · overdue mail waits for the conference-local due day to end", async () => {
@@ -587,6 +638,110 @@ test("AC-130 · one real recipient's rendered preview is available before queuei
   expect(preview.text).toContain("Ada");
 });
 
+test("CONTRACT · MRQ-247 · draft reminder preview uses honest placeholders without exposing a raw token", async () => {
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "draft-preview" });
+  const response = await app.request(
+    "/api/v1/events/evt_mail/comms/preview",
+    {
+      method: "POST",
+      headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
+      body: JSON.stringify({ person_id: "per_mail", submission_id: "sub_mail", role: "speaker", template_key: "draft_close_reminder" }),
+    },
+    env,
+    { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext,
+  );
+  expect(response.status).toBe(200);
+  const rendered = await response.json<{ text: string; html: string }>();
+  expect(rendered.text).toContain("(a private resume link is generated for each speaker at send time)");
+  expect(rendered.text).toContain("session title and abstract");
+  expect(rendered.text).not.toContain("{{draft.resume_link}}");
+  expect(rendered.text).not.toContain("{{draft.missing_fields}}");
+  expect(rendered.html).not.toContain("{{draft.resume_link}}");
+  expect(rendered.html).not.toContain("{{draft.missing_fields}}");
+});
+
+test("CONTRACT · MRQ-247 · draft resume merge fields round-trip only in the keyed editor and never in manual or bulk sends", async () => {
+  const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "draft-editor" });
+  const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+  const headers = { cookie: `mq_session=${session.id}`, "content-type": "application/json" };
+  const createdResponse = await app.request(
+    "/api/v1/events/evt_mail/templates",
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        key: "draft_close_reminder",
+        name: "Draft close reminder",
+        subject: "Finish {{submission.title}}",
+        body_md: "Resume {{draft.resume_link}}; still needed: {{draft.missing_fields}}",
+        enabled: true,
+      }),
+    },
+    env,
+    requestContext,
+  );
+  expect(createdResponse.status).toBe(201);
+  const created = await createdResponse.json<{ id: string; body_md: string }>();
+  expect(created.body_md).toContain("{{draft.resume_link}}");
+
+  const updatedResponse = await app.request(
+    `/api/v1/events/evt_mail/templates/${created.id}`,
+    { method: "PATCH", headers, body: JSON.stringify({ body_md: "Updated {{draft.resume_link}} and {{draft.missing_fields}}" }) },
+    env,
+    requestContext,
+  );
+  expect(updatedResponse.status).toBe(200);
+  expect((await updatedResponse.json<{ body_md: string }>()).body_md).toBe("Updated {{draft.resume_link}} and {{draft.missing_fields}}");
+
+  for (const key of ["custom", "reminder_generic"]) {
+    const rejected = await app.request(
+      "/api/v1/events/evt_mail/templates",
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ key, name: key, subject: "No credential", body_md: "{{draft.resume_link}}", enabled: true }),
+      },
+      env,
+      requestContext,
+    );
+    expect(rejected.status).toBe(400);
+    expect(await rejected.text()).toContain("draft.resume_link");
+  }
+
+  const adHoc = await app.request(
+    "/api/v1/events/evt_mail/comms/send",
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ selector: { submission_ids: ["sub_mail"], person_ids: ["per_mail"], role: "speaker" }, subject: "No credential", body: "{{draft.resume_link}}" }),
+    },
+    env,
+    requestContext,
+  );
+  expect(adHoc.status).toBe(400);
+  expect(await adHoc.text()).toContain("draft.resume_link");
+
+  const bulkTemplate = await app.request(
+    "/api/v1/events/evt_mail/comms/send",
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ selector: { submission_ids: ["sub_mail"], person_ids: ["per_mail"], role: "speaker" }, template_key: "draft_close_reminder" }),
+    },
+    env,
+    requestContext,
+  );
+  expect(bulkTemplate.status).toBe(400);
+  expect(await bulkTemplate.text()).toContain("draft-bound");
+  await expect(enqueueBulkReminder({
+    db: env.DB,
+    eventId: "evt_mail",
+    templateKey: "draft_close_reminder",
+    recipients: [{ entityId: IDEMPOTENCY_REGISTRY.customRecipient("sub_mail"), personId: "per_mail", toEmail: "speaker@example.com" }],
+  })).rejects.toThrow("draft-bound scheduler context");
+  expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE event_id = 'evt_mail'").first<{ total: number }>()).toEqual({ total: 0 });
+});
+
 test("AC-129 · AC-131 · every selected recipient gets its own rendered, inspectable outbox row", async () => {
   await env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail_2', 'org_mail', 'second@example.com', 'Grace Hopper', ?, ?)").bind(NOW, NOW).run();
   const result = await enqueueBulkReminder({
@@ -666,7 +821,7 @@ test("AC-126 · the manifest route exposes authenticated template storage throug
   const response = await app.request("/api/v1/events/evt_mail/templates", { headers: { cookie: `mq_session=${session.id}` } }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
   expect(response.status).toBe(200);
   const body = await response.json<{ data: Array<{ id: string; key: string; enabled: number }> }>();
-  expect(body.data).toHaveLength(9);
+  expect(body.data).toHaveLength(COMMUNICATION_TEMPLATE_KEYS.length);
   expect(body.data.map((template) => template.key)).toEqual(expect.arrayContaining([...TRIGGER_TEMPLATE_KEYS]));
   const rejectedAuthTemplate = await app.request("/api/v1/events/evt_mail/templates", {
     method: "POST",

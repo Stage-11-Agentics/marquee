@@ -129,6 +129,27 @@ export function mintPortalMagicLink(db: D1Database, input: PortalMagicLinkInput)
   return mintLink(db, { ...input, purpose: input.purpose ?? "portal_invite" });
 }
 
+/**
+ * A draft reminder becomes the canonical long-lived resume capability only
+ * after the holder submits through it. The same row remains reusable and
+ * revocable; promotion never changes its token hash or `used_at` state.
+ */
+export async function promoteMagicLinkToResumeCapability(
+  db: D1Database,
+  linkId: Id,
+  now = Date.now(),
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE magic_links
+       SET expires_at = ?, updated_at = ?
+       WHERE id = ? AND purpose = 'draft_resume' AND used_at IS NULL`,
+    )
+    .bind(Number.MAX_SAFE_INTEGER, now, linkId)
+    .run();
+  return (result.meta.changes ?? 0) === 1;
+}
+
 type MagicLinkOptions = {
   purposes?: readonly MagicLinkPurpose[];
   /** Invitations are credentials that may be reopened until they expire. */

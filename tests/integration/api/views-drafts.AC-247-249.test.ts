@@ -121,12 +121,18 @@ describe.sequential("MRQ-34 saved views and draft attention queue", () => {
 
   test("AC-248 · the fixed registry round-trips every column while Title remains mandatory", async () => {
     expect(SUBMISSION_COLUMN_REGISTRY.map((column) => [column.id, column.label])).toEqual([
-      ["type", "Type"], ["id", "ID"], ["title", "Title"], ["speakers", "Speakers"], ["status", "Status"], ["notified", "Notified"], ["tracks", "Tracks"], ["score", "Weighted score"], ["submitted", "Submitted"], ["updated", "Last updated"], ["origin", "Origin"], ["missing", "Missing fields"],
+      ["type", "Type"], ["id", "ID"], ["title", "Title"], ["speakers", "Speakers"], ["status", "Status"], ["notified", "Notified"], ["tracks", "Tracks"], ["score", "Weighted score"], ["submitted", "Submitted"], ["updated", "Last updated"], ["origin", "Origin"], ["missing", "Missing fields"], ["close", "Form close"],
     ]);
     const response = await request(`/api/v1/events/${EVENT_ID}/views`, { method: "POST", body: JSON.stringify({ name: "Every column", columns: SUBMISSION_COLUMN_REGISTRY.map((column) => column.id).reverse(), sort: "title" }) });
     expect(response.status).toBe(201);
     const created = await json<{ config: { columns: string[] } }>(response);
     expect(created.config.columns).toEqual(SUBMISSION_COLUMN_REGISTRY.map((column) => column.id).reverse());
+    const olderViewResponse = await request(`/api/v1/events/${EVENT_ID}/views`, {
+      method: "POST",
+      body: JSON.stringify({ name: "Older saved view", columns: ["title", "missing"], sort: "updated" }),
+    });
+    expect(olderViewResponse.status).toBe(201);
+    expect((await json<{ config: { columns: string[] } }>(olderViewResponse)).config.columns).toEqual(["title", "missing"]);
     const mandatoryResponse = await request(`/api/v1/events/${EVENT_ID}/views/all-submissions`, { method: "PATCH", body: JSON.stringify({}) });
     expect(mandatoryResponse.status).toBe(409);
   });
@@ -142,9 +148,9 @@ describe.sequential("MRQ-34 saved views and draft attention queue", () => {
     ]);
     const revealedQueue = await request(`/api/v1/events/${EVENT_ID}/submissions?status=draft&per_page=50`);
     expect(revealedQueue.status).toBe(200);
-    expect(await json<{ total: number; data: Array<{ id: string; title: string; last_saved_at: number | null; submitter: { email: string }; missing_fields: string[] }> }>(revealedQueue)).toMatchObject({
+    expect(await json<{ total: number; data: Array<{ id: string; title: string; last_saved_at: number | null; submitter: { email: string }; missing_fields: string[]; close_label: string; form_closed: boolean; form_actionable: boolean }> }>(revealedQueue)).toMatchObject({
       total: 1,
-      data: [{ id: DRAFT_ID, title: "Secret draft content", submitter: { email: "speaker@mrq-34.example" }, missing_fields: ["Private context"] }],
+      data: [{ id: DRAFT_ID, title: "Secret draft content", submitter: { email: "speaker@mrq-34.example" }, missing_fields: ["Private context"], close_label: "No close date", form_closed: false, form_actionable: true }],
     });
 
     for (const cookie of [reviewerCookie, speakerCookie]) {

@@ -414,14 +414,14 @@ const EXPECTED_PLACEHOLDER_SITES = [
   },
   {
     file: "src/routes/submissions.queries.ts",
-    owner: "addDraftMetadata",
+    owner: "missingFieldsForDrafts",
     binding: "formPlaceholders",
     expression: 'formIds.map(() => "?")',
     classification: "outside named bulk families; unbounded form IDs are read before draft pagination; routed observation",
   },
   {
     file: "src/routes/submissions.queries.ts",
-    owner: "addDraftMetadata",
+    owner: "missingFieldsForDrafts",
     binding: "submissionPlaceholders",
     expression: 'submissionIds.map(() => "?")',
     classification: "outside named bulk families; unbounded rows are enriched before pagination; candidate D1-cap read; routed observation",

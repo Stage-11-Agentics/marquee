@@ -33,7 +33,7 @@ import { checkUploadRateLimits, rateLimitHeaders } from "../lib/r2/rate-limit";
 import { isMediaHost, serveInlineImageObject, serveMediaObject } from "../lib/r2/serve";
 import { verifyTurnstile } from "../lib/r2/turnstile";
 import { verifyAndComplete } from "../lib/r2/complete";
-import { publicTurnstileExempt } from "./public-form.shared";
+import { publicFormIsClosed, publicTurnstileExempt, resolvePublicFormResume } from "./public-form.shared";
 import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "../lib/participants";
 
 export interface UploadsEnv {
@@ -238,17 +238,42 @@ async function handlePublicSign(context: Context<ApiEnv>) {
   }
 
   const draft = await env.DB.prepare(
-    `SELECT id, event_id, status, resume_token_hash FROM submissions WHERE id = ?1`,
+    `SELECT draft.id, draft.event_id, draft.form_id, draft.status, draft.resume_token_hash,
+            form.slug AS form_slug, form.status AS form_status, form.opens_at, form.closes_at
+       FROM submissions draft
+       JOIN forms form ON form.id = draft.form_id AND form.event_id = draft.event_id
+      WHERE draft.id = ?1`,
   )
     .bind(draftId)
-    .first<{ id: string; event_id: string; status: string; resume_token_hash: string | null }>();
+    .first<{
+      id: string;
+      event_id: string;
+      form_id: string;
+      status: string;
+      resume_token_hash: string | null;
+      form_slug: string;
+      form_status: "open" | "closed";
+      opens_at: number | null;
+      closes_at: number | null;
+    }>();
 
-  if (!draft || draft.status !== "draft" || !draft.resume_token_hash) {
+  if (!draft) {
     return uploadError(context, "not_found", "draft not found");
   }
-  const suppliedHash = await sha256Hex(resumeToken);
-  if (suppliedHash !== draft.resume_token_hash) {
+  const resolution = await resolvePublicFormResume(
+    env.DB,
+    { id: draft.form_id, event_id: draft.event_id },
+    draft.form_slug,
+    resumeToken,
+  );
+  if (!resolution.submission || resolution.submission.id !== draft.id) {
     return uploadError(context, "forbidden", "resume token does not match draft");
+  }
+  if (publicFormIsClosed({ status: draft.form_status, opens_at: draft.opens_at, closes_at: draft.closes_at })) {
+    return uploadError(context, "forbidden", "This call is closed and files can no longer be changed.");
+  }
+  if (draft.status !== "draft") {
+    return uploadError(context, "forbidden", "This draft is no longer editable.");
   }
 
   /**
