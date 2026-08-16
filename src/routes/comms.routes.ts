@@ -964,7 +964,9 @@ const sendComms = defineApiRoute(
       db: context.env.DB,
       scope: await eventOperationScope(context.env.DB, eventId),
       route: "events.comms.send",
-      idempotencyKey: context.req.header("Idempotency-Key"),
+      // Ad-hoc copy identity belongs to the mail-layer registry; request operations
+      // retain keyed replay for templated no-op receipts.
+      idempotencyKey: hasAdHoc ? undefined : context.req.header("Idempotency-Key"),
       requestId,
       actorKind: actor.kind,
       actorPersonId: actor.personId,

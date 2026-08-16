@@ -368,10 +368,8 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
       body: JSON.stringify(body),
     }, ownerCookie);
     expect(repeated.status).toBe(202);
-    expect(await repeated.json()).toMatchObject({ selected: 1, queued: 1, duplicate: 0 });
+    expect(await repeated.json()).toMatchObject({ selected: 1, queued: 0, duplicate: 1 });
 
-    // The same compose can be retried with its durable key, while a new
-    // nudge with no key is a new send even when the recipient and copy match.
     const newNudge = await request(`/api/v1/events/${EVENT_ID}/comms/send`, {
       method: "POST",
       body: JSON.stringify(body),
