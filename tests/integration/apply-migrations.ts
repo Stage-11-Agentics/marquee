@@ -39,6 +39,7 @@ import participantFanoutMigrationSql from "../../migrations/0028_participant_fan
 import submissionNotesMigrationSql from "../../migrations/0029_submission_notes.sql?raw";
 import submissionReferenceCodesMigrationSql from "../../migrations/0030_submission_reference_codes.sql?raw";
 import submissionCapacityMigrationSql from "../../migrations/0031_submission_capacity.sql?raw";
+import calendarBatchPartsMigrationSql from "../../migrations/0032_calendar_batch_parts.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -94,13 +95,31 @@ export async function applyMigrations(): Promise<void> {
     const calendarTruthApplied = await env.DB.prepare(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'calendar_cancellations'",
     ).first();
-    await env.DB.batch(WIPE_ORDER.map((table) => env.DB.prepare(`DELETE FROM ${table}`)));
+    const calendarBatchPartsApplied = await env.DB.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'outbox_calendar_parts'",
+    ).first();
+    const existingWipeTables = await env.DB.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${WIPE_ORDER.map(() => "?").join(", ")})`,
+    )
+      .bind(...WIPE_ORDER)
+      .all<{ name: string }>();
+    const existingWipeTableNames = new Set(existingWipeTables.results.map(({ name }) => name));
+    await env.DB.batch(
+      WIPE_ORDER.filter((table) => existingWipeTableNames.has(table)).map((table) =>
+        env.DB.prepare(`DELETE FROM ${table}`),
+      ),
+    );
     if (calendarTruthApplied) {
       // WIPE_ORDER already clears both calendar tables for test isolation.
       // Production reset deliberately preserves the ledger through its null
       // DELETE_PLANS entry; this helper is intentionally a different path.
     } else {
       for (const statement of splitStatements(calendarTruthMigrationSql)) {
+        await env.DB.prepare(`${statement};`).run();
+      }
+    }
+    if (!calendarBatchPartsApplied) {
+      for (const statement of splitStatements(calendarBatchPartsMigrationSql)) {
         await env.DB.prepare(`${statement};`).run();
       }
     }
@@ -144,6 +163,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(submissionNotesMigrationSql),
     ...splitStatements(submissionReferenceCodesMigrationSql),
     ...splitStatements(submissionCapacityMigrationSql),
+    ...splitStatements(calendarBatchPartsMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

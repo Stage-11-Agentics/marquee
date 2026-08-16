@@ -792,6 +792,18 @@ export interface CalendarCancellationRow {
   updated_at: EpochMilliseconds;
 }
 
+/** One one-VEVENT attachment in a `calendar_batch_request` outbox row. */
+export interface OutboxCalendarPartRow extends MutableRecord {
+  content_type: string;
+  filename: string;
+  ics_body: string;
+  ics_uid: string;
+  outbox_id: Id;
+  part_index: number;
+  sequence: number;
+  submission_id: Id;
+}
+
 export interface MirrorOutboxRow extends MutableRecord {
   attempts: number;
   drained_at: EpochMilliseconds | null;
@@ -983,6 +995,7 @@ export const CORE_TABLE_NAMES = [
   "form_admins",
   "email_templates",
   "outbox",
+  "outbox_calendar_parts",
   "routing_rules",
   "submissions",
   "submission_answers",
@@ -1033,7 +1046,7 @@ export const CORE_TABLE_NAMES = [
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 65 as const;
+export const CORE_TABLE_COUNT = 66 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -1051,7 +1064,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 65>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 66>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -1088,6 +1101,7 @@ export const CORE_TABLES = {
   mirror_state: "mirror_state",
   organizations: "organizations",
   outbox: "outbox",
+  outbox_calendar_parts: "outbox_calendar_parts",
   participations: "participations",
   people: "people",
   person_events: "person_events",
@@ -1156,6 +1170,7 @@ export interface CoreTableRows {
   mirror_state: MirrorStateRow;
   organizations: OrganizationRow;
   outbox: OutboxRow;
+  outbox_calendar_parts: OutboxCalendarPartRow;
   participations: ParticipationRow;
   people: PersonRow;
   person_events: PersonEventRow;
@@ -1235,6 +1250,7 @@ interface CoreDefaultColumns {
   mirror_state: "local_row_count" | "remote_row_count";
   organizations: never;
   outbox: "send_policy" | "status";
+  outbox_calendar_parts: never;
   participations: "confirmation_status";
   people: "custom_fields" | "is_demo" | "last_write_source" | "social_links";
   person_events: never;
@@ -1310,6 +1326,7 @@ export type FormFieldInsert = CoreInsert<"form_fields">;
 export type FormAdminInsert = CoreInsert<"form_admins">;
 export type EmailTemplateInsert = CoreInsert<"email_templates">;
 export type OutboxInsert = CoreInsert<"outbox">;
+export type OutboxCalendarPartInsert = CoreInsert<"outbox_calendar_parts">;
 export type RoutingRuleInsert = CoreInsert<"routing_rules">;
 export type SubmissionInsert = CoreInsert<"submissions">;
 export type SubmissionAnswerInsert = CoreInsert<"submission_answers">;

@@ -1,5 +1,5 @@
 import { ApiError } from "../api/errors";
-import { assertCasUpdated, compareAndSwapResource, requireIfMatch, strongEtag } from "../api/concurrency";
+import { assertCasUpdated, compareAndSwapResourceBatch, requireIfMatch, strongEtag } from "../api/concurrency";
 import {
   MAX_BATCH_PUBLISH_IDS,
   SCHEDULABLE_STATUS_OPTIONS,
@@ -122,6 +122,38 @@ const conflictSchema = z.object({
   label: z.literal("Transit").optional(),
 });
 
+const calendarDebtItemSchema = z.object({
+  kind: z.enum(["first", "update"]),
+  location: z.string(),
+  previous_location: z.string().nullable(),
+  previous_starts_at: z.number().int().nullable(),
+  sequence: z.number().int().nonnegative().nullable(),
+  starts_at: z.number().int(),
+  submission_id: z.string(),
+  title: z.string(),
+  uid: z.string(),
+});
+
+const calendarDebtSchema = z.object({
+  blocked: z.array(z.object({
+    email: z.string(),
+    person_id: z.string(),
+    person_name: z.string(),
+    reason: z.enum(["missing email", "invalid email"]),
+    submission_ids: z.array(z.string()),
+  })),
+  current_count: z.number().int().nonnegative(),
+  first_invite_count: z.number().int().nonnegative(),
+  no_op: z.boolean(),
+  speakers: z.array(z.object({
+    email: z.string(),
+    items: z.array(calendarDebtItemSchema),
+    name: z.string(),
+    person_id: z.string(),
+  })),
+  unsent_update_count: z.number().int().nonnegative(),
+});
+
 const agendaSnapshotSchema = z.object({
   event: z.object({
     id: z.string(),
@@ -156,6 +188,7 @@ const agendaSnapshotSchema = z.object({
     })),
     public_agenda_url: z.string(),
   }),
+  calendar: calendarDebtSchema,
   schedulable_statuses: z.array(z.enum(SCHEDULABLE_STATUS_OPTIONS)),
   rooms: z.array(roomSchema),
   formats: z.array(formatSchema),
@@ -482,28 +515,60 @@ const updateAgendaItem = defineApiRoute(
         throw ApiError.unprocessable(error instanceof Error ? error.message : "Duration is not allowed", "duration_min");
       }
     }
-    const outcome = await compareAndSwapResource({
+    const actor = await publicationActor(context);
+    const now = Date.now();
+    const beforeSlot = {
+      starts_at: current.starts_at,
+      duration_min: current.duration_min,
+      room_id: current.room_id,
+      track_id: current.track_id,
+    };
+    const afterSlot = {
+      starts_at: body.starts_at ?? current.starts_at,
+      duration_min: duration ?? current.duration_min,
+      room_id: body.room_id ?? current.room_id,
+      track_id: body.track_id !== undefined ? body.track_id : current.track_id,
+    };
+    const outcome = await compareAndSwapResourceBatch({
+      db: context.env.DB,
       expected,
-      now: Date.now(),
-      prepareWrite: ({ expectedUpdatedAt, nextUpdatedAt }) => context.env.DB.prepare(`
-        UPDATE agenda_items
-        SET starts_at = COALESCE(?, starts_at),
-            duration_min = COALESCE(?, duration_min),
-            room_id = COALESCE(?, room_id),
-            track_id = CASE WHEN ? THEN ? ELSE track_id END,
-            updated_at = ?
-        WHERE id = ? AND event_id = ? AND updated_at = ?
-      `).bind(
-        body.starts_at ?? null,
-        duration ?? null,
-        body.room_id ?? null,
-        body.track_id !== undefined ? 1 : 0,
-        body.track_id ?? null,
-        nextUpdatedAt,
-        itemId,
-        eventId,
-        expectedUpdatedAt,
-      ),
+      now,
+      prepareWrite: ({ expectedUpdatedAt, nextUpdatedAt }) => [
+        context.env.DB.prepare(`
+          UPDATE agenda_items
+          SET starts_at = COALESCE(?, starts_at),
+              duration_min = COALESCE(?, duration_min),
+              room_id = COALESCE(?, room_id),
+              track_id = CASE WHEN ? THEN ? ELSE track_id END,
+              updated_at = ?
+          WHERE id = ? AND event_id = ? AND updated_at = ?
+        `).bind(
+          body.starts_at ?? null,
+          duration ?? null,
+          body.room_id ?? null,
+          body.track_id !== undefined ? 1 : 0,
+          body.track_id ?? null,
+          nextUpdatedAt,
+          itemId,
+          eventId,
+          expectedUpdatedAt,
+        ),
+        auditStatementFromSelect(context.env.DB, {
+          eventId,
+          actorKind: actor.kind,
+          actorPersonId: actor.personId,
+          action: "agenda_item_updated",
+          entityType: "agenda_item",
+          entityId: itemId,
+          before: beforeSlot,
+          after: afterSlot,
+          now,
+          requestId: actor.requestId,
+        }, `
+          FROM agenda_items item
+          WHERE item.id = ? AND item.event_id = ? AND item.updated_at = ?
+        `, itemId, eventId, nextUpdatedAt),
+      ],
       readCurrent: () => readAgendaItemVersion(context.env.DB, eventId, itemId),
       versionOf: (item) => ({ id: item.id, updatedAt: item.updated_at }),
     });

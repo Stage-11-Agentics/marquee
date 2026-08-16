@@ -86,6 +86,15 @@ export const IDEMPOTENCY_REGISTRY = Object.freeze({
   /** Calendar REQUEST: one UID revision. The snapshot and UID own the recipient grain. */
   calendarRequest: (uid: Id, sequence: number): EntityId => entityId(`${uid}:${sequence}`),
 
+  /** One speaker batch: the sorted covered UID/sequence set is the retry grain. */
+  calendarBatch: (personId: Id, revisions: readonly { uid: Id; sequence: number }[]): EntityId => {
+    const sorted = [...revisions]
+      .map((revision) => `${revision.uid}:${revision.sequence}`)
+      .sort()
+      .join(",");
+    return entityId(`${personId}:${sorted}`);
+  },
+
   /**
    * Calendar CANCEL: one durable uid:sequence intent. The template key is the
    * method discriminator; retries reuse this exact entity id and provider key

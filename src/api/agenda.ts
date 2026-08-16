@@ -54,6 +54,42 @@ export interface AgendaPublication {
   public_agenda_url: string;
 }
 
+export interface AgendaCalendarDebtItem {
+  kind: "first" | "update";
+  location: string;
+  previous_location: string | null;
+  previous_starts_at: number | null;
+  sequence: number | null;
+  starts_at: number;
+  submission_id: string;
+  title: string;
+  uid: string;
+}
+
+export interface AgendaCalendarBlockedRecipient {
+  email: string;
+  person_id: string;
+  person_name: string;
+  reason: "missing email" | "invalid email";
+  submission_ids: string[];
+}
+
+export interface AgendaCalendarSpeaker {
+  email: string;
+  items: AgendaCalendarDebtItem[];
+  name: string;
+  person_id: string;
+}
+
+export interface AgendaCalendarDebt {
+  blocked: AgendaCalendarBlockedRecipient[];
+  current_count: number;
+  first_invite_count: number;
+  no_op: boolean;
+  speakers: AgendaCalendarSpeaker[];
+  unsent_update_count: number;
+}
+
 export interface AgendaBuilding {
   id: string;
   name: string;
@@ -149,6 +185,8 @@ export interface AgendaSnapshot {
     outside_window_session_count: number;
   };
   publication: AgendaPublication;
+  /** Older in-memory fixtures omit this; the production API always supplies it. */
+  calendar?: AgendaCalendarDebt;
   venue?: AgendaVenueDisclosure;
   schedulable_statuses: SchedulableStatus[];
   rooms: AgendaRoom[];

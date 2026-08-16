@@ -13,12 +13,15 @@ import {
   type CalendarEventInput,
   type CalendarMailMaterial,
 } from "./ics";
+import { claimCalendarSequence } from "./sequence";
 
 const DEFAULT_ORIGIN = "https://marquee.stage11.dev";
 const DEFAULT_ORGANIZER_EMAIL = "marquee@stage11.systems";
 const DEFAULT_ORGANIZER_NAME = "Marquee";
 
-interface CalendarSessionRow {
+export const CALENDAR_DEFAULT_ORIGIN = DEFAULT_ORIGIN;
+
+export interface CalendarSessionRow {
   abstract: string | null;
   building_name: string | null;
   duration_min: number;
@@ -35,7 +38,7 @@ interface CalendarSessionRow {
   title: string;
 }
 
-interface CalendarRecipientRow {
+export interface CalendarRecipientRow {
   email: string;
   name: string;
   person_id: Id;
@@ -131,7 +134,7 @@ function originFor(value: string | undefined): string {
   return (value ?? DEFAULT_ORIGIN).replace(/\/+$/, "");
 }
 
-function validEmail(value: unknown): value is string {
+export function validEmail(value: unknown): value is string {
   return typeof value === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) && !/[\r\n]/.test(value);
 }
 
@@ -201,7 +204,7 @@ export function parseCalendarRequestSnapshot(value: string | null): CalendarRequ
   }
 }
 
-function snapshotJson(snapshot: CalendarRequestSnapshot): string {
+export function snapshotJson(snapshot: CalendarRequestSnapshot): string {
   // Keep this object literal ordered and stable: it is the byte source for
   // every retry and the next schedule-update ticket's staleness comparison.
   return JSON.stringify({
@@ -262,7 +265,7 @@ async function recipientsFor(db: D1Database, submissionId: Id): Promise<Calendar
   return rows.results.filter((row) => validEmail(row.email));
 }
 
-function snapshotFor(
+export function snapshotFor(
   session: CalendarSessionRow,
   recipient: CalendarRecipientRow,
   origin: string,
@@ -284,7 +287,7 @@ function snapshotFor(
   };
 }
 
-function eventInputFromSnapshot(
+export function eventInputFromSnapshot(
   snapshot: CalendarRequestSnapshot,
   input: {
     dtstamp: number;
@@ -368,48 +371,11 @@ async function ledgerFor(db: D1Database, uid: string): Promise<CalendarSequenceL
   return db.prepare("SELECT last_sequence FROM calendar_sequence_ledger WHERE uid = ?").bind(uid).first<CalendarSequenceLedgerRow>();
 }
 
-function nextSequence(current: number | null, ledger: CalendarSequenceLedgerRow | null): number {
+function cancellationSequenceCandidate(current: number, ledger: CalendarSequenceLedgerRow | null): number {
   return Math.max(current === null ? 0 : current + 1, ledger ? ledger.last_sequence + 1 : 0);
 }
 
-function ledgerStatement(db: D1Database, uid: string, sequence: number, now: number): D1PreparedStatement {
-  return db.prepare(
-    `INSERT INTO calendar_sequence_ledger (uid, last_sequence, updated_at)
-     VALUES (?, ?, ?)
-     ON CONFLICT(uid) DO UPDATE SET
-       last_sequence = MAX(calendar_sequence_ledger.last_sequence, excluded.last_sequence),
-       updated_at = excluded.updated_at`,
-  ).bind(uid, sequence, now);
-}
-
-function ledgerStatements(
-  db: D1Database,
-  uid: string,
-  sequence: number,
-  now: number,
-  guard: CalendarCancellationGuard | undefined,
-  submissionId: Id,
-): D1PreparedStatement[] {
-  if (!guard?.agendaItemId || guard.expectedUpdatedAt === undefined) {
-    return [ledgerStatement(db, uid, sequence, now)];
-  }
-  const guarded = guardExistsSql(guard);
-  const existsBindings = guarded.bindings.map((binding, index) => index === 1 ? submissionId : binding);
-  return [
-    db.prepare(
-      `INSERT OR IGNORE INTO calendar_sequence_ledger (uid, last_sequence, updated_at)
-       SELECT ?, ?, ?
-       WHERE 1 = 1${guarded.sql}`,
-    ).bind(uid, sequence, now, ...existsBindings),
-    db.prepare(
-      `UPDATE calendar_sequence_ledger
-       SET last_sequence = MAX(last_sequence, ?), updated_at = ?
-       WHERE uid = ?${guarded.sql}`,
-    ).bind(sequence, now, uid, ...existsBindings),
-  ];
-}
-
-/** Update the invite and high-water in one D1 batch after the idempotent outbox admission. */
+/** Update the invite in one D1 batch after the idempotent outbox admission and sequence claim. */
 async function recordRequest(input: {
   current: CalendarInviteRow | null;
   db: D1Database;
@@ -421,42 +387,55 @@ async function recordRequest(input: {
   uid: string;
   organizerEmail: string;
 }): Promise<void> {
-  const inviteStatement = input.current
-    ? input.db.prepare(
+  const statements = input.current
+    ? [input.db.prepare(
       `UPDATE calendar_invites
        SET sequence = ?, last_method = 'REQUEST', last_sent_at = ?, status = 'active',
            request_snapshot = ?, updated_at = ?
-       WHERE id = ?`,
+       WHERE id = ? AND sequence <= ?`,
     ).bind(
       input.sequence,
       input.now,
       snapshotJson(input.snapshot),
       input.now,
       input.current.id,
-    )
-    : input.db.prepare(
-      `INSERT INTO calendar_invites
+      input.sequence,
+    )]
+    : [
+      input.db.prepare(
+        `INSERT OR IGNORE INTO calendar_invites
         (id, submission_id, person_id, uid, sequence, last_method, last_sent_at,
          status, request_snapshot, organizer_email, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'REQUEST', ?, 'active', ?, ?, ?, ?)`,
-    ).bind(
-      crypto.randomUUID(),
-      input.submissionId,
-      input.personId,
-      input.uid,
-      input.sequence,
-      input.now,
-      snapshotJson(input.snapshot),
-      input.organizerEmail,
-      input.now,
-      input.now,
-    );
-  await input.db.batch([
-    // The ledger and snapshot update share the same batch fence. A resumed
-    // request can therefore never expose a newer sequence with old material.
-    ledgerStatement(input.db, input.uid, input.sequence, input.now),
-    inviteStatement,
-  ]);
+        VALUES (?, ?, ?, ?, ?, 'REQUEST', ?, 'active', ?, ?, ?, ?)`,
+      ).bind(
+        crypto.randomUUID(),
+        input.submissionId,
+        input.personId,
+        input.uid,
+        input.sequence,
+        input.now,
+        snapshotJson(input.snapshot),
+        input.organizerEmail,
+        input.now,
+        input.now,
+      ),
+      input.db.prepare(
+        `UPDATE calendar_invites
+         SET sequence = ?, last_method = 'REQUEST', last_sent_at = ?, status = 'active',
+             request_snapshot = ?, updated_at = ?
+         WHERE submission_id = ? AND person_id = ? AND uid = ? AND sequence <= ?`,
+      ).bind(
+        input.sequence,
+        input.now,
+        snapshotJson(input.snapshot),
+        input.now,
+        input.submissionId,
+        input.personId,
+        input.uid,
+        input.sequence,
+      ),
+    ];
+  await input.db.batch(statements);
 }
 
 /**
@@ -498,7 +477,13 @@ export async function sendCalendarInvites(input: {
       ledgerFor(input.db, calendarUid(input.submissionId, recipient.person_id)),
     ]);
     const uid = current?.uid ?? calendarUid(input.submissionId, recipient.person_id);
-    const sequence = nextSequence(current?.sequence ?? null, ledger);
+    const sequenceClaim = await claimCalendarSequence(input.db, {
+      currentSequence: current?.sequence ?? null,
+      knownLastSequence: ledger?.last_sequence ?? null,
+      now,
+      uid,
+    });
+    const sequence = sequenceClaim.sequence;
     const snapshot = snapshotFor(session, recipient, origin);
     const delivery = await queueCalendarMaterial({
       db: input.db,
@@ -565,6 +550,22 @@ function guardExistsSql(guard: CalendarCancellationGuard | undefined): { sql: st
   };
 }
 
+async function cancellationGuardIsCurrent(
+  db: D1Database,
+  submissionId: Id,
+  guard: CalendarCancellationGuard | undefined,
+): Promise<boolean> {
+  if (!guard?.agendaItemId || guard.expectedUpdatedAt === undefined) return true;
+  const row = await db.prepare(
+    `SELECT 1 AS present
+     FROM agenda_items
+     WHERE id = ?
+       AND event_id = (SELECT event_id FROM submissions WHERE id = ?)
+       AND updated_at = ?`,
+  ).bind(guard.agendaItemId, submissionId, guard.expectedUpdatedAt).first<{ present: number }>();
+  return row?.present === 1;
+}
+
 function cancellationFailureReason(
   invite: CalendarInviteRow,
   snapshot: CalendarRequestSnapshot | null,
@@ -617,7 +618,7 @@ function failedCancellationStatement(input: {
 }
 
 /**
- * Prepare cancellation intent + invite/ledger statements. Callers that delete
+ * Prepare cancellation intent + invite statements. Callers that delete
  * an agenda row append that DELETE to the same db.batch, making the intent
  * durable on the deletion fence rather than relying on a later best effort.
  */
@@ -639,8 +640,8 @@ export async function prepareCalendarCancellationBatch(input: {
     // been edited, removed, or reassigned since the calendar client received
     // the invitation. Legacy rows without a stamped REQUEST fail closed.
     const ledger = await ledgerFor(input.db, invite.uid);
-    const sequence = nextSequence(invite.sequence, ledger);
-    const idempotencyKey = String(IDEMPOTENCY_REGISTRY.calendarCancellation(invite.uid, sequence));
+    const sequenceCandidate = cancellationSequenceCandidate(invite.sequence, ledger);
+    const idempotencyKey = String(IDEMPOTENCY_REGISTRY.calendarCancellation(invite.uid, sequenceCandidate));
     idempotencyKeys.push(idempotencyKey);
     const snapshot = parseCalendarRequestSnapshot(invite.request_snapshot);
     const failure = cancellationFailureReason(invite, snapshot);
@@ -652,7 +653,7 @@ export async function prepareCalendarCancellationBatch(input: {
         invite,
         now: input.now,
         reason: `${failure} for ${invite.uid}`,
-        sequence,
+        sequence: sequenceCandidate,
         guard: input.guard,
         submissionId: input.submissionId,
       }));
@@ -661,9 +662,24 @@ export async function prepareCalendarCancellationBatch(input: {
     // cancellationFailureReason proves this is non-null, while keeping the
     // branch explicit for TypeScript and future validation changes.
     if (!snapshot) continue;
+    // The guarded deletion path retains its final EXISTS fence in the same
+    // batch as the invite update. Check it before claiming the ledger so a
+    // stale caller does not consume a sequence for an intent that will not
+    // be admitted; a race after this read still fails the final fence and may
+    // leave only a harmless high-water gap, never a stamped snapshot.
+    if (!(await cancellationGuardIsCurrent(input.db, input.submissionId, input.guard))) continue;
+    const sequenceClaim = await claimCalendarSequence(input.db, {
+      currentSequence: invite.sequence,
+      knownLastSequence: ledger?.last_sequence ?? null,
+      now: input.now,
+      uid: invite.uid,
+    });
+    const sequence = sequenceClaim.sequence;
+    const cancellationKey = String(IDEMPOTENCY_REGISTRY.calendarCancellation(invite.uid, sequence));
+    idempotencyKeys[idempotencyKeys.length - 1] = cancellationKey;
     const intent: CalendarCancellationIntent = {
       eventId: input.eventId,
-      idempotencyKey,
+      idempotencyKey: cancellationKey,
       personId: invite.person_id,
       sequence,
       snapshot,
@@ -684,7 +700,7 @@ export async function prepareCalendarCancellationBatch(input: {
          WHERE 1 = 1${existsClause}`,
       ).bind(
         crypto.randomUUID(),
-        idempotencyKey,
+        cancellationKey,
         input.eventId,
         invite.person_id,
         invite.uid,
@@ -697,7 +713,6 @@ export async function prepareCalendarCancellationBatch(input: {
         input.now,
         ...existsBindings,
       ),
-      ...ledgerStatements(input.db, invite.uid, sequence, input.now, input.guard, input.submissionId),
       input.db.prepare(
         `UPDATE calendar_invites
          SET sequence = ?, last_method = 'CANCEL', status = 'cancelled', updated_at = ?

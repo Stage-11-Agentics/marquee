@@ -154,9 +154,48 @@ describe.sequential("MRQ-33 admin record and program board", () => {
     });
     expect(scheduled.status).toBe(200);
     const scheduledRecord = await body<{ slot: { day: string; time: string; room: string; is_published: boolean }; stage: string; actions: { can_decide: boolean; can_schedule: boolean } }>(scheduled);
-    expect(scheduledRecord).toMatchObject({ stage: "scheduled", slot: { room: "Room 101", is_published: false }, actions: { can_decide: false, can_schedule: false } });
+    expect(scheduledRecord).toMatchObject({ stage: "scheduled", slot: { room: "Room 101", is_published: false }, actions: { can_decide: false, can_schedule: false, can_send_calendar_invite: true } });
     expect(scheduledRecord.slot.day).toContain("·");
     expect(scheduledRecord.slot.time).toMatch(/:/);
+
+    const scheduleAudit = await env.DB.prepare(`
+      SELECT before_json, after_json
+      FROM audit_log
+      WHERE event_id = ? AND entity_type = 'submission' AND entity_id = ? AND action = 'scheduled'
+      ORDER BY created_at DESC, id DESC LIMIT 1
+    `).bind(EVENT_ID, session.id).first<{ before_json: string | null; after_json: string | null }>();
+    expect(scheduleAudit?.before_json).toBeNull();
+    expect(JSON.parse(scheduleAudit!.after_json!)).toEqual({
+      starts_at: Date.UTC(2026, 9, 20, 15, 30),
+      duration_min: 30,
+      room_id: ROOM_ID,
+      track_id: TRACK_IN,
+    });
+
+    const rescheduled = await request(`/api/v1/events/${EVENT_ID}/submissions/${session.id}/schedule`, {
+      method: "POST",
+      body: JSON.stringify({ starts_at: Date.UTC(2026, 9, 20, 16, 0), duration_min: 45, room_id: ROOM_ID, track_id: TRACK_IN }),
+    });
+    expect(rescheduled.status).toBe(200);
+    const scheduleAudits = await env.DB.prepare(`
+      SELECT before_json, after_json
+      FROM audit_log
+      WHERE event_id = ? AND entity_type = 'submission' AND entity_id = ? AND action = 'scheduled'
+      ORDER BY created_at ASC, id ASC
+    `).bind(EVENT_ID, session.id).all<{ before_json: string | null; after_json: string | null }>();
+    expect(scheduleAudits.results).toHaveLength(2);
+    expect(JSON.parse(scheduleAudits.results[1]!.before_json!)).toEqual({
+      starts_at: Date.UTC(2026, 9, 20, 15, 30),
+      duration_min: 30,
+      room_id: ROOM_ID,
+      track_id: TRACK_IN,
+    });
+    expect(JSON.parse(scheduleAudits.results[1]!.after_json!)).toEqual({
+      starts_at: Date.UTC(2026, 9, 20, 16, 0),
+      duration_min: 45,
+      room_id: ROOM_ID,
+      track_id: TRACK_IN,
+    });
 
     const boardResponse = await request(`/api/v1/events/${EVENT_ID}/board?per_page=100`);
     expect(boardResponse.status).toBe(200);

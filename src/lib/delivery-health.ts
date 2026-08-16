@@ -701,17 +701,17 @@ function calendarCapability(facts: DeliveryHealthFacts): CapabilityStatus {
       ...base,
       level: "warn",
       headline: `${count(facts.calendar.invites_unsent)} ${plural(facts.calendar.invites_unsent, "invite has", "invites have")} not gone out yet.`,
-      detail: "Scheduled sessions send an invite when they are published. These are still waiting.",
+      detail: "These scheduled-session changes are waiting for a deliberate batch from the agenda builder.",
     };
   }
   if (facts.calendar.invites_total === 0) {
-    return { ...base, level: "ok", headline: "No calendar invites yet.", detail: "Invites go out once sessions are scheduled and published." };
+    return { ...base, level: "ok", headline: "No calendar invites yet.", detail: "Calendar reconciliation starts with a deliberate send from the agenda builder." };
   }
   return {
     ...base,
     level: "ok",
     headline: `${count(facts.calendar.invites_total)} ${plural(facts.calendar.invites_total, "invite is", "invites are")} in speakers' calendars.`,
-    detail: "Every scheduled session has reached the people presenting it.",
+    detail: "Every stamped calendar request matches the current scheduled-session truth.",
   };
 }
 

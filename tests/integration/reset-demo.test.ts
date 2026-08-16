@@ -56,6 +56,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   calendar_cancellations: 0,
   calendar_invites: 0,
   calendar_sequence_ledger: 0,
+  outbox_calendar_parts: 0,
   submission_reference_ledger: 1,
   speaker_tasks: 358,
   task_templates: 15,

@@ -38,6 +38,18 @@ export interface CalendarMailMaterial {
   text: string;
 }
 
+export interface CalendarBatchMailItem {
+  current: Pick<CalendarEventInput, "durationMin" | "location" | "startsAt" | "timezone" | "title" | "uid">;
+  previous?: Pick<CalendarEventInput, "location" | "startsAt"> | null;
+  sequence: number;
+}
+
+export interface CalendarBatchMailMaterial {
+  html: string;
+  subject: string;
+  text: string;
+}
+
 function textEncoder(): TextEncoder {
   return new TextEncoder();
 }
@@ -396,6 +408,51 @@ export function buildMultipartAlternative(input: {
 
 function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+function displayDateTime(value: number, timezone: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: timezone,
+  }).format(new Date(value));
+}
+
+export function buildCalendarBatchMail(input: {
+  eventName: string;
+  eventTimezone: string;
+  items: readonly CalendarBatchMailItem[];
+}): CalendarBatchMailMaterial {
+  const lines = input.items.map((item) => {
+    const current = item.current;
+    const previous = item.previous;
+    const when = previous && previous.startsAt !== current.startsAt
+      ? `${displayDateTime(previous.startsAt, current.timezone)} -> ${displayDateTime(current.startsAt, current.timezone)}`
+      : displayDateTime(current.startsAt, current.timezone);
+    const where = previous && previous.location !== current.location
+      ? `${previous.location} -> ${current.location}`
+      : current.location;
+    return { current, links: buildCalendarLinks({ ...current }), sequence: item.sequence, when, where };
+  });
+  const text = [
+    `The schedule for ${input.eventName} has been updated.`,
+    "The attached invites keep each session on your calendar in place.",
+    ...lines.map(({ current, links, sequence, when, where }) => [
+      current.title,
+      `When: ${when} (${input.eventTimezone})`,
+      `Where: ${where}`,
+      `Sequence: ${sequence}`,
+      `Calendar file: ${links.stable}`,
+    ].join("\n")),
+  ].join("\n\n");
+  const htmlRows = lines.map(({ current, links, sequence, when, where }) =>
+    `<li><strong>${escapeHtml(current.title)}</strong><br>When: ${escapeHtml(when)} (${escapeHtml(input.eventTimezone)})<br>Where: ${escapeHtml(where)}<br><a href="${escapeHtml(links.stable)}">Download calendar file</a><span> · SEQUENCE ${sequence}</span></li>`,
+  ).join("");
+  return {
+    html: `<p>The schedule for ${escapeHtml(input.eventName)} has been updated.</p><p>The attached invites keep each session on your calendar in place.</p><ul>${htmlRows}</ul>`,
+    subject: `Calendar updates: ${input.eventName}`,
+    text,
+  };
 }
 
 export function buildCalendarMail(input: CalendarEventInput & { origin?: string }): CalendarMailMaterial {

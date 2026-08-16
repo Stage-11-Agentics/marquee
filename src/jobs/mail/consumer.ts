@@ -35,6 +35,14 @@ interface ResendEmail {
   attachments?: Array<{ filename: string; content: string; content_type: string }>;
 }
 
+interface CalendarAttachment {
+  content: string;
+  content_type: string;
+  filename: string;
+}
+
+type DeliveryRow = OutboxRow & { calendar_parts?: readonly CalendarAttachment[] };
+
 function encodeBase64(value: string): string {
   const bytes = new TextEncoder().encode(value);
   let binary = "";
@@ -43,6 +51,8 @@ function encodeBase64(value: string): string {
 }
 
 function emailPayload(row: OutboxRow): ResendEmail {
+  const deliveryRow = row as DeliveryRow;
+  const batchAttachments = deliveryRow.calendar_parts;
   const method = row.ics_body?.match(/^METHOD:(REQUEST|CANCEL)(?:\r?\n|$)/m)?.[1] ?? "REQUEST";
   return {
     from: RESEND_MAIL_FROM,
@@ -54,7 +64,9 @@ function emailPayload(row: OutboxRow): ResendEmail {
       "Content-Class": "urn:content-classes:calendarmessage",
       "Idempotency-Key": row.idempotency_key,
     },
-    ...(row.ics_body
+    ...(batchAttachments?.length
+      ? { attachments: batchAttachments.map((part) => ({ ...part })) }
+      : row.ics_body
       ? {
           attachments: [
             {
@@ -66,6 +78,28 @@ function emailPayload(row: OutboxRow): ResendEmail {
         }
       : {}),
   };
+}
+
+async function calendarPartsFor(
+  db: D1Database,
+  rows: readonly OutboxRow[],
+): Promise<Map<string, CalendarAttachment[]>> {
+  const batchIds = rows.filter((row) => row.template_key === "calendar_batch_request").map((row) => row.id);
+  if (batchIds.length === 0) return new Map();
+  const placeholders = batchIds.map(() => "?").join(", ");
+  const result = await db.prepare(
+    `SELECT outbox_id, filename, ics_body, content_type
+     FROM outbox_calendar_parts
+     WHERE outbox_id IN (${placeholders})
+     ORDER BY outbox_id ASC, part_index ASC`,
+  ).bind(...batchIds).all<{ outbox_id: string; filename: string; ics_body: string; content_type: string }>();
+  const parts = new Map<string, CalendarAttachment[]>();
+  for (const row of result.results) {
+    const existing = parts.get(row.outbox_id) ?? [];
+    existing.push({ content: encodeBase64(row.ics_body), content_type: row.content_type, filename: row.filename });
+    parts.set(row.outbox_id, existing);
+  }
+  return parts;
 }
 
 async function resendRequest(
@@ -212,6 +246,44 @@ async function markSent(db: D1Database, row: OutboxRow, providerMessageId: strin
   return changed;
 }
 
+function calendarSequence(row: OutboxRow): number | null {
+  const match = row.ics_body?.match(/^SEQUENCE:(\d+)\s*$/m);
+  return match ? Number(match[1]) : null;
+}
+
+async function recordSingularCalendarAudit(
+  db: D1Database,
+  row: OutboxRow,
+  providerMessageId: string | null,
+  now: number,
+): Promise<void> {
+  if (row.ics_uid === null) return;
+  const invite = await db
+    .prepare("SELECT submission_id FROM calendar_invites WHERE uid = ?")
+    .bind(row.ics_uid)
+    .first<{ submission_id: string }>();
+  if (!invite) return;
+  await writeAudit(db, {
+    eventId: row.event_id,
+    actorKind: "system",
+    actorPersonId: null,
+    action: "submission.calendar_sent",
+    entityType: "submission",
+    entityId: invite.submission_id,
+    after: {
+      outbox_id: row.id,
+      provider_message_id: providerMessageId,
+      template_key: row.template_key,
+      method: row.template_key === "calendar_cancel" ? "CANCEL" : "REQUEST",
+      sequence: calendarSequence(row),
+      uid: row.ics_uid,
+      sent_at: now,
+    },
+    now,
+    requestId: null,
+  });
+}
+
 /**
  * Delivery is a fact of the consumer, not of the route that admitted a row to
  * the queue. Decision retries use the decision id as their outbox entity;
@@ -224,6 +296,40 @@ async function recordSentAudit(
   providerMessageId: string | null,
   now: number,
 ): Promise<void> {
+  if (row.template_key === "calendar_batch_request") {
+    const parts = await db.prepare(
+      `SELECT submission_id, ics_uid, sequence
+       FROM outbox_calendar_parts
+       WHERE outbox_id = ?
+       ORDER BY part_index ASC`,
+    ).bind(row.id).all<{ submission_id: string; ics_uid: string; sequence: number }>();
+    for (const part of parts.results) {
+      await writeAudit(db, {
+        eventId: row.event_id,
+        actorKind: "system",
+        actorPersonId: null,
+        action: "submission.calendar_batch_sent",
+        entityType: "submission",
+        entityId: part.submission_id,
+        after: {
+          batch_outbox_id: row.id,
+          outbox_id: row.id,
+          provider_message_id: providerMessageId,
+          sequence: part.sequence,
+          template_key: row.template_key,
+          uid: part.ics_uid,
+          sent_at: now,
+        },
+        now,
+        requestId: null,
+      });
+    }
+    return;
+  }
+  if (row.template_key === "calendar_request" || row.template_key === "calendar_cancel") {
+    await recordSingularCalendarAudit(db, row, providerMessageId, now);
+    return;
+  }
   const target = await db
     .prepare(
       `SELECT submission.id AS direct_submission_id,
@@ -301,7 +407,20 @@ export async function processMailOutbox(
     }
   }
 
-  const plain = deliverable.filter((row) => !row.ics_body);
+  const plain = deliverable.filter((row) => !row.ics_body && row.template_key !== "calendar_batch_request");
+  const calendarParts = await calendarPartsFor(db, deliverable);
+  const batchCalendar = deliverable
+    .filter((row) => row.template_key === "calendar_batch_request")
+    .map((row) => ({ row, parts: calendarParts.get(row.id) ?? [] }));
+  if (batchCalendar.some(({ parts }) => parts.length === 0)) {
+    for (const { row } of batchCalendar) {
+      if ((calendarParts.get(row.id)?.length ?? 0) === 0) {
+        await markFailed(db, row, new Error("calendar batch outbox has no child parts"), now);
+        failed += 1;
+      }
+    }
+  }
+  const deliverableCalendarIds = new Set(batchCalendar.filter(({ parts }) => parts.length > 0).map(({ row }) => row.id));
   // Demo-safe batches may have no deliverable rows at all. Do not require a
   // provider credential merely to record suppression in the local outbox.
   const provider = deliverable.length > 0 ? (options.provider ?? createResendProvider(env)) : undefined;
@@ -327,11 +446,14 @@ export async function processMailOutbox(
     }
   }
 
-  for (const [index, row] of deliverable.filter((item) => item.ics_body).entries()) {
+  const calendarRows = deliverable.filter((item) => item.ics_body || deliverableCalendarIds.has(item.id));
+  for (const [index, row] of calendarRows.entries()) {
     if (index > 0) await sleep(100);
     try {
       if (!provider) throw new Error("mail provider is unavailable");
-      const providerId = await provider.sendSingle(row);
+      const parts = calendarParts.get(row.id);
+      const deliveryRow = parts ? ({ ...row, calendar_parts: parts } as OutboxRow) : row;
+      const providerId = await provider.sendSingle(deliveryRow);
       if (await markSent(db, row, providerId, now)) {
         await recordSentAudit(db, row, providerId, now);
         sent += 1;

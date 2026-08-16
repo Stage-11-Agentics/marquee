@@ -6,6 +6,8 @@
  * itself, through this primitive. Route-level read-then-unconditional-write
  * and per-call-site CAS variants are defects.
  */
+import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
+
 import { ApiError } from "./errors";
 
 /** Strong quoted ETag: `"<id>:<updated_at>"`. Never a weak tag. */
@@ -100,6 +102,44 @@ export async function compareAndSwapResource<TCurrent, TResult>(input: {
   if (changes !== 0) {
     throw new Error(
       `compareAndSwapResource invariant: conditional write changed ${changes} rows`,
+    );
+  }
+  const current = await input.readCurrent();
+  if (current === null) return { kind: "missing" };
+  const version = input.versionOf(current);
+  return { kind: "stale", current, etag: strongEtag(version.id, version.updatedAt) };
+}
+
+/**
+ * The batch form of the named CAS primitive. The first statement is the
+ * conditional resource write; later statements may record facts that must be
+ * committed with that write. A stale version therefore produces neither the
+ * resource mutation nor its audit row.
+ */
+export async function compareAndSwapResourceBatch<TCurrent, TResult>(input: {
+  db: D1Database;
+  expected: ResourceVersion;
+  now: number;
+  prepareWrite: (version: {
+    expectedUpdatedAt: number;
+    nextUpdatedAt: number;
+  }) => D1PreparedStatement[];
+  readCurrent: () => Promise<TCurrent | null>;
+  versionOf: (current: TCurrent) => ResourceVersion;
+}): Promise<CasOutcome<TCurrent, TResult>> {
+  const nextUpdatedAt = Math.max(input.now, input.expected.updatedAt + 1);
+  const results = await input.db.batch(input.prepareWrite({
+    expectedUpdatedAt: input.expected.updatedAt,
+    nextUpdatedAt,
+  }));
+  const result = results[0] as D1Result<TResult> | undefined;
+  const changes = result?.meta.changes ?? 0;
+  if (changes === 1 && result) {
+    return { kind: "updated", result, etag: strongEtag(input.expected.id, nextUpdatedAt) };
+  }
+  if (changes !== 0) {
+    throw new Error(
+      `compareAndSwapResourceBatch invariant: conditional write changed ${changes} rows`,
     );
   }
   const current = await input.readCurrent();

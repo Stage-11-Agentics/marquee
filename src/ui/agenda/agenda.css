@@ -36,6 +36,18 @@
 .agenda-filter { display: grid; gap: 4px; min-width: 140px; }
 .agenda-filter select { min-height: 34px; }
 .agenda-status-note { align-self: center; white-space: nowrap; }
+.agenda-attention-strip { display: grid; gap: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 14px; }
+.agenda-attention-gauge { align-items: center; background: var(--panel); border: 1px solid var(--line-strong); display: flex; gap: 14px; min-height: 82px; padding: 11px 16px; }
+.agenda-attention-gauge + .agenda-attention-gauge { border-left: 0; }
+.agenda-attention-copy { display: grid; gap: 4px; min-width: 0; }
+.agenda-attention-copy strong { font: 600 13px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+.agenda-attention-copy .subtle { font-size: 10.5px; }
+.agenda-attention-gauge .button { flex: 0 0 auto; }
+.calendar-batch-speakers { max-height: 190px; overflow: auto; }
+.calendar-batch-speakers small { display: block; color: var(--muted); font: 9px var(--mono); margin-top: 3px; }
+.calendar-batch-blocked { background: color-mix(in srgb, var(--warning) 10%, var(--panel)); border: 1px solid var(--warning); margin-top: 10px; padding: 9px 11px; font: 10px/1.45 var(--mono); }
+.calendar-batch-blocked strong { display: block; margin-bottom: 4px; }
+.calendar-batch-preview { margin-top: 10px; }
 /* Fixed width so swapping to the busy label cannot shift the toolbar. */
 .agenda-auto-place { align-self: center; min-width: 104px; }
 .agenda-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 12px; min-width: 0; }
@@ -204,6 +216,11 @@
   .agenda-view-tabs button { flex: 1 0 62px; }
   .agenda-publication-select-all, .agenda-publication-candidate { min-height: 44px; }
   .agenda-publication-actions .button { min-height: 40px; }
+}
+
+@media (max-width: 760px) {
+  .agenda-attention-strip { grid-template-columns: minmax(0, 1fr); }
+  .agenda-attention-gauge + .agenda-attention-gauge { border-left: 1px solid var(--line-strong); border-top: 0; }
 }
 
 /* ── Session demand (MRQ-208) ──────────────────────────────────────────

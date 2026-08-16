@@ -49,6 +49,8 @@ export interface DashboardSnapshot {
     unreviewed_track: DashboardCount | null;
     overdue_submissions: DashboardCount;
     decided_not_notified: DashboardCount;
+    /** Older in-memory fixtures omit this; the production API always supplies it. */
+    calendar_updates?: DashboardCount;
   };
   metrics: DashboardCount[];
   task_preview: DashboardTaskPreview[];

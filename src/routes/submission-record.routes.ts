@@ -923,6 +923,13 @@ async function loadRecord(
       can_resend_decision: ["accepted", "rejected"].includes(row.status)
         && decisions.results.some((decision) => decision.resulting_status === row.status)
         && canWriteProgram,
+      // This is the existing per-session explicit resend, not the agenda
+      // batch's slot-debt trigger. A scheduled accepted Session can always
+      // claim a new calendar sequence from its record.
+      can_send_calendar_invite: row.kind === "session"
+        && row.status === "accepted"
+        && slot !== null
+        && canWriteProgram,
       // Who is on stage is not content editing: a co-presenter is added to a
       // record at any status, including one already accepted and scheduled —
       // which is exactly when the organizer finds out about them. The one gate
@@ -1418,19 +1425,46 @@ const scheduleSubmission = defineApiRoute(
     }
     const actor = await actorFor(context);
     const now = Date.now();
-    const existing = await context.env.DB.prepare("SELECT id FROM agenda_items WHERE submission_id = ?").bind(submissionId).first<{ id: string }>();
-    if (existing) {
-      await context.env.DB.prepare(`
-        UPDATE agenda_items SET starts_at = ?, duration_min = ?, room_id = ?, track_id = ?, updated_at = ? WHERE id = ?
-      `).bind(body.starts_at, body.duration_min, body.room_id, body.track_id ?? null, now, existing.id).run();
-    } else {
-      await context.env.DB.prepare(`
-        INSERT INTO agenda_items
-          (id, event_id, submission_id, kind, title, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
-        VALUES (?, ?, ?, 'session', NULL, ?, ?, ?, ?, 0, ?, ?)
-      `).bind(newUlid(), eventId, submissionId, body.starts_at, body.duration_min, body.room_id, body.track_id ?? null, now, now).run();
-    }
-    await audit(context.env.DB, eventId, submissionId, "scheduled", actor, { starts_at: body.starts_at, room_id: body.room_id, duration_min: body.duration_min });
+    const existing = await context.env.DB.prepare(
+      "SELECT id, starts_at, duration_min, room_id, track_id FROM agenda_items WHERE submission_id = ? AND event_id = ?",
+    ).bind(submissionId, eventId).first<{ id: string; starts_at: number; duration_min: number; room_id: string; track_id: string | null }>();
+    const beforeSlot = existing ? {
+      starts_at: existing.starts_at,
+      duration_min: existing.duration_min,
+      room_id: existing.room_id,
+      track_id: existing.track_id,
+    } : undefined;
+    const afterSlot = {
+      starts_at: body.starts_at,
+      duration_min: body.duration_min,
+      room_id: body.room_id,
+      track_id: body.track_id ?? null,
+    };
+    const scheduleWrite = existing
+      ? context.env.DB.prepare(`
+          UPDATE agenda_items SET starts_at = ?, duration_min = ?, room_id = ?, track_id = ?, updated_at = ?
+          WHERE id = ? AND event_id = ?
+        `).bind(body.starts_at, body.duration_min, body.room_id, body.track_id ?? null, now, existing.id, eventId)
+      : context.env.DB.prepare(`
+          INSERT INTO agenda_items
+            (id, event_id, submission_id, kind, title, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at)
+          VALUES (?, ?, ?, 'session', NULL, ?, ?, ?, ?, 0, ?, ?)
+        `).bind(newUlid(), eventId, submissionId, body.starts_at, body.duration_min, body.room_id, body.track_id ?? null, now, now);
+    await context.env.DB.batch([
+      scheduleWrite,
+      auditStatement(context.env.DB, {
+        eventId,
+        actorKind: actor.kind,
+        actorPersonId: actor.personId,
+        action: "scheduled",
+        entityType: "submission",
+        entityId: submissionId,
+        before: beforeSlot,
+        after: afterSlot,
+        now,
+        requestId: actor.requestId,
+      }),
+    ]);
     return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
   },
 );
