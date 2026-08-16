@@ -8,6 +8,9 @@
   },
   "scripts": {
     "test": "node scripts/checks/run-test.mjs",
+    "pretest": "npm run build",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
     "test:changed": "node scripts/checks/run-test-changed.mjs",
     "seed": "node scripts/seed/index.ts",
     "e2e": "node scripts/checks/run-e2e.mjs",

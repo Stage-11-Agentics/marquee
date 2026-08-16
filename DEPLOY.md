@@ -114,7 +114,7 @@ export CLOUDFLARE_ACCOUNT_ID
 npx wrangler whoami        # must be Projects@stage11.ai's Account, 16483d6f…
 
 # 3. Build, then ship. The build is not optional — see below.
-npx vite build
+npm run build
 npx wrangler deploy
 
 # 4. Prove it took.
@@ -138,7 +138,8 @@ npm run seed -- --remote      # deterministic upserts: converges, does not dupli
 
 ## The five things that go wrong
 
-**`npx vite build` is load-bearing, not a formality.** With the Cloudflare Vite plugin,
+**`npm run build` is load-bearing, not a formality.** It generates the agent front door
+before the final Worker build. With the Cloudflare Vite plugin,
 `wrangler.jsonc` is *not* what Wrangler reads — `.wrangler/deploy/config.json` redirects it to
 a **generated** `dist/marquee/wrangler.json`. Deploy without rebuilding and you ship the
 previous config while your edit sits on disk looking correct. Wrangler prints "Using

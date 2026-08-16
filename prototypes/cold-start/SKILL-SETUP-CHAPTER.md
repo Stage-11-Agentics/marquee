@@ -37,7 +37,7 @@ paid-only resource, not by reading an API that may lie about it.
 3. Build, migrate, optionally seed, deploy, then verify:
 
    ```sh
-   npx vite build
+   npm run build
    CI=1 npx wrangler d1 migrations apply DB --remote
    npm run seed -- --remote        # only if the operator wants the demo alongside
    npx wrangler deploy

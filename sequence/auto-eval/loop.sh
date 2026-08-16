@@ -317,7 +317,7 @@ deploys, so it must not proceed on an unanswered question.
     ( set -a; . "$CREDENTIALS_ENV"; set +a
       cd "$DEPLOY_TREE" \
       && git fetch github main --quiet && git checkout --quiet --detach github/main \
-      && npx vite build >/dev/null \
+      && npm run build >/dev/null \
       && CLOUDFLARE_API_TOKEN="${MARQUEE_CLOUDFLARE_API_TOKEN:?not in $CREDENTIALS_ENV}" npx wrangler deploy )
 
     say "4/5 verify by build hash, not by the page loading"

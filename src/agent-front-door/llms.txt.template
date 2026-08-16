@@ -38,4 +38,4 @@ Mail is demo-safe by design: the queue and receipts exist, but a free or unconfi
 
 ## Source and staleness
 
-This file is generated from the authored template, the served-document manifest, the live OpenAPI response, the CLI registry, and committed latency evidence. Run `npm run check:docs -- --write` when one of those sources changes. The check fails on drift so a generated fact cannot quietly become a stale claim.
+This file is generated from the authored template, the served-document manifest, the live OpenAPI response, the CLI registry, and committed latency evidence. Run `npm run build` when one of those sources changes. `check:docs` compares the resulting bytes so a generated fact cannot quietly become a stale claim.

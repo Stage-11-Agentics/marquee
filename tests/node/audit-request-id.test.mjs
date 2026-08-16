@@ -19,11 +19,9 @@ test("CONTRACT · the correlation column is additive and nullable, and earlier m
 });
 
 test("CONTRACT · the migration is registered with the test applier, or every integration test runs on a stale schema", () => {
-  assert.match(applyMigrations, /0006_audit_log_request_id\.sql\?raw/);
-  assert.match(applyMigrations, /splitStatements\(auditRequestIdMigrationSql\)/);
-  const registered = applyMigrations.indexOf("auditRequestIdMigrationSql)");
-  const previous = applyMigrations.indexOf("taskCancellationWebhooksMigrationSql)");
-  assert.ok(previous >= 0 && registered > previous, "0006 must apply after 0005");
+  assert.match(applyMigrations, /import\.meta\.glob\("\.\.\/\.\.\/migrations\/\*\.sql"/);
+  assert.match(applyMigrations, /\.sort\(\(\[left\], \[right\]\) => left\.localeCompare\(right\)\)/);
+  assert.match(applyMigrations, /migrationSql\.flatMap\(splitStatements\)/);
 });
 
 test("CONTRACT · schema.ts mirrors the column so a reader cannot silently drop it", () => {

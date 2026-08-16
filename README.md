@@ -119,7 +119,7 @@ actually reads it.
 ### 2. Build the Worker and prepare local D1
 
 ```sh
-npx vite build
+npm run build
 cp .dev.vars dist/marquee/.dev.vars
 CI=1 npx wrangler d1 migrations apply DB --local --persist-to .wrangler/marquee-local
 npm run seed -- --persist-to .wrangler/marquee-local
@@ -212,7 +212,7 @@ organizer**, and confirm the register loads before believing the install.
 
 ### 5. One-shot clean-checkout smoke
 
-For a no-human-input local proof, run this after `npx vite build`. It uses a
+For a no-human-input local proof, run this after `npm run build`. It uses a
 temporary persistence directory, waits for the Worker itself, checks health,
 logs into the seeded demo, checks a non-zero list, and cleans up the Worker and
 state when it exits:
@@ -335,7 +335,7 @@ in the environment; do not commit it.
    endpoint.
 
    ```sh
-   npx vite build
+npm run build
    CI=1 npx wrangler d1 migrations apply DB --remote
    npm run seed -- --remote
    npx wrangler deploy
