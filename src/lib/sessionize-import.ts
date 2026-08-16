@@ -3,6 +3,7 @@ import type { ImportRowRow, MembershipRow } from "../db/schema";
 import { isPublishedSession } from "./publication-guard";
 import { prepareCalendarCancellationBatch } from "../jobs/calendar/invites";
 import { speakerMembershipStatement } from "./speaker-membership";
+import { SUBMISSION_REFERENCE_CODE_SQL, withSubmissionReferenceRetry } from "./submission-reference";
 
 export type SessionizeEntity = "sessions" | "speakers";
 
@@ -86,6 +87,7 @@ interface SubmissionRow {
   status: string;
   format_id: string | null;
   primary_track_id: string | null;
+  reference_code: string | null;
   origin: string;
   vendor_affiliation: string;
   wave_id: string | null;
@@ -892,13 +894,13 @@ async function importSession(
   const changed = !current || current.form_id !== next.formId || current.title !== next.title || current.abstract !== next.abstract || current.status !== next.status || current.format_id !== next.formatId || current.primary_track_id !== next.trackId || current.submitter_person_id !== next.submitterId;
   const trackChanged = next.trackId !== null && !relations.tracks.some((trackRow) => trackRow.track_id === next.trackId && trackRow.is_primary === 1);
   if (!current) {
-    await db.batch([
+    await withSubmissionReferenceRetry(() => db.batch([
       db.prepare(
-        `INSERT INTO submissions (id, event_id, form_id, kind, bypass_evaluation, title, abstract, status, format_id, primary_track_id, origin, vendor_affiliation, wave_id, submitter_person_id, submitted_at, last_saved_at, is_published, external_ref, last_write_source, created_at, updated_at)
-         VALUES (?, ?, ?, 'session', 1, ?, ?, ?, ?, ?, 'import', 'none', NULL, ?, ?, ?, 0, ?, 'marquee', ?, ?)`,
-      ).bind(id, event.id, next.formId, next.title, next.abstract, next.status, next.formatId, next.trackId, next.submitterId, now, now, externalRef, now, now),
+        `INSERT INTO submissions (id, event_id, reference_code, form_id, kind, bypass_evaluation, title, abstract, status, format_id, primary_track_id, origin, vendor_affiliation, wave_id, submitter_person_id, submitted_at, last_saved_at, is_published, external_ref, last_write_source, created_at, updated_at)
+         VALUES (?, ?, ${SUBMISSION_REFERENCE_CODE_SQL}, ?, 'session', 1, ?, ?, ?, ?, ?, 'import', 'none', NULL, ?, ?, ?, 0, ?, 'marquee', ?, ?)`,
+      ).bind(id, event.id, event.id, next.formId, next.title, next.abstract, next.status, next.formatId, next.trackId, next.submitterId, now, now, externalRef, now, now),
       ...importedPrimaryTrackStatements(db, id, next.trackId, now),
-    ]);
+    ]));
   } else if (changed || trackChanged) {
     await db.batch([
       ...(changed ? [db.prepare(

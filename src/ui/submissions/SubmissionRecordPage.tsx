@@ -107,7 +107,7 @@ export type EvaluationPanelEvaluation = Pick<EvaluationEvidence,
 >;
 interface Round { id: string; name: string; mode: "scorecard" | "comparison"; position: number; target_reviews_per_submission: number; plan_status: string; criteria: RubricCriterion[]; reviewers: Assignment[]; evaluations: EvaluationPanelEvaluation[]; comparisons: Array<{ ranking: unknown; submission_ids: string[]; reviewer_person_id: string; reviewer_name: string; reviewer_kind: "human" | "agent" }>; }
 interface RecordData {
-  id: string; event_id: string; event_name: string; kind: "abstract" | "session"; title: string; abstract: string | null;
+  id: string; reference_code: string | null; event_id: string; event_name: string; kind: "abstract" | "session"; title: string; abstract: string | null;
   status: string; stage: string; stage_label: string; bypass_evaluation: boolean; origin: string; vendor_affiliation: string;
   submitter_person_id: string; submitted_at: number | null; last_saved_at: number | null; updated_at: number; time_in_stage: string;
   is_published: boolean;
@@ -588,6 +588,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   const [busy, setBusy] = useState("");
+  const [referenceCopied, setReferenceCopied] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftAbstract, setDraftAbstract] = useState("");
   const [contentError, setContentError] = useState("");
@@ -1011,6 +1012,30 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   if (state.kind === "loading") return <div class="submission-record-page"><PageHeader title="Submission record" copy="Reading the complete conference record…" /><Card><CardBody><div class="record-state">Loading record…</div></CardBody></Card></div>;
   if (state.kind === "error") return <div class="submission-record-page"><PageHeader title="Submission record" copy={state.notFound ? "This record could not be found." : "This record could not be reached right now."} /><Card><CardBody><div class="record-state error"><strong>{state.notFound ? "Record not found" : "Record unavailable"}</strong><span>{state.message}</span><div class="record-action-row"><Button onClick={() => navigate("/submissions")}>Back to submissions</Button><Button variant="primary" onClick={reload}>Retry</Button></div></div></CardBody></Card></div>;
   const record = state.record;
+  const copyReferenceCode = async (): Promise<void> => {
+    const code = record.reference_code;
+    if (!code) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(code);
+      } else {
+        const input = document.createElement("textarea");
+        input.value = code;
+        input.setAttribute("readonly", "");
+        input.style.position = "fixed";
+        input.style.opacity = "0";
+        document.body.appendChild(input);
+        input.select();
+        const copied = document.execCommand("copy");
+        input.remove();
+        if (!copied) throw new Error("clipboard unavailable");
+      }
+      setReferenceCopied(true);
+      window.setTimeout(() => setReferenceCopied(false), 2400);
+    } catch {
+      setActionError({ action: "reference-copy", message: "The reference could not be copied. Select it and copy manually." });
+    }
+  };
   // Every round's rubric, so an evaluation's criteria_scores can be read back
   // as the questions the reviewer actually answered.
   const criteriaByRound = new Map(record.evaluation.rounds.map((round) => [round.id, round.criteria ?? []]));
@@ -1067,7 +1092,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   // can change who is on stage.
   const canEditParticipants = record.actions.can_edit_participants;
   return <div class="submission-record-page">
-    <PageHeader title="Submission record" copy={`${record.id} · ${record.kind === "session" ? "Session" : "Abstract"} · ${record.origin} origin`} actions={<Chip tone={headerChipTone(record)}>{record.stage_label}</Chip>} />
+    <PageHeader title="Submission record" copy={`${record.reference_code ?? record.id} · ${record.kind === "session" ? "Session" : "Abstract"} · ${record.origin} origin`} actions={<><button class="chip submission-reference-copy" type="button" disabled={!record.reference_code} title={record.id} aria-label={record.reference_code ? `Copy submission reference ${record.reference_code}` : "Submission reference unavailable"} onClick={() => void copyReferenceCode()}>{referenceCopied ? "Copied" : record.reference_code ?? "No reference"}</button><Chip tone={headerChipTone(record)}>{record.stage_label}</Chip></>} />
     {/* An assignment refusal answers inside the evaluation panel; every other
         declined action answers here, where the record is still on screen. */}
     {actionError && !actionError.action.startsWith("assign-") && !actionError.action.startsWith("remove-")

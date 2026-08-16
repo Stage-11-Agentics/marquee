@@ -547,6 +547,7 @@ export interface SubmissionRow extends MutableRecord {
   /** The participant roster the public form was filled in with; see migration 0028. */
   participants_json: JsonText | null;
   primary_track_id: Id | null;
+  reference_code: string | null;
   resume_token_hash: string | null;
   search_blob: string;
   sponsorship_id: Id | null;

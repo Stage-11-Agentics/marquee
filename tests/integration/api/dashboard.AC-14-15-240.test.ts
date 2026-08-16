@@ -23,7 +23,7 @@ async function buildFixture(): Promise<void> {
     CREATE TABLE IF NOT EXISTS formats (id TEXT PRIMARY KEY, event_id TEXT NOT NULL, name TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS tracks (id TEXT PRIMARY KEY, event_id TEXT NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS waves (id TEXT PRIMARY KEY, event_id TEXT NOT NULL, name TEXT NOT NULL, decision_on TEXT NOT NULL, target_count INTEGER NOT NULL, sent_at INTEGER, position INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, event_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, format_id TEXT, wave_id TEXT, origin TEXT NOT NULL, submitted_at INTEGER, updated_at INTEGER NOT NULL, search_blob TEXT NOT NULL DEFAULT '');
+    CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, reference_code TEXT, event_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, format_id TEXT, wave_id TEXT, origin TEXT NOT NULL, submitted_at INTEGER, updated_at INTEGER NOT NULL, search_blob TEXT NOT NULL DEFAULT '');
     CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY, name TEXT NOT NULL, company TEXT);
     CREATE TABLE IF NOT EXISTS participations (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, person_id TEXT NOT NULL, role TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS submission_tracks (id TEXT PRIMARY KEY, submission_id TEXT NOT NULL, track_id TEXT NOT NULL, is_primary INTEGER NOT NULL);
@@ -47,13 +47,13 @@ async function buildFixture(): Promise<void> {
     INSERT INTO buildings VALUES ('building-1', 'Sheraton');
     INSERT INTO rooms VALUES ('room-1', 'building-1', 'Liberty 3');
     INSERT INTO submissions VALUES
-      ('sub-submitted', '${EVENT_ID}', 'abstract', 'Submitted work', 'submitted', 'fmt-stage', NULL, 'public', ${now}, ${now}, 'submitted work'),
-      ('sub-review', '${EVENT_ID}', 'abstract', 'Review work', 'in_review', 'fmt-stage', NULL, 'public', ${now}, ${now}, 'review work'),
-      ('sub-unplaced', '${EVENT_ID}', 'abstract', 'Unplaced accepted work', 'accepted', 'fmt-stage', 'wave-1', 'public', ${now}, ${now}, 'unplaced work'),
-      ('sub-waved', '${EVENT_ID}', 'abstract', 'Pending wave work', 'accepted', 'fmt-stage', 'wave-2', 'public', ${now}, ${now}, 'pending wave work'),
-      ('sub-scheduled', '${EVENT_ID}', 'abstract', 'Private scheduled work', 'accepted', 'fmt-stage', 'wave-2', 'public', ${now}, ${now}, 'private scheduled work'),
-      ('sub-published', '${EVENT_ID}', 'session', 'Published work', 'accepted', 'fmt-stage', 'wave-2', 'admin', ${now}, ${now}, 'published work'),
-      ('sub-rejected', '${EVENT_ID}', 'abstract', 'Workshop rejected work', 'rejected', 'fmt-workshop', NULL, 'public', ${now}, ${now}, 'rejected work');
+      ('sub-submitted', 'SUB-1', '${EVENT_ID}', 'abstract', 'Submitted work', 'submitted', 'fmt-stage', NULL, 'public', ${now}, ${now}, 'submitted work'),
+      ('sub-review', 'SUB-2', '${EVENT_ID}', 'abstract', 'Review work', 'in_review', 'fmt-stage', NULL, 'public', ${now}, ${now}, 'review work'),
+      ('sub-unplaced', 'SUB-3', '${EVENT_ID}', 'abstract', 'Unplaced accepted work', 'accepted', 'fmt-stage', 'wave-1', 'public', ${now}, ${now}, 'unplaced work'),
+      ('sub-waved', 'SUB-4', '${EVENT_ID}', 'abstract', 'Pending wave work', 'accepted', 'fmt-stage', 'wave-2', 'public', ${now}, ${now}, 'pending wave work'),
+      ('sub-scheduled', 'SUB-5', '${EVENT_ID}', 'abstract', 'Private scheduled work', 'accepted', 'fmt-stage', 'wave-2', 'public', ${now}, ${now}, 'private scheduled work'),
+      ('sub-published', 'SUB-6', '${EVENT_ID}', 'session', 'Published work', 'accepted', 'fmt-stage', 'wave-2', 'admin', ${now}, ${now}, 'published work'),
+      ('sub-rejected', 'SUB-7', '${EVENT_ID}', 'abstract', 'Workshop rejected work', 'rejected', 'fmt-workshop', NULL, 'public', ${now}, ${now}, 'rejected work');
     INSERT INTO participations SELECT 'par-' || id, id, 'person-1', 'speaker', 0 FROM submissions;
     INSERT INTO participations SELECT 'par-sub-' || id, id, 'person-1', 'submitter', 0 FROM submissions;
     INSERT INTO submission_tracks VALUES

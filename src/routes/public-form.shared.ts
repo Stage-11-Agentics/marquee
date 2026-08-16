@@ -619,6 +619,7 @@ export function toPublicFormState(
   const confirmation: PublicFormConfirmation | null = record.state === "submitted"
     ? {
         ...confirmationCopy,
+        reference_code: record.submission?.reference_code ?? "",
         email: personEmail,
         receipt_email: receipt?.email ?? null,
         receipt_sent: receipt?.sent ?? false,

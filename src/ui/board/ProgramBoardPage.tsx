@@ -42,10 +42,11 @@ export function BoardKindNote({ kind }: { kind: FilterState["kind"] }): JSX.Elem
 }
 
 function BoardCardButton({ card, navigate }: { card: BoardCard; navigate: (target: string) => void }): JSX.Element {
+  const displayCode = card.reference_code ?? card.id;
   return <button
     class="program-board-card"
     type="button"
-    aria-label={`Open ${card.id}: ${card.title}`}
+    aria-label={`Open ${displayCode}: ${card.title}`}
     onClick={() => navigate(`/submissions/${card.id}`)}
     onKeyDown={(event) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -54,7 +55,7 @@ function BoardCardButton({ card, navigate }: { card: BoardCard; navigate: (targe
       }
     }}
   >
-    <span class="program-board-card-top"><span class={`chip entity-chip ${card.kind}`}>{card.kind === "session" ? "Session" : "Abstract"}</span><span class="tabular">{card.id}</span></span>
+    <span class="program-board-card-top"><span class={`chip entity-chip ${card.kind}`}>{card.kind === "session" ? "Session" : "Abstract"}</span><span class="tabular" title={card.id}>{displayCode}</span></span>
     <strong class="program-board-card-title" title={card.title}>{card.title}</strong>
     <span class="program-board-card-speakers" title={card.speakers.map((speaker) => speaker.name).join(", ")}>{card.speakers.length ? card.speakers.map((speaker) => speaker.name).join(" · ") : "—"}</span>
     <span class="program-board-card-tracks">{card.tracks.length ? card.tracks.slice(0, 2).map((track) => <span key={track.id} class="chip track-chip" style={{ borderLeftColor: track.color }}>{track.name}</span>) : "—"}</span>

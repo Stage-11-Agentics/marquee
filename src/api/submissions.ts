@@ -88,6 +88,7 @@ export interface SubmissionAgentReview {
 
 export interface SubmissionListItem {
   id: string;
+  reference_code: string | null;
   kind: "abstract" | "session";
   title: string;
   status: SubmissionListStatus;

@@ -77,6 +77,7 @@ async function submissionRecord(env: MirrorRecordEnv, rowId: string): Promise<Ai
   const attachments = await readyAttachments(env.DB, "submission_file", rowId);
   return fieldRecord(row, {
     event_id: row.event_id,
+    reference_code: row.reference_code,
     form_id: row.form_id,
     kind: row.kind,
     bypass_evaluation: row.bypass_evaluation,

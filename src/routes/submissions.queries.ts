@@ -13,6 +13,7 @@ import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-con
 import { localParts } from "../lib/event-time";
 import { DECISION_RECIPIENT_ROLES, participantListSql, primaryParticipantSql } from "../lib/participants";
 import { reviewAggregateColumns } from "../lib/review-aggregate";
+import { submissionReferenceSearchPatterns, submissionReferenceSearchSql } from "../lib/submission-reference";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import {
   executeListPage,
@@ -196,6 +197,7 @@ export interface SubmissionListEnvelope<T> extends ListEnvelope<T> {
 
 interface SubmissionQueryRow {
   id: string;
+  reference_code: string | null;
   event_id: string;
   kind: "abstract" | "session";
   title: string;
@@ -294,8 +296,9 @@ function filterParts(
   if (filters.placement === "unplaced") clauses.push("ai.id IS NULL");
   if (filters.q) {
     const query = `%${filters.q.toLocaleLowerCase()}%`;
+    const referencePatterns = submissionReferenceSearchPatterns(filters.q);
     clauses.push(`(
-      lower(s.id) LIKE ? OR lower(s.title) LIKE ? OR lower(s.search_blob) LIKE ?
+      lower(s.id) LIKE ? OR lower(s.title) LIKE ? OR lower(s.search_blob) LIKE ? OR ${submissionReferenceSearchSql()}
       OR EXISTS (
         SELECT 1 FROM participations search_par
         JOIN people search_person ON search_person.id = search_par.person_id
@@ -308,7 +311,7 @@ function filterParts(
         WHERE search_st.submission_id = s.id AND lower(search_track.name) LIKE ?
       )
     )`);
-    bindings.push(query, query, query, query, query, query);
+    bindings.push(query, query, query, ...referencePatterns, query, query, query);
   }
   return { where: clauses.join(" AND "), bindings };
 }
@@ -400,6 +403,7 @@ function toItem(row: SubmissionQueryRow): SubmissionListItem {
       : "scheduled";
   return {
     id: row.id,
+    reference_code: row.reference_code,
     kind: row.kind,
     title: row.title,
     status,
@@ -574,6 +578,7 @@ function itemSelect(
   return `
   s.event_id,
   s.id,
+  s.reference_code,
   s.kind,
   s.title,
   s.status AS stored_status,

@@ -2,6 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import type { ListEnvelope } from "./list";
 import { participantListSql } from "../lib/participants";
+import { submissionReferenceSearchPatterns, submissionReferenceSearchSql } from "../lib/submission-reference";
 import { submissionStatusPredicate } from "../routes/submissions.queries";
 import {
   executeListPage,
@@ -76,6 +77,7 @@ export interface BoardSlot {
 
 export interface BoardCard {
   id: string;
+  reference_code: string | null;
   kind: "abstract" | "session";
   title: string;
   speakers: Array<{ id: string; name: string; company: string | null }>;
@@ -110,6 +112,7 @@ export interface BoardListEnvelope extends ListEnvelope<BoardCard> {
 
 interface BoardQueryRow {
   id: string;
+  reference_code: string | null;
   kind: "abstract" | "session";
   title: string;
   format_id: string | null;
@@ -181,8 +184,9 @@ function filterParts(filters: BoardListFilters): QueryParts {
   }
   if (filters.q) {
     const query = `%${filters.q.toLocaleLowerCase()}%`;
+    const referencePatterns = submissionReferenceSearchPatterns(filters.q);
     clauses.push(`(
-      lower(s.id) LIKE ? OR lower(s.title) LIKE ? OR lower(s.search_blob) LIKE ?
+      lower(s.id) LIKE ? OR lower(s.title) LIKE ? OR lower(s.search_blob) LIKE ? OR ${submissionReferenceSearchSql()}
       OR lower(coalesce(format.name, '')) LIKE ?
       OR lower(coalesce(wave.name, '')) LIKE ?
       OR EXISTS (
@@ -197,7 +201,7 @@ function filterParts(filters: BoardListFilters): QueryParts {
         WHERE search_submission_track.submission_id = s.id AND lower(search_track.name) LIKE ?
       )
     )`);
-    bindings.push(query, query, query, query, query, query, query, query);
+    bindings.push(query, query, query, ...referencePatterns, query, query, query, query, query);
   }
   return { where: clauses.join(" AND "), bindings };
 }
@@ -247,6 +251,7 @@ function toCard(row: BoardQueryRow): BoardCard {
   const hours = Math.max(0, Math.floor((Date.now() - row.updated_at) / 3_600_000));
   return {
     id: row.id,
+    reference_code: row.reference_code,
     kind: row.kind,
     title: row.title,
     speakers: parseJsonArray(row.speakers_json),
@@ -286,6 +291,7 @@ export async function listBoard(
   const data = database.prepare(`
     SELECT
       s.id,
+      s.reference_code,
       s.kind,
       s.title,
       s.format_id,

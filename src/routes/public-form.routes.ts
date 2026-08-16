@@ -18,6 +18,7 @@ import { mintMagicLink, mintMagicLink as issueParticipantMagicLink } from "../li
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
 import { verifyTurnstile } from "../lib/r2/turnstile";
 import { submitterEditability } from "../lib/submission-editing";
+import { SUBMISSION_REFERENCE_CODE_SQL, withSubmissionReferenceRetry } from "../lib/submission-reference";
 import { boundSourceOf } from "../lib/bound-options";
 import {
   answerAttachmentId,
@@ -147,7 +148,7 @@ const publicFormSchema = z.object({
   submission_edit_reason: z.string().nullable(),
   turnstile_site_key: z.string().nullable(),
   confirmation: z.object({
-    title: z.string(), message: z.string(), email: z.string(),
+    title: z.string(), message: z.string(), reference_code: z.string(), email: z.string(),
     receipt_email: z.string().nullable(), receipt_sent: z.boolean(),
     resume_url: z.string().nullable(), portal_url: z.string().nullable(),
   }).nullable(),
@@ -655,17 +656,17 @@ async function stageRoutingSubmission(input: {
     ).bind(input.submissionId).all<TrackSnapshot>()).results
     : [];
   if (!input.existing) {
-    await input.db.prepare(
+    await withSubmissionReferenceRetry(() => input.db.prepare(
       `INSERT INTO submissions
-        (id, event_id, form_id, kind, title, abstract, status, format_id, primary_track_id,
+        (id, event_id, reference_code, form_id, kind, title, abstract, status, format_id, primary_track_id,
          origin, vendor_affiliation, submitter_person_id, resume_token_hash, last_saved_at,
          search_blob, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, 'public', ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ${SUBMISSION_REFERENCE_CODE_SQL}, ?, ?, ?, ?, 'draft', ?, ?, 'public', ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
-      input.submissionId, input.eventId, input.formId, input.kind, input.title, input.abstract,
+      input.submissionId, input.eventId, input.eventId, input.formId, input.kind, input.title, input.abstract,
       input.formatId, input.trackIds[0] ?? null, input.vendorAffiliation, input.personId,
       input.resumeHash, input.now, input.searchBlob, input.now, input.now,
-    ).run();
+    ).run());
   }
   await persistTracks(input.db, input.submissionId, input.trackIds, input.now);
   return {
@@ -800,18 +801,19 @@ async function createDraft(
   });
   const submissionId = crypto.randomUUID();
   const resumeToken = mintToken();
+  const resumeHash = await sha256Hex(resumeToken);
   const title = answerText(projected.projected.answers, "title") ?? "Untitled abstract";
-  await context.env.DB.prepare(
+  await withSubmissionReferenceRetry(() => context.env.DB.prepare(
     `INSERT INTO submissions
-      (id, event_id, form_id, kind, title, abstract, status, origin, vendor_affiliation,
+      (id, event_id, reference_code, form_id, kind, title, abstract, status, origin, vendor_affiliation,
        submitter_person_id, resume_token_hash, last_saved_at, search_blob, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'draft', 'public', ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ${SUBMISSION_REFERENCE_CODE_SQL}, ?, ?, ?, ?, 'draft', 'public', ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
-    submissionId, base.form.event_id, base.form.id, base.form.kind, title,
+    submissionId, base.form.event_id, base.form.event_id, base.form.id, base.form.kind, title,
     answerText(projected.projected.answers, "abstract"), vendorAffiliation(projected.projected.answers),
-    person.id, await sha256Hex(resumeToken), now,
+    person.id, resumeHash, now,
     JSON.stringify(projected.projected.answers), now, now,
-  ).run();
+  ).run());
   await replaceProjectedAnswers(context.env.DB, submissionId, base.fields, projected.projected.answers, now);
   await persistParticipantRoster(context.env.DB, {
     submissionId,
@@ -1139,17 +1141,17 @@ async function handlePublicSubmission(
       now, JSON.stringify(projected.projected.answers), routing.ruleId, person.id, now, submissionId,
     ).run();
   } else {
-    await context.env.DB.prepare(
+    await withSubmissionReferenceRetry(() => context.env.DB.prepare(
       `INSERT INTO submissions
-       (id, event_id, form_id, kind, title, abstract, status, format_id, primary_track_id,
+       (id, event_id, reference_code, form_id, kind, title, abstract, status, format_id, primary_track_id,
         origin, vendor_affiliation, submitter_person_id, resume_token_hash, submitted_at,
         last_saved_at, search_blob, applied_rule_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'submitted', ?, ?, 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ${SUBMISSION_REFERENCE_CODE_SQL}, ?, ?, ?, ?, 'submitted', ?, ?, 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
-      submissionId, base.form.event_id, base.form.id, base.form.kind, title, abstract,
+      submissionId, base.form.event_id, base.form.event_id, base.form.id, base.form.kind, title, abstract,
       references.formatId, references.trackIds[0] ?? null, vendor, person.id, resumeHash,
       now, now, JSON.stringify(projected.projected.answers), routing.ruleId, now, now,
-    ).run();
+    ).run());
   }
   // The first two moments of MRQ-211's submission timeline. Everything that
   // happens to a record afterwards — decided, reversed, mailed — already writes
@@ -1200,6 +1202,11 @@ async function handlePublicSubmission(
   await moveAttachments(context.env.DB, submissionId, existing?.id ?? null, projected.projected.answers);
   await writeRoutingPoolAssignment(context.env.DB, submissionId, routing, now);
 
+  const referenceCode = (await context.env.DB.prepare(
+    "SELECT reference_code FROM submissions WHERE id = ? AND event_id = ?",
+  ).bind(submissionId, base.form.event_id).first<{ reference_code: string | null }>())?.reference_code;
+  if (!referenceCode) throw new Error("submission reference code was not assigned");
+
   // One scoped invitation per person somebody else named — the co-speakers, the
   // moderator, and under the disclosure the speaker too. Each is the authority
   // on their own bio and headshot, and this link is how they exercise it.
@@ -1228,10 +1235,10 @@ async function handlePublicSubmission(
       toEmail: email!,
       typedAddress: email!,
       templateKey: confirmationTemplateKey,
-      data: { "submission.title": title, "speaker.first_name": (answerText(projected.projected.answers, "speaker_name") ?? "there").split(/\s+/)[0] ?? "there" },
-      subject: `We received ${title}`,
-      text: `We received ${title}.\n\nReview your conference abstract here: ${confirmationUrl}`,
-      html: `<p>We received <strong>${escapeHtml(title)}</strong>.</p><p><a href="${confirmationUrl}">Review your conference abstract</a></p>`,
+      data: { "submission.title": title, "submission.reference_code": referenceCode, "speaker.first_name": (answerText(projected.projected.answers, "speaker_name") ?? "there").split(/\s+/)[0] ?? "there" },
+      subject: `Abstract ${referenceCode} received — ${title}`,
+      text: `Abstract ${referenceCode} received — ${title}.\n\nReview your conference abstract here: ${confirmationUrl}`,
+      html: `<p>Abstract <strong>${escapeHtml(referenceCode)}</strong> received — <strong>${escapeHtml(title)}</strong>.</p><p><a href="${confirmationUrl}">Review your conference abstract</a></p>`,
       now,
     });
     await enqueueMailMessage(context.env.MAIL_QUEUE, confirmation.id);
