@@ -78,6 +78,7 @@ export interface MirrorTableProgress {
     state: "pending" | "created" | "adopted" | "conflict";
   }[];
   missing_fields: readonly string[];
+  organizer_fields: readonly string[];
   conflicts: readonly MirrorSchemaIssue[];
 }
 
@@ -376,6 +377,8 @@ function progressFor(
     const missingFields = inspection?.missingFields.map((field) => field.name) ?? [];
     const missing = new Set(missingFields);
     const created = createdFields?.get(role);
+    const declaredNames = new Set(MIRROR_TABLE_SCHEMA[role].fields.map((field) => field.name));
+    const organizerFields = table?.fields?.filter((field) => !declaredNames.has(field.name)).map((field) => field.name) ?? [];
     const fields = MIRROR_TABLE_SCHEMA[role].fields.map((field) => ({
       name: field.name,
       state: !tableId
@@ -404,6 +407,7 @@ function progressFor(
       conformant_field_count: conformantFieldCount(role, table, operation),
       fields,
       missing_fields: missingFields,
+      organizer_fields: organizerFields,
       conflicts: issues,
     };
   });
@@ -477,6 +481,9 @@ async function finalizeMirrorConnection(
     input.now,
     input.now,
   )];
+  // Replacement state is cleared only inside the same final batch that writes
+  // the freshly conformant mapping. Verification, provisioning, partial
+  // adoption, and refused retries therefore leave the active mirror untouched.
   statements.push(
     env.DB.prepare(
       "DELETE FROM mirror_state WHERE table_name IN ('submissions', 'speaker_tasks', 'people')",
@@ -530,23 +537,35 @@ async function provisionTables(
   const working = [...input.tables];
   const tableActions: MirrorTableAction[] = [];
   const createdFields = new Map<MirroredTable, ReadonlySet<string>>();
+  const usedTableIds = new Set<string>();
+
+  // Resolve and inspect every submitted/fallback table before the first
+  // mutation. Missing fields are adoptable in the later one-table requests;
+  // hard type/shape conflicts stop provisioning without partial writes.
   for (const role of MIRRORED_TABLES) {
     const submittedId = mappingValue(mapping, role);
-    if (submittedId) {
-      selected[role] = submittedId;
-      tableActions.push({ role, table_id: submittedId, outcome: "adopted" });
-      continue;
+    const candidate = submittedId
+      ? available.get(submittedId)
+      : findExactMirrorTable(working.filter((table) => !usedTableIds.has(table.id)), role);
+    if (!candidate) continue;
+    if (usedTableIds.has(candidate.id)) {
+      return { ok: false, field: "tables", message: "Choose a different Airtable table for each mirrored record type." };
     }
-    const exact = findExactMirrorTable(working, role);
-    if (exact) {
-      const inspection = ensureMirrorSchema(role, exact, "provision");
-      if (!inspection.conformant) {
-        return schemaFailure(inspection, progressFor(working, selected, "provision"), "provision");
-      }
-      selected[role] = exact.id;
-      tableActions.push({ role, table_id: exact.id, outcome: "adopted" });
-      continue;
+    usedTableIds.add(candidate.id);
+    selected[role] = candidate.id;
+    tableActions.push({ role, table_id: candidate.id, outcome: "adopted" });
+  }
+  for (const role of MIRRORED_TABLES) {
+    const tableId = mappingValue(selected, role);
+    if (!tableId) continue;
+    const inspection = ensureMirrorSchema(role, available.get(tableId), "provision");
+    if (inspection.issues.length > 0) {
+      return schemaFailure(inspection, progressFor(working, selected, "provision"), "provision");
     }
+  }
+
+  for (const role of MIRRORED_TABLES) {
+    if (mappingValue(selected, role)) continue;
     try {
       const declaredFields = createTableFields(role);
       const created = await input.transport.createTable({
@@ -577,10 +596,12 @@ async function provisionTables(
     return failureForProvider(error, { operation: "provision" });
   }
   const finalById = tablesById(finalTables);
+  const finalInspections = new Map<MirroredTable, ReturnType<typeof ensureMirrorSchema>>();
   for (const role of MIRRORED_TABLES) {
     const tableId = mappingValue(selected, role);
     const inspection = ensureMirrorSchema(role, tableId ? finalById.get(tableId) : undefined, "provision");
-    if (!inspection.conformant) return schemaFailure(inspection, progressFor(finalTables, selected, "provision"), "provision");
+    finalInspections.set(role, inspection);
+    if (inspection.issues.length > 0) return schemaFailure(inspection, progressFor(finalTables, selected, "provision"), "provision");
   }
   const readiness = readinessFor(finalTables);
   const provisionProgress = progressFor(finalTables, selected, "provision", undefined, createdFields).map((row) => {
@@ -593,8 +614,8 @@ async function provisionTables(
     readiness,
     needsProvisioning: readiness.needs_provisioning,
     progress: provisionProgress,
-    continuation: null,
-    complete: true,
+    continuation: MIRRORED_TABLES.find((role) => !finalInspections.get(role)?.conformant) ?? null,
+    complete: MIRRORED_TABLES.every((role) => finalInspections.get(role)?.conformant === true),
     tableActions,
   };
 }

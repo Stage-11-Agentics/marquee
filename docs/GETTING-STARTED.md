@@ -185,8 +185,10 @@ npx wrangler secret put MIRROR_CREDENTIAL_SECRET
 ```
 
 For local development, put the generated value in the ignored `.dev.vars`;
-`.dev.vars.example` shows the name. The Airtable token needs `schema.bases:read`
-for verification. `schema.bases:write` is needed only when the organizer
+`.dev.vars.example` shows the name. The Marquee bearer token needs
+`mirror:write` for connect, mapping, sync, and disconnect; `program:read` is
+enough for status. The Airtable token needs `schema.bases:read` for
+verification. `schema.bases:write` is needed only when the organizer
 explicitly provisions missing tables or fields; a conformant existing base can
 be adopted with read access alone. Then open **Settings → Airtable**, paste the
 token and base ID, verify the returned schema, choose the submitted IDs for

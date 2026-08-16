@@ -28,6 +28,7 @@ export interface MirrorTableDefinition {
 }
 
 const DATE_TIME_OPTIONS = {
+  timeZone: "utc",
   dateFormat: { name: "iso" },
   timeFormat: { name: "24hour" },
 };
@@ -37,6 +38,9 @@ const SELECT_OR_TEXT_TYPES = ["singleLineText", "multilineText", "richText", "si
 const TEXT_REPRESENTATIVE = "example";
 const ID_REPRESENTATIVE = "rec_mrq248_example";
 const ISO_REPRESENTATIVE = "2026-08-15T12:00:00.000Z";
+// This is the record-write value, not field configuration: Airtable accepts a
+// URL and optional filename for each attachment object. Local metadata keys
+// are deliberately absent from the provider payload.
 const ATTACHMENT_REPRESENTATIVE = [{ url: "https://media.example.test/file.pdf", filename: "file.pdf" }];
 
 function text(name: string, representative = TEXT_REPRESENTATIVE): MirrorSchemaField {

@@ -407,10 +407,12 @@ async function execute(command, arguments_, options, flags, client) {
       const airtableToken = option(options, "--airtable-token");
       if (!baseId) usageError(`${command.usage} requires --base-id`);
       if (!airtableToken) usageError(`${command.usage} requires --airtable-token`);
+      const mapping = parseSetValues(command, options);
       return client.post("/api/v1/mirror/connect", {
         base_id: baseId,
         token: airtableToken,
         intent: flags.has("--provision") ? "provision" : "verify",
+        ...(Object.keys(mapping).length > 0 ? { mapping } : {}),
       });
     }
     if (verb === "map") {
@@ -421,7 +423,9 @@ async function execute(command, arguments_, options, flags, client) {
       const mapping = requireSetValues(command, options);
       let continuation = "submissions";
       let response;
+      const progressByRole = new Map();
       while (continuation) {
+        const requestedRole = continuation;
         response = await client.post("/api/v1/mirror/mapping", {
           ...mapping,
           base_id: baseId,
@@ -429,9 +433,22 @@ async function execute(command, arguments_, options, flags, client) {
           intent: flags.has("--provision") ? "provision" : "adopt",
           continuation,
         });
+        const requestedProgress = response?.data?.progress?.find((row) => row.role === requestedRole);
+        if (requestedProgress) progressByRole.set(requestedRole, requestedProgress);
         continuation = response?.data?.continuation ?? null;
       }
-      return response;
+      if (!response?.data || progressByRole.size === 0) return response;
+      const finalProgress = response.data.progress ?? [];
+      return {
+        ...response,
+        data: {
+          ...response.data,
+          progress: ["submissions", "speaker_tasks", "people"].flatMap((role) => {
+            const row = progressByRole.get(role) ?? finalProgress.find((candidate) => candidate.role === role);
+            return row ? [row] : [];
+          }),
+        },
+      };
     }
     if (verb === "status") return client.get("/api/v1/mirror/status");
     if (verb === "sync") return client.post("/api/v1/mirror/sync");

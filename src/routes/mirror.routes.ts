@@ -79,6 +79,7 @@ const progress = z.object({
     state: z.enum(["pending", "created", "adopted", "conflict"]),
   })),
   missing_fields: z.array(z.string()),
+  organizer_fields: z.array(z.string()),
   conflicts: z.array(z.unknown()),
 });
 
@@ -183,11 +184,28 @@ async function actorPersonId(
   return row.created_by;
 }
 
+export function mirrorActionFailureError(result: { ok: false; field: string; message: string; code?: string; retryable?: boolean; details?: unknown }): ApiError {
+  const details = {
+    ...(typeof result.details === "object" && result.details ? result.details : {}),
+    mirror_setup: true,
+    retryable: result.retryable === true,
+  };
+  if (result.code === "rate_limited") {
+    return new ApiError("rate_limited", result.message, {
+      field: result.field,
+      details,
+      headers: { "Retry-After": "1" },
+    });
+  }
+  if (result.code === "provider_forbidden") {
+    return new ApiError("forbidden", result.message, { field: result.field, details });
+  }
+  if (result.code === "schema_conflict") return ApiError.conflict(result.message, details);
+  return ApiError.unprocessable(result.message, result.field, result.details);
+}
+
 function throwActionFailure(result: { ok: false; field: string; message: string; code?: string; retryable?: boolean; details?: unknown }): never {
-  if (result.code === "rate_limited") throw ApiError.rateLimited(1);
-  if (result.code === "provider_forbidden") throw ApiError.forbidden(result.message);
-  if (result.code === "schema_conflict") throw ApiError.conflict(result.message, { ...(typeof result.details === "object" && result.details ? result.details : {}), retryable: result.retryable === true });
-  throw ApiError.unprocessable(result.message, result.field, result.details);
+  throw mirrorActionFailureError(result);
 }
 
 const connect = defineApiRoute(

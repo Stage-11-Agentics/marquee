@@ -90,11 +90,13 @@ export const COMMAND_REGISTRY = [
   },
   {
     path: ["mirror", "connect"],
-    usage: "marquee mirror connect --base-id <base-id> --airtable-token <token> [--provision]",
+    usage: "marquee mirror connect --base-id <base-id> --airtable-token <token> [--set submissions=<table-id>] [--set speaker_tasks=<table-id>] [--set people=<table-id>] [--provision]",
     summary: "Verify an Airtable base, or explicitly create/adopt its canonical mirror tables.",
     operations: ["connectMirror"],
     skill: "airtable",
+    set: ["submissions", "speaker_tasks", "people"],
     options: [
+      SET_OPTION,
       { name: "--base-id <base-id>", description: "Airtable base ID, such as app… ." },
       { name: "--airtable-token <token>", description: "Airtable personal access token; never the Marquee bearer token." },
       { name: "--provision", description: "Explicitly create missing canonical mirror tables after verification." },

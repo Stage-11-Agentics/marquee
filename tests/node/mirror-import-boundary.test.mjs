@@ -42,7 +42,7 @@ test("CONTRACT · the mirror transport import boundary has teeth", async () => {
   );
   await writeFile(
     badSchemaImport,
-    'import { createFetchAirtableTransport } from "../../jobs/mirror/transport";\nimport { ensureMirrorSchema } from "../../jobs/mirror/schema";\nvoid createFetchAirtableTransport;\nvoid ensureMirrorSchema;\n',
+    'import { ensureMirrorSchema } from "../../jobs/mirror/schema";\nvoid ensureMirrorSchema;\n',
     "utf8",
   );
   try {

@@ -10,12 +10,14 @@ import { currentAirtableRecord, MIRRORED_TABLES, type MirroredTable } from "../.
 import { FakeAirtableTransport } from "../../src/jobs/mirror/fake-transport";
 import {
   airtableValueMatchesType,
+  createFieldPayload,
+  createTableFields,
   ensureMirrorSchema,
   MIRROR_FIELD_COUNTS,
   MIRROR_TABLE_SCHEMA,
   mirrorRecordMatchesSchema,
 } from "../../src/jobs/mirror/schema";
-import type { AirtableTable } from "../../src/jobs/mirror/transport";
+import { createFetchAirtableTransport, type AirtableTable } from "../../src/jobs/mirror/transport";
 import { applyMigrations, env } from "./apply-migrations";
 
 const NOW = Date.UTC(2026, 7, 16, 12, 0, 0);
@@ -60,8 +62,11 @@ function tableFor(role: MirroredTable, id: string, name = MIRROR_TABLE_SCHEMA[ro
   };
 }
 
-function fullTables(names: Partial<Record<MirroredTable, string>> = {}): AirtableTable[] {
-  return MIRRORED_TABLES.map((role) => tableFor(role, names[role] ?? `tbl_${role}`, `Organizer ${role}`));
+function fullTables(
+  ids: Partial<Record<MirroredTable, string>> = {},
+  names: Partial<Record<MirroredTable, string>> = {},
+): AirtableTable[] {
+  return MIRRORED_TABLES.map((role) => tableFor(role, ids[role] ?? `tbl_${role}`, names[role] ?? `Organizer ${role}`));
 }
 
 function mappingFor(tables: readonly AirtableTable[]): MirrorMappingInput {
@@ -157,8 +162,47 @@ beforeEach(async () => {
   await seedOwner();
 });
 
+test("MRQ-248 · fetch transport sends canonical metadata paths and bodies", async () => {
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const fetcher: typeof fetch = async (input, init = {}) => {
+    const url = String(input);
+    requests.push({ url, init });
+    const isField = url.endsWith("/tables/tbl_sessions/fields");
+    return Response.json(isField
+      ? { id: "fld_submitted_at", name: "submitted_at", type: "dateTime", options: MIRROR_TABLE_SCHEMA.submissions.fields.find((field) => field.name === "submitted_at")!.options }
+      : { id: "tbl_sessions", name: "Submissions", fields: createTableFields("submissions") });
+  };
+  const transport = createFetchAirtableTransport({
+    apiKey: "pat_hermetic",
+    baseId: "app base/with slash",
+    apiOrigin: "https://airtable.example.test",
+    fetcher,
+  });
+  await transport.createTable({ name: "Submissions", fields: createTableFields("submissions") });
+  const submittedAt = MIRROR_TABLE_SCHEMA.submissions.fields.find((field) => field.name === "submitted_at")!;
+  await transport.createField({ tableId: "tbl_sessions", ...createFieldPayload(submittedAt) });
+
+  expect(requests.map((request) => request.url)).toEqual([
+    "https://airtable.example.test/v0/meta/bases/app%20base%2Fwith%20slash/tables",
+    "https://airtable.example.test/v0/meta/bases/app%20base%2Fwith%20slash/tables/tbl_sessions/fields",
+  ]);
+  expect(requests[0]?.init).toMatchObject({
+    method: "POST",
+    body: JSON.stringify({ name: "Submissions", fields: createTableFields("submissions") }),
+  });
+  expect(requests[1]?.init).toMatchObject({
+    method: "POST",
+    body: JSON.stringify({ name: "submitted_at", type: "dateTime", options: submittedAt.options }),
+  });
+});
+
 test("MRQ-248 · schema keys, preferred shapes, and canonical record values are exhaustive", async () => {
   expect(MIRROR_FIELD_COUNTS).toEqual({ submissions: 26, speaker_tasks: 19, people: 17 });
+  expect(MIRROR_TABLE_SCHEMA.submissions.fields.find((field) => field.name === "submitted_at")?.options).toEqual({
+    timeZone: "utc",
+    dateFormat: { name: "iso" },
+    timeFormat: { name: "24hour" },
+  });
   for (const role of MIRRORED_TABLES) {
     const fields = MIRROR_TABLE_SCHEMA[role].fields;
     expect(fields[0]?.name).toBe("marquee_id");
@@ -223,11 +267,19 @@ test("MRQ-248 · verify is advisory, fresh/default bases offer explicit provisio
 });
 
 test("MRQ-248 · submitted differently named IDs are authoritative and map without createTable", async () => {
-  const tables = fullTables({ submissions: "tbl_call_for_papers", speaker_tasks: "tbl_followups", people: "tbl_roster" });
+  const tables = fullTables(
+    { submissions: "tbl_call_for_papers", speaker_tasks: "tbl_followups", people: "tbl_roster" },
+    { submissions: "Sessions", speaker_tasks: "Follow-ups", people: "Humans" },
+  );
   const fake = new FakeAirtableTransport(() => NOW, { tables });
   const verified = await verifyConnection(fake);
   expect(verified.needsProvisioning).toBe(false);
-  const mapped = await mapAll(fake, mappingFor(tables));
+  const submittedMapping = {
+    submissions: "tbl_call_for_papers",
+    speaker_tasks: "tbl_followups",
+    people: "tbl_roster",
+  };
+  const mapped = await mapAll(fake, submittedMapping);
   expect(mapped.complete).toBe(true);
   expect(fake.calls.filter((call) => call.kind === "create_table")).toHaveLength(0);
   expect(await env.DB.prepare("SELECT table_name, airtable_table_id FROM mirror_state ORDER BY table_name").all()).toMatchObject({
@@ -238,6 +290,38 @@ test("MRQ-248 · submitted differently named IDs are authoritative and map witho
     ],
   });
   expect(fake.calls.filter((call) => call.kind === "create_webhook")).toHaveLength(1);
+});
+
+test("MRQ-248 · partial templates preserve submitted IDs and organizer columns while creating only unfilled roles", async () => {
+  const submissions = tableFor("submissions", "tbl_sessions_template", "Sessions");
+  submissions.fields = [
+    submissions.fields![0],
+    { id: "fld_organizer_notes", name: "Organizer notes", type: "multilineText", options: { sentinel: "kept-byte-for-byte" } },
+  ];
+  const fake = new FakeAirtableTransport(() => NOW, { tables: [submissions] });
+  const provisioned = await verifyConnection(fake, "provision", { submissions: submissions.id });
+  expect(provisioned.complete).toBe(false);
+  expect(provisioned.continuation).toBe("submissions");
+  expect(fake.calls.filter((call) => call.kind === "create_table")).toHaveLength(2);
+  expect(fake.calls.filter((call) => call.kind === "create_field")).toHaveLength(0);
+  expect(provisioned.tableActions).toEqual(expect.arrayContaining([
+    { role: "submissions", table_id: submissions.id, outcome: "adopted" },
+    expect.objectContaining({ role: "speaker_tasks", outcome: "created" }),
+    expect.objectContaining({ role: "people", outcome: "created" }),
+  ]));
+  expect(provisioned.progress?.find((row) => row.role === "submissions")?.organizer_fields).toEqual(["Organizer notes"]);
+
+  const mapping = Object.fromEntries(provisioned.tableActions!.map((action) => [action.role, action.table_id])) as unknown as MirrorMappingInput;
+  const mapped = await mapAll(fake, mapping);
+  expect(mapped.complete).toBe(true);
+  expect(fake.calls.filter((call) => call.kind === "create_field")).toHaveLength(25);
+  expect(fake.tables.find((table) => table.id === submissions.id)?.fields?.find((field) => field.name === "Organizer notes")).toEqual({
+    id: "fld_organizer_notes",
+    name: "Organizer notes",
+    type: "multilineText",
+    options: { sentinel: "kept-byte-for-byte" },
+  });
+  expect(mapped.progress?.find((row) => row.role === "submissions")?.organizer_fields).toEqual(["Organizer notes"]);
 });
 
 test("MRQ-248 · verify never clears the active mapping; replacement state changes only at final adoption", async () => {
@@ -309,6 +393,7 @@ test("MRQ-248 · adoption is resumable and retry-safe after a rate-limited fifth
   expect(first.retryable).toBe(true);
   expect(first.message).not.toContain("provider-private-429");
   expect(first.details).toMatchObject({ continuation: "submissions" });
+  expect((first.details as { progress: Array<{ role: string; organizer_fields: string[] }> }).progress.find((row) => row.role === "submissions")?.organizer_fields).toEqual(["Organizer notes"]);
   const retry = await mapMirror(actionEnvironment(fake), {
     mapping,
     orgId: ORG_ID,
@@ -331,6 +416,48 @@ test("MRQ-248 · adoption is resumable and retry-safe after a rate-limited fifth
   expect(fake.calls.filter((call) => call.kind === "create_webhook")).toHaveLength(1);
   expect(fake.calls.filter((call) => call.kind === "schema").length).toBeGreaterThanOrEqual(6);
   expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM mirror_state").first<{ count: number }>()).toMatchObject({ count: 3 });
+});
+
+test("MRQ-248 · the final continuation freshly rejects a previously completed table before the on-switch", async () => {
+  const tables = fullTables({ submissions: "tbl_fresh_submissions", speaker_tasks: "tbl_fresh_tasks", people: "tbl_fresh_people" });
+  const fake = new FakeAirtableTransport(() => NOW, { tables });
+  const mapping = mappingFor(tables);
+  for (const continuation of ["submissions", "speaker_tasks"] as const) {
+    const step = await mapMirror(actionEnvironment(fake), {
+      mapping,
+      orgId: ORG_ID,
+      baseId: BASE_ID,
+      setByPersonId: PERSON_ID,
+      token: TOKEN,
+      continuation,
+    });
+    expect(step.ok).toBe(true);
+  }
+  const prior = fake.tables.find((table) => table.id === mapping.submissions)!;
+  prior.fields = prior.fields!.map((field) => field.name === "status" ? { ...field, type: "formula" } : field);
+  const final = await mapMirror(actionEnvironment(fake), {
+    mapping,
+    orgId: ORG_ID,
+    baseId: BASE_ID,
+    setByPersonId: PERSON_ID,
+    token: TOKEN,
+    continuation: "people",
+  });
+  expect(final.ok).toBe(false);
+  if (final.ok) throw new Error("expected fresh final validation to fail");
+  expect(final.code).toBe("schema_conflict");
+  expect(final.message).toContain("status");
+  expect(fake.calls.filter((call) => call.kind === "create_webhook")).toHaveLength(0);
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM mirror_state").first<{ count: number }>()).toMatchObject({ count: 0 });
+});
+
+test("MRQ-248 · unknown provider fields remain unknown instead of becoming an empty schema", async () => {
+  const unknown: AirtableTable = { id: "tbl_unknown", name: "Submissions" };
+  const fake = new FakeAirtableTransport(() => NOW, { tables: [unknown] });
+  const verified = await verifyConnection(fake);
+  expect(verified.tables[0]?.fields).toBeUndefined();
+  expect(verified.readiness.roles.find((role) => role.role === "submissions")?.state).toBe("unknown");
+  expect(ensureMirrorSchema("submissions", unknown, "verify").issues[0]).toMatchObject({ code: "unknown_schema" });
 });
 
 test("MRQ-248 · computed and incomplete single-select fields conflict before webhook registration", async () => {

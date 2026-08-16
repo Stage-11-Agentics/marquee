@@ -13,7 +13,7 @@ The command registry is:
 - `node cli/marquee.mjs setup instance`
 - `node cli/marquee.mjs event create --set name=<name> --set starts_on=<date> --set ends_on=<date> --set timezone=<tz> [--from <event-id>] [--copy <sets>]`
 - `node cli/marquee.mjs event list`
-- `node cli/marquee.mjs mirror connect --base-id <base-id> --airtable-token <token> [--provision]`
+- `node cli/marquee.mjs mirror connect --base-id <base-id> --airtable-token <token> [--set submissions=<table-id>] [--set speaker_tasks=<table-id>] [--set people=<table-id>] [--provision]`
 - `node cli/marquee.mjs mirror map --base-id <base-id> --set submissions=<table-id> --set speaker_tasks=<table-id> --set people=<table-id> --airtable-token <token> [--provision]`
 - `node cli/marquee.mjs mirror status`
 - `node cli/marquee.mjs mirror sync`
@@ -120,7 +120,7 @@ openssl rand -base64 32
 npx wrangler secret put MIRROR_CREDENTIAL_SECRET
 ```
 
-Use Settings → Airtable for the screen flow, or run the same API-backed flow from a terminal. The Marquee bearer token authenticates these commands; the Airtable personal access token is re-sent on every schema-adoption continuation and is stored encrypted only when the final mapping turns the mirror on:
+Use Settings → Airtable for the screen flow, or run the same API-backed flow from a terminal. The Marquee bearer token needs `mirror:write` for connect, mapping, sync, and disconnect; `program:read` is enough for status. The Airtable personal access token needs `schema.bases:read` for verification and `schema.bases:write` only for explicit table or field mutation. It is re-sent on every schema-adoption continuation and is stored encrypted only when the final mapping turns the mirror on:
 
 ```sh
 node cli/marquee.mjs mirror connect --base-id "$AIRTABLE_BASE_ID" --airtable-token "$AIRTABLE_TOKEN" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
