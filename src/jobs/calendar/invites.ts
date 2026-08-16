@@ -3,7 +3,7 @@ import type { D1Database, Queue } from "@cloudflare/workers-types";
 import type { Id } from "../../db/schema";
 import { buildingGeo, sessionLocation } from "../../lib/venue-geometry";
 import { enqueueMailMessage } from "../mail/consumer";
-import { enqueueOutbox } from "../mail/outbox";
+import { enqueueOutbox, enqueueSmokeHarnessMail } from "../mail/outbox";
 import {
   buildCalendarMail,
   calendarUid,
@@ -151,10 +151,12 @@ async function queueCalendarMaterial(
     origin: string;
     sequence: number;
     uid: string;
+    smokeHarness?: boolean;
   },
 ): Promise<{ material: CalendarMailMaterial; outboxId: Id; inserted: boolean }> {
   const material = buildCalendarMail(eventInput(session, recipient, input));
-  const outbox = await enqueueOutbox({
+  const enqueue = input.smokeHarness ? enqueueSmokeHarnessMail : enqueueOutbox;
+  const outbox = await enqueue({
     db,
     eventId: session.event_id,
     templateKey: `calendar_${input.method.toLowerCase()}`,
@@ -183,6 +185,8 @@ export async function sendCalendarInvites(input: {
   queue: Queue<unknown>;
   submissionId: Id;
   now?: number;
+  /** Only the explicit authenticated smoke route may use the live G3 policy. */
+  smokeHarness?: boolean;
 }): Promise<CalendarDeliveryResult[]> {
   const now = input.now ?? Date.now();
   const session = await sessionFor(input.db, input.eventId, input.submissionId);
@@ -204,6 +208,7 @@ export async function sendCalendarInvites(input: {
       origin,
       sequence,
       uid,
+      smokeHarness: input.smokeHarness,
     });
     if (current) {
       await input.db
@@ -244,6 +249,8 @@ export async function cancelCalendarInvites(input: {
   queue: Queue<unknown>;
   submissionId: Id;
   now?: number;
+  /** Only the explicit authenticated smoke route may use the live G3 policy. */
+  smokeHarness?: boolean;
 }): Promise<CalendarDeliveryResult[]> {
   const now = input.now ?? Date.now();
   const session = await sessionFor(input.db, input.eventId, input.submissionId);
@@ -275,6 +282,7 @@ export async function cancelCalendarInvites(input: {
       origin,
       sequence,
       uid: invite.uid,
+      smokeHarness: input.smokeHarness,
     });
     await input.db
       .prepare(

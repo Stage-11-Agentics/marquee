@@ -50,3 +50,30 @@ test("AC-95, AC-96, AC-97, AC-124, AC-252, AC-262 · request update cancel keeps
   expect(publicResponse.headers.get("content-type")).toContain("text/calendar");
   expect(await publicResponse.text()).toBe(outbox.results[2]?.ics_body);
 });
+
+test("CONTRACT · MRQ-238 · only the explicit smoke harness opts calendar mail into always-live delivery", async () => {
+  const first = await sendCalendarInvites({
+    db: env.DB,
+    eventId: EVENT_ID,
+    queue: env.MAIL_QUEUE,
+    submissionId: SUBMISSION_ID,
+    now: NOW,
+    smokeHarness: true,
+  });
+  await cancelCalendarInvites({
+    db: env.DB,
+    eventId: EVENT_ID,
+    queue: env.MAIL_QUEUE,
+    submissionId: SUBMISSION_ID,
+    now: NOW + 1_000,
+    smokeHarness: true,
+  });
+
+  const outbox = await env.DB
+    .prepare("SELECT send_policy FROM outbox WHERE event_id = ? ORDER BY created_at ASC")
+    .bind(EVENT_ID)
+    .all<{ send_policy: string }>();
+  expect(first).toHaveLength(1);
+  expect(outbox.results).toHaveLength(2);
+  expect(outbox.results.every((row) => row.send_policy === "always_live")).toBe(true);
+});

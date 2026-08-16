@@ -71,12 +71,27 @@ Scaffold stubs write `status: "stub"` reports and exit zero for ordinary develop
 
 `smoke:mail` and `smoke:ics` are live, externally configured oracles. They
 write `artifacts/checks/smoke-mail.json` and `artifacts/checks/smoke-ics.json`.
-Each run creates a new `smoke-<ULID>@<catch-all-domain>` recipient; `--to`
-selects a domain for compatibility with the frozen invocation and its supplied
-localpart is deliberately discarded. A bounced address must never be reused.
-The scripts submit through the real public form, query the private inbox D1 via
-Wrangler, and report `needs-human` when routing, database, credentials, or
-calendar-client setup is missing.
+With no `--to`, each run creates a new `smoke-<ULID>@<catch-all-domain>` recipient.
+`--to <full-address>` is an exact, repeatable recipient argument: its localpart
+and domain are preserved, and `--to a@example.test --to b@example.test` runs the
+oracle for both addresses. Explicit recipients must be freshly provisioned for
+the run; never reuse an address after a bounce or suppression-list entry. The
+`--domain` option only chooses the catch-all domain for generated addresses; it
+never rewrites an explicit `--to` address.
+
+The scripts submit through the real public form and query the private inbox D1
+via Wrangler. Generated catch-all addresses can be proved mechanically against
+the inbox Worker with `--local --inbox-persist-to <wrangler-state-directory>`.
+Real Gmail, Outlook, and Apple addresses are the human client half of the
+oracle; provide them literally with repeated `--to` values and confirm arrival
+and calendar rendering in those clients. For a non-catch-all exact address the
+script queues the live path and returns `needs-human` instead of polling that
+address from the private D1; this avoids claiming mechanical arrival where the
+Worker cannot observe it. Missing routing, database,
+credentials, or calendar-client setup is reported as `needs-human` in the JSON
+artifact and exits 2. Poll expiry is a `timeout` artifact and exits 1 because
+no arrival was proved; a timeout is not a needs-human result. A Turnstile 403
+is `needs-human`, since only an operator can complete that security check.
 
 ## Fast and slow suites
 

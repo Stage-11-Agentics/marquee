@@ -100,6 +100,10 @@ const reversalResponseSchema = z.object({
 
 type SubmissionPreview = z.infer<typeof previewSchema>;
 
+function smokeHarnessRequested(context: Parameters<typeof getAuth>[0]): boolean {
+  return context.req.header("x-marquee-smoke-harness") === "1" && getAuth(context)?.kind === "token";
+}
+
 async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
   const auth = getAuth(context);
   if (!auth) throw ApiError.unauthenticated();
@@ -233,6 +237,7 @@ const reverseAcceptance = defineApiRoute(
       calendar: body.calendar as AcceptanceReversalChoice,
       outcome: body.outcome,
       origin: new URL(context.req.url).origin,
+      smokeHarness: smokeHarnessRequested(context),
     });
     if (result.outcome === "failed") {
       if (result.error === "submission not found") throw ApiError.notFound("submission not found");

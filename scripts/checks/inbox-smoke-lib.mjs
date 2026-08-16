@@ -20,10 +20,20 @@ const ONE_PIXEL_PNG = Buffer.from(
 );
 
 export class SmokeNeedsHuman extends Error {
-  constructor(message) {
+  constructor(message, details = {}) {
     super(message);
     this.name = "SmokeNeedsHuman";
     this.needsHuman = true;
+    this.details = details;
+  }
+}
+
+export class SmokeTimeout extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = "SmokeTimeout";
+    this.timeout = true;
+    this.details = details;
   }
 }
 
@@ -56,17 +66,21 @@ export function ulid(now = Date.now()) {
   return `${encodeUlidTime(now)}${encodeUlidRandom(randomBytes(10))}`;
 }
 
+function requestedRecipients(args, environment = process.env) {
+  const requested = args.to ?? environment.MARQUEE_SMOKE_TO;
+  if (requested === undefined || requested === null || requested === "") return [];
+  const values = Array.isArray(requested) ? requested : String(requested).split(",");
+  return values.map((value) => String(value).trim()).filter(Boolean).map((value) => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      throw new SmokeNeedsHuman(`Smoke recipient is not a complete email address: ${value || "<empty>"}`);
+    }
+    return value;
+  });
+}
+
 function requestedDomain(args, environment = process.env) {
   const configured = args.domain ?? environment.MARQUEE_INBOX_DOMAIN ?? DEFAULT_INBOX_DOMAIN;
-  const requestedTo = args.to ?? environment.MARQUEE_SMOKE_TO;
-  // Keep the frozen --to invocation useful while refusing to reuse its
-  // localpart. An address supplied here selects the catch-all's domain only.
-  const domain = typeof requestedTo === "string" && requestedTo.includes("@")
-    ? requestedTo.slice(requestedTo.lastIndexOf("@") + 1)
-    : typeof requestedTo === "string" && requestedTo.length > 0
-      ? requestedTo
-      : configured;
-  const normalized = String(domain).trim().toLowerCase().replace(/^@/, "");
+  const normalized = String(configured).trim().toLowerCase().replace(/^@/, "");
   if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(normalized)) {
     throw new SmokeNeedsHuman(`Inbox catch-all domain is invalid: ${normalized || "<empty>"}`);
   }
@@ -76,11 +90,20 @@ function requestedDomain(args, environment = process.env) {
 export function freshSmokeAddress(args = {}, environment = process.env) {
   const runId = ulid();
   const domain = requestedDomain(args, environment);
+  const requestedTo = requestedRecipients(args, environment);
+  const generatedAddress = requestedTo.length > 0 ? null : `smoke-${runId.toLowerCase()}@${domain}`;
+  const addresses = requestedTo.length > 0 ? requestedTo : [generatedAddress];
   return {
     runId,
     domain,
-    address: `smoke-${runId.toLowerCase()}@${domain}`,
-    requestedTo: args.to ?? environment.MARQUEE_SMOKE_TO ?? null,
+    address: addresses[0],
+    addresses,
+    generatedAddress,
+    generated: requestedTo.length === 0,
+    // --to is an exact recipient contract. It never selects a domain and its
+    // localpart is never rewritten. Operators must supply a new address for
+    // every run when using it; omitted --to is the safer fresh-catch-all path.
+    requestedTo: requestedTo.length > 0 ? requestedTo : null,
   };
 }
 
@@ -117,8 +140,20 @@ export function smokeContext(args = {}, environment = process.env) {
     timeoutMs: Number(args.timeout ?? environment.MARQUEE_SMOKE_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
     inboxDatabase: String(args.database ?? environment.MARQUEE_INBOX_DATABASE ?? DEFAULT_INBOX_DATABASE),
     inboxConfig: String(args["inbox-config"] ?? environment.MARQUEE_INBOX_WRANGLER_CONFIG ?? INBOX_CONFIG),
-    inboxLocal: environment.MARQUEE_INBOX_LOCAL === "1",
+    inboxPersistTo: String(args["inbox-persist-to"] ?? environment.MARQUEE_INBOX_PERSIST_TO ?? "").trim() || null,
+    inboxLocal: args.local === true || environment.MARQUEE_INBOX_LOCAL === "1",
   };
+}
+
+export function smokeContexts(args = {}, environment = process.env) {
+  const recipients = requestedRecipients(args, environment);
+  if (recipients.length === 0) return [smokeContext(args, environment)];
+  return recipients.map((recipient) => smokeContext({ ...args, to: [recipient] }, environment));
+}
+
+export function isCatchAllRecipient(context) {
+  const at = context.inbox.address.lastIndexOf("@");
+  return at > 0 && context.inbox.address.slice(at + 1).toLowerCase() === context.inbox.domain;
 }
 
 function errorBody(text) {
@@ -143,6 +178,9 @@ export async function requestJson(base, path, options = {}) {
   const body = errorBody(text);
   if (!response.ok) {
     const detail = typeof body === "string" ? body : JSON.stringify(body);
+    if (response.status === 403 && /turnstile|security check|captcha/i.test(detail)) {
+      throw new SmokeNeedsHuman(`Public form security check needs operator-provided Turnstile access: ${detail}`);
+    }
     throw new Error(`${options.method ?? "GET"} ${path} returned ${response.status}: ${detail}`);
   }
   return body;
@@ -190,6 +228,7 @@ ORDER BY received_at ASC, id ASC`;
     "--json",
     "--config",
     context.inboxConfig,
+    ...(context.inboxPersistTo ? ["--persist-to", context.inboxPersistTo] : []),
     "--command",
     query,
     context.inboxLocal ? "--local" : "--remote",
@@ -225,7 +264,10 @@ export async function waitForInboxMessage(context, toEmail, since, predicate, la
     }
     await sleep(Math.min(POLL_INTERVAL_MS, Math.max(50, deadline - Date.now())));
   }
-  throw new Error(`${label} did not arrive at ${toEmail} within ${context.timeoutMs}ms${lastError ? `; last query error: ${lastError.message}` : ""}`);
+  throw new SmokeTimeout(
+    `${label} did not arrive at ${toEmail} within ${context.timeoutMs}ms${lastError ? `; last query error: ${lastError.message}` : ""}`,
+    { label, to_email: toEmail, last_query_error: lastError?.message ?? null },
+  );
 }
 
 function configOptions(field) {
@@ -326,7 +368,7 @@ async function uploadRequiredFiles(context, fields, answers, resumeToken, draftI
     });
     smokeAssert(response?.attachmentId && response?.putUrl && response?.completionToken, `Upload presign for ${field.key} was incomplete`);
     const putHeaders = new Headers(response.requiredHeaders ?? {});
-    const put = await fetch(response.putUrl, { method: "PUT", headers: putHeaders, body: ONE_PIXEL_PNG });
+    const put = await fetch(new URL(response.putUrl, `${context.origin}/`).toString(), { method: "PUT", headers: putHeaders, body: ONE_PIXEL_PNG });
     if (!put.ok) throw new Error(`PUT ${field.key} upload returned ${put.status}: ${(await put.text()).slice(0, 500)}`);
     await requestJson(context.origin, `/api/v1/public/uploads/${encodeURIComponent(response.attachmentId)}/complete`, {
       method: "POST",
@@ -397,24 +439,44 @@ function decodeHeaderValue(value) {
 }
 
 export function fromName(raw) {
-  return decodeHeaderValue(headerValue(raw, "From"));
+  const value = decodeHeaderValue(headerValue(raw, "From"));
+  if (!value) return null;
+  const match = value.match(/^(.+?)\s*<\s*[^<>\s]+@[^<>\s]+\s*>$/);
+  if (!match) return null;
+  const displayName = match[1].trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+  return displayName || null;
 }
 
 function decodeCalendarTransfer(raw) {
-  const candidates = [raw];
+  const decodedCandidates = [];
   const transferPattern = /Content-Transfer-Encoding:\s*base64\s*\r?\n\r?\n([A-Za-z0-9+/=\r\n]+)/gi;
   for (const match of raw.matchAll(transferPattern)) {
     try {
-      candidates.push(Buffer.from(match[1].replace(/\s+/g, ""), "base64").toString("utf8"));
+      decodedCandidates.push(Buffer.from(match[1].replace(/\s+/g, ""), "base64").toString("utf8"));
     } catch {
       // Ignore unrelated malformed MIME parts and keep looking for an ICS.
     }
   }
   const quotedPattern = /Content-Transfer-Encoding:\s*quoted-printable\s*\r?\n\r?\n([\s\S]*?)(?=\r?\n--|$)/gi;
   for (const match of raw.matchAll(quotedPattern)) {
-    candidates.push(match[1].replace(/=\r?\n/g, "").replace(/=([0-9a-f]{2})/gi, (_hex, pair) => String.fromCharCode(Number.parseInt(pair, 16))));
+    const value = match[1].replace(/=\r?\n/g, "");
+    const bytes = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const character = value[index];
+      const pair = value.slice(index + 1, index + 3);
+      if (character === "=" && /^[0-9a-f]{2}$/i.test(pair)) {
+        bytes.push(Number.parseInt(pair, 16));
+        index += 2;
+        continue;
+      }
+      bytes.push(...new TextEncoder().encode(character));
+    }
+    decodedCandidates.push(new TextDecoder().decode(Uint8Array.from(bytes)));
   }
-  return candidates.find((candidate) => /BEGIN:VCALENDAR/i.test(candidate)) ?? null;
+  // A multipart envelope can contain the encoded body's literal text, so the
+  // raw RFC-822 document must be the fallback, never candidate zero. Otherwise
+  // a QP soft break and =3D parameter are parsed before their decoding path.
+  return [...decodedCandidates, raw].find((candidate) => /BEGIN:VCALENDAR/i.test(candidate)) ?? null;
 }
 
 export function extractIcs(raw) {
@@ -429,11 +491,15 @@ export function parseIcs(raw) {
   const ics = extractIcs(raw);
   if (!ics) throw new Error("Inbound message did not contain a VCALENDAR payload");
   const lines = unfoldedLines(ics);
+  const eventStart = lines.findIndex((candidate) => /^BEGIN:VEVENT$/i.test(candidate));
+  const eventEnd = lines.findIndex((candidate, index) => index > eventStart && /^END:VEVENT$/i.test(candidate));
+  const eventLines = eventStart >= 0 && eventEnd > eventStart ? lines.slice(eventStart + 1, eventEnd) : lines;
   const property = (name) => {
-    const line = lines.find((candidate) => new RegExp(`^${name}(?:;[^:]*)?:`, "i").test(candidate));
+    const source = name === "METHOD" ? lines : eventLines;
+    const line = source.find((candidate) => new RegExp(`^${name}(?:;[^:]*)?:`, "i").test(candidate));
     return line?.slice(line.indexOf(":") + 1).trim() ?? null;
   };
-  const propertyLine = (name) => lines.find((candidate) => new RegExp(`^${name}(?:;[^:]*)?:`, "i").test(candidate)) ?? null;
+  const propertyLine = (name) => eventLines.find((candidate) => new RegExp(`^${name}(?:;[^:]*)?:`, "i").test(candidate)) ?? null;
   const uid = property("UID");
   const sequence = Number(property("SEQUENCE"));
   const method = property("METHOD");
@@ -462,7 +528,22 @@ export function inboxRowHasIcs(row, predicate) {
 }
 
 export function commandArguments(argv = process.argv.slice(2)) {
-  return parseArguments(argv);
+  const parsed = parseArguments(argv);
+  const recipients = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (!argument.startsWith("--")) continue;
+    const [rawKey, inlineValue] = argument.slice(2).split("=", 2);
+    if (rawKey !== "to") continue;
+    const value = inlineValue ?? (argv[index + 1] !== undefined && !argv[index + 1].startsWith("--") ? argv[++index] : null);
+    if (value !== null) recipients.push(value);
+  }
+  if (recipients.length > 0) parsed.to = recipients;
+  return parsed;
+}
+
+export function smokeHarnessHeaders(context) {
+  return { ...context.auth, "x-marquee-smoke-harness": "1" };
 }
 
 export async function runSmoke(command, args, run) {
@@ -470,11 +551,13 @@ export async function runSmoke(command, args, run) {
   let result;
   let status = "pass";
   let error = null;
+  let details = null;
   try {
     result = await run();
   } catch (caught) {
     error = caught instanceof Error ? caught.message : String(caught);
-    status = caught?.needsHuman ? "needs-human" : "fail";
+    status = caught?.needsHuman ? "needs-human" : caught?.timeout ? "timeout" : "fail";
+    details = caught?.details ?? null;
     result = {};
   }
   const reportResult = {
@@ -483,6 +566,7 @@ export async function runSmoke(command, args, run) {
     gate: process.env.MARQUEE_GATE === "1",
     elapsedMs: Date.now() - startedAt,
     ...(result ?? {}),
+    ...(details ? { details } : {}),
     ...(error ? { error } : {}),
   };
   const report = await writeReport(`artifacts/checks/${command.replaceAll(":", "-")}.json`, reportResult);
@@ -490,4 +574,3 @@ export async function runSmoke(command, args, run) {
   if (status !== "pass") process.exitCode = status === "needs-human" ? 2 : 1;
   return reportResult;
 }
-

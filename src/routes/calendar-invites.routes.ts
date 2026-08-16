@@ -3,6 +3,7 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { sendCalendarInvites } from "../jobs/calendar/invites";
+import { getAuth } from "../lib/auth/auth-middleware";
 
 const params = z.object({
   eventId: z.string().min(1),
@@ -23,6 +24,10 @@ const inviteResponseSchema = z.object({
   queued: z.number().int().nonnegative(),
 });
 
+function smokeHarnessRequested(context: Parameters<typeof getAuth>[0]): boolean {
+  return context.req.header("x-marquee-smoke-harness") === "1" && getAuth(context)?.kind === "token";
+}
+
 const sendInvites = defineApiRoute(
   {
     method: "post",
@@ -30,7 +35,7 @@ const sendInvites = defineApiRoute(
     operationId: "sendSubmissionCalendarInvites",
     summary: "Queue calendar invitations for a scheduled submission",
     description:
-      "Queues one demo-safe METHOD:REQUEST invite per speaker/submitter. Re-sends retain the original UID and increment SEQUENCE.",
+      "Queues one demo-safe METHOD:REQUEST invite per speaker/submitter. An authenticated smoke harness may explicitly opt into the live G3 policy; re-sends retain the original UID and increment SEQUENCE.",
     tags: ["Calendar"],
     request: { params },
     policy: {
@@ -58,6 +63,7 @@ const sendInvites = defineApiRoute(
         origin: new URL(context.req.url).origin,
         queue: context.env.MAIL_QUEUE,
         submissionId,
+        smokeHarness: smokeHarnessRequested(context),
       });
     } catch (error) {
       if (error instanceof Error && error.message === "submission has no scheduled session") {

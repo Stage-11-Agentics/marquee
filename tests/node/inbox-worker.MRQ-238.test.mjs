@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import test from "node:test";
 
 import handler, { captureIncomingEmail } from "../../tooling/inbox-worker/src/index.ts";
@@ -93,9 +94,10 @@ test("CONTRACT · MRQ-238 · the email handler captures and HTTP never exposes t
 });
 
 test("CONTRACT · MRQ-238 · the worker has its own migration and catch-all D1 configuration", async () => {
-  const migration = await readFile("tooling/inbox-worker/migrations/0001_inbox_messages.sql", "utf8");
-  const config = await readFile("tooling/inbox-worker/wrangler.jsonc", "utf8");
-  const readme = await readFile("tooling/inbox-worker/README.md", "utf8");
+  const repositoryRoot = resolve(import.meta.dirname, "../..");
+  const migration = await readFile(resolve(repositoryRoot, "tooling/inbox-worker/migrations/0001_inbox_messages.sql"), "utf8");
+  const config = await readFile(resolve(repositoryRoot, "tooling/inbox-worker/wrangler.jsonc"), "utf8");
+  const readme = await readFile(resolve(repositoryRoot, "tooling/inbox-worker/README.md"), "utf8");
 
   assert.match(migration, /CREATE TABLE inbox_messages/);
   assert.match(migration, /raw_rfc822 TEXT NOT NULL/);
