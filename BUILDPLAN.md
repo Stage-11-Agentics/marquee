@@ -435,3 +435,21 @@ M-21 (embeds, merged under MRQ-22) shipped a two-kind dialog (`agenda|speakers`)
 **Boundaries.** `package.json` untouched (no new dependencies are needed for any of this). The CLI registry and `cli/generate-skill.mjs` are in scope — reconcile the chapter's proposed verb names with what MRQ-104's loop verbs already shipped before minting new names. The suite budget (45 s objective) binds: prefer `tests/node` for pure logic; every new Worker-backed test file costs ~19 s, so consolidate integration coverage into as few files as the ACs allow.
 
 **Total: 16 agent-hours.**
+
+## Amendment 31 — spoken submission references (2026-08-16, MRQ-241)
+
+US-97 / AC-343–AC-348 is a post-deadline plumbing fold. Migration 0030 adds
+the nullable legacy-compatible `submissions.reference_code` column, deterministic
+backfill, unique `(event_id, reference_code)`, and a durable per-event
+`submission_reference_ledger`. Public draft/final submission, organizer add,
+Sessionize import, direct seed, and reset seed all allocate through one seam;
+the ledger advance and caller writes commit in one D1 batch, with one retry only
+for the reference unique-index race. Reset preserves the event floor and starts
+the shipped seed above it, so deletion cannot recycle a spoken code.
+
+The read contract covers the record header copy chip, quick/list/board search
+and projections, CSV, public confirmation and mail, and outbound-only Airtable
+truth. The owner handoff requires the multiline creation-path sweep, focused and
+full local checks, schema/seed validation, and local runtime/browser proof before
+an independent exact-head review; this amendment does not alter the terminal
+gate, tier arithmetic, merge, deploy, or publication boundary.

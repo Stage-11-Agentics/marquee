@@ -31,7 +31,7 @@ import { auditStatement, auditStatementFromSelect, writeAudit } from "../lib/aud
 import { contentOf, isContentAction, recordTimelinePage } from "../lib/history";
 import { purgePublicEmbedCache } from "../lib/public-site";
 import { PUBLISHED_CONTENT_REFUSAL, requirePublishedConfirmation } from "../lib/publication-guard";
-import { SUBMISSION_REFERENCE_CODE_SQL, withSubmissionReferenceRetry } from "../lib/submission-reference";
+import { withSubmissionReferenceAllocation } from "../lib/submission-reference";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const submissionParams = eventParams.extend({ submissionId: z.string().min(1) });
@@ -1089,50 +1089,49 @@ const createSubmission = defineApiRoute(
     if (participantIds.some((id) => !knownPeople.has(id))) throw new Error("participant ownership was not resolved");
     const status = body.status ?? (body.kind === "session" && (body.bypass_evaluation ?? true) ? "accepted" : "submitted");
     const id = newUlid();
-    const statements: D1PreparedStatement[] = [
-      ...personStatements,
-      context.env.DB.prepare(`
-        INSERT INTO submissions
-          (id, event_id, reference_code, form_id, kind, bypass_evaluation, title, abstract, status,
-           format_id, primary_track_id, origin, vendor_affiliation, wave_id,
-           submitter_person_id, decided_at, decided_by_person_id, submitted_at,
-           last_saved_at, resume_token_hash, is_published, external_ref,
-           applied_rule_id, last_write_source, created_at, updated_at)
-        VALUES (?, ?, ${SUBMISSION_REFERENCE_CODE_SQL}, ?, ?, ?, ?, ?, ?, ?, ?, 'admin', ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, 'marquee', ?, ?)
-      `).bind(
-        id, eventId, eventId, body.form_id ?? null, body.kind, body.kind === "session" || body.bypass_evaluation ? 1 : 0,
-        body.title.trim(), body.abstract ?? null, status, owned.formatId,
-        body.primary_track_id ?? owned.trackIds[0] ?? null, body.vendor_affiliation, owned.waveId,
-        submitterId, status === "accepted" ? now : null, status === "accepted" ? actor.personId : null,
-        status === "draft" ? null : now, now, body.external_ref ?? null, body.applied_rule_id ?? null, now, now,
-      ),
-      ...participants.map((participant) => context.env.DB.prepare(`
-        INSERT INTO participations
-          (id, submission_id, person_id, role, position, confirmation_status, confirmed_at, invited_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'pending', NULL, NULL, ?, ?)
-      `).bind(newUlid(), id, participant.personId, participant.role, participant.position, now, now)),
-      ...owned.trackIds.map((trackId) => context.env.DB.prepare(`
-        INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).bind(newUlid(), id, trackId, trackId === (body.primary_track_id ?? owned.trackIds[0]) ? 1 : 0, now, now)),
-      ...owned.answers.map((answer) => context.env.DB.prepare(`
-        INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).bind(newUlid(), id, answer.field_id, answer.value_text ?? null, answer.value_json === undefined ? null : JSON.stringify(answer.value_json), now, now)),
-      auditStatement(context.env.DB, {
-        eventId,
-        actorKind: actor.kind,
-        actorPersonId: actor.personId,
-        action: "created",
-        entityType: "submission",
-        entityId: id,
-        after: { origin: "admin", kind: body.kind, status, bypass_evaluation: body.kind === "session" || body.bypass_evaluation === true },
-        now,
-        requestId: actor.requestId,
-      }),
-    ];
     try {
-      await withSubmissionReferenceRetry(() => context.env.DB.batch(statements));
+      await withSubmissionReferenceAllocation(context.env.DB, eventId, now, (referenceCode) => [
+        ...personStatements,
+        context.env.DB.prepare(`
+          INSERT INTO submissions
+            (id, event_id, reference_code, form_id, kind, bypass_evaluation, title, abstract, status,
+             format_id, primary_track_id, origin, vendor_affiliation, wave_id,
+             submitter_person_id, decided_at, decided_by_person_id, submitted_at,
+             last_saved_at, resume_token_hash, is_published, external_ref,
+             applied_rule_id, last_write_source, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'admin', ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, 'marquee', ?, ?)
+        `).bind(
+          id, eventId, referenceCode, body.form_id ?? null, body.kind, body.kind === "session" || body.bypass_evaluation ? 1 : 0,
+          body.title.trim(), body.abstract ?? null, status, owned.formatId,
+          body.primary_track_id ?? owned.trackIds[0] ?? null, body.vendor_affiliation, owned.waveId,
+          submitterId, status === "accepted" ? now : null, status === "accepted" ? actor.personId : null,
+          status === "draft" ? null : now, now, body.external_ref ?? null, body.applied_rule_id ?? null, now, now,
+        ),
+        ...participants.map((participant) => context.env.DB.prepare(`
+          INSERT INTO participations
+            (id, submission_id, person_id, role, position, confirmation_status, confirmed_at, invited_at, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, 'pending', NULL, NULL, ?, ?)
+        `).bind(newUlid(), id, participant.personId, participant.role, participant.position, now, now)),
+        ...owned.trackIds.map((trackId) => context.env.DB.prepare(`
+          INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(newUlid(), id, trackId, trackId === (body.primary_track_id ?? owned.trackIds[0]) ? 1 : 0, now, now)),
+        ...owned.answers.map((answer) => context.env.DB.prepare(`
+          INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).bind(newUlid(), id, answer.field_id, answer.value_text ?? null, answer.value_json === undefined ? null : JSON.stringify(answer.value_json), now, now)),
+        auditStatement(context.env.DB, {
+          eventId,
+          actorKind: actor.kind,
+          actorPersonId: actor.personId,
+          action: "created",
+          entityType: "submission",
+          entityId: id,
+          after: { origin: "admin", kind: body.kind, status, bypass_evaluation: body.kind === "session" || body.bypass_evaluation === true },
+          now,
+          requestId: actor.requestId,
+        }),
+      ]);
     } catch (error) {
       context.get("logger")?.emit("worker_error", "error", {
         source: "createSubmissionRecord",

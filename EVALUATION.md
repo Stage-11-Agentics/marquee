@@ -786,9 +786,9 @@ schema change for the seam and is unchanged by this fold.
 
 ---
 
-### 2.12 Post-deadline submission-reference band — AC-343 – AC-348 *(Amendment 31, 2026-08-16)*
+### 2.14 Post-deadline submission-reference band — AC-343 – AC-348 *(Amendment 31, 2026-08-16, MRQ-241)*
 
-**Outside the Wednesday terminal gate, on the same terms as §2.4–§2.11.** Not
+**Outside the Wednesday terminal gate, on the same terms as §2.4–§2.13.** Not
 folded into the 210 live in-scope count or tier arithmetic. Story: US-97
 (`sequence/USER_STORIES.md` Amendment 31). Migration 0030, the insert-time
 allocation seam, and the read projections form one reference-code contract.
@@ -905,6 +905,8 @@ Two carry enforcement obligations even though their UI is deferred, because retr
 **Amendment 29 — the participant model, finished, 2026-08-16 (MRQ-224).** §2.12 adds the participant-model band: AC-329 – AC-336 minted, and the reserved AC-270 – AC-272 promoted out of reserve because the build now exists (AC-272 recorded as already satisfied by MRQ-160/162 rather than rebuilt). Gate 19b's named limitation changes from the submitter/speaker fusion — closed by this band — to per-person answers, which is what actually remains. Post-deadline; the live in-scope count and tier arithmetic are unchanged.
 
 **Amendment 30 — internal notes on a submission, 2026-08-16 (MRQ-242).** §2.13 adds exactly US-96 and AC-337 – AC-342: one-action note creation without evaluation rows, authenticated people-row attribution, exclusion from speaker/public/outbound surfaces, fixed rendered notes geometry, the evaluation setup CTA, and no-valid-email recovery. The claims manifest is `tests/ac-claims/MRQ-242.json`; migration 0029 remains unchanged. Post-deadline; the live in-scope count and tier arithmetic are unchanged. The next shared mint is US-97 / AC-343 for MRQ-241.
+
+**Amendment 31 — spoken submission references, 2026-08-16 (MRQ-241).** §2.14 adds exactly US-97 and AC-343 – AC-348: event-scoped `SUB-n` allocation across every creation path, durable high-water provenance across deletion and reset, normalized search, organizer/public/Airtable projections, and deterministic idempotent backfill. Migration 0030 is the sole schema change. Post-deadline; the live in-scope count and tier arithmetic are unchanged. The independent exact-head review and runtime proof remain the handoff boundary.
 
 **Amendment 26 — one named mail-idempotency seam, 2026-08-15, plumbing fold.** Folds `USER_STORIES.md` Amendment 26 and `SPEC.md` §3.8. AC-117's verification now includes the full pre-fix registry byte-identity inventory; **AC-314** is the post-deadline lock for durable manual-nudge retries and fresh new nudges. The live count, tier arithmetic, and terminal gate remain unchanged.
 

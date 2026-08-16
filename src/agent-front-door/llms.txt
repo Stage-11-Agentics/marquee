@@ -41,7 +41,7 @@ Marquee has no OAuth step, CAPTCHA, email verification, or shared passcode in it
 
 ## Generated build facts
 
-This deployment serves **243 OpenAPI operations** and **54 CLI commands across 20 verbs**. The canonical OpenAPI JSON digest is `231400cf50d3a690c98fa1396535dc041e625ab9d7452f355b24f4d2c5098614`; it is the SHA-256 of the served response bytes. These values come from the live route registry and CLI registry at generation time.
+This deployment serves **245 OpenAPI operations** and **56 CLI commands across 20 verbs**. The canonical OpenAPI JSON digest is `9dd36c79125d7ddb40afd769c5110e670c11294cf32dd83d33b566c8b9350169`; it is the SHA-256 of the served response bytes. These values come from the live route registry and CLI registry at generation time.
 
 ## Speed
 

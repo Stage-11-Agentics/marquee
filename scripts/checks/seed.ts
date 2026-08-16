@@ -133,6 +133,12 @@ function checkDirectSeedShape(rows: Awaited<ReturnType<typeof buildSeedRows>>): 
   }
   for (const [eventId, codes] of codesByEvent) {
     assert.equal(new Set(codes).size, codes.length, `seed submission reference codes must be unique for ${eventId}`);
+    const numbers = codes.map((code) => Number(code.slice("SUB-".length)));
+    assert.equal(
+      Math.max(...numbers) - Math.min(...numbers) + 1,
+      numbers.length,
+      `seed submission reference codes must be contiguous for ${eventId}`,
+    );
   }
   assert.equal(competitive.filter((row) => row.status === "accepted").length, 60, "seed must contain 60 accepted submissions");
   assert.ok(

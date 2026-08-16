@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 import { createSession } from "../../../src/lib/auth/auth-sessions";
 import { MIRROR_INBOUND_ALLOWLIST } from "../../../src/jobs/mirror/inbound";
 import { currentAirtableRecord } from "../../../src/jobs/mirror/records";
-import { SUBMISSION_REFERENCE_CODE_SQL, withSubmissionReferenceRetry } from "../../../src/lib/submission-reference";
+import { withSubmissionReferenceAllocation } from "../../../src/lib/submission-reference";
 import { applyMigrations, env } from "../apply-migrations";
 
 const ORIGIN = "https://marquee.stage11.dev";
@@ -40,6 +40,9 @@ async function seedFixture(): Promise<void> {
       VALUES (?, ?, ?, 'abstract', 'Reference code search', 'The code is the language of the call.', 'submitted', 'public', ?, 'SUB-41', 'reference code search', ?, ?),
              (?, ?, ?, 'session', 'Another event code', '', 'accepted', 'admin', ?, 'SUB-41', 'other event', ?, ?)`)
       .bind("submission_mrq241_search", EVENT_ID, FORM_ID, OWNER_ID, NOW, NOW, "submission_mrq241_other", OTHER_EVENT_ID, FORM_ID, OWNER_ID, NOW, NOW),
+    env.DB.prepare(
+      "INSERT INTO submission_reference_ledger (event_id, last_sequence, updated_at) VALUES (?, 41, ?), (?, 41, ?)",
+    ).bind(EVENT_ID, NOW, OTHER_EVENT_ID, NOW),
     env.DB.prepare(`INSERT INTO participations
       (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at)
       VALUES ('participation_mrq241_search', 'submission_mrq241_search', ?, 'speaker', 0, 'confirmed', ?, ?)`)
@@ -55,21 +58,27 @@ async function request(path: string): Promise<Response> {
 describe.sequential("MRQ-241 submission reference codes", () => {
   beforeEach(seedFixture);
 
-  test("AC-343 + AC-346 · codes are event-scoped and allocation continues after a lower code is deleted", async () => {
-    const insert = (id: string, title: string) => withSubmissionReferenceRetry(() => env.DB.prepare(`
-      INSERT INTO submissions
-        (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at, reference_code)
-      VALUES (?, ?, 'abstract', ?, 'submitted', 'admin', ?, ?, ?, ${SUBMISSION_REFERENCE_CODE_SQL})
-    `).bind(id, EVENT_ID, title, OWNER_ID, NOW, NOW, EVENT_ID).run());
+  test("AC-343 + AC-346 · codes are event-scoped and allocation continues after the highest code is deleted", async () => {
+    const insert = (id: string, title: string) => withSubmissionReferenceAllocation(env.DB, EVENT_ID, NOW, (referenceCode) => [
+      env.DB.prepare(`
+        INSERT INTO submissions
+          (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at, reference_code)
+        VALUES (?, ?, 'abstract', ?, 'submitted', 'admin', ?, ?, ?, ?)
+      `).bind(id, EVENT_ID, title, OWNER_ID, NOW, NOW, referenceCode),
+    ]);
 
     await Promise.all([insert("submission_mrq241_alloc_a", "Concurrent A"), insert("submission_mrq241_alloc_b", "Concurrent B")]);
-    const allocated = await env.DB.prepare("SELECT reference_code FROM submissions WHERE event_id = ? AND id LIKE 'submission_mrq241_alloc_%' ORDER BY reference_code").bind(EVENT_ID).all<{ reference_code: string }>();
+    const allocated = await env.DB.prepare("SELECT id, reference_code FROM submissions WHERE event_id = ? AND id LIKE 'submission_mrq241_alloc_%' ORDER BY reference_code").bind(EVENT_ID).all<{ id: string; reference_code: string }>();
     expect(allocated.results.map((row) => row.reference_code)).toEqual(["SUB-42", "SUB-43"]);
 
-    await env.DB.prepare("DELETE FROM submissions WHERE id = ?").bind("submission_mrq241_alloc_a").run();
+    const highest = allocated.results.at(-1);
+    expect(highest).toMatchObject({ reference_code: "SUB-43" });
+    await env.DB.prepare("DELETE FROM submissions WHERE id = ?").bind(highest?.id).run();
     await insert("submission_mrq241_alloc_c", "After deletion");
-    const afterDeletion = await env.DB.prepare("SELECT reference_code FROM submissions WHERE event_id = ? AND id LIKE 'submission_mrq241_alloc_%' ORDER BY id").bind(EVENT_ID).all<{ reference_code: string }>();
-    expect(afterDeletion.results.map((row) => row.reference_code)).toEqual(["SUB-43", "SUB-44"]);
+    const afterDeletion = await env.DB.prepare("SELECT reference_code FROM submissions WHERE event_id = ? AND id LIKE 'submission_mrq241_alloc_%' ORDER BY reference_code").bind(EVENT_ID).all<{ reference_code: string }>();
+    expect(afterDeletion.results.map((row) => row.reference_code)).toEqual(["SUB-42", "SUB-44"]);
+    const ledger = await env.DB.prepare("SELECT last_sequence FROM submission_reference_ledger WHERE event_id = ?").bind(EVENT_ID).first<{ last_sequence: number }>();
+    expect(ledger?.last_sequence).toBe(44);
 
     const sameCodeOtherEvent = await env.DB.prepare("SELECT reference_code FROM submissions WHERE event_id = ?").bind(OTHER_EVENT_ID).first<{ reference_code: string }>();
     expect(sameCodeOtherEvent?.reference_code).toBe("SUB-41");

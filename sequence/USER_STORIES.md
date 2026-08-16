@@ -1361,7 +1361,7 @@ reading an opaque identifier aloud.
   within each conference, and rerunning the backfill produces byte-identical
   codes without renumbering already populated rows.
 
-`EVALUATION.md` §2.12 owns the verification rows. Built by MRQ-241. The
+`EVALUATION.md` §2.14 owns the verification rows. Built by MRQ-241. The
 post-deadline band leaves the terminal gate unchanged.
 
 **Next mint: AC-349.**

@@ -308,8 +308,9 @@ test("CONTRACT · rebuilding the seed produces byte-identical SQL", async () => 
   assert.ok(first.includes("ON CONFLICT(id) DO UPDATE SET"));
   assert.equal(
     first.split("\n").filter((line) => line.startsWith("INSERT INTO")).length,
-    rows.length,
+    rows.length + new Set(table("submissions").map((row) => row.event_id)).size,
   );
+  assert.match(first, /INSERT INTO submission_reference_ledger/);
 });
 
 test("CONTRACT · the orchestrator discovers seeders by glob, not by name", () => {

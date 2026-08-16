@@ -4,10 +4,9 @@ import {
   isSubmissionReferenceUniqueError,
   submissionReferenceSearchPatterns,
   submissionReferenceSearchSql,
-  SUBMISSION_REFERENCE_CODE_SQL,
   withSubmissionReferenceRetry,
 } from "../../src/lib/submission-reference";
-import { assignSubmissionReferenceCodes } from "../../src/lib/reset-demo/seed-modules";
+import { assignSubmissionReferenceCodes, submissionReferenceHighWater } from "../../src/lib/reset-demo/seed-modules";
 import type { SeedRow } from "../../scripts/seed/_sql";
 
 describe("MRQ-241 submission reference allocation", () => {
@@ -28,9 +27,12 @@ describe("MRQ-241 submission reference allocation", () => {
     expect(first.map((entry) => entry.row.reference_code)).toEqual(["SUB-3", "SUB-2", "SUB-1", "SUB-1"]);
   });
 
-  test("AC-347 · the allocator SQL is event-scoped and the retry is exactly once", async () => {
-    expect(SUBMISSION_REFERENCE_CODE_SQL).toContain("MAX(CAST(substr(reference_code, 5) AS INTEGER))");
-    expect(SUBMISSION_REFERENCE_CODE_SQL).toContain("WHERE event_id = ?");
+  test("AC-347 · the durable seed floor and retry seam are event-scoped", async () => {
+    const rows: SeedRow[] = [
+      { table: "submissions", row: { id: "one", event_id: "event-a", reference_code: "SUB-41" } },
+      { table: "submissions", row: { id: "two", event_id: "event-b", reference_code: "SUB-7" } },
+    ];
+    expect([...submissionReferenceHighWater(rows).entries()]).toEqual([["event-a", 41], ["event-b", 7]]);
     expect(isSubmissionReferenceUniqueError("UNIQUE constraint failed: submissions.event_id, submissions.reference_code")).toBe(true);
     expect(isSubmissionReferenceUniqueError("UNIQUE constraint failed: people.email")).toBe(false);
 

@@ -1,7 +1,7 @@
 import {
   SHIPPED_DEMO_EVENT_ID,
   SHIPPED_DEMO_ORGANIZATION_ID,
-  shippedDemoFixtureRows,
+  shippedDemoFixtureRowsWithReferences,
 } from "./demo-fixture";
 import { mirrorSuppressionStatements } from "../../jobs/mirror/outbox";
 
@@ -53,6 +53,10 @@ export const WIPE_ORDER = [
   "import_rows",
   "imports",
   "submissions",
+  // Submission references survive reset just like calendar UIDs. The seed
+  // rows start above these event-scoped floors, so deleting a max-numbered
+  // submission (or all seeded submissions) cannot make its code reusable.
+  "submission_reference_ledger",
   "sponsorship_contacts",
   "sponsorships",
   "sponsor_tiers",
@@ -128,6 +132,7 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   mirror_credentials: null,
   mirror_state: null,
   calendar_sequence_ledger: null,
+  submission_reference_ledger: null,
   webhook_deliveries: {
     sql: `DELETE FROM webhook_deliveries WHERE endpoint_id IN (SELECT id FROM webhook_endpoints WHERE event_id IN (${ORG_EVENTS}))`,
     bindings: ORG,
@@ -482,17 +487,33 @@ export async function reseedDemo(
 ): Promise<ReseedResult> {
   if (!media) throw new Error("MEDIA binding is required for demo reset");
   const deletedObjects = await deleteDemoOrgObjects(db, media);
-  const rows = shippedDemoFixtureRows(now);
+  const existingReferenceFloors = await db.prepare(
+    "SELECT event_id, last_sequence FROM submission_reference_ledger WHERE event_id IN (SELECT id FROM events WHERE org_id = ?)",
+  ).bind(DEMO_ORGANIZATION_ID).all<{ event_id: string; last_sequence: number }>();
+  const startingSequences = new Map(
+    existingReferenceFloors.results.map((row) => [row.event_id, Number(row.last_sequence)] as const),
+  );
+  const fixture = shippedDemoFixtureRowsWithReferences(now, startingSequences);
   const [suppressMirror, releaseMirror] = mirrorSuppressionStatements(db, now);
+  const referenceLedgerStatements = [...fixture.referenceHighWater.entries()].map(([eventId, lastSequence]) =>
+    db.prepare(
+      `INSERT INTO submission_reference_ledger (event_id, last_sequence, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(event_id) DO UPDATE SET
+         last_sequence = MAX(submission_reference_ledger.last_sequence, excluded.last_sequence),
+         updated_at = excluded.updated_at`,
+    ).bind(eventId, lastSequence, now),
+  );
   await db.batch([
     suppressMirror,
     ...scopedWipeStatements(db),
-    ...rows.map((row) => db.prepare(row.statement).bind(...row.bindings)),
+    ...fixture.rows.map((row) => db.prepare(row.statement).bind(...row.bindings)),
+    ...referenceLedgerStatements,
     releaseMirror,
   ]);
   return {
     wipedTables: WIPE_ORDER.length,
-    insertedRows: rows.length,
+    insertedRows: fixture.rows.length,
     deletedObjects,
     reseededAt: now,
   };

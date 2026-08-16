@@ -1243,7 +1243,7 @@ author and append-only semantics.
 
 ## Amendment 31 — spoken submission references *(2026-08-16, plumbing fold)*
 
-Folds `sequence/USER_STORIES.md` Amendment 31 and `EVALUATION.md` §2.12 for
+Folds `sequence/USER_STORIES.md` Amendment 31 and `EVALUATION.md` §2.14 for
 US-97 / AC-343–AC-348. This is a post-deadline addition and does not change
 the live in-scope count, tier arithmetic, or terminal gate.
 

@@ -32,7 +32,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { SeedModule, SeedRow } from "./_sql.ts";
-import { upsertStatement } from "./_sql.ts";
+import { sqlLiteral, upsertStatement } from "./_sql.ts";
 // The frozen demo clock is the spine's own constant (SPEC §6); importing it
 // keeps one definition rather than duplicating the date in two files.
 import { FROZEN_NOW } from "./event.ts";
@@ -82,9 +82,28 @@ export async function buildSeedRows(now: number = FROZEN_NOW): Promise<SeedRow[]
   return buildDemoSeedRows(now, await loadSeedModules());
 }
 
+function submissionReferenceLedgerSql(rows: readonly SeedRow[], now: number): string {
+  const highWater = new Map<string, number>();
+  for (const row of rows) {
+    if (row.table !== "submissions") continue;
+    const referenceCode = typeof row.row.reference_code === "string" ? /^SUB-(\d+)$/.exec(row.row.reference_code) : null;
+    if (!referenceCode) continue;
+    const sequence = Number(referenceCode[1]);
+    const eventId = String(row.row.event_id ?? "");
+    highWater.set(eventId, Math.max(highWater.get(eventId) ?? 0, sequence));
+  }
+  return [...highWater.entries()]
+    .map(([eventId, sequence]) =>
+      `INSERT INTO submission_reference_ledger (event_id, last_sequence, updated_at) VALUES (${sqlLiteral(eventId)}, ${sequence}, ${now}) ` +
+      "ON CONFLICT(event_id) DO UPDATE SET last_sequence = MAX(submission_reference_ledger.last_sequence, excluded.last_sequence), updated_at = excluded.updated_at;",
+    )
+    .join("\n");
+}
+
 export async function buildSeedSql(now: number = FROZEN_NOW): Promise<string> {
   const rows = await buildSeedRows(now);
-  return `${HEADER}${rows.map((row) => upsertStatement(row)).join("\n")}\n`;
+  const ledgerSql = submissionReferenceLedgerSql(rows, now);
+  return `${HEADER}${rows.map((row) => upsertStatement(row)).join("\n")}\n${ledgerSql ? ledgerSql + "\n" : ""}`;
 }
 
 interface SeedOptions {
@@ -126,7 +145,8 @@ function summarize(rows: readonly SeedRow[]): string {
 async function main(): Promise<void> {
   const options = parseSeedArguments(process.argv.slice(2));
   const rows = await buildSeedRows();
-  const sql = `${HEADER}${rows.map((row) => upsertStatement(row)).join("\n")}\n`;
+  const ledgerSql = submissionReferenceLedgerSql(rows, FROZEN_NOW);
+  const sql = `${HEADER}${rows.map((row) => upsertStatement(row)).join("\n")}\n${ledgerSql ? ledgerSql + "\n" : ""}`;
 
   if (options.sqlOnly) {
     process.stdout.write(sql);
