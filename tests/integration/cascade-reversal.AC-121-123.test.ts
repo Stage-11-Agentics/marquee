@@ -13,6 +13,18 @@ import { applyMigrations, env } from "./apply-migrations";
 
 const NOW = Date.parse("2026-08-20T16:00:00.000Z");
 const ACTOR_REQUEST_ID = "req-reversal-fixture";
+const CANCEL_SNAPSHOT = JSON.stringify({
+  attendee: { email: "speaker@example.com", name: "Ada Speaker" },
+  description: "Cancel this acceptance",
+  duration_min: 30,
+  geo: null,
+  location: "Room 1, Building A, 1 Main Street",
+  organizer: { email: "marquee@stage11.systems", name: "Marquee" },
+  starts_at: NOW + 86_400_000,
+  timezone: "America/New_York",
+  title: "Cancel this acceptance",
+  url: "https://marquee.stage11.dev/s/sub-cancel",
+});
 const ACTOR = {
   kind: "user" as const,
   personId: "person-reversal-actor",
@@ -107,11 +119,11 @@ async function seedFixture(): Promise<void> {
     ).bind(NOW, NOW, NOW, NOW, NOW, NOW, NOW, NOW, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO calendar_invites
-        (id, submission_id, person_id, uid, sequence, last_method, last_sent_at, status, created_at, updated_at)
+        (id, submission_id, person_id, uid, sequence, last_method, last_sent_at, status, request_snapshot, organizer_email, created_at, updated_at)
        VALUES
-        ('invite-cancel', 'sub-cancel', 'person-reversal-speaker', 'uid-cancel', 1, 'REQUEST', ?, 'active', ?, ?),
-        ('invite-retain', 'sub-retain', 'person-reversal-speaker', 'uid-retain', 1, 'REQUEST', ?, 'active', ?, ?)`,
-    ).bind(NOW, NOW, NOW, NOW, NOW, NOW),
+        ('invite-cancel', 'sub-cancel', 'person-reversal-speaker', 'uid-cancel', 1, 'REQUEST', ?, 'active', ?, 'marquee@stage11.systems', ?, ?),
+        ('invite-retain', 'sub-retain', 'person-reversal-speaker', 'uid-retain', 1, 'REQUEST', ?, 'active', NULL, 'marquee@stage11.systems', ?, ?)`,
+    ).bind(NOW, CANCEL_SNAPSHOT, NOW, NOW, NOW, NOW, NOW),
   ]);
   await env.DB.batch([
     env.DB.prepare("UPDATE outbox SET idempotency_key = ? WHERE id = 'mail-cancel'").bind(acceptanceCancelKey),

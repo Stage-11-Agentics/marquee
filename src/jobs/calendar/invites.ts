@@ -557,21 +557,15 @@ export async function prepareCalendarCancellationBatch(input: {
   now: number;
   guard?: CalendarCancellationGuard;
 }): Promise<CalendarCancellationBatch> {
-  const [session, invites] = await Promise.all([
-    sessionFor(input.db, input.eventId, input.submissionId),
-    activeInvitesForCancellation(input),
-  ]);
+  const invites = await activeInvitesForCancellation(input);
   const intents: CalendarCancellationIntent[] = [];
   const statements: D1PreparedStatement[] = [];
   for (const invite of invites) {
-    const fallbackRecipient = await input.db
-      .prepare("SELECT email, name, id AS person_id FROM people WHERE id = ?")
-      .bind(invite.person_id)
-      .first<CalendarRecipientRow>();
-    const snapshot = parseCalendarRequestSnapshot(invite.request_snapshot)
-      ?? (session && fallbackRecipient && validEmail(fallbackRecipient.email)
-        ? snapshotFor(session, fallbackRecipient, DEFAULT_ORIGIN)
-        : null);
+    // A cancellation is a correction to a previously delivered REQUEST. It
+    // must never consult mutable session or person rows: those rows may have
+    // been edited, removed, or reassigned since the calendar client received
+    // the invitation. Legacy rows without a stamped REQUEST fail closed.
+    const snapshot = parseCalendarRequestSnapshot(invite.request_snapshot);
     if (!snapshot) throw new Error(`calendar cancellation snapshot unavailable for ${invite.uid}`);
     if (snapshot.organizer.email.trim().toLowerCase() !== invite.organizer_email.trim().toLowerCase()) {
       throw new Error(`calendar cancellation organizer mismatch for ${invite.uid}`);
