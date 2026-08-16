@@ -10,7 +10,6 @@ import { apiFetch, errorSummary, MarqueeApiError } from "../../shell/api-client"
 import {
   PUBLIC_PARTICIPANT_ROLES,
   type PublicFormField,
-  type PublicFormOnBehalfOf,
   type PublicFormParticipant,
   type PublicFormState,
 } from "../../../routes/public-form.types";
@@ -169,18 +168,6 @@ const PARTICIPANT_ROLE_LABELS: Record<PublicFormParticipant["role"], string> = {
 
 function emptySlot(): ParticipantSlot {
   return { name: "", email: "", role: "co_speaker" };
-}
-
-/** Only complete slots are sent; the server treats a half-typed one as a refusal at Submit. */
-function completeParticipants(slots: readonly ParticipantSlot[]): PublicFormParticipant[] {
-  return slots.flatMap((slot) => slot.name.trim() && slot.email.trim()
-    ? [{ name: slot.name.trim(), email: slot.email.trim(), role: slot.role }]
-    : []);
-}
-
-function completeOnBehalfOf(slot: OnBehalfOfSlot | null): PublicFormOnBehalfOf | null {
-  if (!slot) return null;
-  return slot.name.trim() && slot.email.trim() ? { name: slot.name.trim(), email: slot.email.trim() } : null;
 }
 
 export function PublicForm({ initial }: PublicFormProps) {
@@ -480,11 +467,22 @@ export function PublicForm({ initial }: PublicFormProps) {
     setDirty(true);
   }
 
-  /** The roster half of every write body, read from the refs an in-flight request can see. */
-  function rosterPayload(): { participants: PublicFormParticipant[]; on_behalf_of: PublicFormOnBehalfOf | null } {
+  /**
+   * The roster half of every write body, read from the refs an in-flight
+   * request can see.
+   *
+   * Slots are sent **as typed**, half-filled ones included. Filtering them here
+   * would look tidier and would silently defeat the server's refusal: a name
+   * typed with no address would arrive as an absent slot, autosave would store
+   * the roster without it, and Submit would succeed having quietly dropped
+   * somebody the submitter believed they had added. The server stores only
+   * complete entries and refuses an incomplete one at Submit, which is the
+   * moment the submitter can act on it.
+   */
+  function rosterPayload(): { participants: ParticipantSlot[]; on_behalf_of: OnBehalfOfSlot | null } {
     return {
-      participants: completeParticipants(participantsRef.current),
-      on_behalf_of: completeOnBehalfOf(onBehalfOfRef.current),
+      participants: participantsRef.current.map((slot) => ({ ...slot })),
+      on_behalf_of: onBehalfOfRef.current ? { ...onBehalfOfRef.current } : null,
     };
   }
 
