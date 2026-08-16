@@ -212,3 +212,5 @@ Before implementation begins, obtain the fresh non-author plan-review PASS from 
 
 Only after implementation has been reviewed and the relevant gate slot is granted may the full pr-gate run. This plan does not request that slot yet because no implementation exists. Keep Lattice in planning/planned with no auto review. The next handoff is the plan commit and byte-parity proof to the Adoption Orchestrator at surface:513, mailbox adoption-orchestrator.
 
+
+## Reset 2026-08-16 by agent:delegator-mrq-235
