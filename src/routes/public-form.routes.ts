@@ -17,7 +17,6 @@ import { auditStatement } from "../lib/audit";
 import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../lib/auth/draft-resume-copy";
 import { mintMagicLink, mintMagicLink as issueParticipantMagicLink, promoteMagicLinkToResumeCapability } from "../lib/auth/magic-links";
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
-import { noPersonReferencesPredicate } from "../lib/person-references";
 import { verifyTurnstile } from "../lib/r2/turnstile";
 import { submitterEditability } from "../lib/submission-editing";
 import { withSubmissionReferenceAllocation } from "../lib/submission-reference";
@@ -785,87 +784,6 @@ function tagStatements(db: D1Database, submissionId: string, tagIds: readonly st
     `INSERT OR IGNORE INTO submission_tags (id, submission_id, tag_id, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?)`,
   ).bind(crypto.randomUUID(), submissionId, tagId, now, now));
-}
-
-interface RoutingStage {
-  createdSubmission: boolean;
-  previousTracks: TrackSnapshot[];
-  personId: string;
-  personCreated: boolean;
-  submissionId: string;
-}
-
-async function stageRoutingSubmission(input: {
-  db: D1Database;
-  eventId: string;
-  existing: { id: string } | null;
-  formId: string;
-  kind: "abstract" | "session";
-  personId: string;
-  personCreated: boolean;
-  submissionId: string;
-  title: string;
-  abstract: string | null;
-  formatId: string | null;
-  trackIds: string[];
-  vendorAffiliation: "none" | "vendor_to_fi" | "vendor_with_champion";
-  resumeHash: string;
-  now: number;
-  searchBlob: string;
-}): Promise<RoutingStage> {
-  const previousTracks = input.existing
-    ? (await input.db.prepare(
-      "SELECT id, track_id, is_primary, created_at, updated_at FROM submission_tracks WHERE submission_id = ? ORDER BY is_primary DESC, id",
-    ).bind(input.submissionId).all<TrackSnapshot>()).results
-    : [];
-  if (!input.existing) {
-    await withSubmissionReferenceAllocation(input.db, input.eventId, input.now, (referenceCode) => [
-      input.db.prepare(
-        `INSERT INTO submissions
-          (id, event_id, reference_code, form_id, kind, title, abstract, status, format_id, primary_track_id,
-           origin, vendor_affiliation, submitter_person_id, resume_token_hash, last_saved_at,
-           search_blob, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, 'public', ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(
-        input.submissionId, input.eventId, referenceCode, input.formId, input.kind, input.title, input.abstract,
-        input.formatId, input.trackIds[0] ?? null, input.vendorAffiliation, input.personId,
-        input.resumeHash, input.now, input.searchBlob, input.now, input.now,
-      ),
-    ]);
-  }
-  await persistTracks(input.db, input.submissionId, input.trackIds, input.now);
-  return {
-    createdSubmission: input.existing === null,
-    previousTracks,
-    personId: input.personId,
-    personCreated: input.personCreated,
-    submissionId: input.submissionId,
-  };
-}
-
-async function rollbackRoutingStage(db: D1Database, stage: RoutingStage): Promise<void> {
-  if (stage.createdSubmission) {
-    await db.batch([
-      db.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(stage.submissionId),
-      db.prepare("DELETE FROM submissions WHERE id = ? AND status = 'draft'").bind(stage.submissionId),
-    ]);
-  } else {
-    const statements = [db.prepare("DELETE FROM submission_tracks WHERE submission_id = ?").bind(stage.submissionId)];
-    for (const track of stage.previousTracks) {
-      statements.push(db.prepare(
-        `INSERT INTO submission_tracks (id, submission_id, track_id, is_primary, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      ).bind(track.id, stage.submissionId, track.track_id, track.is_primary, track.created_at, track.updated_at));
-    }
-    await db.batch(statements);
-  }
-  if (stage.personCreated) {
-    await db.prepare(`
-      DELETE FROM people
-      WHERE id = ?
-        AND ${noPersonReferencesPredicate()}
-    `).bind(stage.personId).run();
-  }
 }
 
 function attachmentStatements(
