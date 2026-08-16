@@ -17,6 +17,8 @@ import { newUlid } from "../api/ids";
 import type { AuditActorKind } from "../db/schema";
 
 export interface AuditEntry {
+  /** Optional caller-owned ULID when another receipt stores the audit id. */
+  id?: string;
   /**
    * Null only for an action that belongs to the organization rather than to a
    * conference — see `src/lib/org-activity.ts`, which is where such writes go.
@@ -65,7 +67,7 @@ export function auditStatement(db: D1Database, entry: AuditEntry): D1PreparedSta
   return db
     .prepare(`INSERT INTO audit_log\n  ${COLUMNS}\nVALUES ${PLACEHOLDERS}`)
     .bind(
-      newUlid(entry.now),
+      entry.id ?? newUlid(entry.now),
       entry.eventId,
       entry.orgId ?? null,
       entry.actorPersonId,
@@ -101,7 +103,7 @@ export function auditStatementFromSelect(
   return db
     .prepare(`INSERT INTO audit_log\n  ${COLUMNS}\nSELECT ${projection}\n${sourceSql}`)
     .bind(
-      newUlid(entry.now),
+      entry.id ?? newUlid(entry.now),
       entry.eventId,
       entry.orgId ?? null,
       entry.actorPersonId,

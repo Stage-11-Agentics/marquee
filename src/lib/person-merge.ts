@@ -907,24 +907,20 @@ function receiptInsert(db: D1Database, plan: MergePlan, mergeId: string, idempot
 }
 
 function activityInsert(db: D1Database, plan: MergePlan, actor: PersonMergeActor, now: number, activityId: string): D1PreparedStatement {
-  return db.prepare(
-    `INSERT INTO audit_log
-      (id, event_id, org_id, actor_person_id, actor_name, actor_kind, action,
-       entity_type, entity_id, before_json, after_json, created_at, request_id)
-     VALUES (?, NULL, ?, ?, (SELECT name FROM people WHERE id = ?), ?,
-       'person.merged', 'person', ?, ?, ?, ?, ?)`,
-  ).bind(
-    activityId,
-    plan.org_id,
-    actor.actorPersonId,
-    actor.actorPersonId,
-    actor.actorKind,
-    plan.survivor.id,
-    JSON.stringify({ retired_person_id: plan.retired.id, retired_name: plan.retired.name }),
-    JSON.stringify({ merge_id: plan.merge_id, summary: plan.summary, undo: true }),
+  return auditStatement(db, {
+    id: activityId,
+    eventId: null,
+    orgId: plan.org_id,
+    actorKind: actor.actorKind,
+    actorPersonId: actor.actorPersonId,
+    action: "person.merged",
+    entityType: "person",
+    entityId: plan.survivor.id,
+    before: { retired_person_id: plan.retired.id, retired_name: plan.retired.name },
+    after: { merge_id: plan.merge_id, summary: plan.summary, undo: true },
     now,
-    actor.requestId,
-  );
+    requestId: actor.requestId,
+  });
 }
 
 export interface PersonMergeExecuteResult {

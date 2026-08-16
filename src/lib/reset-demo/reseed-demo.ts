@@ -84,8 +84,6 @@ export const WIPE_ORDER = [
   "person_lists",
   "person_events",
   "mirror_credentials",
-  "people_headshots",
-  "people_headshot_attachments",
   "mirror_outbox",
   "people",
   "companies",
@@ -404,14 +402,6 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
     sql: "DELETE FROM people WHERE org_id = ?",
     bindings: ORG,
   },
-  people_headshots: {
-    sql: "UPDATE people SET headshot_attachment_id = NULL WHERE org_id = ?",
-    bindings: ORG,
-  },
-  people_headshot_attachments: {
-    sql: "DELETE FROM attachments WHERE owner_type = 'person_headshot' AND owner_id IN (SELECT id FROM people WHERE org_id = ?)",
-    bindings: ORG,
-  },
   // Org-scoped like people, and deleted AFTER them: `people.company_id` points
   // here, so wiping companies first would leave the person rows referencing a
   // company that no longer exists.
@@ -460,6 +450,18 @@ function scopedWipeStatements(db: D1Database): D1PreparedStatement[] {
     const plan = DELETE_PLANS[table];
     return plan ? [db.prepare(plan.sql).bind(...plan.bindings)] : [];
   });
+}
+
+/**
+ * Person headshots are polymorphic attachment rows, not schema tables of their
+ * own. Sever their people pointers before deleting the attachment rows so the
+ * migration-derived WIPE_ORDER remains a physical-table inventory.
+ */
+function personHeadshotCleanupStatements(db: D1Database): D1PreparedStatement[] {
+  return [
+    db.prepare("UPDATE people SET headshot_attachment_id = NULL WHERE org_id = ?").bind(...ORG),
+    db.prepare("DELETE FROM attachments WHERE owner_type = 'person_headshot' AND owner_id IN (SELECT id FROM people WHERE org_id = ?)").bind(...ORG),
+  ];
 }
 
 /** Enumerate one opaque upload partition without mutating R2. */
@@ -569,6 +571,7 @@ export async function reseedDemo(
   );
   await db.batch([
     suppressMirror,
+    ...personHeadshotCleanupStatements(db),
     ...scopedWipeStatements(db),
     ...fixture.rows.map((row) => db.prepare(row.statement).bind(...row.bindings)),
     ...referenceLedgerStatements,
