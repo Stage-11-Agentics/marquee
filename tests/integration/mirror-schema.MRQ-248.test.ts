@@ -162,7 +162,7 @@ beforeEach(async () => {
   await seedOwner();
 });
 
-test("MRQ-248 · fetch transport sends canonical metadata paths and bodies", async () => {
+test("CONTRACT · MRQ-248 · fetch transport sends canonical metadata paths and bodies", async () => {
   const requests: Array<{ url: string; init: RequestInit }> = [];
   const fetcher: typeof fetch = async (input, init = {}) => {
     const url = String(input);
@@ -196,7 +196,7 @@ test("MRQ-248 · fetch transport sends canonical metadata paths and bodies", asy
   });
 });
 
-test("MRQ-248 · schema keys, preferred shapes, and canonical record values are exhaustive", async () => {
+test("CONTRACT · MRQ-248 · schema keys, preferred shapes, and canonical record values are exhaustive", async () => {
   expect(MIRROR_FIELD_COUNTS).toEqual({ submissions: 27, speaker_tasks: 19, people: 17 });
   expect(MIRROR_TABLE_SCHEMA.submissions.fields.some((field) => field.name === "reference_code")).toBe(true);
   expect(MIRROR_TABLE_SCHEMA.submissions.fields.find((field) => field.name === "submitted_at")?.options).toEqual({
@@ -240,7 +240,7 @@ test("MRQ-248 · schema keys, preferred shapes, and canonical record values are 
   expect(records.find(([role]) => role === "submissions")?.[1]?.fields.created_at).toBe(new Date(NOW - 2_000).toISOString());
 });
 
-test("MRQ-248 · verify is advisory, fresh/default bases offer explicit provisioning, and organizer Table 1 stays untouched", async () => {
+test("CONTRACT · MRQ-248 · verify is advisory, fresh/default bases offer explicit provisioning, and organizer Table 1 stays untouched", async () => {
   const clock = clockAt();
   const fake = new FakeAirtableTransport(clock.now, {
     tables: [{ id: "tbl_table_1", name: "Table 1", fields: [] }],
@@ -268,7 +268,7 @@ test("MRQ-248 · verify is advisory, fresh/default bases offer explicit provisio
   expect(metadataCalls.map((call) => call.at).every((at, index, values) => index === 0 || at - values[index - 1] >= 250)).toBe(true);
 });
 
-test("MRQ-248 · submitted differently named IDs are authoritative and map without createTable", async () => {
+test("CONTRACT · MRQ-248 · submitted differently named IDs are authoritative and map without createTable", async () => {
   const tables = fullTables(
     { submissions: "tbl_call_for_papers", speaker_tasks: "tbl_followups", people: "tbl_roster" },
     { submissions: "Sessions", speaker_tasks: "Follow-ups", people: "Humans" },
@@ -294,7 +294,7 @@ test("MRQ-248 · submitted differently named IDs are authoritative and map witho
   expect(fake.calls.filter((call) => call.kind === "create_webhook")).toHaveLength(1);
 });
 
-test("MRQ-248 · partial templates preserve submitted IDs and organizer columns while creating only unfilled roles", async () => {
+test("CONTRACT · MRQ-248 · partial templates preserve submitted IDs and organizer columns while creating only unfilled roles", async () => {
   const submissions = tableFor("submissions", "tbl_sessions_template", "Sessions");
   submissions.fields = [
     submissions.fields![0],
@@ -327,7 +327,7 @@ test("MRQ-248 · partial templates preserve submitted IDs and organizer columns 
   expect(mapped.progress?.find((row) => row.role === "submissions")?.organizer_fields).toEqual(["Organizer notes"]);
 });
 
-test("MRQ-248 · verify never clears the active mapping; replacement state changes only at final adoption", async () => {
+test("CONTRACT · MRQ-248 · verify never clears the active mapping; replacement state changes only at final adoption", async () => {
   const currentTables = fullTables({ submissions: "tbl_current_submissions", speaker_tasks: "tbl_current_tasks", people: "tbl_current_people" });
   const currentFake = new FakeAirtableTransport(() => NOW, { tables: currentTables });
   await verifyConnection(currentFake);
@@ -364,7 +364,7 @@ test("MRQ-248 · verify never clears the active mapping; replacement state chang
   });
 });
 
-test("MRQ-248 · adoption is resumable and retry-safe after a rate-limited fifth field call", async () => {
+test("CONTRACT · MRQ-248 · adoption is resumable and retry-safe after a rate-limited fifth field call", async () => {
   const submissions = tableFor("submissions", "tbl_partial_submissions", "Organizer submissions");
   submissions.fields = [
     submissions.fields![0],
@@ -421,7 +421,7 @@ test("MRQ-248 · adoption is resumable and retry-safe after a rate-limited fifth
   expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM mirror_state").first<{ count: number }>()).toMatchObject({ count: 3 });
 });
 
-test("MRQ-248 · the final continuation freshly rejects a previously completed table before the on-switch", async () => {
+test("CONTRACT · MRQ-248 · the final continuation freshly rejects a previously completed table before the on-switch", async () => {
   const tables = fullTables({ submissions: "tbl_fresh_submissions", speaker_tasks: "tbl_fresh_tasks", people: "tbl_fresh_people" });
   const fake = new FakeAirtableTransport(() => NOW, { tables });
   const mapping = mappingFor(tables);
@@ -454,7 +454,7 @@ test("MRQ-248 · the final continuation freshly rejects a previously completed t
   expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM mirror_state").first<{ count: number }>()).toMatchObject({ count: 0 });
 });
 
-test("MRQ-248 · unknown provider fields remain unknown instead of becoming an empty schema", async () => {
+test("CONTRACT · MRQ-248 · unknown provider fields remain unknown instead of becoming an empty schema", async () => {
   const unknown: AirtableTable = { id: "tbl_unknown", name: "Submissions" };
   const fake = new FakeAirtableTransport(() => NOW, { tables: [unknown] });
   const verified = await verifyConnection(fake);
@@ -463,7 +463,7 @@ test("MRQ-248 · unknown provider fields remain unknown instead of becoming an e
   expect(ensureMirrorSchema("submissions", unknown, "verify").issues[0]).toMatchObject({ code: "unknown_schema" });
 });
 
-test("MRQ-248 · computed and incomplete single-select fields conflict before webhook registration", async () => {
+test("CONTRACT · MRQ-248 · computed and incomplete single-select fields conflict before webhook registration", async () => {
   const computed = tableFor("submissions", "tbl_computed", "Submissions");
   computed.fields = computed.fields!.map((field) => field.name === "status" ? { ...field, type: "formula" } : field);
   const fake = new FakeAirtableTransport(() => NOW, { tables: [computed, ...fullTables({ speaker_tasks: "tbl_tasks", people: "tbl_people" })] });
@@ -492,7 +492,7 @@ test("MRQ-248 · computed and incomplete single-select fields conflict before we
   expect(ensureMirrorSchema("submissions", incompleteSelect, "adopt").issues[0]).toMatchObject({ code: "single_select_choices" });
 });
 
-test("MRQ-248 · schema.bases:write copy is safe, and exact-name conflicts recover by rename then fresh creation", async () => {
+test("CONTRACT · MRQ-248 · schema.bases:write copy is safe, and exact-name conflicts recover by rename then fresh creation", async () => {
   const partial = tableFor("submissions", "tbl_write_scope", "Organizer submissions");
   partial.fields = [partial.fields![0]];
   const scopeFake = new FakeAirtableTransport(() => NOW, {
