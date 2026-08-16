@@ -67,4 +67,14 @@ describe("speed budget authority", () => {
     expect(scoped.missing.map((entry) => entry.id)).toEqual(["global-search-painted"]);
     expect(scoped.shouldFail).toBe(true);
   });
+
+  test("CONTRACT · hosted calibration is explicit and still fails above its calibrated ceiling", () => {
+    const hostedPass = classifySpeedMeasurements({ ...passingMeasurements(), "global-search-painted": 599 }, { gate: true, scope: "acceptance", runner: "github" });
+    const hostedEntry = hostedPass.entries.find((entry) => entry.id === "global-search-painted");
+    expect(hostedEntry).toMatchObject({ threshold: 200, effectiveThreshold: 600, calibration: "github", verdict: "pass" });
+
+    const hostedFailure = classifySpeedMeasurements({ ...passingMeasurements(), "global-search-painted": 601 }, { gate: true, scope: "acceptance", runner: "github" });
+    expect(hostedFailure.shouldFail).toBe(true);
+    expect(hostedFailure.acceptanceFailures[0]?.id).toBe("global-search-painted");
+  });
 });

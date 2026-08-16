@@ -43,11 +43,12 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
   const [errorMessage, setErrorMessage] = useState("");
   const [paintedQuery, setPaintedQuery] = useState("");
   const activeRequestRef = useRef<AbortController | null>(null);
+  const snapshotReadyRef = useRef<Promise<unknown> | null>(null);
   const searchSessionRef = useRef("");
 
   useEffect(() => {
     searchSessionRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=`, {
+    snapshotReadyRef.current = apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=`, {
       headers: { accept: "application/json", "x-search-session": searchSessionRef.current, "x-search-prefetch": "1" },
       route: "/api/v1/events/{eventId}/search",
     }).catch(() => undefined);
@@ -64,11 +65,11 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
     // Refresh the short-lived server snapshot at open time as well as shell
     // mount time. The persistent component avoids a remount waterfall, while
     // this refresh keeps a long dashboard render from aging out the snapshot.
-    void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=`, {
+    snapshotReadyRef.current = apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=`, {
       headers: { accept: "application/json", "x-search-session": searchSessionRef.current, "x-search-prefetch": "1", "x-search-refresh": "1" },
       route: "/api/v1/events/{eventId}/search",
     }).catch(() => undefined);
-    inputRef.current?.focus();
+    void snapshotReadyRef.current.then(() => inputRef.current?.focus());
   }, [open]);
 
   useEffect(() => {
@@ -84,14 +85,18 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
     const requestQuery = query;
     setState("loading");
     setErrorMessage("");
-    void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=${encodeURIComponent(requestQuery)}`, {
-      headers: { accept: "application/json", "x-search-session": searchSessionRef.current },
-      signal: controller.signal,
-      route: "/api/v1/events/{eventId}/search",
-    })
-      .then(readSearchResponse)
+    void (snapshotReadyRef.current ?? Promise.resolve())
+      .then(() => {
+        if (controller.signal.aborted) return undefined;
+        return apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=${encodeURIComponent(requestQuery)}`, {
+          headers: { accept: "application/json", "x-search-session": searchSessionRef.current },
+          signal: controller.signal,
+          route: "/api/v1/events/{eventId}/search",
+        });
+      })
+      .then((response) => (response === undefined ? undefined : readSearchResponse(response)))
       .then((body) => {
-        if (controller.signal.aborted) return;
+        if (!body || controller.signal.aborted) return;
         setResults(body.data);
         setState("ready");
         setPaintedQuery(requestQuery);

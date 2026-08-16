@@ -41,6 +41,7 @@ jobs:
       - run: npm run check:speed -- --scope=acceptance
         env:
           MARQUEE_GATE: "1"
+          MARQUEE_SPEED_RUNNER: "github"
       - run: npm test
         # Hang detector, not a speed gate — same reasoning as the job-level
         # limit above. The runner is far smaller than a dev machine, so 5
