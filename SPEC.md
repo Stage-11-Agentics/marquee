@@ -445,7 +445,7 @@ Scopes resolve from `memberships`: `public` < `speaker` (own records only) < `re
 |---|---|
 | Event | `GET/PATCH /` , `GET/POST/PATCH/DELETE /tracks|/rooms|/formats|/waves` |
 | Forms | `… /forms` CRUD, `/forms/:id/fields` CRUD + `PATCH /reorder`, `/forms/:id/admins` CRUD, `POST /forms/:id/duplicate` (AC-20), `POST /forms/:id/publish|close|reopen` |
-| Submissions | `GET /submissions` (filters: status including `draft`, kind, track, format, wave, origin, missing field, q), `POST` (admin create — AC-118), `GET/PATCH/DELETE /submissions/:id`, `POST /submissions/:id/decision` `{recommendation, feedback_md?}` (AC-235), `POST /submissions/:id/messages` (AC-236), `POST /submissions/bulk` `{selector, action}` where `selector` is **either ids or a filter — select-all-matching is a server concept, not a page of checkboxes (AC-66)**; actions `accept`, `reject`, `waitlist`, `withdraw`, `promote`, `assign` |
+| Submissions | `GET /submissions` (filters: status including `draft`, kind, track, format, wave, origin, missing field, q), `POST` (admin create — AC-118), `GET/PATCH/DELETE /submissions/:id`, `GET/POST /submissions/:id/notes` (append-only staff notes; author from the authenticated seat; no speaker/public/outbound read), `POST /submissions/:id/decision` `{recommendation, feedback_md?}` (AC-235), `POST /submissions/:id/messages` (AC-236), `POST /submissions/bulk` `{selector, action}` where `selector` is **either ids or a filter — select-all-matching is a server concept, not a page of checkboxes (AC-66)**; actions `accept`, `reject`, `waitlist`, `withdraw`, `promote`, `assign` |
 | Views | `GET/POST /views`, `PATCH/DELETE /views/:id`; always event- and person-scoped; built-in views are returned with `built_in:true` and reject mutation (AC-247, AC-248) |
 | Participation | `POST/PATCH/DELETE /submissions/:id/participants` |
 | Evaluation | `/plans`, `/plans/:id/rounds`, `/rounds/:id/criteria`, `/committees`, `/committees/:id/reviewers/:personId/tracks` CRUD (AC-246), `/rounds/:id/assignments`, `POST /rounds/:id/promote` (AC-99) |
@@ -583,7 +583,7 @@ Each is specified here and demonstrated as a real route, overlay, modal, or stat
 | Screen | Route | ACs |
 |---|---|---|
 | Global search results overlay (⌘K / `/`) | overlay | AC-101 – AC-104 |
-| Admin submission record (detail, participants with their roles labelled, answers, scores per round, applied routing rule, history) | `/submissions/:id` | AC-100, AC-120, AC-136, AC-224, **AC-271** |
+| Admin submission record (detail, participants with their roles labelled, answers, scores per round, applied routing rule, history, internal notes) | `/submissions/:id` | AC-100, AC-120, AC-136, AC-224, **AC-271**, **AC-337 – AC-342** |
 | Admin create submission (abstract or session, bypass-evaluation toggle) | `/submissions/new` | AC-118, AC-119 |
 | Un-accept cascade dialog (enumerates portal tasks, scheduled emails, calendar invites; cancel/retain each) | modal | AC-121 – AC-124 |
 | Comms: templates, triggers on/off, outbox log with rendered previews and delivery outcome | `/comms` | AC-125 – AC-131, AC-189 |
@@ -1196,3 +1196,47 @@ before there is a session has no participation for the roster to read. Their
 `speaker` seat is the only evidence there is, and it stands — which is why the
 roster keeps a membership half at all rather than becoming purely
 participation-derived.
+
+## Amendment 30 — internal notes on a submission *(2026-08-16, MRQ-242)*
+
+This post-deadline amendment folds **USER_STORIES.md Amendment 30** and
+**EVALUATION.md §2.13**. It mints **US-96** with exactly **AC-337 – AC-342**;
+the live competition count and tier arithmetic do not change. The next shared
+mint is **US-97 / AC-343** for MRQ-241.
+
+**Data model.** Migration **0029** creates `submission_notes` with
+`submission_id` referencing `submissions`, `author_person_id` referencing the
+organization-scoped `people` row, immutable `body_md`, and `created_at`. Its
+`(submission_id, created_at DESC, id DESC)` index is the read order. The table
+is append-only: there is no update or delete route, and the migration is not
+revised by this amendment.
+
+**Staff API.** `GET/POST /api/v1/submissions/{submissionId}/notes` first
+resolves the submission's conference and authorizes program staff for that
+conference. POST accepts only the note body; the author is derived from the
+authenticated session or token seat and checked against the same organization.
+The route never creates or changes an evaluation, decision, or outbound-mail
+row. Speaker, public, and outbound projections do not read this table.
+
+**Admin record.** The submission record includes an **Internal notes** card
+with loading, empty, and populated states, a one-action **Save note** form,
+and the explicit label **Staff only · never sent**. The card's content body is
+rendered with inline `height`, `min-height`, and `max-height` all fixed at
+220px, while its compose row remains 126px. Moving the invariant into the
+rendered style makes the no-jump guarantee hold before the stylesheet loads;
+the accepted trade is that those inline dimensions have higher specificity and
+therefore constrain later CSS/media-query overrides. The component contract is
+the deliberate authority for this card, and the computed-style test observes
+the resulting geometry across loading, empty, and populated states.
+
+When no evaluation rows exist, the record's empty state renders **Set up
+evaluation** and its actual handler navigates to `/evaluation`. A decision
+refusal caused by a missing valid email keeps decision and outbound state
+unchanged, identifies the missing address, and opens the speaker record as the
+repair door.
+
+**Agent parity.** The CLI and generated `SKILL.md` expose the same route as
+`marquee submissions notes <submission-id>` and
+`marquee submissions note <submission-id> --set body=<text>`. Both operations
+are staff-scoped, return JSON when requested, and preserve the server-derived
+author and append-only semantics.

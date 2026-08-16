@@ -12,7 +12,7 @@ import type { DecisionActor } from "../jobs/cascade/decisions";
 import { writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { drainCalendarCancellations, prepareCalendarCancellationBatch } from "../jobs/calendar/invites";
 import { getAuth } from "../lib/auth/auth-middleware";
-import { membershipAllowsGrant, roleForEvent, tokenHasGrant } from "../lib/auth/scope-resolution";
+import { authHasRole, membershipAllowsGrant, roleForEvent, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { decisionHistory, decisionRecipient } from "../lib/decision-history";
 import { heldBackReason } from "../lib/delivery-health";
 import { classifySendFailure } from "../lib/mail-failure";
@@ -238,6 +238,11 @@ function canWriteProgram(context: Context<ApiEnv>, eventId: string): boolean {
   if (auth.kind === "token") return tokenHasGrant(auth, "program:write", eventId);
   const role = roleForEvent(auth.memberships, eventId);
   return role !== null && membershipAllowsGrant(role, "program:write");
+}
+
+function canViewSubmissionNotes(context: Context<ApiEnv>, eventId: string): boolean {
+  const auth = getAuth(context);
+  return auth !== null && authHasRole(auth, "ops", eventId);
 }
 
 async function audit(
@@ -540,7 +545,13 @@ async function projectAnswers(
  * The two `authenticated` routes (the record read and the drafts editor) pass
  * the resolved answer, because they admit principals who genuinely lack it.
  */
-async function loadRecord(db: D1Database, eventId: string, submissionId: string, canWriteProgram = true): Promise<Record<string, unknown>> {
+async function loadRecord(
+  db: D1Database,
+  eventId: string,
+  submissionId: string,
+  canWriteProgram = true,
+  canViewNotes = false,
+): Promise<Record<string, unknown>> {
   const row = await db.prepare(`
     SELECT
       s.id, s.event_id, event.name AS event_name, event.timezone,
@@ -917,6 +928,7 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
       // Overriding a recorded score is the chair's authority over the review,
       // not the reviewer's, so it answers `program:write` and nothing else.
       can_override_scores: canWriteProgram,
+      can_view_notes: canViewNotes,
     },
   };
 }
@@ -1147,7 +1159,7 @@ const getSubmissionRecord = defineApiRoute(
     if (!submission) throw ApiError.notFound("submission not found");
     if (submission.status === "draft") await requireDraftRead(context, eventId);
     else await requireSubmissionRead(context, eventId);
-    return context.json(await loadRecord(context.env.DB, eventId, submissionId, canWriteProgram(context, eventId)), 200);
+    return context.json(await loadRecord(context.env.DB, eventId, submissionId, canWriteProgram(context, eventId), canViewSubmissionNotes(context, eventId)), 200);
   },
 );
 
@@ -1275,7 +1287,7 @@ const patchDraft = defineApiRoute(
       }
     }
     await context.env.DB.batch(statements);
-    return context.json(await loadRecord(context.env.DB, eventId, submissionId, canWriteProgram(context, eventId)), 200);
+    return context.json(await loadRecord(context.env.DB, eventId, submissionId, canWriteProgram(context, eventId), canViewSubmissionNotes(context, eventId)), 200);
   },
 );
 

@@ -142,6 +142,7 @@ export async function deleteEventCascade(
   statements.push(
     prepared(db, `DELETE FROM webhook_deliveries WHERE endpoint_id IN ${endpointsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM webhook_endpoints WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
+    prepared(db, `DELETE FROM submission_notes WHERE submission_id IN ${submissionsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM submission_decisions WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM submission_answers WHERE submission_id IN ${submissionsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM submission_tracks WHERE submission_id IN ${submissionsSql}`, ...eventBindings),

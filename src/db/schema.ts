@@ -583,6 +583,12 @@ export interface SubmissionDecisionRow extends MutableRecord {
   submission_id: Id;
 }
 
+export interface SubmissionNoteRow extends ImmutableRecord {
+  author_person_id: Id;
+  body_md: string;
+  submission_id: Id;
+}
+
 export interface SavedViewRow extends MutableRecord {
   config_json: JsonText;
   event_id: Id;
@@ -973,6 +979,7 @@ export const CORE_TABLE_NAMES = [
   "submission_answers",
   "submission_tracks",
   "submission_decisions",
+  "submission_notes",
   "saved_views",
   "participations",
   "evaluation_plans",
@@ -1016,7 +1023,7 @@ export const CORE_TABLE_NAMES = [
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 63 as const;
+export const CORE_TABLE_COUNT = 64 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -1034,7 +1041,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 63>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 64>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -1089,6 +1096,7 @@ export const CORE_TABLES = {
   speaker_tasks: "speaker_tasks",
   submission_answers: "submission_answers",
   submission_decisions: "submission_decisions",
+  submission_notes: "submission_notes",
   submission_tracks: "submission_tracks",
   submissions: "submissions",
   task_templates: "task_templates",
@@ -1155,6 +1163,7 @@ export interface CoreTableRows {
   speaker_tasks: SpeakerTaskRow;
   submission_answers: SubmissionAnswerRow;
   submission_decisions: SubmissionDecisionRow;
+  submission_notes: SubmissionNoteRow;
   submission_tracks: SubmissionTrackRow;
   submissions: SubmissionRow;
   task_templates: TaskTemplateRow;
@@ -1231,6 +1240,7 @@ interface CoreDefaultColumns {
   speaker_tasks: "description" | "last_write_source" | "status";
   submission_answers: never;
   submission_decisions: never;
+  submission_notes: never;
   submission_tracks: "is_primary";
   submissions:
     | "is_published"
@@ -1291,6 +1301,7 @@ export type SubmissionInsert = CoreInsert<"submissions">;
 export type SubmissionAnswerInsert = CoreInsert<"submission_answers">;
 export type SubmissionTrackInsert = CoreInsert<"submission_tracks">;
 export type SubmissionDecisionInsert = CoreInsert<"submission_decisions">;
+export type SubmissionNoteInsert = CoreInsert<"submission_notes">;
 export type SavedViewInsert = CoreInsert<"saved_views">;
 export type ParticipationInsert = CoreInsert<"participations">;
 export type EvaluationPlanInsert = CoreInsert<"evaluation_plans">;

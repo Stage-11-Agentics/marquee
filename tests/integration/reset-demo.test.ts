@@ -30,6 +30,7 @@ const UNRELATED_OBJECT_KEY = "uploads/" + UNRELATED_EVENT_ID + "/event_logo/unre
 const SEEDED_COUNTS: Record<string, number> = {
   webhook_deliveries: 0,
   webhook_endpoints: 0,
+  submission_notes: 0,
   submission_decisions: 680,
   submission_answers: 4091,
   submission_tracks: 1156,
@@ -195,6 +196,9 @@ async function dirtyDemoState(): Promise<void> {
       "UPDATE submissions SET status = 'rejected', decided_at = ?, decided_by_person_id = ?, updated_at = ? WHERE id = ?",
     ).bind(NOW, DEMO_ORGANIZER_PERSON_ID, NOW, inReview.results[1]!.id),
     env.DB.prepare(
+      "INSERT INTO submission_notes (id, submission_id, author_person_id, body_md, created_at) VALUES (?, ?, ?, ?, ?)",
+    ).bind("submission-note-dirty", inReview.results[0]!.id, DEMO_ORGANIZER_PERSON_ID, "Dirty internal note", NOW),
+    env.DB.prepare(
       "INSERT INTO submission_decisions (id, event_id, submission_id, decision, resulting_status, feedback_md, decided_by_person_id, decided_at, outbox_id, created_at, updated_at) VALUES (?, ?, ?, 'approve', 'accepted', 'Dirty accept', ?, ?, NULL, ?, ?)",
     ).bind("decision-dirty-accept", DEMO_EVENT_ID, inReview.results[0]!.id, DEMO_ORGANIZER_PERSON_ID, NOW, NOW, NOW),
     env.DB.prepare(
@@ -293,6 +297,9 @@ async function insertUnrelatedTenant(): Promise<void> {
 async function assertResetState(): Promise<void> {
   expect(Object.keys(SEEDED_COUNTS).sort()).toEqual([...WIPE_ORDER].sort());
   expect(await tableCounts()).toEqual(expectedCountsAfterReset());
+  expect(await env.DB.prepare(
+    "SELECT id FROM submission_notes WHERE submission_id IN (SELECT id FROM submissions WHERE event_id = ?)",
+  ).bind(DEMO_EVENT_ID).first()).toBeNull();
 
   const event = await env.DB.prepare(
     "SELECT id, name, demo_mode FROM events WHERE id = ?",
@@ -338,6 +345,7 @@ test("AC-230 · reset-demo restores the full seeded baseline from dirty state, s
 
   const job = await readResetJob(env.CACHE, jobId);
   expect(job?.status).toBe("done");
+  expect(job?.result).toMatchObject({ deletedObjects: 1 });
   await assertResetState();
   expect(mirrorSend).toHaveBeenCalledTimes(1);
   expect(mirrorSend.mock.calls[0][0]).toMatchObject({ type: "mirror_reconcile" });
@@ -352,7 +360,9 @@ test("AC-230 · reset-demo restores the full seeded baseline from dirty state, s
   const { job_id: secondJobId } = await secondPost.json<{ job_id: string }>();
   const secondMirrorSend = vi.fn();
   await dispatchResetJob(secondJobId, secondMirrorSend);
-  expect((await readResetJob(env.CACHE, secondJobId))?.status).toBe("done");
+  const secondJob = await readResetJob(env.CACHE, secondJobId);
+  expect(secondJob?.status).toBe("done");
+  expect(secondJob?.result).toMatchObject({ deletedObjects: 0 });
   await assertResetState();
   expect(secondMirrorSend).toHaveBeenCalledTimes(1);
   await assertBothDemoLogins();

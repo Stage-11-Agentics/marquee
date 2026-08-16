@@ -767,6 +767,23 @@ the recipient split form one participant seam.
 | AC-335 | PD | `auto` | `test:` two people shared across one overlapping pair produce two person-conflicts naming both. Verified to fail against the truncated behaviour before the fix, so the row asserts the defect and not merely the result. |
 | AC-336 | PD | `auto` | `test:` publish a session with a moderator and assert the public agenda payload carries `role: "moderator"` for them and `null` for a plain speaker; the card renders the label through the existing `participationRoleLabel`. |
 
+### 2.13 Post-deadline internal-notes band — AC-337 – AC-342 *(Amendment 30, 2026-08-16, MRQ-242)*
+
+**Outside the Wednesday terminal gate, on the same terms as §2.4–§2.12.**
+This band is enforced by `tests/ac-claims/MRQ-242.json` and does not change
+the live in-scope count or tier arithmetic. Story: US-96
+(`sequence/USER_STORIES.md` Amendment 30). Migration 0029 remains the sole
+schema change for the seam and is unchanged by this fold.
+
+| AC | Tier | Tag | How verified |
+|---|---|---|---|
+| AC-337 | PD | `auto` | `tests/integration/api/submission-notes.US-96.test.ts`: create a fresh submission with no evaluation rows, append one note in one staff request, assert the note is readable and the evaluation count is unchanged. |
+| AC-338 | PD | `auto` | The same API test reads the note as a second organizer and asserts the first authenticated seat's organization-level people row is the author; the forged author is ignored and the API exposes no update path. |
+| AC-339 | PD | `auto` | The same API test uses a sentinel and asserts the speaker receives 403, the speaker response contains no sentinel, and public/outbound projections contain no sentinel. |
+| AC-340 | PD | `auto` | `tests/unit/submission-notes.MRQ-242.test.ts` renders loading, empty, and populated notes states and observes the computed 220px content viewport: `height`, `min-height`, `max-height`, grid rows, and overflow stay identical across all three states. |
+| AC-341 | PD | `auto` | The unit test mounts the actual `EvaluationEmptyState`, invokes the rendered button handler, and asserts the navigation target is `/evaluation`. |
+| AC-342 | PD | `auto` | The unit test exercises the missing-valid-email error path and the rendered speaker-record recovery action; the API decision contract leaves state unchanged on that refusal. |
+
 ---
 
 ## 3. Felt checkpoints
@@ -868,6 +885,8 @@ Two carry enforcement obligations even though their UI is deferred, because retr
 ## Amendment log
 
 **Amendment 29 — the participant model, finished, 2026-08-16 (MRQ-224).** §2.12 adds the participant-model band: AC-329 – AC-336 minted, and the reserved AC-270 – AC-272 promoted out of reserve because the build now exists (AC-272 recorded as already satisfied by MRQ-160/162 rather than rebuilt). Gate 19b's named limitation changes from the submitter/speaker fusion — closed by this band — to per-person answers, which is what actually remains. Post-deadline; the live in-scope count and tier arithmetic are unchanged.
+
+**Amendment 30 — internal notes on a submission, 2026-08-16 (MRQ-242).** §2.13 adds exactly US-96 and AC-337 – AC-342: one-action note creation without evaluation rows, authenticated people-row attribution, exclusion from speaker/public/outbound surfaces, fixed rendered notes geometry, the evaluation setup CTA, and no-valid-email recovery. The claims manifest is `tests/ac-claims/MRQ-242.json`; migration 0029 remains unchanged. Post-deadline; the live in-scope count and tier arithmetic are unchanged. The next shared mint is US-97 / AC-343 for MRQ-241.
 
 **Amendment 26 — one named mail-idempotency seam, 2026-08-15, plumbing fold.** Folds `USER_STORIES.md` Amendment 26 and `SPEC.md` §3.8. AC-117's verification now includes the full pre-fix registry byte-identity inventory; **AC-314** is the post-deadline lock for durable manual-nudge retries and fresh new nudges. The live count, tier arithmetic, and terminal gate remain unchanged.
 

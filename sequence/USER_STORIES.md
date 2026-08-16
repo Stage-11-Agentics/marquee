@@ -1289,3 +1289,35 @@ that** a moderator is not a person the system quietly forgets.
 count changes. Built by MRQ-224.
 
 **Next mint: AC-337.**
+
+---
+
+## Amendment 30 — think out loud without deciding out loud *(2026-08-16, MRQ-242)*
+
+This post-deadline amendment mints exactly one story, **US-96**, and exactly
+six criteria, **AC-337 – AC-342**. It records the internal-notes seam built by
+MRQ-242: notes belong to the organization-level people row behind the
+authenticated staff seat, are append-only, and never become speaker, public,
+or outbound content. Migration **0029** is the sole schema change and remains
+the contract for this seam. After this fold the next shared mint is
+**US-97 / AC-343**, reserved for MRQ-241.
+
+### US-96 · Think out loud without deciding out loud
+
+**As an** organizer, **I want** to append private context to a submission,
+**so that** the conference team can continue the work without turning an
+unresolved note into an evaluation, decision, or message.
+
+- **AC-337**: In a fresh conference with a fresh submission and no evaluation rows, an authorized staff seat can save one internal note in one action. The note is visible to the staff reader and the operation creates no evaluation row.
+- **AC-338**: A second authorized organizer can read the note with attribution to the first authenticated seat's organization-level people row. The server derives `author_person_id` from that seat, ignores any client-supplied author, and exposes no update or delete path.
+- **AC-339**: A note containing a sentinel is denied to the authenticated speaker and the sentinel is absent from speaker-facing, public, and outbound projections.
+- **AC-340**: The rendered notes card preserves one fixed body across loading, empty, and populated states. Its computed content viewport is 220px, with matching `height`, `min-height`, and `max-height`, so the card does not jump as notes load.
+- **AC-341**: The evaluation empty state renders a setup CTA whose actual button handler navigates to `/evaluation`.
+- **AC-342**: A decision refusal caused by a missing valid email leaves decision and outbound state unchanged, names the missing address, and offers an action that opens the speaker record for repair.
+
+`SPEC.md` Amendment 30 carries the data model, staff routes, admin card,
+CLI/SKILL parity, and the inline geometry decision. `EVALUATION.md` §2.13
+owns the verification rows. MRQ-249 depends on this notes seam. Browser and
+two-seat UI evidence remain a separate held validation axis.
+
+**Next mint: US-97 / AC-343 (MRQ-241).**

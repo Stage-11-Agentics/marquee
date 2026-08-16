@@ -1,0 +1,13 @@
+{
+  "ticket": "MRQ-242",
+  "owns": [
+    "AC-337",
+    "AC-338",
+    "AC-339",
+    "AC-340",
+    "AC-341",
+    "AC-342"
+  ],
+  "exercises": [],
+  "notes": "MRQ-242 owns the post-deadline internal-notes band in EVALUATION §2.13: one-action note creation on a fresh conference without evaluation rows; authenticated people-row attribution visible to a second organizer; sentinel exclusion from speaker, public, and outbound surfaces; rendered/computed fixed card geometry across loading, empty, and populated states; the working evaluation setup CTA; and the no-valid-email decision refusal recovery path. The submission_notes table and its (submission_id, created_at) index are migration 0029 and remain append-only with no update route. The MRQ-162 refusal-policy tests are inherited general-contract coverage and retain their MRQ-162 lineage under CONTRACT titles; they do not claim an MRQ-242 criterion. The CTA and no-email fixes are small walkthrough-loop repairs carried by this ticket, and MRQ-249 depends on this notes seam. Browser/two-seat UI evidence remains a separate held validation axis."
+}
