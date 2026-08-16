@@ -826,7 +826,7 @@ export function PublicationCandidateRow({
     {!review && <input
       type="checkbox"
       checked={selected === true}
-      disabled={disabled}
+      disabled={disabled || !candidate.can_publish}
       title={!candidate.can_publish ? blockedReason : undefined}
       aria-label={`Select ${candidate.title} for publication${candidate.can_publish ? "" : ` — ${blockedReason}`}`}
       onChange={() => onToggle?.(candidate.submission_id)}

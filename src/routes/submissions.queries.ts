@@ -162,13 +162,15 @@ function acceptedStagePredicate(
  */
 export function submissionStatusPredicate(
   status: SubmissionStatusFilter,
-  aliases: { submission?: string; agenda?: string; includeCancelledAt?: boolean } = {},
+  aliases: { submission?: string; agenda?: string; includeCancelledAt?: boolean; eventStatusAvailable?: boolean } = {},
 ): string {
   const submission = aliases.submission ?? "s";
   const agenda = aliases.agenda ?? "ai";
   const includeCancelledAt = aliases.includeCancelledAt ?? false;
   if (status === "not_yet_public" || status === "live_on_site") {
-    return publicationClassificationPredicate(status, { submission, agenda, event: "event" });
+    return publicationClassificationPredicate(status, { submission, agenda, event: "event" }, {
+      eventStatusAvailable: aliases.eventStatusAvailable,
+    });
   }
   if (status === "scheduled") return `${agenda}.id IS NOT NULL AND ${agenda}.is_published = 0`;
   if (status === "published") return `${agenda}.id IS NOT NULL AND ${agenda}.is_published = 1`;
@@ -268,6 +270,7 @@ function filterParts(
   statusSemantics: SubmissionStatusSemantics = "derived",
   overdueDay?: string,
   includeTemplateProvenance = false,
+  eventStatusAvailable = true,
 ): QueryParts {
   const clauses = ["s.event_id = ?"];
   const bindings: unknown[] = [filters.eventId];
@@ -282,7 +285,7 @@ function filterParts(
       clauses.push("s.status = ?");
       bindings.push(filters.status === "accepted_any" ? "accepted" : filters.status);
     } else {
-      clauses.push(submissionStatusPredicate(filters.status, { includeCancelledAt }));
+      clauses.push(submissionStatusPredicate(filters.status, { includeCancelledAt, eventStatusAvailable }));
     }
   }
   if (filters.track) {
@@ -327,15 +330,19 @@ function filterParts(
   return { where: clauses.join(" AND "), bindings };
 }
 
-const BASE_FROM = `FROM submissions s
+function submissionFrom(includeFormMetadata: boolean, venueEventScoped = true): string {
+  const agendaJoin = venueEventScoped
+    ? "LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.event_id = s.event_id AND ai.kind = 'session'"
+    : "LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'";
+  const venueJoins = venueEventScoped
+    ? "LEFT JOIN rooms room ON room.id = ai.room_id AND room.event_id = ai.event_id\nLEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id"
+    : "LEFT JOIN rooms room ON room.id = ai.room_id\nLEFT JOIN buildings building ON building.id = room.building_id";
+  const base = `FROM submissions s
 JOIN events event ON event.id = s.event_id
 LEFT JOIN formats format ON format.id = s.format_id
-LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.event_id = s.event_id AND ai.kind = 'session'
-LEFT JOIN rooms room ON room.id = ai.room_id AND room.event_id = ai.event_id
-LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id`;
-
-function submissionFrom(includeFormMetadata: boolean): string {
-  return `${BASE_FROM}${includeFormMetadata ? "\nLEFT JOIN forms form ON form.id = s.form_id AND form.event_id = s.event_id" : ""}`;
+${agendaJoin}
+${venueJoins}`;
+  return `${base}${includeFormMetadata ? "\nLEFT JOIN forms form ON form.id = s.form_id AND form.event_id = s.event_id" : ""}`;
 }
 
 /**
@@ -345,8 +352,8 @@ function submissionFrom(includeFormMetadata: boolean): string {
  * demo-mode suppression is settled by design, so the view closes when the
  * decision has reached a terminal notification outcome.
  */
-function notificationFrom(includeFormMetadata: boolean): string {
-  return `${submissionFrom(includeFormMetadata)}
+function notificationFrom(includeFormMetadata: boolean, venueEventScoped = true): string {
+  return `${submissionFrom(includeFormMetadata, venueEventScoped)}
 LEFT JOIN submission_decisions latest_decision
   ON latest_decision.id = (
     SELECT candidate.id
@@ -774,7 +781,11 @@ async function listDraftsNeedingAttention(
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
   const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
   const includeTemplateProvenance = filters.task === "overdue" && await hasSpeakerTaskTemplateProvenance(database);
-  const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay, includeTemplateProvenance);
+  const eventStatusAvailable = await hasColumns(database, "events", ["status"]);
+  const venueEventScoped = await hasColumns(database, "agenda_items", ["event_id"])
+    && await hasColumns(database, "rooms", ["event_id"])
+    && await hasColumns(database, "buildings", ["event_id"]);
+  const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay, includeTemplateProvenance, eventStatusAvailable);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const includeFormMetadata = await hasColumns(database, "forms", ["id", "event_id", "status", "opens_at", "closes_at"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
@@ -785,7 +796,7 @@ async function listDraftsNeedingAttention(
       submitter.id AS submitter_id,
       submitter.name AS submitter_name,
       submitter.email AS submitter_email
-    ${submissionFrom(includeFormMetadata)}
+    ${submissionFrom(includeFormMetadata, venueEventScoped)}
     JOIN people submitter ON submitter.id = s.submitter_person_id
     WHERE ${where}
     ORDER BY ${stableOrder}
@@ -818,14 +829,18 @@ export async function listSubmissions(
   const stableOrder = orderClause(sort).replace(/, id ASC$/, ", s.id ASC");
   const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
   const includeTemplateProvenance = filters.task === "overdue" && await hasSpeakerTaskTemplateProvenance(database);
-  const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay, includeTemplateProvenance);
+  const eventStatusAvailable = await hasColumns(database, "events", ["status"]);
+  const venueEventScoped = await hasColumns(database, "agenda_items", ["event_id"])
+    && await hasColumns(database, "rooms", ["event_id"])
+    && await hasColumns(database, "buildings", ["event_id"]);
+  const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay, includeTemplateProvenance, eventStatusAvailable);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const includeFormMetadata = await hasColumns(database, "forms", ["id", "event_id", "status", "opens_at", "closes_at"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
-  const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${submissionFrom(includeFormMetadata)} WHERE ${where}`).bind(...bindings);
+  const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${submissionFrom(includeFormMetadata, venueEventScoped)} WHERE ${where}`).bind(...bindings);
   const data = database.prepare(`
     SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities, includeFormMetadata)}
-    ${submissionFrom(includeFormMetadata)}
+    ${submissionFrom(includeFormMetadata, venueEventScoped)}
     WHERE ${where}
     ORDER BY ${stableOrder}
     LIMIT ? OFFSET ?
@@ -835,7 +850,7 @@ export async function listSubmissions(
     return { ...envelope, data: envelope.data.map(toItem) };
   }
   const published = await database
-    .prepare(`SELECT COUNT(DISTINCT CASE WHEN ai.is_published = 1 THEN s.id END) AS published_count ${submissionFrom(includeFormMetadata)} WHERE ${where}`)
+    .prepare(`SELECT COUNT(DISTINCT CASE WHEN ai.is_published = 1 THEN s.id END) AS published_count ${submissionFrom(includeFormMetadata, venueEventScoped)} WHERE ${where}`)
     .bind(...bindings)
     .first<{ published_count: number }>();
   return {
@@ -855,17 +870,21 @@ async function listNotNotifiedSubmissions(
   const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
   const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
   const includeTemplateProvenance = filters.task === "overdue" && await hasSpeakerTaskTemplateProvenance(database);
-  const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay, includeTemplateProvenance);
+  const eventStatusAvailable = await hasColumns(database, "events", ["status"]);
+  const venueEventScoped = await hasColumns(database, "agenda_items", ["event_id"])
+    && await hasColumns(database, "rooms", ["event_id"])
+    && await hasColumns(database, "buildings", ["event_id"]);
+  const { where, bindings } = filterParts(filters, includeCancelledAt, "derived", overdueDay, includeTemplateProvenance, eventStatusAvailable);
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const includeFormMetadata = await hasColumns(database, "forms", ["id", "event_id", "status", "opens_at", "closes_at"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
   const count = database
-    .prepare(`SELECT COUNT(DISTINCT s.id) AS total ${notificationFrom(includeFormMetadata)} WHERE ${where}`)
+    .prepare(`SELECT COUNT(DISTINCT s.id) AS total ${notificationFrom(includeFormMetadata, venueEventScoped)} WHERE ${where}`)
     .bind(...bindings);
   const data = database
     .prepare(`
       SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities, includeFormMetadata)}, ${NOTIFICATION_SELECT}
-      ${notificationFrom(includeFormMetadata)}
+      ${notificationFrom(includeFormMetadata, venueEventScoped)}
       WHERE ${where}
       ORDER BY ${stableOrder}
       LIMIT ? OFFSET ?
@@ -941,14 +960,19 @@ export async function selectSubmissionIds(
   const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
   const overdueDay = filters.task === "overdue" ? await eventLocalDay(database, filters.eventId, Date.now()) : undefined;
   const includeTemplateProvenance = filters.task === "overdue" && await hasSpeakerTaskTemplateProvenance(database);
+  const eventStatusAvailable = await hasColumns(database, "events", ["status"]);
+  const venueEventScoped = await hasColumns(database, "agenda_items", ["event_id"])
+    && await hasColumns(database, "rooms", ["event_id"])
+    && await hasColumns(database, "buildings", ["event_id"]);
   const { where, bindings } = filterParts(
     filters,
     includeCancelledAt,
     options.statusSemantics,
     overdueDay,
     includeTemplateProvenance,
+    eventStatusAvailable,
   );
-  const source = filters.status === "not_notified" ? notificationFrom(false) : submissionFrom(false);
+  const source = filters.status === "not_notified" ? notificationFrom(false, venueEventScoped) : submissionFrom(false, venueEventScoped);
   const limit = options.limit === undefined ? BULK_ID_LIMIT + 1 : options.limit;
   const limitClause = limit === null ? "" : " LIMIT ?";
   const statement = database.prepare(`SELECT DISTINCT s.id ${source} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC${limitClause}`);

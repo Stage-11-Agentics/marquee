@@ -233,6 +233,12 @@ export function classifyPublicationFact(
 
   const items = fact.agendaItems;
   const item = items.length === 1 ? items[0]! : null;
+  // Older imported/fixture rows can retain `submissions.kind = 'abstract'`
+  // after they have been placed as a Session. A session agenda placement is
+  // the durable fact that made that row public before MRQ-237; do not turn
+  // those already-valid rows into a new public 422/409 boundary.
+  const hasSessionPlacement = items.some((candidate) => candidate.kind === "session");
+  const isSession = fact.kind === "session" || hasSessionPlacement;
   const detail = reasonDetails(item, items.length, options.publicBoundaryOpen, fact.status !== "rejected" && fact.status !== "withdrawn");
   const validSlot = item !== null
     && !detail.missing_date_time
@@ -242,7 +248,7 @@ export function classifyPublicationFact(
   const privacyAllowed = fact.status !== "rejected" && fact.status !== "withdrawn";
   const published = item?.isPublished === true;
   let classification: PublicationClassification;
-  if (fact.kind !== "session") classification = "WRONG_KIND";
+  if (!isSession) classification = "WRONG_KIND";
   else if (items.length === 0) classification = fact.status === "accepted" ? "ACCEPTED_UNSCHEDULED" : "UNSCHEDULED_WITHHELD";
   else if (items.length > 1) classification = "EXISTING_ITEM_MALFORMED";
   else if (published && !privacyAllowed) classification = "BOARD_ANOMALY";
@@ -253,7 +259,7 @@ export function classifyPublicationFact(
   else classification = "EXISTING_ITEM_WITHHELD";
 
   const codes: PublicationReasonCode[] = [];
-  if (fact.kind !== "session") codes.push("WRONG_KIND");
+  if (!isSession) codes.push("WRONG_KIND");
   if (published) codes.push("ALREADY_PUBLISHED");
   if (published && !privacyAllowed) codes.push("POST_PUBLISH_REVERSED");
   if (items.length > 1 || (items.length === 1 && !validSlot)) {
@@ -485,7 +491,6 @@ export function publicPublicationPredicate(aliases: { submission?: string; agend
   const event = aliases.event ?? "event";
   return `(
     ${event}.status = 'live'
-    AND ${submission}.kind = 'session'
     AND ${submission}.status = 'accepted'
     AND ${agenda}.event_id = ${submission}.event_id
     AND ${agenda}.kind = 'session'
@@ -512,7 +517,9 @@ export function publicPublicationPredicate(aliases: { submission?: string; agend
 export function publicationClassificationPredicate(
   classification: "not_yet_public" | "live_on_site",
   aliases: { submission?: string; agenda?: string; event?: string } = {},
+  options: { eventStatusAvailable?: boolean } = {},
 ): string {
+  if (options.eventStatusAvailable === false) return "(0 = 1)";
   const submission = aliases.submission ?? "s";
   const agenda = aliases.agenda ?? "ai";
   const event = aliases.event ?? "event";
@@ -540,13 +547,11 @@ export function publicationClassificationPredicate(
         AND publication_room.event_id = ${submission}.event_id
     )`;
   const ready = `${event}.status = 'live'
-    AND ${submission}.kind = 'session'
     AND ${submission}.status = 'accepted'
     AND ${exactlyOne}
     AND ${item((candidateAlias) => `${candidateAlias}.is_published = 0 AND ${validSlot(candidateAlias)}`)}`;
   if (classification === "not_yet_public") return `(${ready})`;
   return `(${event}.status = 'live'
-    AND ${submission}.kind = 'session'
     AND ${submission}.status = 'accepted'
     AND ${exactlyOne}
     AND ${item((candidateAlias) => `${candidateAlias}.is_published = 1 AND ${validSlot(candidateAlias)}`)})`;

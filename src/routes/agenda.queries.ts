@@ -587,7 +587,7 @@ export async function readAgendaPublication(
        AND item.kind = 'session'
       LEFT JOIN rooms room ON room.id = item.room_id AND room.event_id = item.event_id
       LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id
-      WHERE submission.event_id = ? AND submission.kind = 'session'
+      WHERE submission.event_id = ?
       ORDER BY submission.id ASC, item.id ASC
     `).bind(eventId).all<PublishCandidateMetaRow>(),
   ]);

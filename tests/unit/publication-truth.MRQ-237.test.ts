@@ -64,6 +64,7 @@ describe("MRQ-237 publication truth partition", () => {
   test("CONTRACT · MRQ-237 · the pure classifier partitions unscheduled, withheld, ready, live, and anomaly states", () => {
     expect(classifyPublicationFact(null, open).classification).toBe("UNKNOWN_ID");
     expect(classifyPublicationFact(fact({ kind: "abstract", agendaItems: [] }), open).classification).toBe("WRONG_KIND");
+    expect(classifyPublicationFact(fact({ kind: "abstract" }), open).classification).toBe("READY_TO_PUBLISH");
     expect(classifyPublicationFact(fact({ agendaItems: [] }), open)).toMatchObject({
       classification: "ACCEPTED_UNSCHEDULED",
       primaryReasonCode: "MISSING_AGENDA_ITEM",
@@ -109,7 +110,7 @@ describe("MRQ-237 publication truth partition", () => {
       classification: "FOREIGN_EVENT",
       primaryReasonCode: "FOREIGN_EVENT",
     });
-    expect(classifyPublicationFact(fact({ kind: "abstract" }), open).primaryReasonCode).toBe("WRONG_KIND");
+    expect(classifyPublicationFact(fact({ kind: "abstract", agendaItems: [] }), open).primaryReasonCode).toBe("WRONG_KIND");
     expect(classifyPublicationFact(fact({ agendaItems: [] }), open).reasonCodes).toContain("MISSING_AGENDA_ITEM");
     expect(classifyPublicationFact(fact({ agendaItems: [item({ startsAt: null })] }), open).reasonCodes)
       .toEqual(expect.arrayContaining(["MALFORMED_SLOT", "MISSING_DATE_TIME"]));
