@@ -246,6 +246,44 @@ async function markSent(db: D1Database, row: OutboxRow, providerMessageId: strin
   return changed;
 }
 
+function calendarSequence(row: OutboxRow): number | null {
+  const match = row.ics_body?.match(/^SEQUENCE:(\d+)\s*$/m);
+  return match ? Number(match[1]) : null;
+}
+
+async function recordSingularCalendarAudit(
+  db: D1Database,
+  row: OutboxRow,
+  providerMessageId: string | null,
+  now: number,
+): Promise<void> {
+  if (row.ics_uid === null) return;
+  const invite = await db
+    .prepare("SELECT submission_id FROM calendar_invites WHERE uid = ?")
+    .bind(row.ics_uid)
+    .first<{ submission_id: string }>();
+  if (!invite) return;
+  await writeAudit(db, {
+    eventId: row.event_id,
+    actorKind: "system",
+    actorPersonId: null,
+    action: "submission.calendar_sent",
+    entityType: "submission",
+    entityId: invite.submission_id,
+    after: {
+      outbox_id: row.id,
+      provider_message_id: providerMessageId,
+      template_key: row.template_key,
+      method: row.template_key === "calendar_cancel" ? "CANCEL" : "REQUEST",
+      sequence: calendarSequence(row),
+      uid: row.ics_uid,
+      sent_at: now,
+    },
+    now,
+    requestId: null,
+  });
+}
+
 /**
  * Delivery is a fact of the consumer, not of the route that admitted a row to
  * the queue. Decision retries use the decision id as their outbox entity;
@@ -286,6 +324,10 @@ async function recordSentAudit(
         requestId: null,
       });
     }
+    return;
+  }
+  if (row.template_key === "calendar_request" || row.template_key === "calendar_cancel") {
+    await recordSingularCalendarAudit(db, row, providerMessageId, now);
     return;
   }
   const target = await db

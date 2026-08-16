@@ -248,12 +248,47 @@ describe.sequential("MRQ-20 agenda API", () => {
     expect(update.status).toBe(200);
     const updated = await update.json<{ etag: string; starts_at: number; duration_min: number }>();
     expect(updated).toMatchObject({ starts_at: NOW + 7_200_000, duration_min: 15 });
+
+    const firstAudit = await env.DB.prepare(`
+      SELECT before_json, after_json
+      FROM audit_log
+      WHERE event_id = ? AND action = 'agenda_item_updated' AND entity_id = ?
+      ORDER BY created_at ASC, id ASC
+    `).bind(DEMO_EVENT_ID, created.id).first<{ before_json: string; after_json: string }>();
+    expect(JSON.parse(firstAudit!.before_json)).toEqual({
+      starts_at: NOW,
+      duration_min: 20,
+      room_id: "room-agenda",
+      track_id: "track-agenda",
+    });
+    expect(JSON.parse(firstAudit!.after_json)).toEqual({
+      starts_at: NOW + 7_200_000,
+      duration_min: 15,
+      room_id: "room-agenda",
+      track_id: "track-agenda",
+    });
+
+    const noOp = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/items/${created.id}`, {
+      method: "PATCH",
+      headers: { "If-Match": updated.etag },
+      body: JSON.stringify({}),
+    });
+    expect(noOp.status).toBe(200);
+    const auditCountAfterNoOp = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM audit_log WHERE event_id = ? AND action = 'agenda_item_updated' AND entity_id = ?",
+    ).bind(DEMO_EVENT_ID, created.id).first<{ count: number }>();
+    expect(Number(auditCountAfterNoOp?.count ?? 0)).toBe(2);
+
     const stale = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda/items/${created.id}`, {
       method: "PATCH",
       headers: { "If-Match": created.etag },
       body: JSON.stringify({ duration_min: 20 }),
     });
     expect(stale.status).toBe(409);
+    const auditCountAfterStale = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM audit_log WHERE event_id = ? AND action = 'agenda_item_updated' AND entity_id = ?",
+    ).bind(DEMO_EVENT_ID, created.id).first<{ count: number }>();
+    expect(Number(auditCountAfterStale?.count ?? 0)).toBe(2);
   });
 
   test("AC-252 · agenda room metadata renders Room · Building", async () => {

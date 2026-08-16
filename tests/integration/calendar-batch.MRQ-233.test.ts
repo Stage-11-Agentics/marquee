@@ -17,6 +17,7 @@ import { projectCalendarDebt } from "../../src/jobs/calendar/projection";
 import { processMailOutbox, type MailProvider } from "../../src/jobs/mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../../src/jobs/mail/idempotency";
 import { enqueueOutbox, buildIdempotencyKey } from "../../src/jobs/mail/outbox";
+import { recordTimelinePage } from "../../src/lib/history";
 import { applyMigrations, env as migrationEnv } from "./apply-migrations";
 
 const EVENT_ID = "evt_calendar_batch";
@@ -185,6 +186,39 @@ test("batch admission sends one provider email with one one-VEVENT REQUEST per s
   ).bind(EVENT_ID).all<{ after_json: string; entity_id: string }>();
   expect(audits.results.map((row) => row.entity_id)).toEqual([SUBMISSION_ONE, SUBMISSION_TWO]);
   expect(audits.results.every((row) => JSON.parse(row.after_json).batch_outbox_id === owner!.id)).toBe(true);
+  const timeline = await recordTimelinePage(env.DB, EVENT_ID, SUBMISSION_ONE, { limit: 20, cursor: null });
+  expect(timeline.entries.find((entry) => entry.action === "submission.calendar_batch_sent")).toMatchObject({
+    action: "submission.calendar_batch_sent",
+    summary: "Calendar batch sent",
+  });
+});
+
+test("singular calendar delivery audits the real submission and appears in its timeline", async () => {
+  const delivery = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, submissionId: SUBMISSION_ONE, now: NOW });
+  const fake = provider();
+  const outcome = await processMailOutbox(env.DB, env, [delivery[0]!.outbox_id], { provider: fake, now: NOW + 1_000, sleep: async () => undefined });
+  expect(outcome).toEqual({ sent: 1, suppressed: 0, failed: 0 });
+
+  const audit = await env.DB.prepare(`
+    SELECT entity_type, entity_id, after_json
+    FROM audit_log
+    WHERE event_id = ? AND action = 'submission.calendar_sent'
+    ORDER BY created_at DESC, id DESC LIMIT 1
+  `).bind(EVENT_ID).first<{ after_json: string; entity_id: string; entity_type: string }>();
+  expect(audit?.entity_type).toBe("submission");
+  expect(audit?.entity_id).toBe(SUBMISSION_ONE);
+  expect(JSON.parse(audit!.after_json)).toMatchObject({
+    outbox_id: delivery[0]!.outbox_id,
+    method: "REQUEST",
+    uid: delivery[0]!.uid,
+    sequence: 0,
+  });
+  const timeline = await recordTimelinePage(env.DB, EVENT_ID, SUBMISSION_ONE, { limit: 20, cursor: null });
+  expect(timeline.entries.find((entry) => entry.action === "submission.calendar_sent")).toMatchObject({
+    action: "submission.calendar_sent",
+    summary: "Calendar invitation sent",
+    detail: "REQUEST",
+  });
 });
 
 test("batch debt ignores non-slot snapshot changes, then a real agenda move creates one reschedule per speaker", async () => {

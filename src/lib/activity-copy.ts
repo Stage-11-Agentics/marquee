@@ -84,7 +84,9 @@ const SUMMARIES: Readonly<Record<string, string>> = {
   "submission.decision_resent": "Decision email resent",
   "submission.message_queued": "Message queued",
   "submission.message_sent": "Message sent",
+  "submission.calendar_sent": "Calendar invitation sent",
   "submission.calendar_batch_sent": "Calendar batch sent",
+  agenda_item_updated: "Agenda slot updated",
   "submission.tasks_reconciled": "Speaker tasks updated",
   "submission.tasks_cancelled": "Speaker tasks cancelled",
   "submission.tasks_retained": "Speaker tasks kept",
@@ -248,6 +250,8 @@ export function describeActivity(entry: {
     case "submission.decision_mail_sent":
     case "submission.decision_resent":
       return { summary, detail: payloadField(after, "subject") ?? payloadField(after, "template_key") };
+    case "submission.calendar_sent":
+      return { summary, detail: payloadField(after, "method") };
     default:
       return { summary, detail: null };
   }
