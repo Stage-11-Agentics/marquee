@@ -96,6 +96,10 @@ test("AC-337 + AC-338 + AC-339 · a fresh submission saves one internal note and
   expect(readBySecondOrganizer.status).toBe(200);
   expect(await readBySecondOrganizer.json()).toEqual({ notes: [created.note] });
 
+  const secondOrganizerRecord = await request(`/api/v1/events/${EVENT_ID}/submissions/${submissionId}`, {}, SECOND_SESSION);
+  expect(secondOrganizerRecord.status).toBe(200);
+  expect((await secondOrganizerRecord.json() as { actions: { can_view_notes: boolean } }).actions.can_view_notes).toBe(true);
+
   const afterEvaluations = await env.DB.prepare(
     "SELECT COUNT(*) AS count FROM evaluations WHERE submission_id = ?",
   ).bind(submissionId).first<{ count: number }>();
