@@ -9,6 +9,7 @@ import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader } from "../shell/components";
 import { useEventContext } from "../shell/event-context";
+import { SubmissionCapacityEditor } from "./SubmissionCapacityEditor";
 import "./forms.css";
 
 type FormKind = "abstract" | "session";
@@ -26,6 +27,8 @@ interface FormSummary {
   closes_at: number | null;
   welcome_md: string;
   per_submitter_limit: number;
+  submitter_limit_inherit: boolean;
+  effective_submitter_limit: number;
   min_speakers: number;
   max_speakers: number;
   max_sponsors: number;
@@ -351,8 +354,19 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
   const saveForm = () => {
     if (!form) return;
     void mutate("form", async () => {
+      // Legacy explicit-zero rows are read-only unlimited state. An inherit
+      // transition must still carry a bounded dormant value for the writer;
+      // unrelated saves preserve an explicit legacy zero by omitting capacity.
+      const dormantLimit = form.per_submitter_limit >= 1 && form.per_submitter_limit <= 100
+        ? form.per_submitter_limit
+        : 1;
+      const capacity = form.submitter_limit_inherit
+        ? { per_submitter_limit: dormantLimit, submitter_limit_inherit: true }
+        : form.per_submitter_limit === 0
+          ? {}
+          : { per_submitter_limit: form.per_submitter_limit, submitter_limit_inherit: false };
       const updated = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}`, "/api/v1/events/{eventId}/forms/{formId}", { method: "PATCH", body: JSON.stringify({
-        name: form.name, slug: form.slug, kind: form.kind, welcome_md: form.welcome_md, per_submitter_limit: form.per_submitter_limit,
+        name: form.name, slug: form.slug, kind: form.kind, welcome_md: form.welcome_md, ...capacity,
         min_speakers: form.min_speakers, max_speakers: form.max_speakers, max_sponsors: form.max_sponsors,
         closes_at: form.closes_at, reminder_offset_hours: form.reminder_offset_hours, thankyou_template_key: form.thankyou_template_key,
       }) });
@@ -495,7 +509,7 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
     <div class="forms-builder">
       <aside class="card forms-steps" aria-label="Form builder steps">
         <CardHeader title="Build steps" />
-        <CardBody><div class="forms-step-list">{STEP_NAMES.map((name, index) => <button key={name} class={step === index ? "active" : ""} onClick={() => setStep(index)}><span>{index + 1}</span>{name}</button>)}</div><div class="divider" /><div class="field"><label>Collects</label><div class="segment forms-target"><button class={form.kind === "abstract" ? "active" : ""} disabled={form.status !== "draft"} onClick={() => setForm({ ...form, kind: "abstract" })}>Abstracts</button><button class={form.kind === "session" ? "active" : ""} disabled={form.status !== "draft"} onClick={() => setForm({ ...form, kind: "session" })}>Sessions</button></div><span class="field-note">{form.status === "draft" ? form.kind === "abstract" ? "Enters the evaluation pipeline." : "Bypasses evaluation; ready for agenda." : "Target locked after the conference form opened."}</span></div><div class="divider" /><div class="field"><label>Close date {eventTimeLabel(timezone)}</label><input type="datetime-local" value={timezone ? instantToLocalDateTime(form.closes_at, timezone) : ""} disabled={!timezone} onInput={(inputEvent) => { if (!timezone) return; setForm({ ...form, closes_at: localDateTimeToInstant((inputEvent.currentTarget as HTMLInputElement).value, timezone) }); }} /></div><div class="field"><label>Submissions per person</label><input type="number" min="1" max="100" value={form.per_submitter_limit} onInput={(event) => setForm({ ...form, per_submitter_limit: Number((event.currentTarget as HTMLInputElement).value) || 1 })} /></div><Button variant="primary" onClick={saveForm} disabled={busy !== null}>{busy === "form" ? "Saving…" : "Save form"}</Button></CardBody>
+        <CardBody><div class="forms-step-list">{STEP_NAMES.map((name, index) => <button key={name} class={step === index ? "active" : ""} onClick={() => setStep(index)}><span>{index + 1}</span>{name}</button>)}</div><div class="divider" /><div class="field"><label>Collects</label><div class="segment forms-target"><button class={form.kind === "abstract" ? "active" : ""} disabled={form.status !== "draft"} onClick={() => setForm({ ...form, kind: "abstract" })}>Abstracts</button><button class={form.kind === "session" ? "active" : ""} disabled={form.status !== "draft"} onClick={() => setForm({ ...form, kind: "session" })}>Sessions</button></div><span class="field-note">{form.status === "draft" ? form.kind === "abstract" ? "Enters the evaluation pipeline." : "Bypasses evaluation; ready for agenda." : "Target locked after the conference form opened."}</span></div><div class="divider" /><div class="field"><label>Close date {eventTimeLabel(timezone)}</label><input type="datetime-local" value={timezone ? instantToLocalDateTime(form.closes_at, timezone) : ""} disabled={!timezone} onInput={(inputEvent) => { if (!timezone) return; setForm({ ...form, closes_at: localDateTimeToInstant((inputEvent.currentTarget as HTMLInputElement).value, timezone) }); }} /></div><SubmissionCapacityEditor inherit={form.submitter_limit_inherit} rawLimit={form.per_submitter_limit} effectiveLimit={form.effective_submitter_limit} onChange={(patch) => setForm({ ...form, ...patch })} /><Button variant="primary" onClick={saveForm} disabled={busy !== null}>{busy === "form" ? "Saving…" : "Save form"}</Button></CardBody>
       </aside>
       <section class="card forms-editor" aria-label="Form editor">
         <CardHeader title={STEP_NAMES[step] ?? "Form fields"}><Chip tone={formStatusTone(form.status)}>{form.status}</Chip></CardHeader>

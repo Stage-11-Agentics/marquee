@@ -459,6 +459,7 @@ export interface FormRow extends MutableRecord {
   opens_at: EpochMilliseconds | null;
   password_hash: string | null;
   per_submitter_limit: number;
+  submitter_limit_inherit: 0 | 1;
   reminder_offset_hours: number | null;
   slug: string;
   status: FormStatus;
@@ -1221,6 +1222,7 @@ interface CoreDefaultColumns {
     | "max_sponsors"
     | "min_speakers"
     | "per_submitter_limit"
+    | "submitter_limit_inherit"
     | "status"
     | "turnstile_required"
     | "welcome_md";

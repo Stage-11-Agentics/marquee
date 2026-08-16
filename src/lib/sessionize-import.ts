@@ -689,8 +689,8 @@ async function ensureSessionizeForm(db: D1Database, eventId: string, customField
   let form = await db.prepare("SELECT * FROM forms WHERE id = ? AND event_id = ?").bind(formId, eventId).first<FormRow>();
   if (!form) {
     await db.prepare(
-      `INSERT INTO forms (id, event_id, name, slug, kind, status, welcome_md, per_submitter_limit, min_speakers, max_speakers, max_sponsors, admin_notify_person_ids, turnstile_required, created_at, updated_at)
-       VALUES (?, ?, 'Sessionize import fields', ?, 'session', 'closed', 'Imported fields are retained for organizer review.', 100, 0, 20, 0, '[]', 0, ?, ?)`,
+      `INSERT INTO forms (id, event_id, name, slug, kind, status, welcome_md, per_submitter_limit, submitter_limit_inherit, min_speakers, max_speakers, max_sponsors, admin_notify_person_ids, turnstile_required, created_at, updated_at)
+       VALUES (?, ?, 'Sessionize import fields', ?, 'session', 'closed', 'Imported fields are retained for organizer review.', 100, 0, 0, 20, 0, '[]', 0, ?, ?)`,
     ).bind(formId, eventId, `sessionize-import-${hashPart(eventId)}`, now, now).run();
     form = await db.prepare("SELECT * FROM forms WHERE id = ?").bind(formId).first<FormRow>();
   }

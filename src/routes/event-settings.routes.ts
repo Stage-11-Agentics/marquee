@@ -13,6 +13,7 @@ import { countOutsideConferenceWindow } from "../lib/conference-dates";
 import { SHIPPED_DEMO_ORGANIZATION_ID } from "../lib/reset-demo/demo-fixture";
 import { SOCIAL_PLATFORM_IDS, type SocialPlatformId } from "../lib/social-links";
 import { enabledSocialPlatformsFor, writeEnabledSocialPlatforms } from "../lib/social-platform-setting";
+import { submissionDefaultFor, writeSubmissionDefault } from "../lib/submission-capacity";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const formatParams = eventParams.extend({ formatId: z.string().min(1) });
@@ -59,6 +60,8 @@ const settingsResponse = z.object({
     tracks: z.array(trackSchema),
     /** Which social profiles this conference asks its speakers for. */
     speaker_social_platforms: z.array(socialPlatformId),
+    /** The per-submitter default for forms that inherit it. */
+    submission_default_limit: z.number().int().min(1).max(100),
     schedule_window: z.object({
       outside_window_session_count: z.number().int().nonnegative(),
     }),
@@ -126,6 +129,8 @@ const eventPatch = z.object({
    * distinct from omitting the field, meaning "leave the setting alone".
    */
   speaker_social_platforms: z.array(socialPlatformId).max(SOCIAL_PLATFORM_IDS.length).optional(),
+  /** Zero is intentionally not an API affordance; legacy form rows may still read as unlimited. */
+  submission_default_limit: z.number().int().min(1).max(100).optional(),
 });
 const eventInput = z.object({
   name: z.string().trim().min(1).max(200),
@@ -168,8 +173,8 @@ async function eventFor(db: D1Database, eventId: string): Promise<PublicEvent> {
   return event;
 }
 
-async function settingsFor(db: D1Database, eventId: string): Promise<{ event: PublicEvent; formats: FormatRow[]; tracks: TrackRow[]; speaker_social_platforms: SocialPlatformId[]; schedule_window: { outside_window_session_count: number } }> {
-  const [event, formats, tracks, socialPlatforms, scheduledItems] = await Promise.all([
+async function settingsFor(db: D1Database, eventId: string): Promise<{ event: PublicEvent; formats: FormatRow[]; tracks: TrackRow[]; speaker_social_platforms: SocialPlatformId[]; submission_default_limit: number; schedule_window: { outside_window_session_count: number } }> {
+  const [event, formats, tracks, socialPlatforms, submissionDefaultLimit, scheduledItems] = await Promise.all([
     eventFor(db, eventId),
     db.prepare(
       `SELECT id, event_id, name, default_duration_min, min_duration_min, max_duration_min, position, created_at, updated_at
@@ -180,6 +185,7 @@ async function settingsFor(db: D1Database, eventId: string): Promise<{ event: Pu
        FROM tracks WHERE event_id = ? ORDER BY position, id`,
     ).bind(eventId).all<TrackRow>(),
     enabledSocialPlatformsFor(db, eventId),
+    submissionDefaultFor(db, eventId),
     db.prepare("SELECT starts_at FROM agenda_items WHERE event_id = ? AND kind = 'session'").bind(eventId).all<{ starts_at: number }>(),
   ]);
   return {
@@ -187,6 +193,7 @@ async function settingsFor(db: D1Database, eventId: string): Promise<{ event: Pu
     formats: formats.results,
     tracks: tracks.results,
     speaker_social_platforms: socialPlatforms,
+    submission_default_limit: submissionDefaultLimit,
     schedule_window: {
       outside_window_session_count: countOutsideConferenceWindow(
         scheduledItems.results.map((item) => Number(item.starts_at)),
@@ -569,6 +576,9 @@ const updateSettings = defineApiRoute(
     ).run();
     if (body.speaker_social_platforms !== undefined) {
       await writeEnabledSocialPlatforms(context.env.DB, eventId, body.speaker_social_platforms, now);
+    }
+    if (body.submission_default_limit !== undefined) {
+      await writeSubmissionDefault(context.env.DB, eventId, body.submission_default_limit, now);
     }
     return context.json({ data: await settingsFor(context.env.DB, eventId) }, 200);
   },

@@ -10,6 +10,13 @@ import {
 import { sha256Hex } from "../lib/auth/random-token";
 import { submitterEditability } from "../lib/submission-editing";
 import {
+  DEFAULT_SUBMISSION_LIMIT,
+  effectiveSubmitterLimit,
+  parseSubmissionDefault,
+  submissionCapacityMessage,
+  submissionCapacityRefusal,
+} from "../lib/submission-capacity";
+import {
   PUBLIC_PARTICIPANT_ROLES,
   type PublicFormConfirmation,
   type PublicFormField,
@@ -30,6 +37,7 @@ interface PublicFormRow extends FormRow {
   conference_name: string;
   conference_slug: string;
   conference_timezone: string;
+  submission_default_limit_json: string | null;
 }
 
 export interface PublicFormRecord {
@@ -48,6 +56,8 @@ export interface PublicFormRecord {
   submissionOutcome: PublicFormOutcome | null;
   submissionEditable: boolean;
   submissionEditReason: string | null;
+  actualCount: number;
+  effectiveLimit: number;
   /** Everyone beyond the primary speaker, plus the on-behalf-of disclosure. */
   roster: PublicParticipantRoster;
   /**
@@ -494,8 +504,11 @@ export async function loadPublicForm(
 ): Promise<PublicFormRecord | null> {
   const row = await db
     .prepare(
-      `SELECT f.*, e.name AS conference_name, e.slug AS conference_slug, e.timezone AS conference_timezone
+      `SELECT f.*, e.name AS conference_name, e.slug AS conference_slug, e.timezone AS conference_timezone,
+              setting.value_json AS submission_default_limit_json
        FROM forms f JOIN events e ON e.id = f.event_id
+       LEFT JOIN event_settings setting
+         ON setting.event_id = e.id AND setting.key = 'submission_default_limit'
        WHERE f.slug = ? LIMIT 1`,
     )
     .bind(slug)
@@ -503,6 +516,18 @@ export async function loadPublicForm(
   if (!row || row.status === "draft") return null;
 
   const form: FormRow = row;
+  let eventDefault = DEFAULT_SUBMISSION_LIMIT;
+  if (row.submission_default_limit_json !== null) {
+    try {
+      eventDefault = parseSubmissionDefault(JSON.parse(row.submission_default_limit_json) as unknown);
+    } catch {
+      eventDefault = DEFAULT_SUBMISSION_LIMIT;
+    }
+  }
+  const effectiveLimit = effectiveSubmitterLimit(
+    { submission_default_limit: eventDefault },
+    form,
+  );
   // Narrowed once, here, so rendering, validation, persistence and the client
   // all see the same field set. Filtering only at the render layer would leave
   // a required legacy field enforced by a control nobody can see.
@@ -522,7 +547,7 @@ export async function loadPublicForm(
   if (submission?.status !== "draft" && submission) state = "submitted";
   else if (publicFormIsClosed(form, now)) state = "closed";
   else if (submission?.status === "draft") state = "resumed";
-  else if (form.per_submitter_limit > 0 && count >= Number(form.per_submitter_limit)) state = "at_limit";
+  else if (effectiveLimit > 0 && count >= effectiveLimit) state = "at_limit";
   else state = "open";
 
   const editability = submission
@@ -550,6 +575,8 @@ export async function loadPublicForm(
     submissionOutcome: publicOutcomeForSubmission(submission),
     submissionEditable: editability.enabled,
     submissionEditReason: editability.reason,
+    actualCount: count,
+    effectiveLimit,
     roster: readParticipantRoster(submission?.participants_json ?? null, answers),
     // Only for the freshly-submitted state: an outcome replaces this copy
     // entirely, so under one the query would be run and then discarded.
@@ -559,16 +586,17 @@ export async function loadPublicForm(
   };
 }
 
-function messageForState(
+export function messageForState(
   state: PublicFormStateName,
   submissionEditable = false,
   receipt: { email: string; sent: boolean } | null = null,
+  capacity: { effectiveLimit: number; actualCount: number } = { effectiveLimit: DEFAULT_SUBMISSION_LIMIT, actualCount: 0 },
 ): string | null {
   switch (state) {
     case "closed":
       return "This call for speakers is closed. Keep your link and return when the conference reopens.";
     case "at_limit":
-      return "Your abstract limit is full. Use a saved resume link to continue an existing draft.";
+      return submissionCapacityMessage(submissionCapacityRefusal(capacity.effectiveLimit, capacity.actualCount, "new"));
     case "resumed":
       return "Your saved draft is back. Review the answers, then choose Submit when you are ready.";
     case "submitted": {
@@ -637,7 +665,7 @@ export function toPublicFormState(
       status: publicFormIsClosed(record.form, now) ? "closed" : "open",
       welcome_md: record.form.welcome_md,
       closes_at: asNumber(record.form.closes_at),
-      per_submitter_limit: Number(record.form.per_submitter_limit),
+      per_submitter_limit: record.effectiveLimit,
       min_speakers: Number(record.form.min_speakers),
       max_speakers: advertisedMaxSpeakers(Number(record.form.max_speakers), record.fields),
       max_sponsors: Number(record.form.max_sponsors),
@@ -658,7 +686,10 @@ export function toPublicFormState(
     confirmation,
     message: record.resumeMissed
       ? resumeMissMessage(record.state)
-      : messageForState(record.state, record.submissionEditable, receipt),
+      : messageForState(record.state, record.submissionEditable, receipt, {
+        effectiveLimit: record.effectiveLimit,
+        actualCount: record.actualCount,
+      }),
     // The slots as typed, so a resumed draft is what the submitter left on the
     // screen rather than what the record could make of it.
     participants: record.roster.typed,

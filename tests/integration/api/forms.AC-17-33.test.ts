@@ -269,8 +269,86 @@ describe.sequential("MRQ-13 form builder API", () => {
     for (const limit of [1, 3, 5]) {
       const response = await request(`/api/v1/events/${EVENT_ID}/forms/${DRAFT_FORM_ID}`, { method: "PATCH", body: JSON.stringify({ per_submitter_limit: limit }) });
       expect(response.status).toBe(200);
-      expect((await json<{ per_submitter_limit: number }>(response)).per_submitter_limit).toBe(limit);
+      expect((await json<{ per_submitter_limit: number; submitter_limit_inherit: boolean; effective_submitter_limit: number }>(response))).toMatchObject({
+        per_submitter_limit: limit,
+        submitter_limit_inherit: false,
+        effective_submitter_limit: limit,
+      });
     }
+  });
+
+  test("CONTRACT · MRQ-245 · omitted create inherits with a bound dormant value, while whole-object and flag-omitted PATCHes stay observable", async () => {
+    const created = await request(`/api/v1/events/${EVENT_ID}/forms`, {
+      method: "POST",
+      body: JSON.stringify({ name: "Inherited capacity", slug: "inherited-capacity" }),
+    });
+    expect(created.status).toBe(201);
+    expect((await json<{ per_submitter_limit: number; submitter_limit_inherit: boolean; effective_submitter_limit: number }>(created))).toMatchObject({
+      per_submitter_limit: 3,
+      submitter_limit_inherit: true,
+      effective_submitter_limit: 3,
+    });
+
+    const changedDefault = await request(`/api/v1/events/${EVENT_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ submission_default_limit: 7 }),
+    });
+    expect(changedDefault.status).toBe(200);
+    const wholeObject = await request(`/api/v1/events/${EVENT_ID}/forms/${DRAFT_FORM_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name: "Builder rename", per_submitter_limit: 3, submitter_limit_inherit: true }),
+    });
+    expect(wholeObject.status).toBe(200);
+    expect((await json<{ name: string; per_submitter_limit: number; submitter_limit_inherit: boolean; effective_submitter_limit: number }>(wholeObject))).toMatchObject({
+      name: "Builder rename",
+      per_submitter_limit: 3,
+      submitter_limit_inherit: true,
+      effective_submitter_limit: 7,
+    });
+
+    const explicit = await request(`/api/v1/events/${EVENT_ID}/forms/${DRAFT_FORM_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ per_submitter_limit: 5 }),
+    });
+    expect(explicit.status).toBe(200);
+    expect((await json<{ submitter_limit_inherit: boolean; effective_submitter_limit: number }>(explicit))).toMatchObject({
+      submitter_limit_inherit: false,
+      effective_submitter_limit: 5,
+    });
+    const missingExplicitNumber = await request(`/api/v1/events/${EVENT_ID}/forms/${DRAFT_FORM_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ submitter_limit_inherit: false }),
+    });
+    expect(missingExplicitNumber.status).toBe(422);
+    const cleared = await request(`/api/v1/events/${EVENT_ID}/forms/${DRAFT_FORM_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ submitter_limit_inherit: true }),
+    });
+    expect((await json<{ submitter_limit_inherit: boolean; effective_submitter_limit: number }>(cleared))).toMatchObject({
+      submitter_limit_inherit: true,
+      effective_submitter_limit: 7,
+    });
+    const zero = await request(`/api/v1/events/${EVENT_ID}/forms/${DRAFT_FORM_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ per_submitter_limit: 0 }),
+    });
+    expect(zero.status).toBe(400);
+  });
+
+  test("CONTRACT · MRQ-245 · a legacy stored zero stays unlimited on the read path without becoming a write affordance", async () => {
+    await env.DB.prepare("UPDATE forms SET per_submitter_limit = 0, submitter_limit_inherit = 0 WHERE id = ?").bind(MAIN_FORM_ID).run();
+    const detail = await request(`/api/v1/events/${EVENT_ID}/forms/${MAIN_FORM_ID}`);
+    expect(detail.status).toBe(200);
+    expect((await json<{ per_submitter_limit: number; submitter_limit_inherit: boolean; effective_submitter_limit: number }>(detail))).toMatchObject({
+      per_submitter_limit: 0,
+      submitter_limit_inherit: false,
+      effective_submitter_limit: 0,
+    });
+    const rejected = await request(`/api/v1/events/${EVENT_ID}/forms/${MAIN_FORM_ID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ per_submitter_limit: 0 }),
+    });
+    expect(rejected.status).toBe(400);
   });
 
   test("AC-33 · thank-you and named-admin settings belong to the form", async () => {

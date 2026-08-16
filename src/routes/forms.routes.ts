@@ -50,6 +50,8 @@ const formSummarySchema = z
     closes_at: z.number().int().nullable(),
     welcome_md: z.string(),
     per_submitter_limit: z.number().int().nonnegative(),
+    submitter_limit_inherit: z.boolean(),
+    effective_submitter_limit: z.number().int().nonnegative(),
     min_speakers: z.number().int().nonnegative(),
     max_speakers: z.number().int().nonnegative(),
     max_sponsors: z.number().int().nonnegative(),
@@ -132,7 +134,8 @@ const createFormSchema = z.object({
   opens_at: z.number().int().nullable().optional(),
   closes_at: z.number().int().nullable().optional(),
   welcome_md: z.string().max(50_000).default(""),
-  per_submitter_limit: z.number().int().min(1).max(100).default(3),
+  per_submitter_limit: z.number().int().min(1).max(100).optional(),
+  submitter_limit_inherit: z.boolean().optional(),
   min_speakers: z.number().int().min(0).max(100).default(1),
   max_speakers: z.number().int().min(0).max(100).default(4),
   max_sponsors: z.number().int().min(0).max(100).default(0),
@@ -322,19 +325,27 @@ const createEventForm = defineApiRoute(
     if (!event) throw ApiError.notFound("conference not found");
     const body = context.req.valid("json");
     validateFormSettings(body.opens_at, body.closes_at, body.min_speakers, body.max_speakers);
+    const inherits = body.submitter_limit_inherit ?? body.per_submitter_limit === undefined;
+    if (!inherits && body.per_submitter_limit === undefined) {
+      throw ApiError.unprocessable("an explicit capacity requires per_submitter_limit", "per_submitter_limit");
+    }
+    // Omitted create binds body.per_submitter_limit ?? 3 even when the stored
+    // value is dormant under inheritance. Writes remain 1–100; legacy stored 0
+    // is a read-path-only unlimited state.
+    const perSubmitterLimit = body.per_submitter_limit ?? 3;
     const now = Date.now();
     const id = crypto.randomUUID();
     try {
       await context.env.DB.prepare(
         `INSERT INTO forms
           (id, event_id, name, slug, kind, status, opens_at, closes_at, welcome_md,
-           per_submitter_limit, min_speakers, max_speakers, max_sponsors,
+           per_submitter_limit, submitter_limit_inherit, min_speakers, max_speakers, max_sponsors,
            reminder_offset_hours, thankyou_template_key, admin_notify_person_ids,
            turnstile_required, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         id, eventId, body.name, body.slug, body.kind, body.opens_at ?? null, body.closes_at ?? null,
-        body.welcome_md, body.per_submitter_limit, body.min_speakers, body.max_speakers, body.max_sponsors,
+        body.welcome_md, perSubmitterLimit, inherits ? 1 : 0, body.min_speakers, body.max_speakers, body.max_sponsors,
         body.reminder_offset_hours ?? null, body.thankyou_template_key ?? null,
         JSON.stringify(body.admin_notify_person_ids), body.turnstile_required ? 1 : 0, now, now,
       ).run();
@@ -397,7 +408,18 @@ const updateEventForm = defineApiRoute(
     if (body.opens_at !== undefined) set("opens_at", body.opens_at);
     if (body.closes_at !== undefined) set("closes_at", body.closes_at);
     if (body.welcome_md !== undefined) set("welcome_md", body.welcome_md);
-    if (body.per_submitter_limit !== undefined) set("per_submitter_limit", body.per_submitter_limit);
+    if (body.submitter_limit_inherit !== undefined) {
+      if (!body.submitter_limit_inherit && body.per_submitter_limit === undefined) {
+        throw ApiError.unprocessable("an explicit capacity requires per_submitter_limit", "per_submitter_limit");
+      }
+      set("submitter_limit_inherit", body.submitter_limit_inherit ? 1 : 0);
+      if (!body.submitter_limit_inherit) set("per_submitter_limit", body.per_submitter_limit!);
+    } else if (body.per_submitter_limit !== undefined) {
+      // A flag-omitted number is an observable explicit override, never a
+      // dormant no-op. This keeps older CLI/API callers truthful.
+      set("per_submitter_limit", body.per_submitter_limit);
+      set("submitter_limit_inherit", 0);
+    }
     if (body.min_speakers !== undefined) set("min_speakers", body.min_speakers);
     if (body.max_speakers !== undefined) set("max_speakers", body.max_speakers);
     if (body.max_sponsors !== undefined) set("max_sponsors", body.max_sponsors);
@@ -473,12 +495,12 @@ const duplicateEventForm = defineApiRoute(
       context.env.DB.prepare(
         `INSERT INTO forms
           (id, event_id, name, slug, kind, status, opens_at, closes_at, welcome_md,
-           per_submitter_limit, min_speakers, max_speakers, max_sponsors, reminder_offset_hours,
+           per_submitter_limit, submitter_limit_inherit, min_speakers, max_speakers, max_sponsors, reminder_offset_hours,
            thankyou_template_key, admin_notify_person_ids, turnstile_required, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         id, eventId, copyName, slug, source.kind, source.opens_at, source.closes_at, source.welcome_md,
-        source.per_submitter_limit, source.min_speakers, source.max_speakers, source.max_sponsors,
+        source.per_submitter_limit, source.submitter_limit_inherit, source.min_speakers, source.max_speakers, source.max_sponsors,
         source.reminder_offset_hours, source.thankyou_template_key, source.admin_notify_person_ids,
         source.turnstile_required, now, now,
       ),

@@ -19,6 +19,7 @@ import { mintToken, sha256Hex } from "../lib/auth/random-token";
 import { verifyTurnstile } from "../lib/r2/turnstile";
 import { submitterEditability } from "../lib/submission-editing";
 import { withSubmissionReferenceAllocation } from "../lib/submission-reference";
+import { submissionCapacityMessage, submissionCapacityRefusal } from "../lib/submission-capacity";
 import { boundSourceOf } from "../lib/bound-options";
 import {
   answerAttachmentId,
@@ -766,7 +767,11 @@ async function createDraft(
     await requireTurnstile(context, tokenFromBody(body));
   }
   if (publicFormIsClosed(base.form)) throw ApiError.conflict("This call for speakers is closed. Keep your answers and return when the conference reopens.");
-  if (base.state === "at_limit") throw ApiError.conflict("Your abstract limit is full. Use a saved resume link to continue an existing draft.");
+  if (base.state === "at_limit") {
+    throw ApiError.conflict(submissionCapacityMessage(
+      submissionCapacityRefusal(base.effectiveLimit, base.actualCount, "new"),
+    ));
+  }
 
   const raw = rawAnswersFromBody(answerMap(body), body.email);
   const projected = projectPublicAnswers(base.fields, raw);
@@ -783,8 +788,13 @@ async function createDraft(
   if (!event) throw ApiError.notFound("This conference is no longer available.");
   const now = Date.now();
   const knownPerson = await findPersonByEmail(context.env.DB, event.org_id, email);
-  if (base.form.per_submitter_limit > 0 && knownPerson && await countFormForPerson(context.env.DB, base.form.id, knownPerson.id) >= Number(base.form.per_submitter_limit)) {
-    throw ApiError.conflict("Your abstract limit is full. Use a saved resume link to continue an existing draft.");
+  const knownPersonCount = knownPerson
+    ? await countFormForPerson(context.env.DB, base.form.id, knownPerson.id)
+    : 0;
+  if (base.effectiveLimit > 0 && knownPerson && knownPersonCount >= base.effectiveLimit) {
+    throw ApiError.conflict(submissionCapacityMessage(
+      submissionCapacityRefusal(base.effectiveLimit, knownPersonCount, "new"),
+    ));
   }
   // `knownPerson ??`, never an unconditional upsert. This route is the one
   // unauthenticated write door to `people`: a stranger POSTing a draft that
@@ -1031,7 +1041,13 @@ async function handlePublicSubmission(
   }
   if (base.submission && base.submission.status !== "draft") throw ApiError.conflict("This abstract was already submitted. Use its confirmation link to view it.");
   if (publicFormIsClosed(base.form)) throw ApiError.conflict("This call for speakers is closed. Keep your answers and return when the conference reopens.");
-  if (base.state === "at_limit") throw ApiError.conflict("Your abstract limit is full. Use a saved resume link to continue an existing draft.");
+  // A resumed draft gets the path-aware capacity response below, after its
+  // owner and exclusion-aware count are known. New submissions can refuse now.
+  if (base.state === "at_limit" && !base.submission) {
+    throw ApiError.conflict(submissionCapacityMessage(
+      submissionCapacityRefusal(base.effectiveLimit, base.actualCount, "new"),
+    ));
+  }
 
   const raw = rawAnswersFromBody(answerMap(body), body.email);
   const projected = projectPublicAnswers(base.fields, raw);
@@ -1078,8 +1094,13 @@ async function handlePublicSubmission(
   // domain issue above and the throw is unconditional — so there is no
   // draft-owner fallback arm. One existed and could never run.
   const existingPerson = await findPersonByEmail(context.env.DB, event.org_id, email!);
-  if (!existing && base.form.per_submitter_limit > 0 && existingPerson && await countFormForPerson(context.env.DB, base.form.id, existingPerson.id) >= Number(base.form.per_submitter_limit)) {
-    throw ApiError.conflict("Your abstract limit is full. Use a saved resume link to continue an existing draft.");
+  const existingPersonCount = existingPerson
+    ? await countFormForPerson(context.env.DB, base.form.id, existingPerson.id)
+    : 0;
+  if (!existing && base.effectiveLimit > 0 && existingPerson && existingPersonCount >= base.effectiveLimit) {
+    throw ApiError.conflict(submissionCapacityMessage(
+      submissionCapacityRefusal(base.effectiveLimit, existingPersonCount, "new"),
+    ));
   }
   // The submitter's own profile fields come from the speaker card only when the
   // submitter *is* the speaker. Under the disclosure those fields describe
@@ -1097,8 +1118,10 @@ async function handlePublicSubmission(
   });
   if (!person) throw new Error("submission owner disappeared");
   const existingCount = await countFormForPerson(context.env.DB, base.form.id, person.id, existing?.id);
-  if (base.form.per_submitter_limit > 0 && existingCount >= Number(base.form.per_submitter_limit)) {
-    throw ApiError.conflict("Your abstract limit is full. Use a saved resume link to continue an existing draft.");
+  if (base.effectiveLimit > 0 && existingCount >= base.effectiveLimit) {
+    throw ApiError.conflict(submissionCapacityMessage(
+      submissionCapacityRefusal(base.effectiveLimit, existingCount, existing ? "resumed-draft" : "new"),
+    ));
   }
   const submissionId = existing?.id ?? crypto.randomUUID();
   const rawResumeToken = resumeToken ?? mintToken();
