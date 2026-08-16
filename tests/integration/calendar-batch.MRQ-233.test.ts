@@ -168,7 +168,7 @@ beforeEach(async () => {
   await seedFixture();
 });
 
-test("batch admission sends one provider email with one one-VEVENT REQUEST per session and audits every submission", async () => {
+test("CONTRACT · batch admission sends one provider email with one one-VEVENT REQUEST per session and audits every submission", async () => {
   const first = await sendCalendarBatch({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW });
   expect(first.deliveries).toHaveLength(1);
   expect(first.deliveries[0]?.parts).toHaveLength(2);
@@ -210,7 +210,7 @@ test("batch admission sends one provider email with one one-VEVENT REQUEST per s
   });
 });
 
-test("singular calendar delivery audits the real submission and appears in its timeline", async () => {
+test("CONTRACT · singular calendar delivery audits the real submission and appears in its timeline", async () => {
   const delivery = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, submissionId: SUBMISSION_ONE, now: NOW });
   const fake = provider();
   const outcome = await processMailOutbox(env.DB, env, [delivery[0]!.outbox_id], { provider: fake, now: NOW + 1_000, sleep: async () => undefined });
@@ -238,7 +238,7 @@ test("singular calendar delivery audits the real submission and appears in its t
   });
 });
 
-test("batch debt ignores non-slot snapshot changes, then a real agenda move creates one reschedule per speaker", async () => {
+test("CONTRACT · batch debt ignores non-slot snapshot changes, then a real agenda move creates one reschedule per speaker", async () => {
   const first = await sendCalendarBatch({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW });
   expect(first.no_op).toBe(false);
 
@@ -266,7 +266,7 @@ test("batch debt ignores non-slot snapshot changes, then a real agenda move crea
   expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM outbox WHERE event_id = ? AND template_key = 'calendar_batch_request'").bind(EVENT_ID).first<{ count: number }>())?.count).toBe(2);
 });
 
-test("batch projection reads all participations through one bounded agenda query", async () => {
+test("CONTRACT · batch projection reads all participations through one bounded agenda query", async () => {
   const counted = countedDatabase();
   const result = await sendCalendarBatch({ db: counted.db, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW });
   expect(result.deliveries).toHaveLength(1);
@@ -274,7 +274,7 @@ test("batch projection reads all participations through one bounded agenda query
   expect(counted.sql.some((query) => query.includes("FROM calendar_invites WHERE submission_id = ? AND person_id = ?"))).toBe(false);
 });
 
-test("projection names invalid recipients before valid-email filtering and the batch fails closed when all debt is blocked", async () => {
+test("CONTRACT · projection names invalid recipients before valid-email filtering and the batch fails closed when all debt is blocked", async () => {
   await addBlockedParticipation();
   const mixed = await projectCalendarDebt(env.DB, EVENT_ID);
   expect(mixed.sendable.map((item) => item.person_id)).toEqual([SPEAKER_ID, SPEAKER_ID]);
@@ -297,7 +297,7 @@ test("projection names invalid recipients before valid-email filtering and the b
   expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM outbox WHERE event_id = ?").bind(EVENT_ID).first<{ count: number }>()).toEqual({ count: 0 });
 });
 
-test("an admitted batch resumes its same owner and provider call without claiming another revision", async () => {
+test("CONTRACT · an admitted batch resumes its same owner and provider call without claiming another revision", async () => {
   const messages: unknown[] = [];
   const queue = { send: async (message: unknown) => { messages.push(message); } } as unknown as Queue<unknown>;
   const first = await sendCalendarBatch({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW });
@@ -323,7 +323,7 @@ test("an admitted batch resumes its same owner and provider call without claimin
   expect(duplicateFake.singles).toHaveLength(0);
 });
 
-test("CAS sequence claims reread a lost initialization and never double-claim the first revision", async () => {
+test("CONTRACT · CAS sequence claims reread a lost initialization and never double-claim the first revision", async () => {
   const uid = calendarUid(SUBMISSION_ONE, SPEAKER_ID);
   const claims = await Promise.all([
     claimCalendarSequence(env.DB, { currentSequence: null, now: NOW, uid }),
@@ -337,7 +337,7 @@ test("CAS sequence claims reread a lost initialization and never double-claim th
   expect(legacyClaim).toEqual({ expectedPrior: 4, sequence: 5 });
 });
 
-test("a failed duplicate batch admission leaves the previously stamped snapshot untouched", async () => {
+test("CONTRACT · a failed duplicate batch admission leaves the previously stamped snapshot untouched", async () => {
   const first = await sendCalendarBatch({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW });
   const before = await env.DB.prepare(
     "SELECT sequence, request_snapshot FROM calendar_invites WHERE submission_id = ? AND person_id = ?",
@@ -389,7 +389,7 @@ test("a failed duplicate batch admission leaves the previously stamped snapshot 
   expect((await env.DB.prepare("SELECT last_sequence FROM calendar_sequence_ledger WHERE uid = ?").bind(firstParts[0]!.ics_uid).first<{ last_sequence: number }>())?.last_sequence).toBe(1);
 });
 
-test("GET /i/:uid.ics chooses the newest standalone REQUEST after a batch REQUEST", async () => {
+test("CONTRACT · GET /i/:uid.ics chooses the newest standalone REQUEST after a batch REQUEST", async () => {
   const batch = await sendCalendarBatch({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW });
   const uid = batch.deliveries[0]!.parts[0]!.uid;
   const batchBody = (await childRows(batch.deliveries[0]!.outbox_id))[0]!.ics_body;
@@ -403,7 +403,7 @@ test("GET /i/:uid.ics chooses the newest standalone REQUEST after a batch REQUES
   expect((await getIcs(uid)).body).toBe(standalone!.ics_body);
 });
 
-test("GET /i/:uid.ics chooses a newer CANCEL after a batch REQUEST", async () => {
+test("CONTRACT · GET /i/:uid.ics chooses a newer CANCEL after a batch REQUEST", async () => {
   const batch = await sendCalendarBatch({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW });
   const uid = batch.deliveries[0]!.parts[0]!.uid;
   await cancelCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, submissionId: SUBMISSION_ONE, now: NOW + 1_000 });
@@ -414,7 +414,7 @@ test("GET /i/:uid.ics chooses a newer CANCEL after a batch REQUEST", async () =>
   expect((await getIcs(uid)).body).toBe(cancellation!.ics_body);
 });
 
-test("resolver ties same-timestamp owners by descending owner id and fails closed for mixed grains", async () => {
+test("CONTRACT · resolver ties same-timestamp owners by descending owner id and fails closed for mixed grains", async () => {
   const batch = await sendCalendarBatch({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW });
   const uid = batch.deliveries[0]!.parts[0]!.uid;
   const batchPart = (await childRows(batch.deliveries[0]!.outbox_id))[0]!;
@@ -430,14 +430,14 @@ test("resolver ties same-timestamp owners by descending owner id and fails close
   expect((await getIcs(uid)).response.status).toBe(404);
 });
 
-test("resolver rejects an unknown template grain instead of falling through to an older revision", async () => {
+test("CONTRACT · resolver rejects an unknown template grain instead of falling through to an older revision", async () => {
   const batch = await sendCalendarBatch({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW });
   const uid = batch.deliveries[0]!.parts[0]!.uid;
   await env.DB.prepare("UPDATE outbox SET template_key = 'calendar_unknown' WHERE id = ?").bind(batch.deliveries[0]!.outbox_id).run();
   expect((await getIcs(uid)).response.status).toBe(404);
 });
 
-test("resolver fails closed for missing batch parts and corrupt standalone material", async () => {
+test("CONTRACT · resolver fails closed for missing batch parts and corrupt standalone material", async () => {
   const batch = await sendCalendarBatch({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW });
   const batchPart = (await childRows(batch.deliveries[0]!.outbox_id))[0]!;
   await env.DB.prepare("DELETE FROM outbox_calendar_parts WHERE outbox_id = ? AND ics_uid = ?")
@@ -454,7 +454,7 @@ test("resolver fails closed for missing batch parts and corrupt standalone mater
   expect((await getIcs(standaloneRow!.ics_uid)).response.status).toBe(404);
 });
 
-test("resolver fails closed for same-owner grain mixing and template-method mismatch", async () => {
+test("CONTRACT · resolver fails closed for same-owner grain mixing and template-method mismatch", async () => {
   const standalone = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, submissionId: SUBMISSION_ONE, now: NOW });
   const standaloneRow = await env.DB.prepare("SELECT id, ics_uid, ics_body FROM outbox WHERE id = ?")
     .bind(standalone[0]!.outbox_id)
