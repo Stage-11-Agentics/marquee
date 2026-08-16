@@ -20,9 +20,10 @@ import "./agents.css";
  * screen existed that claim was reachable only from the sidebar foot, which is
  * where a product puts the things it is not really offering. The page is
  * deliberately light: one paste-ready prompt that connects any agent, three
- * machine doors, four agents worth running, and two honesty cards. No runtime
- * name-dropping, no command anatomy — the reference already exists and this page
- * points at it rather than reprinting it.
+ * canonical machine doors plus the generated context shortcut, four agents
+ * worth running, and two honesty cards. No runtime name-dropping, no command
+ * anatomy — the reference already exists and this page points at it rather
+ * than reprinting it.
  *
  * Every card action is Copy. The agent cards carry no navigation on purpose
  * (client ruling, 2026-08-15): this page tells an operator how to set their
@@ -88,6 +89,11 @@ export function AgentsPage({ navigate, origin }: { navigate: (target: string) =>
         a product hides something it does not mean.
       */}
       <div class="agents-doors">
+        <div class="agents-context-door">
+          <strong>Machine context</strong>
+          <span>Start with the generated index, or take the complete served context in one fetch.</span>
+          <a class="button small" href="/llms.txt">Open /llms.txt →</a>
+        </div>
         <div class="agents-door">
           <strong>Create API token</strong>
           <span>Scoped to the organization or one conference, revocable in one click.</span>

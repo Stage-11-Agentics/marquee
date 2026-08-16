@@ -261,7 +261,7 @@ export function LandingPage({ data }: { data: LandingData }): JSX.Element {
 
       <footer class="landing-foot">
         <span>Apache-2.0 · Self-hosted · API-first</span>
-        <span>Built for {data.conferenceName}</span>
+        <span>Built for {data.conferenceName} · <a href="/llms.txt">For agents ↗</a></span>
       </footer>
     </div>
   );
@@ -318,7 +318,7 @@ export function UnclaimedLandingPage(): JSX.Element {
 
       <footer class="landing-foot">
         <span>Apache-2.0 · Self-hosted · API-first</span>
-        <span>Unclaimed instance</span>
+        <span>Unclaimed instance · <a href="/llms.txt">For agents ↗</a></span>
       </footer>
     </div>
   );

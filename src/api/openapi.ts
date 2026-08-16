@@ -238,7 +238,8 @@ ${operationRows}
       }
       <footer>
         ${rows.length} operation${rows.length === 1 ? "" : "s"} ·
-        document SHA-256 <code>${escape(bundle.hash)}</code>
+        document SHA-256 <code>${escape(bundle.hash)}</code> ·
+        <a href="/llms.txt">Agent front door</a>
       </footer>
     </main>
   </body>

@@ -1,0 +1,7 @@
+[
+  { "url": "/README.md", "source": "README.md" },
+  { "url": "/docs/GETTING-STARTED.md", "source": "docs/GETTING-STARTED.md" },
+  { "url": "/PHILOSOPHY.md", "source": "PHILOSOPHY.md" },
+  { "url": "/DESIGN.md", "source": "DESIGN.md" },
+  { "url": "/DEPLOY.md", "source": "DEPLOY.md" }
+]

@@ -182,13 +182,19 @@ secret is configured.
 In a second terminal, while the Worker is running:
 
 ```sh
+set -eu
 curl -fsS http://127.0.0.1:8787/health
 curl -fsS -c /tmp/marquee-local-cookies.txt \
   -H 'content-type: application/json' \
   --data '{"role":"organizer"}' \
   http://127.0.0.1:8787/api/v1/auth/demo
+event_id="$(
+  curl -fsS -b /tmp/marquee-local-cookies.txt \
+    http://127.0.0.1:8787/api/v1/events \
+    | node -e 'const body = require("fs").readFileSync(0, "utf8"); const event = JSON.parse(body).data?.find((candidate) => Number(candidate.submission_count) > 0); if (!event?.id) process.exit(1); process.stdout.write(event.id);'
+)"
 curl -fsS -b /tmp/marquee-local-cookies.txt \
-  'http://127.0.0.1:8787/api/v1/events/evt_aie-ny-2026/submissions?per_page=1&page=1' \
+  "http://127.0.0.1:8787/api/v1/events/${event_id}/submissions?per_page=1&page=1" \
   | grep -Eq '"total"[[:space:]]*:[[:space:]]*[1-9][0-9]*'
 ```
 
@@ -243,8 +249,13 @@ curl -fsS -c "$state_dir/cookies.txt" \
   -H 'content-type: application/json' \
   --data '{"role":"organizer"}' \
   http://127.0.0.1:8787/api/v1/auth/demo >/dev/null
+event_id="$(
+  curl -fsS -b "$state_dir/cookies.txt" \
+    http://127.0.0.1:8787/api/v1/events \
+    | node -e 'const body = require("fs").readFileSync(0, "utf8"); const event = JSON.parse(body).data?.find((candidate) => Number(candidate.submission_count) > 0); if (!event?.id) process.exit(1); process.stdout.write(event.id);'
+)"
 curl -fsS -b "$state_dir/cookies.txt" \
-  'http://127.0.0.1:8787/api/v1/events/evt_aie-ny-2026/submissions?per_page=1&page=1' \
+  "http://127.0.0.1:8787/api/v1/events/${event_id}/submissions?per_page=1&page=1" \
   | grep -Eq '"total"[[:space:]]*:[[:space:]]*[1-9][0-9]*'
 ```
 

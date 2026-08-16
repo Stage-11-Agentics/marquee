@@ -1159,6 +1159,7 @@ export function PublicAgentsPage({ event, origin }: { event: PublicEvent; origin
           <div>
             <h1>For agents</h1>
             <p>Everything on this site is anonymous, typed JSON. An agent can build its human's conference schedule end to end without a browser and without an account.</p>
+            <p class="public-detail-meta"><a href="/llms.txt">Read the machine index ↗</a> · <a href="/llms-full.txt">full context ↗</a></p>
           </div>
         </div>
         <article class="public-card">

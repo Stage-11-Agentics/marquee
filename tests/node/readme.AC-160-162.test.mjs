@@ -15,7 +15,12 @@ test("AC-160 · the README exposes a numbered clean-checkout deploy path", () =>
   assert.match(readme, /npm run seed -- --persist-to/);
   assert.match(readme, /wrangler dev/);
   assert.match(readme, /curl -fsS http:\/\/127\.0\.0\.1:8787\/health/);
-  assert.match(readme, /api\/v1\/events\/evt_aie-ny-2026\/submissions/);
+  assert.doesNotMatch(readme, /MARQUEE_EVENT_ID/);
+  assert.doesNotMatch(readme, /evt_aie-ny-2026/);
+  assert.match(readme, /curl -fsS -b [\s\S]*?\/api\/v1\/events/);
+  assert.match(readme, /submission_count[^;]+> 0/);
+  assert.match(readme, /event_id=\"\$\(\s*[\s\S]*?\/api\/v1\/events/);
+  assert.match(readme, /events\/\$\{event_id\}\/submissions/);
   // This guard used to assert the README said the hosted path was "not covered
   // in this checkout". That sentence became false the day we deployed, and a
   // reader who believed it never opened the running site. The honest form of
