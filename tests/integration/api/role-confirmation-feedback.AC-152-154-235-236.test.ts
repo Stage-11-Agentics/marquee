@@ -1,8 +1,6 @@
 import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, test } from "vitest";
 
-import { findTemplate } from "../../../src/jobs/mail/templates";
-import { renderMail } from "../../../src/jobs/mail/render";
 import { createSession } from "../../../src/lib/auth/auth-sessions";
 import { DEMO_EVENT_ID, DEMO_ORGANIZATION_ID, DEMO_ORGANIZER_PERSON_ID, DEMO_SPEAKER_PERSON_ID, demoFixtureRows } from "../../../src/lib/reset-demo/demo-fixture";
 import { applyMigrations } from "../apply-migrations";
@@ -288,18 +286,13 @@ describe.sequential("MRQ-38 role confirmation and decision feedback", () => {
       "SELECT id, feedback_md, outbox_id FROM submission_decisions WHERE id = ?",
     ).bind(singleResult.decision_id).first<{ id: string; feedback_md: string | null; outbox_id: string | null }>();
     expect(singleDecision).toEqual({ id: singleResult.decision_id, feedback_md: "Line one\nLine two", outbox_id: singleResult.outbox_id });
-    const singleTemplate = await findTemplate(env.DB, EVENT_ID, "acceptance");
-    const expectedSingle = renderMail(singleTemplate, {
-      "speaker.first_name": "Demo",
-      "speaker.name": "Demo Speaker",
-      "speaker.email": "speaker@demo.marquee.example",
-      "submission.title": "Single decision with feedback",
-      "decision.feedback": "Line one\nLine two",
-      "decision.resulting_status": "accepted",
-      "decision.recommendation": "approve",
-    });
     const singleOutbox = await env.DB.prepare("SELECT text, html, send_policy FROM outbox WHERE id = ?").bind(singleResult.outbox_id).first<{ text: string; html: string; send_policy: string }>();
-    expect(singleOutbox).toEqual({ text: expectedSingle.text, html: expectedSingle.html, send_policy: "demo_safe" });
+    expect(singleOutbox?.send_policy).toBe("demo_safe");
+    expect(singleOutbox?.text).toContain("Line one\nLine two");
+    expect(singleOutbox?.text).toContain("AIE NYC 2026");
+    expect(singleOutbox?.text).toMatch(/https:\/\/marquee\.stage11\.dev\/api\/v1\/auth\/exchange\?token=/);
+    expect(singleOutbox?.text).not.toContain("{{portal.link}}");
+    expect(singleOutbox?.html).toContain("AIE NYC 2026");
 
     const noFeedback = await requestDecision(SUB_NO_FEEDBACK, { recommendation: "approve" });
     expect(noFeedback.status).toBe(200);

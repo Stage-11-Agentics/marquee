@@ -29,7 +29,7 @@
  * paragraph with the nouns swapped has not described a job.
  */
 
-export type AgentBriefSurface = "cfp" | "chase" | "agenda" | "portal";
+export type AgentBriefSurface = "cfp" | "chase" | "agenda" | "portal" | "decision";
 
 export interface AgentBriefContext {
   /** The running deployment's origin. `window.location.origin` in the app. */
@@ -131,14 +131,32 @@ function portal(context: AgentBriefContext): AgentBriefCopy {
   };
 }
 
+function decision(context: AgentBriefContext): AgentBriefCopy {
+  return {
+    title: "Hand this to your agent",
+    label: "Hand this to your agent",
+    hint: "Copy the text below and paste it into Claude, or whichever agent you work with. It knows how to carry the decision, its facts, and its receipt through the same API as this screen.",
+    brief: [
+      "Carry my program decision through with its facts intact.",
+      contract(context),
+      "Read the submission and its current decision history first. Build a decision plan, then apply it with the plan fingerprint and If-Match value. For an acceptance or rejection, put speaker-facing context in feedback_md and staff-only context in internal_note; the latter is saved with the proposal and never sent. A waitlist changes the record and sends no email.",
+      "Do not use the generic communications endpoint for a decision. The decision endpoint mints a recipient-specific speaker portal link and guarantees that the final rendered message contains it even if an edited template removed the merge field.",
+      "When you're done, report the resulting status, decision_id, outbox_id, whether a message was queued, and the exact feedback you carried. Verify the queued message has the event name, the speaker-facing feedback, and a working portal exchange URL, while the internal note is absent from the message and portal payload.",
+    ].join("\n\n"),
+    note: "Keep speaker-facing feedback and staff-only context in their separate fields.",
+    endpoint: `POST /api/v1/events/${context.eventId}/submissions/{submissionId}/decision`,
+  };
+}
+
 const BUILDERS: Record<AgentBriefSurface, (context: AgentBriefContext) => AgentBriefCopy> = {
   cfp,
   chase,
   agenda,
   portal,
+  decision,
 };
 
-export const AGENT_BRIEF_SURFACES: readonly AgentBriefSurface[] = ["cfp", "chase", "agenda", "portal"];
+export const AGENT_BRIEF_SURFACES: readonly AgentBriefSurface[] = ["cfp", "chase", "agenda", "portal", "decision"];
 
 /** The shared closing claim: the screen and the API are the same product. */
 export const AGENT_BRIEF_PARITY = "Everything the screen can do, it can do — there is no capability here the API lacks.";

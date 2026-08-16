@@ -20,6 +20,7 @@ const decisionBodySchema = z
   .object({
     recommendation: z.enum(["approve", "maybe", "deny"]),
     feedback_md: z.string().max(50_000).nullable().optional(),
+    internal_note: z.string().max(5_000).nullable().optional(),
     confirm_published: z.boolean().optional(),
     plan_fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
   })
@@ -157,6 +158,8 @@ const decideSubmission = defineApiRoute(
       feedbackMd: body.feedback_md,
       confirmPublished: body.confirm_published === true,
       cache: context.env.CACHE,
+      internalNote: body.internal_note,
+      origin: new URL(context.req.url).origin,
     });
     if (result.outcome === "failed") {
       if (result.error === "submission not found") throw ApiError.notFound("submission not found");
@@ -207,6 +210,7 @@ const resendDecision = defineApiRoute(
       eventId,
       submissionId,
       actor,
+      origin: new URL(context.req.url).origin,
     });
     if (result.outcome === "failed") {
       if (result.error === "submission not found") throw ApiError.notFound("submission not found");

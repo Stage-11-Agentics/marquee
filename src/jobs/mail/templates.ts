@@ -54,13 +54,13 @@ export const DEFAULT_TEMPLATES: Record<MailTemplateKey, DefaultTemplate> = {
   },
   acceptance: {
     name: "Acceptance",
-    subject: "Your session was accepted",
-    body_md: "Hi {{speaker.first_name}},\n\n**{{submission.title}}** was accepted.\n\n{{decision.feedback}}",
+    subject: "{{submission.title}} was accepted · {{event.name}}",
+    body_md: "Hi {{speaker.first_name}},\n\nWe’re pleased to invite **{{submission.title}}** to {{event.name}}. We’ll follow up with the next steps for preparing your session.\n\n{{decision.feedback}}\n\nOpen your speaker portal: {{portal.link}}\n\n— {{event.name}} team",
   },
   rejection: {
     name: "Rejection",
-    subject: "An update about {{submission.title}}",
-    body_md: "Hi {{speaker.first_name}},\n\nThank you for sharing **{{submission.title}}**.\n\n{{decision.feedback}}",
+    subject: "An update about {{submission.title}} · {{event.name}}",
+    body_md: "Hi {{speaker.first_name}},\n\nThank you for sharing **{{submission.title}}** with {{event.name}}. We’re unable to include it in this program.\n\n{{decision.feedback}}\n\nYou can review the decision in your speaker portal: {{portal.link}}\n\n— {{event.name}} team",
   },
   task_assigned: {
     name: "Task assigned",

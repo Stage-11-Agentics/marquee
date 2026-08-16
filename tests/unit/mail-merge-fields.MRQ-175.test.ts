@@ -26,11 +26,16 @@ test("CONTRACT · organizer communications do not advertise or queue auth-only l
   expect(MERGE_FIELDS).toContain("draft.missing_fields");
   expect(COMMUNICATION_MERGE_FIELDS).not.toContain("auth.link");
   expect(COMMUNICATION_MERGE_FIELDS).not.toContain("draft.resume_link");
+  expect(COMMUNICATION_MERGE_FIELDS).not.toContain("portal.link");
+  expect(COMMUNICATION_MERGE_FIELDS).not.toContain("decision.feedback");
   expect(COMMUNICATION_MERGE_FIELDS).toContain("draft.missing_fields");
   expect(unknownMergeFieldsForCommunication("Sign in: {{auth.link}}")).toEqual(["auth.link"]);
   expect(unknownMergeFieldsForCommunication("Resume: {{draft.resume_link}}")).toEqual(["draft.resume_link"]);
   expect(unknownMergeFieldsForCommunication("Still needed: {{draft.missing_fields}}")).toEqual([]);
   expect(unknownMergeFieldsForCommunication("Hi {{speaker.first_name}}")).toEqual([]);
+  expect(unknownMergeFieldsForCommunication("Decision: {{decision.feedback}} {{portal.link}}")).toEqual(["decision.feedback", "portal.link"]);
+  expect(unknownMergeFieldsForCommunicationTemplate("acceptance", "{{event.name}}", "{{decision.feedback}} {{portal.link}}")).toEqual([]);
+  expect(unknownMergeFieldsForCommunicationTemplate("custom", "{{event.name}}", "{{decision.feedback}} {{portal.link}}")).toEqual(["event.name", "decision.feedback", "portal.link"]);
   expect(unknownMergeFieldsForCommunicationTemplate("draft_close_reminder", "Resume: {{draft.resume_link}}", "Missing: {{draft.missing_fields}}")).toEqual([]);
   expect(unknownMergeFieldsForCommunicationTemplate("reminder_generic", "Resume: {{draft.resume_link}}", "Missing: {{draft.missing_fields}}")).toEqual(["draft.resume_link"]);
   expect(unknownMergeFieldsForCommunicationTemplate(undefined, "Resume: {{draft.resume_link}}", "Missing: {{draft.missing_fields}}")).toEqual(["draft.resume_link"]);

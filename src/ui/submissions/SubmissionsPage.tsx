@@ -354,6 +354,7 @@ export function SubmissionsPage({
   const [notifyPlanStale, setNotifyPlanStale] = useState(false);
   const [bulkRequest, setBulkRequest] = useState<BulkAction | null>(null);
   const [bulkFeedback, setBulkFeedback] = useState("");
+  const [bulkInternalNote, setBulkInternalNote] = useState("");
   const [bulkConfirmPublished, setBulkConfirmPublished] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMessage, setBulkMessage] = useState("");
@@ -813,6 +814,7 @@ export function SubmissionsPage({
   const openBulkPlan = (action: BulkAction) => {
     setBulkRequest(action);
     setBulkFeedback("");
+    setBulkInternalNote("");
     setBulkConfirmPublished(false);
     setBulkPlan(null);
     setBulkPlanError("");
@@ -856,6 +858,7 @@ export function SubmissionsPage({
             action: bulkRequest,
             plan_fingerprint: bulkPlan.plan_fingerprint,
             ...(bulkFeedback.trim() ? { feedback_md: bulkFeedback.trim() } : {}),
+            ...(bulkInternalNote.trim() ? { internal_note: bulkInternalNote.trim() } : {}),
             ...(bulkConfirmPublished ? { confirm_published: true } : {}),
           }),
           route: "/api/v1/events/{eventId}/submissions/bulk",
@@ -871,6 +874,7 @@ export function SubmissionsPage({
       setBulkRequest(null);
       setBulkPlan(null);
       setBulkFeedback("");
+      setBulkInternalNote("");
       setSelectedIds(new Set());
       setAllMatching(false);
       setReloadKey((value) => value + 1);
@@ -1084,12 +1088,14 @@ export function SubmissionsPage({
         stale={bulkPlanStale}
         busy={bulkBusy}
         feedback={bulkFeedback}
+        internalNote={bulkInternalNote}
         confirmPublished={bulkConfirmPublished}
         publishedCount={publishedSelectedCount}
         onFeedbackChange={onBulkFeedbackChange}
+        onInternalNoteChange={setBulkInternalNote}
         onConfirmPublishedChange={onBulkConfirmPublishedChange}
         onConfirm={() => void runBulk()}
-        onClose={() => { setBulkRequest(null); setBulkPlan(null); setBulkPlanError(""); }}
+        onClose={() => { setBulkRequest(null); setBulkPlan(null); setBulkPlanError(""); setBulkFeedback(""); setBulkInternalNote(""); }}
         onRefresh={() => bulkRequest && void loadBulkPlan(bulkRequest, bulkFeedback, bulkConfirmPublished)}
       />}
       {(notifyPlan || notifyPlanLoading || notifyPlanError || notifyPlanStale) && <DecisionPlanPanel
@@ -1099,9 +1105,11 @@ export function SubmissionsPage({
         stale={notifyPlanStale}
         busy={notifying}
         feedback=""
+        internalNote=""
         confirmPublished={false}
         publishedCount={null}
         onFeedbackChange={() => undefined}
+        onInternalNoteChange={() => undefined}
         onConfirmPublishedChange={() => undefined}
         onConfirm={() => void notifySpeakers()}
         onClose={() => { setNotifyPlan(null); setNotifyPlanError(""); setNotifyPlanStale(false); }}

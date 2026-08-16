@@ -35,16 +35,72 @@ export function mergeTemplate(source: string, data: MergeData): string {
 function markdownToText(markdown: string): string {
   return markdown
     .replace(/\r\n/g, "\n")
-    .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1")
+    // Keep the destination visible in plain mail. Feedback is organizer-authored
+    // markdown, and dropping the URL turns a useful decision fact into a dead
+    // label for recipients whose client does not render HTML.
+    .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, "$1 ($2)")
     .replace(/[*`#>]/g, "")
     .trim();
 }
 
+function safeMarkdownHref(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) return trimmed;
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function markdownParagraphToHtml(paragraph: string): string {
+  const linkPattern = /\[([^\]]+)\]\(([^\)]+)\)/g;
+  let html = "";
+  let cursor = 0;
+  for (const match of paragraph.matchAll(linkPattern)) {
+    const index = match.index ?? 0;
+    html += escapeHtml(paragraph.slice(cursor, index));
+    const label = match[1] ?? "";
+    const destination = match[2] ?? "";
+    const href = safeMarkdownHref(destination);
+    html += href === null
+      ? `${escapeHtml(label)} (${escapeHtml(destination)})`
+      : `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
+    cursor = index + match[0].length;
+  }
+  html += escapeHtml(paragraph.slice(cursor));
+  return html.replace(/[*`#>]/g, "").replaceAll("\n", "<br>");
+}
+
 function markdownToHtml(markdown: string): string {
-  return markdownToText(markdown)
+  return markdown
+    .replace(/\r\n/g, "\n")
     .split(/\n{2,}/)
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replaceAll("\n", "<br>")}</p>`)
+    .map((paragraph) => `<p>${markdownParagraphToHtml(paragraph)}</p>`)
     .join("");
+}
+
+/** The plan can show truthful copy without minting a credential it will not send. */
+export const DECISION_PORTAL_PREVIEW_PLACEHOLDER = "(a private speaker portal link is generated for each recipient at send time)";
+
+/**
+ * Decision mail has one extra invariant beyond ordinary template rendering:
+ * an organizer may remove the portal token while editing a template, but a
+ * decision recipient must still receive the link minted for that recipient.
+ */
+export function renderDecisionMail(
+  template: Pick<EmailTemplateRow, "subject" | "body_md">,
+  data: MergeData,
+  portalLink?: string,
+): RenderedMail {
+  const mergedData = { ...data, "portal.link": portalLink ?? DECISION_PORTAL_PREVIEW_PLACEHOLDER };
+  const rendered = renderMail(template, mergedData);
+  if (!portalLink || rendered.text.includes(portalLink)) return rendered;
+  return renderMail(
+    { ...template, body_md: `${template.body_md}\n\nOpen your speaker portal: ${portalLink}` },
+    mergedData,
+  );
 }
 
 /**

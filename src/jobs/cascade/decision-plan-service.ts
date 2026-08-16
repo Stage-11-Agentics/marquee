@@ -10,7 +10,7 @@ import { isValidEmail } from "../../lib/email-validity";
 import { PUBLISHED_SESSION_REFUSAL } from "../../lib/publication-guard";
 import { canTransitionSubmissionStatus } from "../../lib/submission-transitions";
 import { firstName } from "../mail/merge-data";
-import { renderMail } from "../mail/render";
+import { renderDecisionMail } from "../mail/render";
 import { findTemplate } from "../mail/templates";
 import {
   loadSubmissions,
@@ -149,6 +149,7 @@ function previewData(submission: SubmissionContext, resultingStatus: "accepted" 
     "speaker.first_name": firstName(submission.person_name),
     "speaker.name": submission.person_name,
     "speaker.email": submission.person_email,
+    "event.name": submission.event_name,
     "submission.title": submission.title,
     "decision.feedback": feedbackMd ?? "",
     "decision.resulting_status": resultingStatus,
@@ -208,7 +209,7 @@ export async function buildDecisionPlan(input: {
   const previewSubmission = firstPreviewId ? byId.get(firstPreviewId) : undefined;
   const recipientPreview = input.action === "waitlist" || input.action === "withdraw" || !previewSubmission
     ? null
-    : { ...renderMail(template, previewData(previewSubmission, input.action === "accept" ? "accepted" : "rejected", plan.feedback_md)), to_email: previewSubmission.person_email.trim() };
+    : { ...renderDecisionMail(template, previewData(previewSubmission, input.action === "accept" ? "accepted" : "rejected", plan.feedback_md)), to_email: previewSubmission.person_email.trim() };
   const fingerprintPayload = {
     action: input.action,
     wave_id: input.waveId ?? null,
@@ -323,7 +324,7 @@ export async function buildNotifyPlan(input: {
   const previewTemplate = sendableStatus ? templateByKey[notifyTemplateKey(sendableStatus)] : null;
   const recipientPreview = sendableSubmission && sendableState && sendableStatus && previewTemplate
     ? {
-        ...renderMail(previewTemplate, previewData(sendableSubmission, sendableStatus, normalizeDecisionFeedback(sendableState.feedback_md))),
+        ...renderDecisionMail(previewTemplate, previewData(sendableSubmission, sendableStatus, normalizeDecisionFeedback(sendableState.feedback_md))),
         to_email: sendableSubmission.person_email.trim(),
       }
     : null;

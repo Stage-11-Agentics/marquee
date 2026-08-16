@@ -3,7 +3,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import type { Id, OutboxRow, OutboxSendPolicy } from "../../db/schema";
 import { sha256Hex } from "../../lib/auth/random-token";
 import type { EntityId } from "./idempotency";
-import { renderAdHocMail, renderMail, type MergeData } from "./render";
+import { renderAdHocMail, renderMail, type MergeData, type RenderedMail } from "./render";
 import { findTemplate } from "./templates";
 
 export interface EnqueueOutboxInput {
@@ -18,6 +18,8 @@ export interface EnqueueOutboxInput {
   body?: string;
   html?: string;
   text?: string;
+  /** A context-specific renderer may supply the complete recipient mail. */
+  rendered?: RenderedMail;
   icsUid?: string | null;
   icsBody?: string | null;
   scheduledFor?: number | null;
@@ -62,12 +64,15 @@ async function insertOutbox(
   const idempotencyKey = input.idempotencyKey
     ?? await buildIdempotencyKey(input.templateKey, input.entityId, input.personId);
   const id = crypto.randomUUID();
-  let rendered = {
+  let rendered = input.rendered ?? {
     subject: input.subject ?? "",
     text: input.text ?? input.body ?? "",
     html: input.html ?? input.body ?? "",
   };
-  if (input.subject !== undefined && input.body !== undefined && input.html === undefined && input.text === undefined) {
+  if (input.rendered !== undefined) {
+    // Decision mail has already rendered its per-recipient credential-aware
+    // body; do not pass it through the generic template renderer again.
+  } else if (input.subject !== undefined && input.body !== undefined && input.html === undefined && input.text === undefined) {
     rendered = renderAdHocMail(input.subject, input.body, input.data ?? {});
   } else if (input.subject === undefined && input.body === undefined && input.html === undefined && input.text === undefined) {
     const template = await findTemplate(input.db, input.eventId, input.templateKey);
