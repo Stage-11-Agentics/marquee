@@ -261,6 +261,31 @@ test("MRQ-247 · draft-resume capabilities cannot enter the session-producing au
   });
   const row = await env.DB.prepare("SELECT used_at FROM magic_links WHERE token_hash = ?").bind(await sha256Hex(minted.token)).first<{ used_at: number | null }>();
   expect(row?.used_at).toBeNull();
+
+  const liveSession = await createSession(env.DB, {
+    personId: PERSON,
+    roleHint: "reviewer",
+    userAgent: "mrq-247-live-session",
+  });
+  const beforeSession = await env.DB
+    .prepare("SELECT id, person_id, role_hint, expires_at, revoked_at, created_at, updated_at FROM auth_sessions WHERE id = ?")
+    .bind(liveSession.id)
+    .first();
+  const liveResponse = await app.request(`/api/v1/auth/exchange?token=${minted.token}`, {
+    headers: {
+      accept: "application/json",
+      cookie: `mq_session=${liveSession.id}`,
+    },
+  }, env);
+  expect(liveResponse.status).toBe(401);
+  expect(liveResponse.headers.get("set-cookie")).toBeNull();
+  const afterSession = await env.DB
+    .prepare("SELECT id, person_id, role_hint, expires_at, revoked_at, created_at, updated_at FROM auth_sessions WHERE id = ?")
+    .bind(liveSession.id)
+    .first();
+  expect(afterSession).toEqual(beforeSession);
+  const liveRow = await env.DB.prepare("SELECT used_at FROM magic_links WHERE id = ?").bind(minted.id).first<{ used_at: number | null }>();
+  expect(liveRow?.used_at).toBeNull();
 });
 
 async function signinPage(init: RequestInit = {}, overrides: Record<string, unknown> = {}): Promise<string> {
