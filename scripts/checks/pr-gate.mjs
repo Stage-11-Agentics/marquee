@@ -28,6 +28,7 @@ const vite = resolve(REPOSITORY_ROOT, "node_modules/.bin/vite");
 const checks = [
   ["git lock report", "npm", ["run", "check:locks"]],
   ["worker types", tsc, ["-p", "tsconfig.json", "--noEmit"]],
+  ["inbox worker types", tsc, ["-p", "tooling/inbox-worker/tsconfig.json", "--noEmit"]],
   ["client types", tsc, ["-p", "tsconfig.client.json", "--noEmit"]],
   ["test types", tsc, ["-p", "tsconfig.test.json", "--noEmit"]],
   ["source-text test guard", "npm", ["run", "check:no-op-tests"]],

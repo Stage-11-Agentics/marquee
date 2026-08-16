@@ -85,6 +85,8 @@ export interface AcceptanceReversalInput {
   tasks: AcceptanceReversalChoice;
   now?: number;
   origin?: string;
+  /** Only the authenticated smoke harness may use the live G3 calendar path. */
+  smokeHarness?: boolean;
 }
 
 export interface AcceptanceReversalResult {
@@ -965,6 +967,7 @@ export async function writeAcceptanceReversal(
       queue: input.queue,
       submissionId: submission.id,
       now,
+      smokeHarness: input.smokeHarness,
     })
     : [];
 

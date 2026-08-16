@@ -25,6 +25,7 @@ export const PUBLIC_ROOT_DIRECTORIES = [
   "scripts",
   "src",
   "tests",
+  "tooling",
 ];
 
 export const PUBLIC_ROOT_FILES = [
