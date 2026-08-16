@@ -446,8 +446,17 @@ function zonedParts(timestamp: number, timezone: string): { date: string; time: 
   };
 }
 
-function publicSpeakerSlug(name: string, id: string): string {
+export function publicSpeakerSlug(name: string, id: string): string {
   return slugify(name) || slugify(id) || "speaker";
+}
+
+/** The one event-scoped public permalink shared by admin, portal, and mail. */
+export function publicSpeakerPath(eventSlug: string, speakerSlug: string): string {
+  return `/p/${encodeURIComponent(speakerSlug)}?event=${encodeURIComponent(eventSlug)}`;
+}
+
+export function publicSpeakerUrl(origin: string, eventSlug: string, speakerSlug: string): string {
+  return `${origin.replace(/\/+$/, "")}${publicSpeakerPath(eventSlug, speakerSlug)}`;
 }
 
 function publicSessionSlug(title: string, id: string): string {
@@ -908,6 +917,26 @@ export async function loadPublicSpeaker(
   };
 }
 
+/**
+ * Resolve a person's share link through the same published-speaker loader as
+ * `/p/:slug`. A name alone is never enough: an accepted speaker remains
+ * private until one of their public-audience sessions is published.
+ */
+export async function publicSpeakerPathForPerson(
+  database: D1Database,
+  eventId: string,
+  name: string,
+  id: string,
+): Promise<string | null> {
+  const event = await database
+    .prepare("SELECT slug FROM events WHERE id = ? AND status = 'live' LIMIT 1")
+    .bind(eventId)
+    .first<{ slug: string }>();
+  if (!event) return null;
+  const speaker = await loadPublicSpeaker(database, publicSpeakerSlug(name, id), event.slug);
+  return speaker ? publicSpeakerPath(event.slug, speaker.speaker.slug) : null;
+}
+
 function validAccent(value: unknown): string | null {
   return typeof value === "string" && /^#[0-9a-f]{3,8}$/i.test(value) ? value : null;
 }
@@ -1003,7 +1032,7 @@ function isFormClosed(form: FormRow, now = Date.now()): boolean {
     || (form.closes_at !== null && Number(form.closes_at) <= now);
 }
 
-async function loadPublicCfp(database: D1Database, eventId: string): Promise<PublicEmbedCfp | null> {
+export async function loadPublicCfp(database: D1Database, eventId: string): Promise<PublicEmbedCfp | null> {
   const form = await findPrimaryEmbedForm(database, eventId);
   if (!form) return null;
   const formatRows = await database

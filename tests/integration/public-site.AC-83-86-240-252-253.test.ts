@@ -149,6 +149,28 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   await env.DB.prepare("DELETE FROM buildings WHERE id = 'building-public-annex'").run();
 });
 
+test("CONTRACT · MRQ-225 · public pages publish bounded share metadata, exact speaker titles, and honest 404s", async () => {
+  const agenda = await request(`/agenda?event=${EVENT_SLUG}`);
+  const agendaBody = await agenda.text();
+  expect(agenda.headers.get("cache-control")).toBe("public, max-age=300");
+  expect(agendaBody).toContain('<meta property="og:title" content="Public Conference 2026 — public agenda">');
+  expect(agendaBody).toContain('<meta property="og:image" content="http://localhost/marquee-share-card.svg">');
+  expect(agendaBody).toContain('<meta name="twitter:card" content="summary_large_image">');
+
+  const speaker = await request(`/p/public-speaker?event=${EVENT_SLUG}`);
+  const speakerBody = await speaker.text();
+  expect(speaker.headers.get("cache-control")).toBe("public, max-age=300");
+  expect(speakerBody).toContain("<title>Public Speaker — speaking at Public Conference 2026</title>");
+  expect(speakerBody).toContain('<meta property="og:type" content="profile">');
+
+  const missing = await request(`/p/private-speaker?event=${EVENT_SLUG}`);
+  const missingBody = await missing.text();
+  expect(missing.status).toBe(404);
+  expect(missing.headers.get("cache-control")).toBe("no-store");
+  expect(missingBody).not.toContain("Secret Unpublished Speaker");
+  expect(missingBody).not.toContain("og:title");
+});
+
 test("CONTRACT · MRQ-185 · a published submitter-only session names its missing on-stage speaker on the agenda and embed", async () => {
   await env.DB.batch([
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, title, company, bio, social_links, is_demo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 1, ?, ?)")

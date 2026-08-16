@@ -5,6 +5,8 @@ import { formatEventDateTime } from "../../lib/event-time";
 import { formatDueDate, isTaskOverdue } from "../../lib/task-due";
 import { hasSpeakerTaskCancellationColumn, missingFieldsForDrafts } from "../../routes/submissions.queries";
 import type { TriggerKey } from "./triggers";
+import { mergeDataForRecipient } from "./merge-data";
+import type { MergeData } from "./render";
 
 /** The Worker cron that evaluates pre-close and overdue mail schedules. */
 export const MAIL_SCHEDULE_CRON = "0 * * * *" as const;
@@ -15,7 +17,7 @@ export interface MailScheduleCandidate {
   entityId: Id;
   personId: Id;
   toEmail: string;
-  data: Record<string, string>;
+  data: MergeData;
 }
 
 export interface DraftCloseReminderCandidate extends MailScheduleCandidate {
@@ -90,10 +92,7 @@ export async function selectPreCloseReminderCandidates(
     personId: row.person_id,
     toEmail: row.email,
     data: {
-      "speaker.first_name": row.name.trim().split(/\s+/)[0] ?? row.name,
-      "speaker.name": row.name,
-      "speaker.email": row.email,
-      "submission.title": row.submission_title ?? "—",
+      ...mergeDataForRecipient({ name: row.name, email: row.email, submissionTitle: row.submission_title }),
       "form.closes_at": formatEventDateTime(row.closes_at, row.timezone),
     },
   }));
@@ -155,10 +154,7 @@ export async function selectDraftCloseReminderCandidates(
       timezone: row.timezone,
       missingFields,
       data: {
-        "speaker.first_name": row.name.trim().split(/\s+/)[0] ?? row.name,
-        "speaker.name": row.name,
-        "speaker.email": row.email,
-        "submission.title": row.submission_title || "Untitled abstract",
+        ...mergeDataForRecipient({ name: row.name, email: row.email, submissionTitle: row.submission_title || "Untitled abstract" }),
         "form.closes_at": formatEventDateTime(row.closes_at, row.timezone),
         "draft.missing_fields": missingFields.length > 0
           ? missingFields.join(", ")
@@ -213,10 +209,7 @@ export async function selectOverdueTaskCandidates(
     personId: row.person_id,
     toEmail: row.email,
     data: {
-      "speaker.first_name": row.name.trim().split(/\s+/)[0] ?? row.name,
-      "speaker.name": row.name,
-      "speaker.email": row.email,
-      "submission.title": row.submission_title ?? "—",
+      ...mergeDataForRecipient({ name: row.name, email: row.email, submissionTitle: row.submission_title, taskTitle: row.task_title, taskDueAt: row.due_at, taskTemplateDueAt: row.template_due_at, timezone: row.timezone }),
       "task.title": row.task_title,
       "task.due_date": taskDueLabel(row),
     },

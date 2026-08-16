@@ -2,7 +2,7 @@ import { z } from "@hono/zod-openapi";
 
 import type { DecisionPlan } from "../jobs/cascade/decision-plan";
 
-export const decisionPlanActionSchema = z.enum(["accept", "reject", "waitlist", "withdraw", "notify"]);
+export const decisionPlanActionSchema = z.enum(["accept", "reject", "waitlist", "withdraw", "notify", "announce"]);
 
 export const decisionPlanRecordSchema = z.object({
   id: z.string().min(1),

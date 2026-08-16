@@ -5,6 +5,8 @@ import { formatDueDate, isFixedCalendarDayDue } from "../../lib/task-due";
 export interface RecipientMergeContext {
   name: string;
   email: string;
+  /** A public speaker permalink; absent context deliberately stays visible as a token. */
+  publicLink?: string | null;
   submissionTitle?: string | null;
   room?: string | null;
   building?: string | null;
@@ -61,6 +63,7 @@ export function mergeDataForRecipient(recipient: RecipientMergeContext): MergeDa
     "speaker.first_name": firstName(recipient.name),
     "speaker.name": recipient.name,
     "speaker.email": recipient.email,
+    "speaker.public_link": recipient.publicLink,
     "submission.title": submissionTitle,
     "session.title": submissionTitle,
     "room.name": room,

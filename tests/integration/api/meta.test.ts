@@ -74,7 +74,7 @@ test("CONTRACT · MRQ-146 · concurrency claims and headers cover agenda and dec
     ))
     .map((operation) => operation.operationId)
     .sort();
-  expect(ifMatchOperations).toEqual(["bulkDecideSubmissions", "decideSubmission", "removeAgendaItem", "updateAgendaItem"]);
+  expect(ifMatchOperations).toEqual(["applyAnnounceMail", "bulkDecideSubmissions", "decideSubmission", "removeAgendaItem", "updateAgendaItem"]);
 
   const operations = Object.values(document.paths).flatMap((path) => Object.values(path));
   const responsesFor = (operationId: string) => operations.find((operation) => operation.operationId === operationId)?.responses ?? {};
@@ -159,6 +159,7 @@ test("CONTRACT · MRQ-150 · the document's concurrency claim matches the routes
   expect(enforcing).toEqual([
     "DELETE /api/v1/events/{eventId}/agenda/items/{itemId}",
     "PATCH /api/v1/events/{eventId}/agenda/items/{itemId}",
+    "POST /api/v1/events/{eventId}/announce/mail",
     "POST /api/v1/events/{eventId}/submissions/bulk",
     "POST /api/v1/events/{eventId}/submissions/{submissionId}/decision",
   ]);

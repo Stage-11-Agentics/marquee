@@ -45,6 +45,7 @@ import { ServerPage } from "../settings/ServerPage";
 import { OrganizationHomePage } from "../org/OrganizationHomePage";
 import { AgentsPage } from "../agents/AgentsPage";
 import { AirtablePage } from "../settings/AirtablePage";
+import { AnnouncePage } from "../announce/AnnouncePage";
 
 type ResetResponse = {
   job_id?: unknown;
@@ -212,6 +213,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
   const isPeople = ["/people", "/crm", "/directory", "/contacts"].includes(location.pathname);
   const isServer = route?.id === "org-server" || route?.id === "org-instance";
   const isAirtable = route?.id === "airtable-settings";
+  const isAnnounce = route?.id === "announce";
   useEffect(() => {
     if (location.pathname === "/org/instance") navigate("/org/server", { replace: true });
   }, [location.pathname, navigate]);
@@ -302,6 +304,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             : isOrganizationHome ? <OrganizationHomePage navigate={navigate} />
             : isAgents ? <AgentsPage navigate={navigate} />
             : isAirtable ? <AirtablePage navigate={navigate} />
+            : isAnnounce && eventId !== null ? <AnnouncePage eventId={eventId} />
             : isPeople ? <PeoplePage search={location.search} navigate={navigate} />
             /* Lists is the People screen's second tab, not a screen of its own. */
             : route?.id === "lists" ? <PeoplePage search={location.search} navigate={navigate} tab="lists" />

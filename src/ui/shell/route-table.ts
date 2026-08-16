@@ -151,6 +151,7 @@ export const routeTable: readonly RouteDefinition[] = [
   // real. A client-side push would land the shell on a route it does not render
   // and draw an empty state over a builder that works.
   { id: "embeds", path: "/embed/config", label: "Embeds", icon: "↗", group: "public-links", sidebar: true, external: true },
+  { id: "announce", path: "/announce", label: "Announce", icon: "", group: "public-links", sidebar: true },
   // One conference's settings, standing alone under its own rule at the foot of
   // the conference — the scope is the group above it, so the label is the word.
   { id: "settings", path: "/settings", label: "Settings", icon: "⚙", group: "settings", sidebar: true },

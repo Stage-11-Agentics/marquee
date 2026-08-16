@@ -58,6 +58,7 @@ everything else is drawn inside the organizer shell.
 | `/portal` | Speaker portal | speaker | yes | browser navigation |
 | `/sponsor-portal` | Sponsor portal | organizer | — | client push |
 | `/embed/config` | Embeds | public | yes | browser navigation |
+| `/announce` | Announce | organizer | yes | client push |
 | `/settings` | Settings | organizer | yes | client push |
 | `/delivery-health?view=system` | System health | organizer | — | browser navigation |
 | `/co-speaker` | Co-speaker confirmation | speaker | — | browser navigation |
@@ -108,7 +109,7 @@ routes — the text to hand any agent or reader that needs to know what exists.
 ```text
 ROUTES (real paths, not hash routes):
   Public, no auth: / /:eventSlug/:kind/embed /agenda /agenda/agents /claim/:token /embed/:slug /embed/config /f/:slug /join/:token /login /p/:slug /s/:slug /sign-in /signin /site /speakers
-  Organizer (admin shell): /org/home /people /lists /pipeline /agents /org /org/server /org/instance /org/tokens /crm /directory /contacts /org/organizers /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /agenda-builder /roster /tasks /communications /files /delivery-health /forms /evaluation /sponsor-portal /settings /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /org/activity /settings/webhooks /settings/airtable /import
+  Organizer (admin shell): /org/home /people /lists /pipeline /agents /org /org/server /org/instance /org/tokens /crm /directory /contacts /org/organizers /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /agenda-builder /roster /tasks /communications /files /delivery-health /forms /evaluation /sponsor-portal /announce /settings /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /org/activity /settings/webhooks /settings/airtable /import
   Reviewer: /reviewer
   Review queue: /reviewer/queue
   Speaker portal: /portal
