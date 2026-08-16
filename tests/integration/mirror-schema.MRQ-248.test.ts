@@ -109,7 +109,7 @@ async function seedCurrentRows(): Promise<void> {
       `INSERT INTO speaker_tasks
         (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, response_json, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 'Confirm details', 'acknowledge', 'Long task description', ?, 'open', '{"z":2,"a":1}', ?, ?)`,
-    ).bind(TASK_ID, EVENT_ID, PERSON_ID, SUBMISSION_ID, TEMPLATE_ID, NOW + 7 * 86_400_000, NOW, NOW),
+    ).bind(TASK_ID, EVENT_ID, PERSON_ID, SUBMISSION_ID, TEMPLATE_ID, Date.now() + 7 * 86_400_000, NOW, NOW),
   ]);
 }
 
