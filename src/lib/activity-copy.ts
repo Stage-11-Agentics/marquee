@@ -84,6 +84,7 @@ const SUMMARIES: Readonly<Record<string, string>> = {
   "submission.decision_resent": "Decision email resent",
   "submission.message_queued": "Message queued",
   "submission.message_sent": "Message sent",
+  "submission.calendar_batch_sent": "Calendar batch sent",
   "submission.tasks_reconciled": "Speaker tasks updated",
   "submission.tasks_cancelled": "Speaker tasks cancelled",
   "submission.tasks_retained": "Speaker tasks kept",
@@ -242,6 +243,7 @@ export function describeActivity(entry: {
       return { summary, detail: payloadField(after, "rule_name") };
     case "submission.message_queued":
     case "submission.message_sent":
+    case "submission.calendar_batch_sent":
     case "submission.decision_mail_queued":
     case "submission.decision_mail_sent":
     case "submission.decision_resent":

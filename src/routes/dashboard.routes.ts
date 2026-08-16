@@ -18,6 +18,7 @@ import { visibleVenueConflicts } from "../lib/venue-disclosure";
 import { localParts } from "../lib/event-time";
 import { isTaskOverdue } from "../lib/task-due";
 import { readAgendaBuildingComparison, readAgendaConflicts } from "./agenda.queries";
+import { projectCalendarDebt } from "../jobs/calendar/projection";
 
 const dashboardCountSchema = z.object({
   id: z.string(),
@@ -48,6 +49,7 @@ const dashboardSnapshotSchema = z.object({
     unreviewed_track: dashboardCountSchema.nullable(),
     overdue_submissions: dashboardCountSchema,
     decided_not_notified: dashboardCountSchema,
+    calendar_updates: dashboardCountSchema,
   }),
   metrics: z.array(dashboardCountSchema),
   task_preview: z.array(z.object({
@@ -132,7 +134,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     : `
         (task.due_at = ${utcDayEnd} AND date(task.due_at / 1000, 'unixepoch') < ?)
         OR (task.due_at <> ${utcDayEnd} AND task.due_at < ?)`;
-  const [stageResult, formatResult, trackResult, waveResult, overdueResult, unplacedResult, taskResult, agendaConflicts, showBuildingComparison, notifiedSummary] = await Promise.all([
+  const [stageResult, formatResult, trackResult, waveResult, overdueResult, unplacedResult, taskResult, agendaConflicts, showBuildingComparison, notifiedSummary, calendarDebt] = await Promise.all([
     database.prepare(`
       SELECT ${dashboardStageSql(includeCancelledAt)}
       FROM submissions s
@@ -215,6 +217,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     readDashboardConflicts(database, eventId),
     readDashboardBuildingComparison(database, eventId),
     summarizeNotNotifiedSubmissions(database, eventId),
+    projectCalendarDebt(database, eventId),
   ]);
 
   const stages = stageResult ?? {};
@@ -281,6 +284,15 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     href: "/agenda-builder",
     note: `${conflictSessionCount} affected Sessions · live`,
   };
+  const calendarUpdates: DashboardCount = {
+    id: "calendar-updates",
+    label: "Unsent schedule updates",
+    count: calendarDebt.first_invite_count + calendarDebt.unsent_update_count,
+    href: "/agenda-builder",
+    note: calendarDebt.blocked.length > 0
+      ? `${calendarDebt.blocked.length} recipient${calendarDebt.blocked.length === 1 ? "" : "s"} need an address first`
+      : "open the agenda builder to send one batch per speaker",
+  };
 
   return {
     generated_at: now,
@@ -293,6 +305,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       unreviewed_track: unreviewedTrack,
       overdue_submissions: overdueSubmissions,
       decided_not_notified: decidedNotNotified,
+      calendar_updates: calendarUpdates,
     },
     metrics: [
       pipeline.find((item) => item.id === "in_review")!,

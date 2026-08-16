@@ -46,6 +46,13 @@ interface AttentionEntry {
 
 function attentionEntries(snapshot: DashboardSnapshot): AttentionEntry[] {
   const { attention, generated_at } = snapshot;
+  const calendarUpdates = attention.calendar_updates ?? {
+    id: "calendar-updates",
+    label: "Unsent schedule updates",
+    count: 0,
+    href: "/agenda-builder",
+    note: "open the agenda builder to send one batch per speaker",
+  };
   const entries: AttentionEntry[] = [];
   if (attention.next_wave) {
     const wave = attention.next_wave;
@@ -104,6 +111,19 @@ function attentionEntries(snapshot: DashboardSnapshot): AttentionEntry[] {
     emoji: "✉️",
     cmd: "notify --pending",
     flag: "[comms]",
+  });
+  entries.push({
+    id: "calendar",
+    href: calendarUpdates.href,
+    ariaLabel: `Open ${formatNumber(calendarUpdates.count)} unsent schedule updates`,
+    title: `${formatNumber(calendarUpdates.count)} unsent schedule updates`,
+    detail: calendarUpdates.note,
+    stat: "calendar",
+    warn: calendarUpdates.count > 0,
+    dateMs: generated_at,
+    emoji: "📅",
+    cmd: "calendar --send-updates",
+    flag: "[calendar]",
   });
   return entries;
 }

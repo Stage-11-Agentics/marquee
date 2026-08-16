@@ -3,6 +3,8 @@ import type { ComponentChildren, JSX } from "preact";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 
 import type {
+  AgendaCalendarDebt,
+  AgendaCalendarSpeaker,
   AgendaConflict,
   AgendaPoolItem,
   AgendaPublication,
@@ -914,6 +916,100 @@ function PublicationPanel({
   </section>;
 }
 
+const EMPTY_CALENDAR_DEBT: AgendaCalendarDebt = {
+  blocked: [],
+  current_count: 0,
+  first_invite_count: 0,
+  no_op: true,
+  speakers: [],
+  unsent_update_count: 0,
+};
+
+function calendarDebtCount(calendar: AgendaCalendarDebt): number {
+  return calendar.first_invite_count + calendar.unsent_update_count;
+}
+
+function calendarSpeakerDetail(speaker: AgendaCalendarSpeaker): string {
+  const updates = speaker.items.filter((item) => item.kind === "update").length;
+  const first = speaker.items.filter((item) => item.kind === "first").length;
+  return [
+    updates ? `${updates} update${updates === 1 ? "" : "s"} · same UID, SEQUENCE+1` : "",
+    first ? `${first} first invite${first === 1 ? "" : "s"} · SEQUENCE 0` : "",
+  ].filter(Boolean).join(" · ");
+}
+
+export function CalendarBatchModal({
+  calendar,
+  busy,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  calendar: AgendaCalendarDebt;
+  busy: boolean;
+  error: string;
+  onClose: () => void;
+  onConfirm: () => void;
+}): JSX.Element {
+  const preview = calendar.speakers[0]?.items[0];
+  return <div class="modal-backdrop" data-calendar-modal="true">
+    <section class="modal wide" role="dialog" aria-modal="true" aria-labelledby="calendar-batch-title">
+      <div class="modal-head">
+        <div class="eyebrow">Calendar · one batch</div>
+        <h2 id="calendar-batch-title">Make every speaker’s calendar match the agenda?</h2>
+        <p>{calendar.unsent_update_count} update{calendar.unsent_update_count === 1 ? "" : "s"} and {calendar.first_invite_count} first invite{calendar.first_invite_count === 1 ? "" : "s"}, folded to one email per speaker — a speaker moved three times hears once.</p>
+      </div>
+      <div class="modal-body">
+        <div class="plan-detail calendar-batch-speakers" role="list" aria-label="Calendar batch speakers">
+          {calendar.speakers.slice(0, 10).map((speaker) => <div class="plan-detail-row" role="listitem" key={speaker.person_id}>
+            <span><strong>{speaker.name}</strong><small>{speaker.email}</small></span>
+            <span class="why">{calendarSpeakerDetail(speaker)}</span>
+          </div>)}
+          {calendar.speakers.length > 10 && <div class="plan-detail-row"><span class="subtle">+ {calendar.speakers.length - 10} more speakers</span></div>}
+          {!calendar.speakers.length && <div class="plan-detail-row"><span class="subtle">No sendable speakers.</span></div>}
+        </div>
+        {calendar.blocked.length > 0 && <div class="calendar-batch-blocked" role="alert">
+          <strong>{calendar.blocked.length} speaker{calendar.blocked.length === 1 ? "" : "s"} need an address first.</strong>
+          {calendar.blocked.map((recipient) => <div key={recipient.person_id}>{recipient.person_name} — {recipient.reason}</div>)}
+        </div>}
+        {preview && <div class="message-preview calendar-batch-preview">
+          <strong>Preview · {preview.title}</strong> <span class="subtle">— brand voice, event timezone</span>
+          <div class="divider" />
+          The schedule for your session has been updated.<br /><br />
+          <strong>When</strong> — {preview.previous_starts_at !== null ? `${new Date(preview.previous_starts_at).toLocaleString()} → ` : ""}{new Date(preview.starts_at).toLocaleString()}<br />
+          <strong>Where</strong> — {preview.previous_location && preview.previous_location !== preview.location ? `${preview.previous_location} → ` : ""}{preview.location}<br />
+          <span class="subtle">The attached invite updates your existing calendar entry in place.</span>
+        </div>}
+        {error && <div class="agenda-publication-error" role="alert">{error}</div>}
+      </div>
+      <div class="modal-actions"><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" disabled={busy || calendar.speakers.length === 0} onClick={onConfirm}>{busy ? "Sending…" : `Send to ${calendar.speakers.length} speaker${calendar.speakers.length === 1 ? "" : "s"}`}</Button></div>
+    </section>
+  </div>;
+}
+
+export function AgendaAttentionStrip({
+  snapshot,
+  onCalendarOpen,
+  calendarBusy,
+}: {
+  snapshot: AgendaSnapshot;
+  onCalendarOpen: () => void;
+  calendarBusy: boolean;
+}): JSX.Element {
+  const calendar = snapshot.calendar ?? EMPTY_CALENDAR_DEBT;
+  const debt = calendarDebtCount(calendar);
+  return <div class="agenda-attention-strip" aria-label="Agenda publication and calendar attention">
+    <section class="agenda-attention-gauge">
+      <div class="agenda-attention-copy"><span class="eyebrow">Publication</span><strong><span class="tabular">{snapshot.publication.live}</span> live · <span class="tabular">{snapshot.publication.not_yet_public}</span> not yet public</strong><span class="subtle">Everything live is still accepted</span></div>
+      <a class="button primary small" href="#agenda-publication-panel" style={{ width: "150px" }}>Review and publish</a>
+    </section>
+    <section class="agenda-attention-gauge" data-calendar-gauge="true">
+      <div class="agenda-attention-copy"><span class="eyebrow">Calendar invites</span><strong><span class="tabular">{calendar.current_count}</span> current · <span class="tabular">{calendar.unsent_update_count}</span> unsent updates · <span class="tabular">{calendar.first_invite_count}</span> never invited</strong><span class="subtle">Move a scheduled Session and one batch email covers each speaker</span></div>
+      <Button variant="primary" small data-calendar-send="true" disabled={calendar.no_op || calendarBusy} onClick={onCalendarOpen} style={{ width: "190px" }}>{calendarBusy ? "Sending…" : `Send ${debt} calendar update${debt === 1 ? "" : "s"}`}</Button>
+    </section>
+  </div>;
+}
+
 export function AgendaPage({ eventId }: Props): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading", snapshot: null });
   const [view, setView] = useState<AgendaView>("day");
@@ -929,6 +1025,9 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
   const [publishSelection, setPublishSelection] = useState<string[]>([]);
   const [publicationStep, setPublicationStep] = useState<PublicationStep>("select");
   const [publicationBusy, setPublicationBusy] = useState(false);
+  const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [calendarBusy, setCalendarBusy] = useState(false);
+  const [calendarError, setCalendarError] = useState("");
   const [autoPlaceBusy, setAutoPlaceBusy] = useState(false);
   const [armedPlacement, setArmedPlacement] = useState<ArmedPlacement | null>(null);
   const [placementBusy, setPlacementBusy] = useState(false);
@@ -1177,6 +1276,29 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
     }
   };
 
+  const sendCalendarBatch = async () => {
+    setCalendarBusy(true);
+    setCalendarError("");
+    try {
+      const result = await apiFetch<{ deliveries: Array<{ person_id: string }>; no_op: boolean }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/calendar-invites`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          route: "/api/v1/events/{eventId}/calendar-invites",
+        },
+      );
+      setCalendarModalOpen(false);
+      setNotice(result.no_op ? "Every speaker’s calendar already matches the agenda — nothing to send." : `Queued ${result.deliveries.length} speaker${result.deliveries.length === 1 ? "" : "s"} once each.`);
+      await load();
+    } catch (error: unknown) {
+      setCalendarError(errorSummary(error));
+      await load();
+    } finally {
+      setCalendarBusy(false);
+    }
+  };
+
   if (state.kind === "loading" && !state.snapshot) return <div class="agenda-page"><PageHeader title="Agenda builder" copy="Place accepted Sessions directly into the conference schedule." /><div class="agenda-loading instrument" aria-busy="true"><span class="eyebrow">Agenda</span><strong>Reading the working schedule…</strong><span class="subtle">Loading Sessions, rooms, and placement metadata.</span></div></div>;
   if (!state.snapshot) return <div class="agenda-page"><PageHeader title="Agenda builder" copy="Place accepted Sessions directly into the conference schedule." /><EmptyState title="Agenda data unavailable" copy={state.message} action={<Button variant="primary" onClick={() => { setState({ kind: "loading", snapshot: null }); setReloadKey((value) => value + 1); }}>Try again</Button>} /></div>;
 
@@ -1249,6 +1371,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
       <span class="subtle agenda-status-note">No save button · changes persist as you place</span>
     </div>
     <div class={`agenda-placement-status${armedPlacement ? " is-active" : ""}`} role="status" aria-live="polite" aria-atomic="true">{armedPlacement ? `Placing: ${armedPlacement.title}. Choose an open time and room, or press Escape to cancel.` : ""}</div>
+    <AgendaAttentionStrip snapshot={snapshot} calendarBusy={calendarBusy} onCalendarOpen={() => { setCalendarError(""); setCalendarModalOpen(true); }} />
     <AgendaDayStatus snapshot={snapshot} day={selectedDay} />
     {notice && <div class="agenda-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss notice">×</button></div>}
     {snapshot.sessions.length === 0 && snapshot.unscheduled.length === 0
@@ -1257,7 +1380,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
         <Pool snapshot={snapshot} query={poolQuery} setQuery={setPoolQuery} track={track} onDragStart={onDragStart} onDrop={onPoolDrop} onArm={armPoolItem} armedPlacement={armedPlacement} />
         <section class="card agenda-board wide-grid-scroll" ref={boardRef} aria-label={`${view} agenda view`}>{renderBoard()}</section>
       </div>}
-    <PublicationPanel
+    <div id="agenda-publication-panel"><PublicationPanel
       publication={snapshot.publication}
       timezone={snapshot.event.timezone}
       selectedIds={publishSelection}
@@ -1269,10 +1392,11 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
       onReview={() => { setPublicationError(""); setPublicationStep("review"); }}
       onBack={() => { setPublicationError(""); setPublicationStep("select"); }}
       onPublish={() => void publishSelected()}
-    />
+    /></div>
     <DemandPanel eventId={eventId} timezone={snapshot.event.timezone} />
     {activeRoom && <RoomPanel room={activeRoom} showBuildingComparison={showBuildingComparison} onClose={() => setRoomPanelId(null)} />}
     {conflictsOpen && <ConflictPanel conflicts={snapshot.conflicts} sessions={snapshot.sessions} showBuildingComparison={showBuildingComparison} onClose={() => setConflictsOpen(false)} onJump={jumpToSession} />}
+    {calendarModalOpen && <CalendarBatchModal calendar={snapshot.calendar ?? EMPTY_CALENDAR_DEBT} busy={calendarBusy} error={calendarError} onClose={() => setCalendarModalOpen(false)} onConfirm={() => void sendCalendarBatch()} />}
   </div>;
 }
 

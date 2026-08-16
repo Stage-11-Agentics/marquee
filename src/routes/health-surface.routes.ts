@@ -32,6 +32,7 @@ import {
   type WebhookFacts,
 } from "../lib/delivery-health";
 import type { D1Database } from "@cloudflare/workers-types";
+import { projectCalendarDebt } from "../jobs/calendar/projection";
 
 /**
  * Every owed row is judged so the counts are true, not just the page that is
@@ -330,7 +331,7 @@ async function readForms(database: D1Database, eventId: string): Promise<FormFac
 
 async function readCalendar(database: D1Database, eventId: string): Promise<CalendarFacts> {
   return tolerant(async () => {
-    const [invites, failures] = await Promise.all([
+    const [invites, failures, debt] = await Promise.all([
       database
         .prepare(`
           SELECT COUNT(*) AS total, COUNT(CASE WHEN ci.last_sent_at IS NULL THEN 1 END) AS unsent
@@ -344,10 +345,11 @@ async function readCalendar(database: D1Database, eventId: string): Promise<Cale
         .prepare("SELECT COUNT(*) AS failed FROM outbox WHERE event_id = ? AND ics_uid IS NOT NULL AND status = 'failed'")
         .bind(eventId)
         .first<{ failed: number | null }>(),
+      projectCalendarDebt(database, eventId),
     ]);
     return {
       invites_total: whole(invites?.total),
-      invites_unsent: whole(invites?.unsent),
+      invites_unsent: debt.first_invite_count + debt.unsent_update_count,
       invite_sends_failed: whole(failures?.failed),
     };
   }, { invites_total: 0, invites_unsent: 0, invite_sends_failed: 0 });

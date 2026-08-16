@@ -34,6 +34,7 @@ export const WIPE_ORDER = [
   "saved_views",
   "audit_log",
   "file_comments",
+  "outbox_calendar_parts",
   // Cancellation jobs are demo-event material and are discarded with the
   // reset; the UID high-water table immediately below is deliberately listed
   // without a DELETE plan because SEQUENCE must survive this operation.
@@ -132,6 +133,10 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   mirror_credentials: null,
   mirror_state: null,
   calendar_sequence_ledger: null,
+  outbox_calendar_parts: {
+    sql: `DELETE FROM outbox_calendar_parts WHERE outbox_id IN (SELECT id FROM outbox WHERE event_id IN (${ORG_EVENTS}))`,
+    bindings: ORG,
+  },
   submission_reference_ledger: null,
   webhook_deliveries: {
     sql: `DELETE FROM webhook_deliveries WHERE endpoint_id IN (SELECT id FROM webhook_endpoints WHERE event_id IN (${ORG_EVENTS}))`,

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 
 import type { Env } from "../index";
+import { resolveCalendarIcs } from "../jobs/calendar/resolver";
 import { ICON_LINKS } from "../lib/head-icons";
 
 export const calendarRoutes = new Hono<{ Bindings: Env }>();
@@ -10,21 +11,12 @@ calendarRoutes.get("/i/:uid", async (context) => {
   if (!pathUid.endsWith(".ics")) return context.notFound();
   const uid = pathUid.slice(0, -4);
   if (!uid || /[\r\n]/.test(uid)) return context.notFound();
-  const row = await context.env.DB
-    .prepare(
-      `SELECT ics_body, ics_uid
-       FROM outbox
-       WHERE ics_uid = ? AND ics_body IS NOT NULL
-       ORDER BY created_at DESC, id DESC
-       LIMIT 1`,
-    )
-    .bind(uid)
-    .first<{ ics_body: string; ics_uid: string }>();
-  if (!row) return context.notFound();
+  const revision = await resolveCalendarIcs(context.env.DB, uid);
+  if (!revision) return context.notFound();
   context.header("Cache-Control", "no-store");
   context.header("Content-Type", "text/calendar; charset=utf-8");
-  context.header("Content-Disposition", `inline; filename="${encodeURIComponent(row.ics_uid)}.ics"`);
-  return context.body(row.ics_body);
+  context.header("Content-Disposition", `inline; filename="${encodeURIComponent(revision.uid)}.ics"`);
+  return context.body(revision.body);
 });
 
 /** Minimal public resolver target used by the URL property in an invite. */

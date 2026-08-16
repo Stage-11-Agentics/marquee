@@ -122,6 +122,38 @@ const conflictSchema = z.object({
   label: z.literal("Transit").optional(),
 });
 
+const calendarDebtItemSchema = z.object({
+  kind: z.enum(["first", "update"]),
+  location: z.string(),
+  previous_location: z.string().nullable(),
+  previous_starts_at: z.number().int().nullable(),
+  sequence: z.number().int().nonnegative().nullable(),
+  starts_at: z.number().int(),
+  submission_id: z.string(),
+  title: z.string(),
+  uid: z.string(),
+});
+
+const calendarDebtSchema = z.object({
+  blocked: z.array(z.object({
+    email: z.string(),
+    person_id: z.string(),
+    person_name: z.string(),
+    reason: z.enum(["missing email", "invalid email"]),
+    submission_ids: z.array(z.string()),
+  })),
+  current_count: z.number().int().nonnegative(),
+  first_invite_count: z.number().int().nonnegative(),
+  no_op: z.boolean(),
+  speakers: z.array(z.object({
+    email: z.string(),
+    items: z.array(calendarDebtItemSchema),
+    name: z.string(),
+    person_id: z.string(),
+  })),
+  unsent_update_count: z.number().int().nonnegative(),
+});
+
 const agendaSnapshotSchema = z.object({
   event: z.object({
     id: z.string(),
@@ -156,6 +188,7 @@ const agendaSnapshotSchema = z.object({
     })),
     public_agenda_url: z.string(),
   }),
+  calendar: calendarDebtSchema,
   schedulable_statuses: z.array(z.enum(SCHEDULABLE_STATUS_OPTIONS)),
   rooms: z.array(roomSchema),
   formats: z.array(formatSchema),

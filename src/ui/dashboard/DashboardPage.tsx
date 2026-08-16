@@ -68,6 +68,13 @@ function WaveRow({ wave, navigate }: { wave: DashboardWave; navigate: Props["nav
 
 function DashboardContents({ snapshot, navigate, eventId }: { snapshot: DashboardSnapshot; navigate: Props["navigate"]; eventId: string }): JSX.Element {
   const { attention } = snapshot;
+  const calendarUpdates = attention.calendar_updates ?? {
+    id: "calendar-updates",
+    label: "Unsent schedule updates",
+    count: 0,
+    href: "/agenda-builder",
+    note: "open the agenda builder to send one batch per speaker",
+  };
   const hasProgram = snapshot.pipeline.some((item) => item.count > 0);
   // The checklist remains visible after the first program record so an undone
   // setup step cannot disappear at the moment it becomes relevant. Only the
@@ -107,6 +114,9 @@ function DashboardContents({ snapshot, navigate, eventId }: { snapshot: Dashboar
       </DashboardLink>
       <DashboardLink href={attention.decided_not_notified.href} navigate={navigate} class="dashboard-attention-item" label={`Open ${formatNumber(attention.decided_not_notified.count)} decided submissions not notified`}>
         <strong>{formatNumber(attention.decided_not_notified.count)} decisions not notified</strong><span>{attention.decided_not_notified.note}</span>
+      </DashboardLink>
+      <DashboardLink href={calendarUpdates.href} navigate={navigate} class="dashboard-attention-item" label={`Open ${formatNumber(calendarUpdates.count)} unsent schedule updates`}>
+        <strong>{formatNumber(calendarUpdates.count)} unsent schedule updates</strong><span>{calendarUpdates.note}</span>
       </DashboardLink>
     </section>}
 

@@ -180,6 +180,12 @@ export async function deleteEventCascade(
     prepared(db, `DELETE FROM reviewer_track_scopes WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM saved_views WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM file_comments WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
+    prepared(
+      db,
+      `DELETE FROM outbox_calendar_parts
+       WHERE outbox_id IN (SELECT id FROM outbox WHERE event_id IN ${eventIdsSql})`,
+      ...eventBindings,
+    ),
     prepared(db, `DELETE FROM calendar_invites WHERE submission_id IN ${submissionsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM speaker_tasks WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM task_templates WHERE event_id IN ${eventIdsSql}`, ...eventBindings),

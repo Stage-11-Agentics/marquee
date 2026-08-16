@@ -26,6 +26,7 @@ import { countOutsideConferenceWindow } from "../lib/conference-dates";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import { getTransitConflicts, type TransitAgendaItem } from "../lib/venue-geometry";
 import type { SubmissionSpeakerListItem, SubmissionTrackListItem } from "../api/submissions";
+import { projectCalendarDebt, type CalendarDebtProjection } from "../jobs/calendar/projection";
 
 const SETTINGS_KEY = "agenda_schedulable_statuses";
 const LEGACY_SETTINGS_KEY = "agenda.schedulable_statuses";
@@ -35,6 +36,32 @@ interface EventRow extends AgendaEvent {}
 interface SettingRow {
   value_json: string;
   updated_at: number;
+}
+
+function agendaCalendarDebt(projection: CalendarDebtProjection) {
+  return {
+    blocked: projection.blocked,
+    current_count: projection.current_count,
+    first_invite_count: projection.first_invite_count,
+    no_op: projection.no_op,
+    speakers: projection.speakers.map((speaker) => ({
+      email: speaker.email,
+      items: speaker.items.map((item) => ({
+        kind: item.kind,
+        location: item.snapshot.location,
+        previous_location: item.prior_snapshot?.location ?? null,
+        previous_starts_at: item.prior_snapshot?.starts_at ?? null,
+        sequence: item.prior_sequence === null ? 0 : item.prior_sequence + 1,
+        starts_at: item.snapshot.starts_at,
+        submission_id: item.submission_id,
+        title: item.snapshot.title,
+        uid: item.uid,
+      })),
+      name: speaker.name,
+      person_id: speaker.person_id,
+    })),
+    unsent_update_count: projection.unsent_update_count,
+  };
 }
 
 interface RoomQueryRow {
@@ -449,7 +476,7 @@ export async function readAgendaSnapshot(
 ): Promise<AgendaSnapshot | null> {
   const event = await readEvent(database, eventId);
   if (!event) return null;
-  const [statuses, rooms, formats, tracks, sessions, venue, publication] = await Promise.all([
+  const [statuses, rooms, formats, tracks, sessions, venue, publication, calendarProjection] = await Promise.all([
     readStatuses(database, eventId),
     readRooms(database, eventId),
     readFormats(database, eventId),
@@ -457,6 +484,7 @@ export async function readAgendaSnapshot(
     readSessions(database, eventId),
     readAgendaVenueDisclosure(database, eventId),
     readAgendaPublication(database, eventId, event.slug),
+    projectCalendarDebt(database, eventId),
   ]);
   const unscheduled = await readPool(database, eventId, statuses);
   const outsideWindowSessionCount = countOutsideConferenceWindow(
@@ -469,6 +497,7 @@ export async function readAgendaSnapshot(
     event,
     schedule_window: { outside_window_session_count: outsideWindowSessionCount },
     publication,
+    calendar: agendaCalendarDebt(calendarProjection),
     venue,
     schedulable_statuses: statuses,
     rooms,

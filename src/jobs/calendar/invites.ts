@@ -13,12 +13,15 @@ import {
   type CalendarEventInput,
   type CalendarMailMaterial,
 } from "./ics";
+import { claimCalendarSequence } from "./sequence";
 
 const DEFAULT_ORIGIN = "https://marquee.stage11.dev";
 const DEFAULT_ORGANIZER_EMAIL = "marquee@stage11.systems";
 const DEFAULT_ORGANIZER_NAME = "Marquee";
 
-interface CalendarSessionRow {
+export const CALENDAR_DEFAULT_ORIGIN = DEFAULT_ORIGIN;
+
+export interface CalendarSessionRow {
   abstract: string | null;
   building_name: string | null;
   duration_min: number;
@@ -35,7 +38,7 @@ interface CalendarSessionRow {
   title: string;
 }
 
-interface CalendarRecipientRow {
+export interface CalendarRecipientRow {
   email: string;
   name: string;
   person_id: Id;
@@ -131,7 +134,7 @@ function originFor(value: string | undefined): string {
   return (value ?? DEFAULT_ORIGIN).replace(/\/+$/, "");
 }
 
-function validEmail(value: unknown): value is string {
+export function validEmail(value: unknown): value is string {
   return typeof value === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) && !/[\r\n]/.test(value);
 }
 
@@ -201,7 +204,7 @@ export function parseCalendarRequestSnapshot(value: string | null): CalendarRequ
   }
 }
 
-function snapshotJson(snapshot: CalendarRequestSnapshot): string {
+export function snapshotJson(snapshot: CalendarRequestSnapshot): string {
   // Keep this object literal ordered and stable: it is the byte source for
   // every retry and the next schedule-update ticket's staleness comparison.
   return JSON.stringify({
@@ -262,7 +265,7 @@ async function recipientsFor(db: D1Database, submissionId: Id): Promise<Calendar
   return rows.results.filter((row) => validEmail(row.email));
 }
 
-function snapshotFor(
+export function snapshotFor(
   session: CalendarSessionRow,
   recipient: CalendarRecipientRow,
   origin: string,
@@ -284,7 +287,7 @@ function snapshotFor(
   };
 }
 
-function eventInputFromSnapshot(
+export function eventInputFromSnapshot(
   snapshot: CalendarRequestSnapshot,
   input: {
     dtstamp: number;
@@ -426,13 +429,14 @@ async function recordRequest(input: {
       `UPDATE calendar_invites
        SET sequence = ?, last_method = 'REQUEST', last_sent_at = ?, status = 'active',
            request_snapshot = ?, updated_at = ?
-       WHERE id = ?`,
+       WHERE id = ? AND sequence <= ?`,
     ).bind(
       input.sequence,
       input.now,
       snapshotJson(input.snapshot),
       input.now,
       input.current.id,
+      input.sequence,
     )
     : input.db.prepare(
       `INSERT INTO calendar_invites
@@ -451,12 +455,7 @@ async function recordRequest(input: {
       input.now,
       input.now,
     );
-  await input.db.batch([
-    // The ledger and snapshot update share the same batch fence. A resumed
-    // request can therefore never expose a newer sequence with old material.
-    ledgerStatement(input.db, input.uid, input.sequence, input.now),
-    inviteStatement,
-  ]);
+  await input.db.batch([inviteStatement]);
 }
 
 /**
@@ -498,7 +497,13 @@ export async function sendCalendarInvites(input: {
       ledgerFor(input.db, calendarUid(input.submissionId, recipient.person_id)),
     ]);
     const uid = current?.uid ?? calendarUid(input.submissionId, recipient.person_id);
-    const sequence = nextSequence(current?.sequence ?? null, ledger);
+    const sequenceClaim = await claimCalendarSequence(input.db, {
+      currentSequence: current?.sequence ?? null,
+      knownLastSequence: ledger?.last_sequence ?? null,
+      now,
+      uid,
+    });
+    const sequence = sequenceClaim.sequence;
     const snapshot = snapshotFor(session, recipient, origin);
     const delivery = await queueCalendarMaterial({
       db: input.db,
