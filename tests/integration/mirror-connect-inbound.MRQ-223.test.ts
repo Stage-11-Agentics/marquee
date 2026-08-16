@@ -404,7 +404,7 @@ test("CONTRACT · inbound accepted status stops before tasks and mail until the 
     env.DB.prepare(
       `INSERT INTO submissions
         (id, event_id, kind, title, status, origin, submitter_person_id, is_published, created_at, updated_at)
-       VALUES (?, ?, 'session', 'MRQ-223 session', 'submitted', 'admin', ?, 1, ?, ?)`,
+       VALUES (?, ?, 'session', 'MRQ-223 session', 'accepted', 'admin', ?, 1, ?, ?)`,
     ).bind(SUBMISSION_ID, EVENT_ID, PERSON_ID, NOW, NOW),
     env.DB.prepare(
       `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
@@ -427,7 +427,7 @@ test("CONTRACT · inbound accepted status stops before tasks and mail until the 
   await connectAndMap(fake);
   fake.payloads.push(submissionPayload("accepted"));
   const pulled = await pullMirrorPayloads(actionEnvironment(fake), { transport: fake, ...clockAt() });
-  expect(pulled).toMatchObject({ applied: 0, dropped: 1 });
+  expect(pulled).toMatchObject({ applied: 0, dropped: 2 });
   expect(await count("SELECT COUNT(*) AS count FROM speaker_tasks WHERE submission_id = ?", SUBMISSION_ID)).toBe(0);
   expect(await count("SELECT COUNT(*) AS count FROM outbox WHERE event_id = ?", EVENT_ID)).toBe(0);
   const rejection = await env.DB.prepare(

@@ -15,6 +15,7 @@ import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { notifyExistingDecisions, writeBulkSubmissionDecisions } from "../jobs/cascade/decisions";
 import { getAuth } from "../lib/auth/auth-middleware";
+import { PUBLISHED_SESSION_REFUSAL } from "../lib/publication-guard";
 import { selectSubmissionIds, submissionFilterSchema, summarizeNotNotifiedSubmissions } from "./submissions.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -25,6 +26,7 @@ const bulkBodySchema = z
     action: z.enum(["accept", "reject", "waitlist", "withdraw"]),
     feedback_md: z.string().max(50_000).nullable().optional(),
     wave_id: z.string().min(1).max(200).nullable().optional(),
+    confirm_published: z.boolean().optional(),
   })
   .strict();
 
@@ -78,7 +80,7 @@ const bulkDecideSubmissions = defineApiRoute(
     },
     responses: {
       200: jsonResponse(bulkResultSchema, "The per-record bulk decision summary."),
-      ...errorResponses([400, 401, 403, 404, 422, 429, 500]),
+      ...errorResponses([400, 401, 403, 404, 409, 422, 429, 500]),
     },
   },
   async (context) => {
@@ -112,6 +114,8 @@ const bulkDecideSubmissions = defineApiRoute(
       actor,
       action: body.action,
       feedbackMd: body.feedback_md,
+      confirmPublished: body.confirm_published === true,
+      cache: context.env.CACHE,
       waveId: body.wave_id,
       operationId,
     });
@@ -120,7 +124,7 @@ const bulkDecideSubmissions = defineApiRoute(
       .slice(0, BULK_FAILURE_REPORT_LIMIT)
       .map((item) => ({
         id: item.id,
-        code: "transition_failed",
+        code: item.error === PUBLISHED_SESSION_REFUSAL ? "published_while_live" : "transition_failed",
         message: item.error ?? "transition failed",
       }));
     return context.json(buildBulkResult({
@@ -130,6 +134,7 @@ const bulkDecideSubmissions = defineApiRoute(
       failed: result.results.filter((item) => item.outcome === "failed").length,
       state: failures.length > 0 ? "completed_with_failures" : "completed",
       outbox_enqueued: result.outboxEnqueued,
+      published_count: result.publishedCount,
       failures: failures.length > 0 ? failures : undefined,
       results: result.results.map((item) => ({
         id: item.id,

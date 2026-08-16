@@ -29,6 +29,7 @@ import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-acc
 import { auditStatement, auditStatementFromSelect, writeAudit } from "../lib/audit";
 import { contentOf, isContentAction, recordTimelinePage } from "../lib/history";
 import { purgePublicEmbedCache } from "../lib/public-site";
+import { requirePublishedConfirmation } from "../lib/publication-guard";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const submissionParams = eventParams.extend({ submissionId: z.string().min(1) });
@@ -332,7 +333,7 @@ async function nextParticipantPosition(db: D1Database, submissionId: string): Pr
  * letting it be rewritten would make every past decision unreadable. There is
  * no `scheduled` or `published` status to list — a scheduled Session's status
  * is still `accepted`; placement lives in `agenda_items` and publication in
- * `agenda_items.is_published`, which is what `publishedGuard` reads.
+ * `agenda_items.is_published`, which is what the shared publication guard reads.
  */
 const EDITABLE_CONTENT_STATUSES = ["draft", "submitted", "in_review", "accepted", "waitlisted"] as const;
 
@@ -427,17 +428,6 @@ async function editableContentFor(
  * agenda. The UI supplies it as a second click; an API caller supplies the flag
  * and thereby says the same thing out loud.
  */
-async function publishedGuard(db: D1Database, eventId: string, submissionId: string, confirmed: boolean): Promise<void> {
-  if (confirmed) return;
-  const slot = await db
-    .prepare("SELECT is_published FROM agenda_items WHERE submission_id = ? AND event_id = ? AND kind = 'session'")
-    .bind(submissionId, eventId)
-    .first<{ is_published: number }>();
-  if (slot?.is_published === 1) {
-    throw ApiError.conflict("this Session is live on the public site — resend with confirm_published to change what attendees see");
-  }
-}
-
 interface AnswerProjection extends Record<string, unknown> {
   id: string;
   field_id: string | null;
@@ -826,7 +816,9 @@ async function loadRecord(db: D1Database, eventId: string, submissionId: string,
     time_in_stage_hours: hours,
     time_in_stage: hours < 24 ? `${hours}h in stage` : `${Math.floor(hours / 24)}d in stage`,
     slot,
-    is_published: row.is_published === 1,
+    // Publication belongs to the agenda placement. The submission column is a
+    // legacy mirror and may lag during imports or older reversals.
+    is_published: row.agenda_published === 1,
     tracks: tracks.results.map((track) => ({ ...track, is_primary: Boolean(track.is_primary) })),
     participants: participants.results,
     answers: normalizedAnswers,
@@ -1309,7 +1301,7 @@ const updateSubmissionContent = defineApiRoute(
     if (after.title === before.title && after.abstract === before.abstract) {
       return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
     }
-    await publishedGuard(context.env.DB, eventId, submissionId, body.confirm_published === true);
+    await requirePublishedConfirmation(context.env.DB, eventId, submissionId, body.confirm_published === true);
     const actor = await actorFor(context);
     await context.env.DB.batch(
       contentWriteStatements(context.env.DB, eventId, submissionId, before, after, actor, "content_updated", Date.now()),
@@ -1363,7 +1355,7 @@ const restoreSubmissionContent = defineApiRoute(
     if (after.title === before.title && after.abstract === before.abstract) {
       return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
     }
-    await publishedGuard(context.env.DB, eventId, submissionId, body.confirm_published === true);
+    await requirePublishedConfirmation(context.env.DB, eventId, submissionId, body.confirm_published === true);
     const actor = await actorFor(context);
     // The restore's own before/after describes what the restore changed — not
     // what the original edit changed. That is what makes the row honest when

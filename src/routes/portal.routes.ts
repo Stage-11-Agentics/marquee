@@ -44,6 +44,7 @@ import {
 import { auditStatement, writeAudit } from "../lib/audit";
 import { contentHistoryFor } from "../lib/history";
 import { submitterEditability } from "../lib/submission-editing";
+import { requirePublishedConfirmation } from "../lib/publication-guard";
 import {
   parseSocialLinks,
   personProfilePatchShape,
@@ -1551,6 +1552,9 @@ const updateSpeakerTalk = defineApiRoute(
     if (next.title === current.submission.title && next.description === current.submission.abstract) {
       return context.json({ submission: { ...current.submission, ...next }, history: await historyFor(context.env.DB, current.eventId, submissionId) }, 200);
     }
+    // Speakers have no unpublish or acceptance-reversal authority, so their
+    // live-session write is a refusal rather than a second confirmation path.
+    await requirePublishedConfirmation(context.env.DB, current.eventId, submissionId, false);
     const now = Date.now();
     await context.env.DB.batch([
       context.env.DB.prepare(

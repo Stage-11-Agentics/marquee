@@ -757,6 +757,9 @@ export async function listSubmissions(
   const includeVenueDisclosure = await hasColumns(database, "buildings", ["event_id", "lat", "lng"]);
   const reviewCapabilities = await reviewQueryCapabilities(database);
   const count = database.prepare(`SELECT COUNT(DISTINCT s.id) AS total ${FROM} WHERE ${where}`).bind(...bindings);
+  const publishedCount = database
+    .prepare(`SELECT COUNT(DISTINCT CASE WHEN ai.is_published = 1 THEN s.id END) AS published_count ${FROM} WHERE ${where}`)
+    .bind(...bindings);
   const data = database.prepare(`
     SELECT ${itemSelect(includeVenueDisclosure, reviewCapabilities)}
     ${FROM}
@@ -764,8 +767,15 @@ export async function listSubmissions(
     ORDER BY ${stableOrder}
     LIMIT ? OFFSET ?
   `).bind(...bindings, page.limit, page.offset);
-  const envelope = await executeListPage<SubmissionQueryRow>({ count, data, page });
-  return { ...envelope, data: envelope.data.map(toItem) };
+  const [envelope, published] = await Promise.all([
+    executeListPage<SubmissionQueryRow>({ count, data, page }),
+    publishedCount.first<{ published_count: number }>(),
+  ]);
+  return {
+    ...envelope,
+    published_count: Number(published?.published_count ?? 0),
+    data: envelope.data.map(toItem),
+  };
 }
 
 async function listNotNotifiedSubmissions(

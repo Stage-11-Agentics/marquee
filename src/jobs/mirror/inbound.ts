@@ -12,6 +12,7 @@ import {
   type AirtableWebhookPayload,
 } from "./transport";
 import { MIRROR_INBOUND_MESSAGE_TYPE } from "./messages";
+import { recordMirrorSubmissionRejection } from "./rejections";
 
 const SUBMISSION_STATUS = new Set(["draft", "submitted", "in_review", "accepted", "waitlisted", "rejected", "withdrawn"]);
 const VENDOR_AFFILIATION = new Set(["none", "vendor_to_fi", "vendor_with_champion"]);
@@ -181,14 +182,42 @@ async function applySubmissionRecord(
   fields: Record<string, unknown>,
   now: number,
 ): Promise<{ applied: boolean; dropped: number }> {
-  const row = await db.prepare("SELECT event_id, primary_track_id FROM submissions WHERE id = ?").bind(rowId).first<{ event_id: string; primary_track_id: string | null }>();
+  const row = await db.prepare(
+    `SELECT submission.event_id, submission.primary_track_id, submission.status,
+            EXISTS (
+              SELECT 1 FROM agenda_items live_agenda
+               WHERE live_agenda.event_id = submission.event_id
+                 AND live_agenda.submission_id = submission.id
+                 AND live_agenda.kind = 'session'
+                 AND live_agenda.is_published = 1
+            ) AS agenda_published
+       FROM submissions submission
+      WHERE submission.id = ?`,
+  ).bind(rowId).first<{
+    event_id: string;
+    primary_track_id: string | null;
+    status: string;
+    agenda_published: number;
+  }>();
   if (!row) return { applied: false, dropped: 0 };
   const allowed = MIRROR_INBOUND_ALLOWLIST.submissions;
-  const dropped = Object.keys(fields).filter((field) => field !== "marquee_id" && !allowed.includes(field)).length;
+  let dropped = Object.keys(fields).filter((field) => field !== "marquee_id" && !allowed.includes(field)).length;
   const assignments: string[] = [];
   const values: (string | number | null)[] = [];
   let changed = false;
-  if (Object.hasOwn(fields, "status") && typeof fields.status === "string" && SUBMISSION_STATUS.has(fields.status)) {
+  if (Object.hasOwn(fields, "status") && row.agenda_published === 1) {
+    await recordMirrorSubmissionRejection({
+      db,
+      eventId: row.event_id,
+      rowId,
+      field: "status",
+      reason: "forbidden_while_published",
+      before: row.status,
+      requested: fields.status,
+      now,
+    });
+    dropped += 1;
+  } else if (Object.hasOwn(fields, "status") && typeof fields.status === "string" && SUBMISSION_STATUS.has(fields.status)) {
     assignments.push("status = ?"); values.push(fields.status); changed = true;
   }
   if (Object.hasOwn(fields, "format_id")) {

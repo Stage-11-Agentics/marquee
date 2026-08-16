@@ -109,6 +109,8 @@ export const bulkResultSchema = z
       .int()
       .min(0)
       .describe("Publication/outbox rows enqueued by the operation"),
+    /** Selected live sessions are reported even when the default is to skip them. */
+    published_count: z.number().int().min(0).optional(),
     failures: z.array(bulkItemFailureSchema).max(BULK_FAILURE_REPORT_LIMIT).optional(),
     results: z.array(bulkItemResultSchema).max(BULK_ID_LIMIT).optional(),
   })

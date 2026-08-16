@@ -6,6 +6,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { resendSubmissionDecision, writeSubmissionDecision } from "../jobs/cascade/decisions";
+import { PUBLISHED_SESSION_REFUSAL } from "../lib/publication-guard";
 import { getAuth } from "../lib/auth/auth-middleware";
 
 const eventSubmissionParams = z.object({
@@ -17,6 +18,7 @@ const decisionBodySchema = z
   .object({
     recommendation: z.enum(["approve", "maybe", "deny"]),
     feedback_md: z.string().max(50_000).nullable().optional(),
+    confirm_published: z.boolean().optional(),
   })
   .strict();
 
@@ -77,7 +79,7 @@ const decideSubmission = defineApiRoute(
     },
     responses: {
       200: jsonResponse(decisionResponseSchema, "The decision and cascade result."),
-      ...errorResponses([400, 401, 403, 404, 422, 429, 500]),
+      ...errorResponses([400, 401, 403, 404, 409, 422, 429, 500]),
     },
   },
   async (context) => {
@@ -92,9 +94,12 @@ const decideSubmission = defineApiRoute(
       actor,
       recommendation: body.recommendation,
       feedbackMd: body.feedback_md,
+      confirmPublished: body.confirm_published === true,
+      cache: context.env.CACHE,
     });
     if (result.outcome === "failed") {
       if (result.error === "submission not found") throw ApiError.notFound("submission not found");
+      if (result.error === PUBLISHED_SESSION_REFUSAL) throw ApiError.conflict(result.error);
       throw ApiError.unprocessable(result.error ?? "decision could not be applied");
     }
     if (!result.resultingStatus || !result.decisionId) {

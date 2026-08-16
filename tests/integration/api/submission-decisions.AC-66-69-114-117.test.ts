@@ -2,6 +2,7 @@ import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, test } from "vitest";
 
 import { sha256Hex } from "../../../src/lib/auth/random-token";
+import { publicEmbedCacheKey } from "../../../src/lib/public-site";
 import { selectSubmissionIds } from "../../../src/routes/submissions.queries";
 import { applyMigrations } from "../apply-migrations";
 
@@ -275,9 +276,13 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     });
     expect(await env.DB.prepare("SELECT status FROM submissions WHERE id = 'sub-mrq19-100'").first()).toEqual({ status: "accepted" });
 
+    const cacheKey = publicEmbedCacheKey(EVENT_ID, "mrq19-sessions");
+    await env.CACHE.put(cacheKey, JSON.stringify({ cached: true }), { expirationTtl: 60 });
+    expect(await env.CACHE.get(cacheKey, "json")).toEqual({ cached: true });
     const confirmed = await requestRecord("sub-mrq19-100", { recommendation: "deny", confirm_published: true });
     expect(confirmed.status).toBe(200);
     expect(await confirmed.json()).toMatchObject({ resulting_status: "rejected" });
+    expect(await env.CACHE.get(cacheKey, "json")).toBeNull();
   }, 20_000);
 
   test("AC-114, AC-115, AC-116, AC-117 · record-owned reject shares rendered merge fields, status history, and UNIQUE outbox identity", async () => {

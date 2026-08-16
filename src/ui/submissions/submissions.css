@@ -67,6 +67,7 @@
 .bulk-decision-dialog-head h2 { font-size: 16px; margin: 5px 0 0; }
 .bulk-decision-dialog-head > button { background: transparent; border: 0; color: var(--muted); cursor: pointer; font-size: 20px; line-height: 1; padding: 0 2px; }
 .bulk-decision-dialog p { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 0; }
+.bulk-decision-dialog .bulk-published-count { min-height: 17px; }
 .bulk-decision-dialog .field span { color: var(--muted); font: 600 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .bulk-decision-dialog textarea { min-height: 92px; resize: vertical; }
 .bulk-decision-actions { display: flex; gap: 8px; justify-content: flex-end; }

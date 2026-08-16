@@ -95,6 +95,7 @@ export function createListResponseSchema<Item extends z.ZodType>(item: Item, ite
       per_page: z.number().int().min(1).max(LIST_DEFAULTS.maxPerPage),
       total: z.number().int().min(0),
       total_pages: z.number().int().min(0),
+      published_count: z.number().int().min(0).optional(),
     })
     .openapi(`${itemName}List`);
 }
@@ -105,4 +106,6 @@ export interface ListEnvelope<T> {
   per_page: number;
   total: number;
   total_pages: number;
+  /** Optional endpoint-owned count of live sessions in the selected set. */
+  published_count?: number;
 }
