@@ -423,6 +423,9 @@ describe.sequential("MRQ-15 public conference form", () => {
     ).bind(EVENT_ID, JSON.stringify({ limit: 2 }), NOW, NOW).run();
     const inherited = await request("/api/v1/public/forms/public-cfp");
     expect((await json<{ state: string; form: { per_submitter_limit: number } }>(inherited))).toMatchObject({ state: "open", form: { per_submitter_limit: 2 } });
+    await env.DB.prepare("UPDATE event_settings SET value_json = ? WHERE event_id = ? AND key = 'submission_default_limit'").bind(JSON.stringify({ limit: 0 }), EVENT_ID).run();
+    const invalidDefault = await request("/api/v1/public/forms/public-cfp");
+    expect((await json<{ form: { per_submitter_limit: number } }>(invalidDefault)).form.per_submitter_limit).toBe(3);
 
     await env.DB.prepare("UPDATE forms SET submitter_limit_inherit = 0, per_submitter_limit = 0 WHERE id = ?").bind(FORM_ID).run();
     const legacy = await request("/api/v1/public/forms/public-cfp");

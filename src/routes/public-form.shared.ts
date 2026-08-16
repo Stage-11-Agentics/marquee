@@ -10,6 +10,7 @@ import {
 import { sha256Hex } from "../lib/auth/random-token";
 import { submitterEditability } from "../lib/submission-editing";
 import {
+  DEFAULT_SUBMISSION_LIMIT,
   effectiveSubmitterLimit,
   parseSubmissionDefault,
   submissionCapacityMessage,
@@ -515,12 +516,12 @@ export async function loadPublicForm(
   if (!row || row.status === "draft") return null;
 
   const form: FormRow = row;
-  let eventDefault = 3;
+  let eventDefault = DEFAULT_SUBMISSION_LIMIT;
   if (row.submission_default_limit_json !== null) {
     try {
       eventDefault = parseSubmissionDefault(JSON.parse(row.submission_default_limit_json) as unknown);
     } catch {
-      eventDefault = 3;
+      eventDefault = DEFAULT_SUBMISSION_LIMIT;
     }
   }
   const effectiveLimit = effectiveSubmitterLimit(
@@ -589,7 +590,7 @@ export function messageForState(
   state: PublicFormStateName,
   submissionEditable = false,
   receipt: { email: string; sent: boolean } | null = null,
-  capacity: { effectiveLimit: number; actualCount: number } = { effectiveLimit: 3, actualCount: 0 },
+  capacity: { effectiveLimit: number; actualCount: number } = { effectiveLimit: DEFAULT_SUBMISSION_LIMIT, actualCount: 0 },
 ): string | null {
   switch (state) {
     case "closed":
