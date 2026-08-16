@@ -221,7 +221,7 @@ test("MRQ-248 · schema keys, preferred shapes, and canonical record values are 
   expect(airtableValueMatchesType("multipleAttachments", [{ url: "https://example.test", content_type: "text/plain" }])).toBe(false);
 
   await seedCurrentRows();
-  const mirror = { mediaPublicOrigin: "media.example.test", uploadTokenSecret: "upload-secret" };
+  const mirror = { apiKey: "pat_hermetic", baseId: BASE_ID, mediaPublicOrigin: "media.example.test", uploadTokenSecret: "upload-secret" };
   const records = await Promise.all(MIRRORED_TABLES.map(async (role) => [
     role,
     await currentAirtableRecord({ DB: env.DB, mirror }, role, role === "submissions" ? SUBMISSION_ID : role === "speaker_tasks" ? TASK_ID : PERSON_ID),
