@@ -708,6 +708,22 @@ appended to US-45/US-68; the implementation seam is the frozen registry in
 
 ---
 
+### 2.10 Post-deadline publication-integrity band — AC-315 – AC-318 *(Amendment 27, 2026-08-15)*
+
+**Outside the Wednesday terminal gate, on the same terms as §2.4–§2.9.** Not
+folded into the 210 live in-scope count or tier arithmetic. Story: US-93
+(`sequence/USER_STORIES.md` Amendment 27). The implementation shares one
+published-session guard and one extensible mirror-rejection seam.
+
+| AC | Tier | Tag | How verified |
+|---|---|---|---|
+| AC-315 | PD | `auto` | `test + e2e:` publish a session, call the single decision route without confirmation and assert the exact 409 refusal plus no status, decision, mail, or cache mutation; repeat through bulk selection and assert published count, then confirm the live write and assert success plus cache purge. The submissions dialog shows the honest count with reserved space before its confirm action. |
+| AC-316 | PD | `auto` | `test:` pull an inbound Airtable status change for a published row and assert it is dropped and counted, the `mirror.inbound_rejected` audit records `forbidden_while_published`, and one outbound repair is queued from current D1 truth; assert no status or cascade mutation. |
+| AC-317 | PD | `auto` | `test:` reverse an accepted published session and assert the agenda row is gone, `submissions.is_published=0`, and both the record and list projections report `is_published=false`. |
+| AC-318 | PD | `auto` | `test:` edit a live talk through the speaker portal and complete sponsor session-content write-back; both return the exact refusal before changing content or completing the task. Assert the public-read predicate remains independent of `confirmation_status`. |
+
+---
+
 ## 3. Felt checkpoints
 
 Four in-scope ACs are judgements no assertion settles. Each is a scheduled human-use session with an explicit trigger, an explicit method, and a recorded verdict. A checkpoint that has not run is not a pass.

@@ -343,6 +343,8 @@ An allowlisted edit applies within one webhook cycle; **an edit to any other fie
 
 **An inbound status change does not run the acceptance cascade.** `submissions.status` is inbound-writable, and `PHILOSOPHY.md` 2 says status change *is* the notification — so this had to be stated rather than left to the fleet. An inbound write sets the status and `last_write_source='airtable'` and stops there: **no emails queued, no task sets assigned, no invites offered.** The record then surfaces **"changed in Airtable · cascade not run"** with a one-click **"run onboarding cascade"** action for a program lead. The alternative — cascading on inbound — means an ops person's spreadsheet edit can mass-mail hundreds of speakers, which is the same blast radius G3 exists to contain.
 
+**Published-session exception:** a status edit for a submission whose session is live is rejected by the shared submission-apply seam with reason `forbidden_while_published`. It is dropped and counted, written to the sync audit, and the current D1 truth is queued for the next outbound pass; it never changes public visibility or runs a cascade. The rejection reason set is extensible so later transition-specific refusals share this same drop, count, log, and write-back machinery.
+
 ### 3.10 Operations and provenance
 
 **`submission_tracks`** (Amendment 2, AC-234) — `submission_id`, `track_id`, `is_primary` (exactly one per submission). Writer: public form multi-select, admin edit, import. Reader: routing rules, reviewer track scoping, list filters (a submission appears under every track it carries), track chips on records; the swimlane places a session by its primary track (or the schedule item's override). Source: Discord ruling 2026-08-08 — *"talks are submitted to one or more tracks, and reviewers review one or more tracks."*
@@ -619,6 +621,8 @@ The seeded demo *is* the product a judge sees. Generator lives at `scripts/seed/
 ## 7. Guardrails
 
 Each carries an enforcement criterion and **a demanded audit ticket** — a ticket the orchestrator must schedule and an auditor must sign, not a hope.
+
+**Publication invariant:** Pipeline and workflow writes never change public visibility and never fire mail; publication changes only through deliberate publish, unpublish, or acceptance-reversal actions.
 
 | # | Guardrail | Enforcement criterion | Audit ticket |
 |---|---|---|---|

@@ -1193,3 +1193,27 @@ outbox boundary.
 `EVALUATION.md` §2.9 owns the verification row. Built by MRQ-226.
 
 **Next mint: AC-315.**
+
+---
+
+## Amendment 27 — deciding is not publishing *(2026-08-15, plumbing fold)*
+
+The publication boundary is now explicit across decision routes, mirror inbound,
+acceptance reversal, and the remaining portal and sponsor write doors. This is a
+post-deadline addition; it does not change the live competition count or tier
+arithmetic.
+
+### US-93 · Keep live sessions out of pipeline writes
+
+**As an** organizer, **I want** workflow and mirror writes to leave published
+sessions alone, **so that** the conference site changes only when I deliberately
+change publication.
+
+- **AC-315**: A single or bulk decision route refuses to change a submission whose session is published unless the caller explicitly confirms the live write. Without confirmation the route returns the exact product refusal, leaves status, decision, mail, and cache state unchanged, and bulk selection reports the honest published-record count. With confirmation the decision proceeds and purges the public embed cache; the bulk dialog reserves space for that count and states that published records stay unchanged unless explicitly confirmed.
+- **AC-316**: An inbound mirror status edit for a published session is rejected with reason `forbidden_while_published`, dropped and counted with the other rejected fields, written to the sync audit, and queued to write back current D1 truth on the next outbound pass. It never changes status, public visibility, or cascade state, and its rejection pipeline accepts additional reasons without a second choke point.
+- **AC-317**: Acceptance reversal deletes the published agenda projection and clears the legacy `submissions.is_published` flag in the same atomic database operation; record and list reads derive publication from the agenda projection and both report the session as unpublished after reversal.
+- **AC-318**: Speaker-portal live-talk edits and sponsor session-content write-back refuse with the exact live-session sentence before mutation or task completion. `confirmation_status` remains intentionally outside the public-read predicate.
+
+`EVALUATION.md` §2.10 owns the verification rows. Post-deadline band; no gate count changes.
+
+**Next mint: AC-319.**
