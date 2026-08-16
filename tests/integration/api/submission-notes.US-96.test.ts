@@ -56,7 +56,7 @@ beforeAll(async () => {
     env.DB.prepare(
       `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
        VALUES (?, ?, 'speaker', ?, 'fixture', NULL, ?, ?)`,
-    ).bind(SPEAKER_SESSION, DEMO_SPEAKER_PERSON_ID, now + 86_400_000, now, now),
+    ).bind(SPEAKER_SESSION, DEMO_SPEAKER_PERSON_ID, now + 3 * 86_400_000, now, now),
   ]);
 
   const created = await request(`/api/v1/events/${EVENT_ID}/submissions`, {
