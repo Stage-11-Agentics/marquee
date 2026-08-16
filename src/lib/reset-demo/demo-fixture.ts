@@ -1,4 +1,4 @@
-import { buildDemoSeedRows } from "./seed-modules";
+import { buildDemoSeedRows } from "./seed-modules.ts";
 import {
   EVENT_ID,
   FROZEN_NOW,
@@ -13,6 +13,9 @@ export const SHIPPED_DEMO_EVENT_ID = EVENT_ID;
 export const SHIPPED_DEMO_TARGET_EVENT_ID = OUTREACH_EVENT_ID;
 export const SHIPPED_DEMO_ORGANIZER_PERSON_ID = STAFF_PERSON_ID;
 /** First named accepted-core speaker; stable because the source seed is pinned. */
+// STORYLINE: See SEED-STORYLINES.md § “Shipped demo-login speaker”. This ID
+// must continue to resolve to a generated accepted-core speaker membership.
+// DO NOT RENAME the source speaker without updating the fixture and its guard.
 export const SHIPPED_DEMO_SPEAKER_PERSON_ID = "per_aarush-selvan";
 
 /**

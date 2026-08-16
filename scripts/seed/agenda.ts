@@ -26,6 +26,9 @@ const WORKSHOP_ROOM_IDS = ROOM_IDS.slice(4);
  * everything after them they are positional, taking whatever `SCHEDULE_PLAN`
  * puts first. `run()` asserts the format rather than trusting the plan's order.
  */
+// STORYLINE: See SEED-STORYLINES.md § “Day-one conflict placements”. These
+// literals are intentionally paired at the same times to keep Transit and
+// person-conflict walkthrough states reachable without double-booking a room.
 const DAY_ONE_PLACEMENTS: ReadonlyArray<{ startsAt: number; roomId: string }> = [
   { startsAt: Date.UTC(2026, 9, 12, 13), roomId: ROOM_IDS[0]! },
   { startsAt: Date.UTC(2026, 9, 12, 13), roomId: ROOM_IDS[4]! },
@@ -71,6 +74,9 @@ function dayTwoPlacement(
   }
 }
 
+// STORYLINE: See SEED-STORYLINES.md § “Day-one conflict participations”. This
+// helper deliberately reuses a lead speaker on a second accepted submission;
+// do not “deduplicate” the rows or the seeded person conflicts disappear.
 function addConflictParticipation(
   ctx: SeedContext,
   sourceSubmissionId: string,
@@ -232,7 +238,11 @@ export function run(ctx: SeedContext): void {
     updated_at: ctx.now,
   });
 
+  // STORYLINE: agenda.day-one.transit-person — the 13:00 pair crosses Sheraton
+  // and Marriott while reusing the first lead speaker.
   addConflictParticipation(ctx, String(accepted[0]!.id), String(accepted[1]!.id), "one");
+  // STORYLINE: agenda.day-one.same-building-person — the 14:00 pair reuses a
+  // lead speaker inside Sheraton, independently of the Transit pair.
   addConflictParticipation(ctx, String(accepted[2]!.id), String(accepted[3]!.id), "two");
   addConfirmationCoverage(ctx, accepted);
 }

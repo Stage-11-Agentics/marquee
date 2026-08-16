@@ -219,6 +219,9 @@ function poolStatus(index: number): "submitted" | "in_review" | "rejected" | "wa
   // Keep the 1,000-row demo spine and every deterministic pool identity intact
   // while making the two status filters reachable. These are synthetic pool
   // records, deliberately outside the published accepted core.
+  // STORYLINE: See SEED-STORYLINES.md § “Filter reachability fixtures”. The
+  // boundary indexes below are the lone Submitted and Withdrawn rows.
+  // Changing either literal makes its organizer filter disappear.
   if (index === IN_REVIEW_COUNT - 1) return "submitted";
   if (index === IN_REVIEW_COUNT + REJECTED_COUNT - 1) return "withdrawn";
   if (index < IN_REVIEW_COUNT) return "in_review";

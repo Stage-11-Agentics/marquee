@@ -10,6 +10,8 @@ function table(ctx: SeedContext, name: string): SeedRow["row"][] {
   return ctx.rows.filter((entry) => entry.table === name).map((entry) => entry.row);
 }
 
+// STORYLINE: See SEED-STORYLINES.md § “Edge-case people”. These four names are
+// deliberate layout, diacritic, and initials-avatar fixtures; preserve them.
 const EDGE_PEOPLE = [
   ["casey-oconnell-singh", "Casey O'Connell-Singh", "Systems Cartographer"],
   ["mei-ling-de-la-fontaine", "Mei-Ling de la Fontaine", "Reliability Researcher"],
