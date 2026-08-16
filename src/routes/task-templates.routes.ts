@@ -8,10 +8,25 @@ import { auditStatement } from "../lib/audit";
 import { defineApiRoute, errorResponses, jsonResponse, type ApiRouteEntry } from "../api/route";
 import { resolveTaskDueAt } from "../lib/task-due";
 import { normalizeTaskFileConfig, readTaskFileConfig, TaskFileConfigError, type TaskFileConfig } from "../lib/task-template-config";
+import {
+  readTaskAppliesToRoles,
+  WORK_HOLDING_PARTICIPATION_ROLES,
+  writeTaskAppliesToRoles,
+} from "../lib/participants";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const templateParams = eventParams.extend({ templateId: z.string().min(1) });
 const taskKind = z.enum(["acknowledge", "file", "form"]);
+/**
+ * Who a template is for. The enum is the on-stage population, so a template can
+ * never be aimed at a role the fan-out does not reach — an organizer narrowing
+ * a task to a role nobody can hold would produce a template that reaches no
+ * one, and nothing on any screen would say so.
+ */
+const appliesToRoles = z
+  .array(z.enum(WORK_HOLDING_PARTICIPATION_ROLES))
+  .min(1)
+  .max(WORK_HOLDING_PARTICIPATION_ROLES.length);
 const fileConfigSchema = z.object({
   accept: z.array(z.string()),
   maxBytes: z.number().int().positive(),
@@ -33,6 +48,7 @@ const taskTemplateSchema = z.object({
   due_offset_days: z.number().int().nullable(),
   form_id: z.string().nullable(),
   auto_assign: z.number().int(),
+  applies_to_roles: z.array(z.enum(WORK_HOLDING_PARTICIPATION_ROLES)),
   assigned_count: z.number().int().nonnegative(),
   open_count: z.number().int().nonnegative(),
 });
@@ -89,6 +105,7 @@ const createTemplateBody = z.object({
   form_id: z.string().min(1).nullable().optional(),
   file_config: fileConfigSchema.nullable().optional(),
   auto_assign: z.boolean().default(false),
+  applies_to_roles: appliesToRoles.optional(),
   assign_to: z.array(z.string().min(1)).max(MAX_ASSIGNEES).default([]),
   session_assignments: sessionAssignmentList.optional(),
 });
@@ -101,6 +118,7 @@ const patchTemplateBody = z.object({
   form_id: z.string().min(1).nullable().optional(),
   file_config: fileConfigSchema.nullable().optional(),
   auto_assign: z.boolean().optional(),
+  applies_to_roles: appliesToRoles.optional(),
 });
 const assignBody = z.object({
   template_id: z.string().min(1),
@@ -116,13 +134,14 @@ type TaskTemplateView = Pick<TaskTemplateRow, "id" | "event_id" | "name" | "kind
   due_offset_days: number | null;
   form_id: string | null;
   auto_assign: number;
+  applies_to_roles: string[];
   assigned_count: number;
   open_count: number;
 };
 
 type TemplateListRow = Pick<
   TaskTemplateRow,
-  "id" | "event_id" | "name" | "kind" | "description" | "position" | "file_config" | "updated_at" | "due_at" | "due_offset_days" | "form_id" | "auto_assign"
+  "id" | "event_id" | "name" | "kind" | "description" | "position" | "file_config" | "updated_at" | "due_at" | "due_offset_days" | "form_id" | "auto_assign" | "applies_to_roles"
 > & { assigned_count?: number | null; open_count?: number | null };
 
 interface AuditActor {
@@ -240,6 +259,7 @@ function templateView(row: TemplateListRow): TaskTemplateView {
     due_offset_days: row.due_offset_days === null ? null : Number(row.due_offset_days),
     form_id: row.form_id,
     auto_assign: Number(row.auto_assign),
+    applies_to_roles: readTaskAppliesToRoles(row.applies_to_roles),
     assigned_count: Number(row.assigned_count ?? 0),
     open_count: Number(row.open_count ?? 0),
   };
@@ -256,7 +276,7 @@ function normalizeForWrite(value: unknown): TaskFileConfig {
 
 async function templateFor(db: D1Database, eventId: string, templateId: string): Promise<TaskTemplateRow> {
   const template = await db.prepare(
-    `SELECT id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at
+    `SELECT id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, applies_to_roles, created_at, updated_at
      FROM task_templates WHERE id = ? AND event_id = ?`,
   ).bind(templateId, eventId).first<TaskTemplateRow>();
   if (!template) throw ApiError.notFound("task template not found");
@@ -439,6 +459,7 @@ const TEMPLATE_SELECT =
   `SELECT template.id, template.event_id, template.name, template.kind, template.description,
           template.position, template.file_config, template.updated_at, template.due_at,
           template.due_offset_days, template.form_id, template.auto_assign,
+          template.applies_to_roles,
           (SELECT COUNT(*) FROM speaker_tasks task
             WHERE task.template_id = template.id AND task.cancelled_at IS NULL) AS assigned_count,
           (SELECT COUNT(*) FROM speaker_tasks task
@@ -516,8 +537,8 @@ const createTaskTemplate = defineApiRoute(
     await context.env.DB.batch([
       context.env.DB.prepare(
         `INSERT INTO task_templates
-          (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, applies_to_roles, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         templateId,
         eventId,
@@ -530,6 +551,7 @@ const createTaskTemplate = defineApiRoute(
         fileConfig === null ? null : JSON.stringify(fileConfig),
         Number(positionRow?.next ?? 0),
         body.auto_assign ? 1 : 0,
+        writeTaskAppliesToRoles(body.applies_to_roles),
         now,
         now,
       ),
@@ -540,7 +562,7 @@ const createTaskTemplate = defineApiRoute(
         action: "task_template.created",
         entityType: "task_template",
         entityId: templateId,
-        after: { name: body.name, kind: body.kind, due_at: dueAt, due_offset_days: dueOffsetDays, auto_assign: body.auto_assign ? 1 : 0, assigned: assignment.assigned.length },
+        after: { name: body.name, kind: body.kind, due_at: dueAt, due_offset_days: dueOffsetDays, auto_assign: body.auto_assign ? 1 : 0, applies_to_roles: readTaskAppliesToRoles(body.applies_to_roles), assigned: assignment.assigned.length },
         now,
         requestId,
       }),
@@ -606,13 +628,14 @@ const updateTaskTemplate = defineApiRoute(
     const nextName = body.name ?? template.name;
     const nextDescription = body.description ?? template.description;
     const nextAutoAssign = body.auto_assign === undefined ? Number(template.auto_assign) : (body.auto_assign ? 1 : 0);
+    const nextAppliesToRoles = readTaskAppliesToRoles(body.applies_to_roles ?? template.applies_to_roles);
     const now = Date.now();
     const requestId = context.get("requestId") ?? null;
 
     const statements = [
       context.env.DB.prepare(
         `UPDATE task_templates
-         SET name = ?, kind = ?, description = ?, due_at = ?, due_offset_days = ?, form_id = ?, file_config = ?, auto_assign = ?, updated_at = ?
+         SET name = ?, kind = ?, description = ?, due_at = ?, due_offset_days = ?, form_id = ?, file_config = ?, auto_assign = ?, applies_to_roles = ?, updated_at = ?
          WHERE id = ? AND event_id = ?`,
       ).bind(
         nextName,
@@ -623,6 +646,7 @@ const updateTaskTemplate = defineApiRoute(
         nextFormId,
         kind === "file" && nextFileConfig !== null ? JSON.stringify(nextFileConfig) : null,
         nextAutoAssign,
+        JSON.stringify(nextAppliesToRoles),
         now,
         templateId,
         eventId,
@@ -634,8 +658,8 @@ const updateTaskTemplate = defineApiRoute(
         action: "task_template.updated",
         entityType: "task_template",
         entityId: templateId,
-        before: { name: template.name, kind: template.kind, description: template.description, due_at: template.due_at, due_offset_days: template.due_offset_days, auto_assign: Number(template.auto_assign) },
-        after: { name: nextName, kind, description: nextDescription, due_at: nextDueAt, due_offset_days: nextOffset, auto_assign: nextAutoAssign },
+        before: { name: template.name, kind: template.kind, description: template.description, due_at: template.due_at, due_offset_days: template.due_offset_days, auto_assign: Number(template.auto_assign), applies_to_roles: readTaskAppliesToRoles(template.applies_to_roles) },
+        after: { name: nextName, kind, description: nextDescription, due_at: nextDueAt, due_offset_days: nextOffset, auto_assign: nextAutoAssign, applies_to_roles: nextAppliesToRoles },
         now,
         requestId,
       }),

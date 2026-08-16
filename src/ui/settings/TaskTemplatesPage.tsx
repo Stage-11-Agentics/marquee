@@ -5,6 +5,7 @@ import { apiFetch, errorSummary } from "../shell/api-client";
 import { PageHeader } from "../shell/components";
 import { dateInputFromDueAt, dueAtFromDateInput, formatDueDate } from "../../lib/task-due";
 import { disambiguatedNames } from "../../lib/duplicate-names";
+import { participationRoleLabel } from "../shell/identity-format";
 import "./settings.css";
 
 const BYTES_PER_MB = 1024 * 1024;
@@ -50,6 +51,7 @@ interface TaskTemplate {
   due_offset_days: number | null;
   form_id: string | null;
   auto_assign: number;
+  applies_to_roles: string[];
   assigned_count: number;
   open_count: number;
 }
@@ -123,6 +125,60 @@ interface Props {
   eventId: string;
 }
 
+/**
+ * Who a task can be aimed at, and the label each role wears.
+ *
+ * Panels are a moderator plus co-speakers rather than a role of their own, so
+ * this list is the participation vocabulary exactly — a fifth chip reading
+ * "Panelist" would name a role the record cannot hold.
+ */
+const ON_STAGE_ROLES = ["speaker", "co_speaker", "moderator", "chairperson"] as const;
+
+/**
+ * One sentence about who owes a task, in the same width whatever it says.
+ *
+ * A row that swapped between one chip and four would move every row beneath it
+ * as templates were narrowed, so the summary is one fixed-width chip either
+ * way: the whole stage, or the count and the names.
+ */
+function roleTargetLabel(roles: readonly string[]): string {
+  const targeted = ON_STAGE_ROLES.filter((role) => roles.includes(role));
+  if (targeted.length === 0 || targeted.length === ON_STAGE_ROLES.length) return "Everyone on stage";
+  return targeted.map((role) => participationRoleLabel(role)).join(" · ");
+}
+
+/**
+ * The role targeting control. Four fixed-width chips that never change size
+ * when selected, so narrowing a task cannot move the deadline field under it.
+ * The last chip cannot be turned off: a template aimed at nobody would be
+ * invisible on every organizer surface, and silently reach no one.
+ */
+function RoleTargetPicker({ idPrefix, selected, onChange }: {
+  idPrefix: string;
+  selected: string[];
+  onChange: (next: string[]) => void;
+}): JSX.Element {
+  const isLastSelected = (role: string): boolean => selected.length === 1 && selected[0] === role;
+  return <div class="field span-2">
+    <span>Who owes this</span>
+    <div class="task-segment" role="group" aria-label="Who owes this task">
+      {ON_STAGE_ROLES.map((role) => {
+        const on = selected.includes(role);
+        return <button
+          key={role}
+          id={`${idPrefix}-role-${role}`}
+          class={`task-segment-button ${on ? "is-selected" : ""}`}
+          type="button"
+          aria-pressed={on}
+          disabled={isLastSelected(role)}
+          onClick={() => onChange(on ? selected.filter((entry) => entry !== role) : [...ON_STAGE_ROLES].filter((entry) => entry === role || selected.includes(entry)))}
+        >{participationRoleLabel(role)}</button>;
+      })}
+    </div>
+    <small class="task-kind-hint">{roleTargetLabel(selected)} is assigned this task when a session is accepted.</small>
+  </div>;
+}
+
 interface Draft {
   name: string;
   kind: TaskKind;
@@ -132,12 +188,13 @@ interface Draft {
   dueOffsetDays: string;
   formId: string;
   autoAssign: boolean;
+  appliesToRoles: string[];
   assignTo: string[];
   sessionChoices: Record<string, string>;
 }
 
 function emptyDraft(): Draft {
-  return { name: "", kind: "acknowledge", description: "", dueMode: "date", dueDate: "", dueOffsetDays: "14", formId: "", autoAssign: false, assignTo: [], sessionChoices: {} };
+  return { name: "", kind: "acknowledge", description: "", dueMode: "date", dueDate: "", dueOffsetDays: "14", formId: "", autoAssign: false, appliesToRoles: [...ON_STAGE_ROLES], assignTo: [], sessionChoices: {} };
 }
 
 async function requestJson<T>(path: string, route: string, init: RequestInit = {}): Promise<T> {
@@ -496,11 +553,11 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
     if (value.dueMode === "date") {
       const dueAt = dueAtFromDateInput(value.dueDate);
       if (dueAt === null) return { error: "Choose a due date." };
-      return { body: { name: value.name.trim(), kind: value.kind, description: value.description, due_at: dueAt, due_offset_days: null, form_id: value.kind === "form" ? value.formId : null, auto_assign: value.autoAssign } };
+      return { body: { name: value.name.trim(), kind: value.kind, description: value.description, due_at: dueAt, due_offset_days: null, form_id: value.kind === "form" ? value.formId : null, auto_assign: value.autoAssign, applies_to_roles: value.appliesToRoles } };
     }
     const days = Number(value.dueOffsetDays);
     if (!Number.isInteger(days) || days < 0) return { error: "Days after acceptance must be a whole number." };
-    return { body: { name: value.name.trim(), kind: value.kind, description: value.description, due_at: null, due_offset_days: days, form_id: value.kind === "form" ? value.formId : null, auto_assign: value.autoAssign } };
+    return { body: { name: value.name.trim(), kind: value.kind, description: value.description, due_at: null, due_offset_days: days, form_id: value.kind === "form" ? value.formId : null, auto_assign: value.autoAssign, applies_to_roles: value.appliesToRoles } };
   };
 
   const createTask = async (event: JSX.TargetedEvent<HTMLFormElement>): Promise<void> => {
@@ -639,6 +696,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
       dueOffsetDays: String(template.due_offset_days ?? 14),
       formId: template.form_id ?? "",
       autoAssign: template.auto_assign === 1,
+      appliesToRoles: template.applies_to_roles.length > 0 ? [...template.applies_to_roles] : [...ON_STAGE_ROLES],
       assignTo: [],
       sessionChoices: {},
     });
@@ -659,6 +717,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
         <label class="field span-2"><span>Instructions</span><textarea rows={2} value={draft.description} placeholder="Final slide deck as a PDF, 16:9 aspect ratio." onInput={(event) => { const value = event.currentTarget.value; setDraft((current) => ({ ...current, description: value })); }} /></label>
         {draft.kind === "form" && <label class="field span-2"><span>Form</span><select value={draft.formId} onChange={(event) => { const value = event.currentTarget.value; setDraft((current) => ({ ...current, formId: value })); }}><option value="">Choose a form…</option>{forms.map((form) => <option key={form.id} value={form.id}>{form.name}</option>)}</select></label>}
         <div class="field span-2"><span>Deadline</span><DeadlineFields dueMode={draft.dueMode} dueDate={draft.dueDate} dueOffsetDays={draft.dueOffsetDays} idPrefix="task-new" onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))} /></div>
+        <RoleTargetPicker idPrefix="task-new" selected={draft.appliesToRoles} onChange={(next) => setDraft((current) => ({ ...current, appliesToRoles: next }))} />
       </div>
       <AssigneePicker assignees={assignees} displayNames={assigneeNames} selected={draft.assignTo} idPrefix="task-new-assignee" onChange={(update) => setDraft((current) => ({ ...current, assignTo: update(current.assignTo) }))} />
       <SessionChoicePicker assignees={assignees} displayNames={assigneeNames} selected={draft.assignTo} choices={draft.sessionChoices} idPrefix="task-new-assignee" onChange={(personId, submissionId) => setDraft((current) => ({ ...current, sessionChoices: { ...current.sessionChoices, [personId]: submissionId } }))} />
@@ -698,6 +757,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
                 <strong>{template.name}</strong>
                 <span class="task-heading-meta">
                   <span class="task-kind-badge">{kindLabel(template.kind)}</span>
+                  <span class="task-role-badge" title="Who this task is assigned to">{roleTargetLabel(template.applies_to_roles)}</span>
                   <span class="subtle tabular">{deadlineLabel(template)}</span>
                 </span>
               </div>
@@ -717,6 +777,7 @@ export function TaskTemplatesPage({ eventId }: Props): JSX.Element {
                   <label class="field span-2"><span>Task name</span><input value={editDraft.name} onInput={(event) => { const value = event.currentTarget.value; setEditDraft((current) => ({ ...current, name: value })); }} /></label>
                   <label class="field span-2"><span>Instructions</span><textarea rows={2} value={editDraft.description} onInput={(event) => { const value = event.currentTarget.value; setEditDraft((current) => ({ ...current, description: value })); }} /></label>
                   <div class="field span-2"><span>Deadline</span><DeadlineFields dueMode={editDraft.dueMode} dueDate={editDraft.dueDate} dueOffsetDays={editDraft.dueOffsetDays} idPrefix={`task-edit-${template.id}`} onChange={(patch) => setEditDraft((current) => ({ ...current, ...patch }))} /></div>
+                  <RoleTargetPicker idPrefix={`task-edit-${template.id}`} selected={editDraft.appliesToRoles} onChange={(next) => setEditDraft((current) => ({ ...current, appliesToRoles: next }))} />
                 </div>
                 <div class="task-compose-actions"><button class="button primary" type="button" onClick={() => void saveEdit(template.id)} disabled={rowBusy === template.id}>{rowBusy === template.id ? "Saving…" : "Save task"}</button></div>
               </div>}
