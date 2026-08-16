@@ -2,6 +2,8 @@ import { SELF } from "cloudflare:test";
 import { beforeEach, describe, expect, test } from "vitest";
 
 import { createSession } from "../../../src/lib/auth/auth-sessions";
+import { MIRROR_INBOUND_ALLOWLIST } from "../../../src/jobs/mirror/inbound";
+import { currentAirtableRecord } from "../../../src/jobs/mirror/records";
 import { SUBMISSION_REFERENCE_CODE_SQL, withSubmissionReferenceRetry } from "../../../src/lib/submission-reference";
 import { applyMigrations, env } from "../apply-migrations";
 
@@ -88,5 +90,19 @@ describe.sequential("MRQ-241 submission reference codes", () => {
     expect(board.status).toBe(200);
     const boardBody = await board.json<{ data: Array<{ id: string; reference_code: string | null }> }>();
     expect(boardBody.data.find((row) => row.id === "submission_mrq241_search")).toMatchObject({ reference_code: "SUB-41" });
+  });
+
+  test("AC-345 · Airtable reads the code from D1 outbound truth but never accepts it inbound", async () => {
+    const record = await currentAirtableRecord(
+      {
+        DB: env.DB,
+        mirror: { apiKey: "", baseId: "", mediaPublicOrigin: "", uploadTokenSecret: "" },
+      },
+      "submissions",
+      "submission_mrq241_search",
+    );
+
+    expect(record?.fields.reference_code).toBe("SUB-41");
+    expect(MIRROR_INBOUND_ALLOWLIST.submissions).not.toContain("reference_code");
   });
 });
