@@ -143,6 +143,7 @@ test("CONTRACT · act keeps its own policy for writes that carry no typed work",
 
   // Unchanged by any of this: a refused write answers beside the control, and a
   // record that really is gone still takes the page.
-  assert.match(act, /if \(isRefusal\(error\)\) setActionError/);
-  assert.match(act, /else setState\(\{ kind: "error"/);
+  assert.match(act, /const failure = submissionWriteFailure\(error, name\);/);
+  assert.match(act, /if \(failure\.kind === "refusal"\) setActionError\(failure\.actionError\);/);
+  assert.match(act, /else setState\(failure\.state\);/);
 });
