@@ -354,8 +354,15 @@ export function FormsPage({ eventId, search = "" }: Props): JSX.Element {
   const saveForm = () => {
     if (!form) return;
     void mutate("form", async () => {
+      // Legacy explicit-zero rows are read-only unlimited state. Do not send
+      // that dormant raw value back through the bounded writer on an unrelated
+      // whole-object save; preserving the row means omitting both capacity
+      // fields for this one legacy case. Normal builder saves always send both.
+      const capacity = !form.submitter_limit_inherit && form.per_submitter_limit === 0
+        ? {}
+        : { per_submitter_limit: form.per_submitter_limit, submitter_limit_inherit: form.submitter_limit_inherit };
       const updated = await request<FormDetail>(`/api/v1/events/${eventId}/forms/${form.id}`, "/api/v1/events/{eventId}/forms/{formId}", { method: "PATCH", body: JSON.stringify({
-        name: form.name, slug: form.slug, kind: form.kind, welcome_md: form.welcome_md, per_submitter_limit: form.per_submitter_limit, submitter_limit_inherit: form.submitter_limit_inherit,
+        name: form.name, slug: form.slug, kind: form.kind, welcome_md: form.welcome_md, ...capacity,
         min_speakers: form.min_speakers, max_speakers: form.max_speakers, max_sponsors: form.max_sponsors,
         closes_at: form.closes_at, reminder_offset_hours: form.reminder_offset_hours, thankyou_template_key: form.thankyou_template_key,
       }) });
