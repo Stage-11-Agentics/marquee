@@ -75,9 +75,9 @@ async function seedFixture(): Promise<void> {
   ).bind(ORG_ID, now, now).run();
 
   for (const [id, eventId, name, slug, status, closesAt] of [
-    [DRAFT_FORM_ID, EVENT_ID, "Draft intake", "mrq236-draft", "draft", now + 86_400_000],
-    [OPEN_FORM_ID, EVENT_ID, "Open intake", "mrq236-open", "open", now + 86_400_000],
-    [CLOSED_FORM_ID, EVENT_ID, "Closed intake", "mrq236-closed", "closed", now + 86_400_000],
+    [DRAFT_FORM_ID, EVENT_ID, "Draft intake", "mrq236-draft", "draft", now + 3 * 86_400_000],
+    [OPEN_FORM_ID, EVENT_ID, "Open intake", "mrq236-open", "open", now + 3 * 86_400_000],
+    [CLOSED_FORM_ID, EVENT_ID, "Closed intake", "mrq236-closed", "closed", now + 3 * 86_400_000],
   ] as const) {
     await env.DB.prepare(
       `INSERT INTO forms
