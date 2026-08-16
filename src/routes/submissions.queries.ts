@@ -942,8 +942,7 @@ export async function selectSubmissionIds(
     overdueDay,
     includeTemplateProvenance,
   );
-  const includeFormMetadata = await hasColumns(database, "forms", ["id", "event_id", "status", "opens_at", "closes_at"]);
-  const source = filters.status === "not_notified" ? notificationFrom(includeFormMetadata) : submissionFrom(includeFormMetadata);
+  const source = filters.status === "not_notified" ? notificationFrom(false) : submissionFrom(false);
   const limit = options.limit === undefined ? BULK_ID_LIMIT + 1 : options.limit;
   const limitClause = limit === null ? "" : " LIMIT ?";
   const statement = database.prepare(`SELECT DISTINCT s.id ${source} WHERE ${where} ORDER BY s.updated_at DESC, s.id ASC${limitClause}`);
