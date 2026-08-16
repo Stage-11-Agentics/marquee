@@ -297,6 +297,32 @@ test("projection names invalid recipients before valid-email filtering and the b
   expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM outbox WHERE event_id = ?").bind(EVENT_ID).first<{ count: number }>()).toEqual({ count: 0 });
 });
 
+test("an admitted batch resumes its same owner and provider call without claiming another revision", async () => {
+  const messages: unknown[] = [];
+  const queue = { send: async (message: unknown) => { messages.push(message); } } as unknown as Queue<unknown>;
+  const first = await sendCalendarBatch({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW });
+  const ownerId = first.deliveries[0]!.outbox_id;
+  const beforeParts = await childRows(ownerId);
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM calendar_invites WHERE submission_id IN (?, ?)").bind(SUBMISSION_ONE, SUBMISSION_TWO),
+    env.DB.prepare("DELETE FROM calendar_sequence_ledger WHERE uid IN (SELECT ics_uid FROM outbox_calendar_parts WHERE outbox_id = ?)").bind(ownerId),
+  ]);
+
+  const resumed = await sendCalendarBatch({ db: env.DB, eventId: EVENT_ID, queue, now: NOW + 1_000 });
+  expect(resumed.deliveries).toMatchObject([{ outbox_id: ownerId, outbox_inserted: false, sequence_set: [
+    `${SUBMISSION_ONE}.${SPEAKER_ID}@marquee.stage11.dev:0`,
+    `${SUBMISSION_TWO}.${SPEAKER_ID}@marquee.stage11.dev:0`,
+  ] }]);
+  expect(messages).toEqual([{ type: "mail_outbox", outbox_id: ownerId }]);
+  expect(await childRows(ownerId)).toEqual(beforeParts);
+
+  const fake = provider();
+  expect(await processMailOutbox(env.DB, env, [ownerId], { provider: fake, now: NOW + 2_000, sleep: async () => undefined })).toMatchObject({ sent: 1 });
+  const duplicateFake = provider();
+  expect(await processMailOutbox(env.DB, env, [ownerId], { provider: duplicateFake, now: NOW + 3_000, sleep: async () => undefined })).toEqual({ sent: 0, suppressed: 0, failed: 0 });
+  expect(duplicateFake.singles).toHaveLength(0);
+});
+
 test("CAS sequence claims reread a lost initialization and never double-claim the first revision", async () => {
   const uid = calendarUid(SUBMISSION_ONE, SPEAKER_ID);
   const claims = await Promise.all([
