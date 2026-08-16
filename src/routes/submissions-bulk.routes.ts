@@ -48,8 +48,12 @@ const notifiedSummarySchema = z.object({
   total: z.number().int().nonnegative(),
   sendable: z.number().int().nonnegative(),
   no_valid_address: z.number().int().nonnegative(),
+  queue_revision: z.number().int().nonnegative(),
 });
 const notifyQuerySchema = z.object({ cursor: z.string().min(1).max(200).optional() });
+const notifyBodySchema = z.object({
+  queue_revision: z.number().int().nonnegative(),
+}).strict();
 const notifyNotifiedResultSchema = z.object({
   selected: z.number().int().nonnegative(),
   queued: z.number().int().nonnegative(),
@@ -57,6 +61,7 @@ const notifyNotifiedResultSchema = z.object({
   remaining: z.number().int().nonnegative(),
   next_cursor: z.string().nullable(),
   outbox_ids: z.array(z.string()),
+  queue_revision: z.number().int().nonnegative(),
 });
 
 async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
@@ -277,7 +282,11 @@ const notifyNotifiedSubmissions = defineApiRoute(
     summary: "Queue notifications for decided submissions",
     description: "Queue a bounded batch of messages for sendable decisions while preserving the existing decision rows byte-for-byte; use next_cursor while remaining is non-zero.",
     tags: ["Submissions"],
-    request: { params: eventParams, query: notifyQuerySchema },
+    request: {
+      params: eventParams,
+      query: notifyQuerySchema,
+      body: { content: { "application/json": { schema: notifyBodySchema } } },
+    },
     policy: {
       auth: { kind: "grants", grants: ["program:write"] },
       rateLimit: { bucket: "write" },
@@ -285,18 +294,20 @@ const notifyNotifiedSubmissions = defineApiRoute(
     },
     responses: {
       202: jsonResponse(notifyNotifiedResultSchema, "Notification retry summary"),
-      ...errorResponses([401, 403, 429, 500]),
+      ...errorResponses([400, 401, 403, 409, 429, 500]),
     },
   },
   async (context) => {
     const { eventId } = context.req.valid("param");
     const { cursor } = context.req.valid("query");
+    const { queue_revision: queueRevision } = context.req.valid("json");
     const ids = await selectSubmissionIds(context.env.DB, { eventId, status: "not_notified" }, { limit: null });
     const result = await notifyExistingDecisions({
       db: context.env.DB,
       queue: context.env.MAIL_QUEUE,
       eventId,
       submissionIds: ids,
+      queueRevision,
       cursor,
     });
     return context.json({
@@ -306,6 +317,7 @@ const notifyNotifiedSubmissions = defineApiRoute(
       remaining: result.remaining,
       next_cursor: result.nextCursor,
       outbox_ids: result.outboxIds,
+      queue_revision: result.queueRevision,
     }, 202);
   },
 );

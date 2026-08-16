@@ -873,10 +873,19 @@ export interface NotifiedSummary {
   total: number;
   sendable: number;
   no_valid_address: number;
+  queue_revision: number;
 }
 
-function emptyNotifiedSummary(): NotifiedSummary {
-  return { total: 0, sendable: 0, no_valid_address: 0 };
+async function eventQueueRevision(database: D1Database, eventId: string): Promise<number> {
+  const event = await database
+    .prepare("SELECT updated_at FROM events WHERE id = ?")
+    .bind(eventId)
+    .first<{ updated_at: number | null }>();
+  return Number(event?.updated_at ?? 0);
+}
+
+function emptyNotifiedSummary(queueRevision = 0): NotifiedSummary {
+  return { total: 0, sendable: 0, no_valid_address: 0, queue_revision: queueRevision };
 }
 
 /** Dashboard counts are intentionally the actionable subset; no-address rows stay visible in the view. */
@@ -885,6 +894,7 @@ export async function summarizeNotNotifiedSubmissions(
   eventId: string,
 ): Promise<NotifiedSummary> {
   try {
+    const queueRevision = await eventQueueRevision(database, eventId);
     const row = await database
       .prepare(`
         SELECT
@@ -903,6 +913,7 @@ export async function summarizeNotNotifiedSubmissions(
       total: countValue(row?.total),
       sendable: countValue(row?.sendable),
       no_valid_address: countValue(row?.no_valid_address),
+      queue_revision: queueRevision,
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);

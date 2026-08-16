@@ -117,7 +117,7 @@ async function seedFixture(): Promise<void> {
 }
 
 function authHeaders(): HeadersInit {
-  return { authorization: `Bearer ${TOKEN}` };
+  return { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" };
 }
 
 async function listGaps(): Promise<ListResponse> {
@@ -126,7 +126,7 @@ async function listGaps(): Promise<ListResponse> {
   return response.json<ListResponse>();
 }
 
-async function summary(): Promise<{ total: number; sendable: number; no_valid_address: number }> {
+async function summary(): Promise<{ total: number; sendable: number; no_valid_address: number; queue_revision: number }> {
   const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/summary`, { headers: authHeaders() });
   expect(response.status).toBe(200);
   return response.json();
@@ -159,7 +159,7 @@ describe.sequential("MRQ-68 decided not notified", () => {
     expect(list.data.find((item) => item.id === "sub-mrq68-suppressed")?.notified?.detail).toContain("operator pause");
 
     const gapSummary = await summary();
-    expect(gapSummary).toEqual({ total: 5, sendable: 4, no_valid_address: 1 });
+    expect(gapSummary).toMatchObject({ total: 5, sendable: 4, no_valid_address: 1, queue_revision: NOW });
 
     const dashboardResponse = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/dashboard`, { headers: authHeaders() });
     expect(dashboardResponse.status).toBe(200);
@@ -178,9 +178,13 @@ describe.sequential("MRQ-68 decided not notified", () => {
       `SELECT id, submission_id, feedback_md, decided_by_person_id, decided_at
        FROM submission_decisions WHERE event_id = ? ORDER BY id ASC`,
     ).bind(EVENT_ID).all<DecisionSnapshot>();
-    const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, { method: "POST", headers: authHeaders() });
+    const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ queue_revision: (await summary()).queue_revision }),
+    });
     expect(response.status).toBe(202);
-    const result = await response.json<{ selected: number; queued: number; skipped_no_address: number; outbox_ids: string[] }>();
+    const result = await response.json<{ selected: number; queued: number; skipped_no_address: number; outbox_ids: string[]; queue_revision: number }>();
     expect(result).toMatchObject({ selected: 4, queued: 4, skipped_no_address: 1 });
     expect(result.outbox_ids).toHaveLength(4);
 
@@ -204,9 +208,13 @@ describe.sequential("MRQ-68 decided not notified", () => {
     expect((await summary()).sendable).toBe(0);
 
     await env.DB.prepare("UPDATE people SET email = 'now-valid@mrq68.test' WHERE id = 'person-mrq68-invalid'").run();
-    const finalNotify = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, { method: "POST", headers: authHeaders() });
+    const finalNotify = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ queue_revision: (await summary()).queue_revision }),
+    });
     expect(finalNotify.status).toBe(202);
-    const finalResult = await finalNotify.json<{ selected: number; queued: number; skipped_no_address: number; outbox_ids: string[] }>();
+    const finalResult = await finalNotify.json<{ selected: number; queued: number; skipped_no_address: number; outbox_ids: string[]; queue_revision: number }>();
     expect(finalResult).toMatchObject({ selected: 1, queued: 1, skipped_no_address: 0 });
     await env.DB.prepare("UPDATE outbox SET status = 'sent', sent_at = ?, updated_at = ? WHERE id = ?").bind(NOW + 2, NOW + 2, finalResult.outbox_ids[0]).run();
 
@@ -253,15 +261,66 @@ describe.sequential("MRQ-68 decided not notified", () => {
     ]);
     await env.DB.prepare("UPDATE submission_decisions SET outbox_id = ? WHERE id = ?").bind(outboxId, decisionId).run();
 
-    const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, { method: "POST", headers: authHeaders() });
+    const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ queue_revision: (await summary()).queue_revision }),
+    });
     expect(response.status).toBe(202);
-    const result = await response.json<{ selected: number; queued: number; remaining: number; next_cursor: string | null; outbox_ids: string[] }>();
+    const result = await response.json<{ selected: number; queued: number; remaining: number; next_cursor: string | null; outbox_ids: string[]; queue_revision: number }>();
     expect(result).toMatchObject({ selected: 1, queued: 1, remaining: 0, next_cursor: null });
 
     await env.DB.batch([
       env.DB.prepare("UPDATE outbox SET status = 'sent', sent_at = ?, updated_at = ? WHERE id = ?").bind(NOW + 1, NOW + 1, result.outbox_ids[0]),
       env.DB.prepare("UPDATE events SET demo_mode = 1 WHERE id = ?").bind(EVENT_ID),
     ]);
+  });
+
+  test("MRQ-234 · two Notify requests from one queue revision yield one drain and one stale refusal", async () => {
+    const candidates = ["one", "two"].map((suffix) => ({
+      submissionId: `sub-mrq68-race-${suffix}`,
+      participationId: `par-mrq68-race-${suffix}`,
+      decisionId: `decision-mrq68-race-${suffix}`,
+    }));
+    await env.DB.batch([
+      ...candidates.map((candidate, index) => env.DB.prepare(
+        `INSERT INTO submissions
+          (id, event_id, kind, title, status, origin, submitter_person_id, last_write_source, submitted_at, created_at, updated_at)
+         VALUES (?, ?, 'abstract', ?, 'accepted', 'public', 'person-mrq68-good', 'marquee', ?, ?, ?)`,
+      ).bind(candidate.submissionId, EVENT_ID, `Race candidate ${index}`, NOW + index, NOW + index, NOW + index)),
+      ...candidates.map((candidate) => env.DB.prepare(
+        `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+         VALUES (?, ?, 'person-mrq68-good', 'speaker', 0, ?, ?)`,
+      ).bind(candidate.participationId, candidate.submissionId, NOW, NOW)),
+      ...candidates.map((candidate, index) => env.DB.prepare(
+        `INSERT INTO submission_decisions
+          (id, event_id, submission_id, decision, resulting_status, feedback_md, decided_by_person_id, decided_at, outbox_id, created_at, updated_at)
+         VALUES (?, ?, ?, 'approve', 'accepted', NULL, 'person-mrq68-actor', ?, NULL, ?, ?)`,
+      ).bind(candidate.decisionId, EVENT_ID, candidate.submissionId, NOW + index, NOW + index, NOW + index)),
+    ]);
+
+    const queueRevision = (await summary()).queue_revision;
+    const notify = () => SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/notify`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ queue_revision: queueRevision }),
+    });
+    const responses = await Promise.all([notify(), notify()]);
+    expect(responses.map((response) => response.status).sort()).toEqual([202, 409]);
+    const winner = responses.find((response) => response.status === 202);
+    const loser = responses.find((response) => response.status === 409);
+    expect(winner).toBeDefined();
+    expect(loser).toBeDefined();
+    const winnerBody = await winner!.json<{ selected: number; queued: number; queue_revision: number; outbox_ids: string[] }>();
+    expect(winnerBody).toMatchObject({ selected: 2, queued: 2 });
+    expect(winnerBody.queue_revision).toBeGreaterThan(queueRevision);
+    expect(winnerBody.outbox_ids).toHaveLength(2);
+    expect(await loser!.json()).toMatchObject({
+      error: { code: "conflict", details: { code: "stale_queue_revision" } },
+    });
+    await env.DB.batch(winnerBody.outbox_ids.map((id) => env.DB.prepare(
+      "UPDATE outbox SET status = 'sent', sent_at = ?, updated_at = ? WHERE id = ?",
+    ).bind(NOW + 1, NOW + 1, id)));
   });
 
   test("CONTRACT · demo bulk notification is bounded, resumable, and converges on suppressed rows", async () => {
@@ -302,12 +361,20 @@ describe.sequential("MRQ-68 decided not notified", () => {
       remaining: number;
       next_cursor: string | null;
       outbox_ids: string[];
+      queue_revision: number;
     };
+    let latestQueueRevision: number | null = null;
     const notify = async (cursor?: string | null): Promise<NotifyResult> => {
       const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-      const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/notify${query}`, { method: "POST", headers: authHeaders() });
+      const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/notify${query}`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ queue_revision: cursor ? latestQueueRevision : (await summary()).queue_revision }),
+      });
       expect(response.status).toBe(202);
-      return response.json<NotifyResult>();
+      const result = await response.json<NotifyResult>();
+      latestQueueRevision = result.queue_revision;
+      return result;
     };
     const suppress = async (ids: string[]): Promise<void> => {
       await env.DB.prepare(
@@ -347,7 +414,8 @@ describe.sequential("MRQ-68 decided not notified", () => {
     await suppress(fourth.outbox_ids);
 
     const final = await notify();
-    expect(final).toEqual({ selected: 0, queued: 0, skipped_no_address: 0, remaining: 0, next_cursor: null, outbox_ids: [] });
+    expect(final).toMatchObject({ selected: 0, queued: 0, skipped_no_address: 0, remaining: 0, next_cursor: null, outbox_ids: [] });
+    expect(final.queue_revision).toEqual(expect.any(Number));
     const outbox = await env.DB.prepare(
       `SELECT COUNT(*) AS total, COUNT(DISTINCT entity_id) AS decisions
        FROM outbox WHERE event_id = ? AND entity_id LIKE 'decision-mrq68-bulk-%'`,
