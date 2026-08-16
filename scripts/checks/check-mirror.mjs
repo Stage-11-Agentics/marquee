@@ -44,7 +44,7 @@ if (exitCode !== 0) {
       "recorded outbound batch calls and shared rate budget",
       "signed inbound allowlist, cursor, and echo suppression",
       "keepalive webhook expiry refresh and row-count reconciliation",
-      "canonical 26/19/17 schemas, ID-authoritative provisioning, and resumable adoption",
+      "canonical 27/19/17 schemas, ID-authoritative provisioning, and resumable adoption",
       "fresh three-table conformance before webhook and organizer-column preservation",
     ],
     tests: testFiles,

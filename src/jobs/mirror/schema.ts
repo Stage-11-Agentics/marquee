@@ -124,6 +124,7 @@ export const MIRROR_TABLE_SCHEMA: Record<MirroredTable, MirrorTableDefinition> =
     fields: [
       text("marquee_id", ID_REPRESENTATIVE),
       text("event_id", ID_REPRESENTATIVE),
+      text("reference_code"),
       text("form_id", ID_REPRESENTATIVE),
       selectOrText("kind"),
       checkbox("bypass_evaluation"),

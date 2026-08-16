@@ -197,7 +197,8 @@ test("MRQ-248 · fetch transport sends canonical metadata paths and bodies", asy
 });
 
 test("MRQ-248 · schema keys, preferred shapes, and canonical record values are exhaustive", async () => {
-  expect(MIRROR_FIELD_COUNTS).toEqual({ submissions: 26, speaker_tasks: 19, people: 17 });
+  expect(MIRROR_FIELD_COUNTS).toEqual({ submissions: 27, speaker_tasks: 19, people: 17 });
+  expect(MIRROR_TABLE_SCHEMA.submissions.fields.some((field) => field.name === "reference_code")).toBe(true);
   expect(MIRROR_TABLE_SCHEMA.submissions.fields.find((field) => field.name === "submitted_at")?.options).toEqual({
     timeZone: "utc",
     dateFormat: { name: "iso" },
@@ -255,7 +256,8 @@ test("MRQ-248 · verify is advisory, fresh/default bases offer explicit provisio
   const created = fake.calls.filter((call) => call.kind === "create_table");
   expect(created).toHaveLength(3);
   expect(new Set(created.map((call) => call.tableId)).size).toBe(3);
-  expect(created.map((call) => call.fields.length)).toEqual([26, 19, 17]);
+  expect(created.map((call) => call.fields.length)).toEqual([27, 19, 17]);
+  expect(created.find((call) => call.name === "Submissions")?.fields.some((field) => field.name === "reference_code")).toBe(true);
   expect(created.every((call) => call.fields[0]?.name === "marquee_id")).toBe(true);
   expect(provisioned.tableActions).toEqual(expect.arrayContaining([
     expect.objectContaining({ role: "submissions", outcome: "created" }),
@@ -314,7 +316,8 @@ test("MRQ-248 · partial templates preserve submitted IDs and organizer columns 
   const mapping = Object.fromEntries(provisioned.tableActions!.map((action) => [action.role, action.table_id])) as unknown as MirrorMappingInput;
   const mapped = await mapAll(fake, mapping);
   expect(mapped.complete).toBe(true);
-  expect(fake.calls.filter((call) => call.kind === "create_field")).toHaveLength(25);
+  expect(fake.calls.filter((call) => call.kind === "create_field")).toHaveLength(26);
+  expect(fake.calls.some((call) => call.kind === "create_field" && call.field.name === "reference_code")).toBe(true);
   expect(fake.tables.find((table) => table.id === submissions.id)?.fields?.find((field) => field.name === "Organizer notes")).toEqual({
     id: "fld_organizer_notes",
     name: "Organizer notes",
@@ -408,11 +411,11 @@ test("MRQ-248 · adoption is resumable and retry-safe after a rate-limited fifth
   expect(retry.ok).toBe(true);
   if (!retry.ok) throw new Error(retry.message);
   expect(retry.continuation).toBe("speaker_tasks");
-  expect(fake.tables.find((table) => table.id === submissions.id)?.fields).toHaveLength(27);
+  expect(fake.tables.find((table) => table.id === submissions.id)?.fields).toHaveLength(28);
   expect(fake.tables.find((table) => table.id === submissions.id)?.fields?.some((field) => field.name === "Organizer notes")).toBe(true);
   const mapped = await mapAll(fake, mapping, clock);
   expect(mapped.complete).toBe(true);
-  expect(fake.calls.filter((call) => call.kind === "create_field")).toHaveLength(25);
+  expect(fake.calls.filter((call) => call.kind === "create_field")).toHaveLength(26);
   expect(fake.calls.filter((call) => call.kind === "create_webhook")).toHaveLength(1);
   expect(fake.calls.filter((call) => call.kind === "schema").length).toBeGreaterThanOrEqual(6);
   expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM mirror_state").first<{ count: number }>()).toMatchObject({ count: 3 });
