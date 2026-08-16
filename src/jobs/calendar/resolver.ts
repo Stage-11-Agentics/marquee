@@ -45,7 +45,7 @@ function parseBody(body: string): { method: "REQUEST" | "CANCEL"; sequence: numb
 }
 
 function validPart(part: ChildPart, expectedUid: string): CalendarIcsRevision | null {
-  if (!part.filename || part.content_type !== "text/calendar; charset=utf-8; method=REQUEST") return null;
+  if (part.filename !== `${expectedUid}.ics` || part.content_type !== "text/calendar; charset=utf-8; method=REQUEST") return null;
   if (part.ics_uid !== expectedUid) return null;
   const parsed = parseBody(part.ics_body);
   if (!parsed || parsed.method !== "REQUEST" || parsed.uid !== expectedUid || parsed.sequence !== part.sequence) return null;
@@ -114,6 +114,8 @@ export async function resolveCalendarIcs(db: D1Database, uid: string): Promise<C
       if (owner.ics_uid !== null || owner.ics_body !== null || ownerParts.length === 0) return null;
       const part = ownerParts.find((candidate) => candidate.ics_uid === uid);
       if (!part) return null;
+      if (ownerParts.some((candidate, index) => candidate.part_index !== index)
+        || new Set(ownerParts.map((candidate) => candidate.ics_uid)).size !== ownerParts.length) return null;
       const parsedParts = ownerParts.map((candidate) => validPart(candidate, candidate.ics_uid));
       if (parsedParts.some((candidate) => candidate === null)) return null;
       const parsed = validPart(part, uid);

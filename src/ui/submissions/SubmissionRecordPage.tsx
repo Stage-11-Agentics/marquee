@@ -18,6 +18,7 @@ import "./record.css";
 const SUBMISSION_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}";
 const DECISION_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/decision";
 const RESEND_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/decision/resend";
+const CALENDAR_INVITES_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/invites";
 const SCHEDULE_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/schedule";
 const PUBLISH_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/publish";
 const UNPUBLISH_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/unpublish";
@@ -129,7 +130,7 @@ interface RecordData {
   history_total: number;
   history_next_cursor: string | null;
   history_has_more: boolean;
-  actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_unpublish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean; can_edit_participants: boolean; can_override_scores: boolean; can_view_notes: boolean };
+  actions: { can_decide: boolean; can_schedule: boolean; can_publish: boolean; can_unpublish: boolean; can_edit_content: boolean; can_restore_content: boolean; can_resend_decision: boolean; can_send_calendar_invite: boolean; can_edit_participants: boolean; can_override_scores: boolean; can_view_notes: boolean };
 }
 
 export interface SubmissionNote {
@@ -617,6 +618,8 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [messageError, setMessageError] = useState("");
   const [messageNotice, setMessageNotice] = useState("");
   const [resendNotice, setResendNotice] = useState("");
+  const [calendarInviteError, setCalendarInviteError] = useState("");
+  const [calendarInviteNotice, setCalendarInviteNotice] = useState("");
   const [sendsOpen, setSendsOpen] = useState(false);
   const [overrideError, setOverrideError] = useState("");
   const [participantMode, setParticipantMode] = useState<"existing" | "new">("existing");
@@ -914,6 +917,20 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     }, (error) => setState({ kind: "error", message: errorSummary(error), notFound: isNotFound(error) }));
   };
 
+  const resendCalendarInvite = async () => {
+    setCalendarInviteError("");
+    setCalendarInviteNotice("");
+    await writeThenRefresh("calendar-invite", async () => {
+      const result = await apiFetch<{ queued?: number }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/invites`,
+        { method: "POST", headers: { "content-type": "application/json" }, route: CALENDAR_INVITES_ROUTE },
+      );
+      setCalendarInviteNotice(result.queued === 0
+        ? "That calendar revision was already queued."
+        : "Calendar invite queued in the conference outbox.");
+    }, (error) => setCalendarInviteError(errorSummary(error)));
+  };
+
   const assign = async (roundId: string) => {
     const reviewerPersonId = selectedReviewers[roundId];
     if (!reviewerPersonId) return;
@@ -1145,6 +1162,12 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
         </CardBody></Card>}
         {record.status === "accepted" && <AcceptanceReversalPanel eventId={eventId} submissionId={submissionId} onReversed={refreshRecord} />}
         {record.actions.can_schedule && <Card><CardHeader title="Working agenda"><span class="subtle">Place this Session on the private agenda.</span></CardHeader><CardBody><form class="record-schedule-form" onSubmit={(submitEvent) => { submitEvent.preventDefault(); if (!timezone) return; const request = submissionScheduleRequest(schedule, timezone); if (!request) return; void act("schedule", request.path, request.init, request.route); }}><label class="field"><span>Starts at {eventTimeLabel(timezone)}</span><input required type="datetime-local" value={schedule.starts_at} disabled={!timezone} onInput={(inputEvent) => setSchedule({ ...schedule, starts_at: inputEvent.currentTarget.value })} /></label><label class="field"><span>Duration</span><input required type="number" min="1" value={schedule.duration_min} onInput={(inputEvent) => setSchedule({ ...schedule, duration_min: inputEvent.currentTarget.value })} /></label><label class="field"><span>Room ID</span><input required value={schedule.room_id} onInput={(inputEvent) => setSchedule({ ...schedule, room_id: inputEvent.currentTarget.value })} /></label><Button variant="primary" type="submit" disabled={Boolean(busy) || !timezone}>Place on agenda</Button></form></CardBody></Card>}
+        {record.actions.can_send_calendar_invite && <Card><CardHeader title="Calendar invitation"><span class="subtle">The Session is already on the working agenda.</span></CardHeader><CardBody>
+          <p class="record-delivery-copy">Send this Session's calendar invitation again. This explicit record action claims a new calendar revision even when the slot has not changed.</p>
+          <div class="record-action-row"><Button data-calendar-record-send="true" variant="primary" disabled={Boolean(busy)} onClick={() => void resendCalendarInvite()}>{busy === "calendar-invite" ? "Queueing…" : "Send calendar invite again"}</Button></div>
+          <span class={`record-inline-message ${calendarInviteError ? "error" : ""}`} role={calendarInviteError ? "alert" : undefined}>{calendarInviteError || " "}</span>
+          {calendarInviteNotice && <p class="record-inline-message notice" role="status">{calendarInviteNotice}</p>}
+        </CardBody></Card>}
         <Card><CardHeader title="Participants"><span class="tabular">{participantGroups.length}</span></CardHeader><CardBody>
           <div class="record-participants">{participantGroups.length ? participantGroups.map((group) => <div class="record-person" key={group.person_id}><strong>{participantNames.get(group.person_id) ?? group.name}</strong><span>{group.company || "Company not provided"}</span><small>{group.email}</small><div class="record-person-roles" aria-label={`${participantNames.get(group.person_id) ?? group.name} roles`}>{group.participants.map((participant) => <div class="record-person-role" key={participant.id}><span class="record-person-role-name">{statusLabel(participant.role)}</span><Chip tone={participantConfirmationTone(participant.confirmation_status)}>{participantConfirmationLabel(participant.confirmation_status)}</Chip>{canEditParticipants && participant.role !== "submitter" && <Button small variant="ghost" class="record-person-remove" aria-label={`Remove the ${statusLabel(participant.role)} role from ${participantNames.get(group.person_id) ?? group.name}`} disabled={Boolean(busy)} onClick={() => void removeParticipant(participant.id)}>Remove {statusLabel(participant.role)} role</Button>}</div>)}</div></div>) : <div class="record-inline-empty">No participants are attached to this record yet.</div>}</div>
           {canEditParticipants && <form class="record-participant-add" onSubmit={(event) => void addParticipant(event)}>

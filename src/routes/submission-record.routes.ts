@@ -923,6 +923,13 @@ async function loadRecord(
       can_resend_decision: ["accepted", "rejected"].includes(row.status)
         && decisions.results.some((decision) => decision.resulting_status === row.status)
         && canWriteProgram,
+      // This is the existing per-session explicit resend, not the agenda
+      // batch's slot-debt trigger. A scheduled accepted Session can always
+      // claim a new calendar sequence from its record.
+      can_send_calendar_invite: row.kind === "session"
+        && row.status === "accepted"
+        && slot !== null
+        && canWriteProgram,
       // Who is on stage is not content editing: a co-presenter is added to a
       // record at any status, including one already accepted and scheduled —
       // which is exactly when the organizer finds out about them. The one gate

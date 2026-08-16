@@ -154,7 +154,7 @@ describe.sequential("MRQ-33 admin record and program board", () => {
     });
     expect(scheduled.status).toBe(200);
     const scheduledRecord = await body<{ slot: { day: string; time: string; room: string; is_published: boolean }; stage: string; actions: { can_decide: boolean; can_schedule: boolean } }>(scheduled);
-    expect(scheduledRecord).toMatchObject({ stage: "scheduled", slot: { room: "Room 101", is_published: false }, actions: { can_decide: false, can_schedule: false } });
+    expect(scheduledRecord).toMatchObject({ stage: "scheduled", slot: { room: "Room 101", is_published: false }, actions: { can_decide: false, can_schedule: false, can_send_calendar_invite: true } });
     expect(scheduledRecord.slot.day).toContain("·");
     expect(scheduledRecord.slot.time).toMatch(/:/);
 

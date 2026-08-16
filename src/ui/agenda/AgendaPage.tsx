@@ -970,7 +970,7 @@ export function CalendarBatchModal({
         </div>
         {calendar.blocked.length > 0 && <div class="calendar-batch-blocked" role="alert">
           <strong>{calendar.blocked.length} speaker{calendar.blocked.length === 1 ? "" : "s"} need an address first.</strong>
-          {calendar.blocked.map((recipient) => <div key={recipient.person_id}>{recipient.person_name} — {recipient.reason}</div>)}
+          {calendar.blocked.map((recipient) => <div data-calendar-blocked-row="true" key={recipient.person_id}>{recipient.person_name} — {recipient.reason}</div>)}
         </div>}
         {preview && <div class="message-preview calendar-batch-preview">
           <strong>Preview · {preview.title}</strong> <span class="subtle">— brand voice, event timezone</span>
