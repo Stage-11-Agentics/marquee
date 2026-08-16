@@ -172,6 +172,31 @@ describe.sequential("MRQ-33 admin record and program board", () => {
       track_id: TRACK_IN,
     });
 
+    const rescheduled = await request(`/api/v1/events/${EVENT_ID}/submissions/${session.id}/schedule`, {
+      method: "POST",
+      body: JSON.stringify({ starts_at: Date.UTC(2026, 9, 20, 16, 0), duration_min: 45, room_id: ROOM_ID, track_id: TRACK_IN }),
+    });
+    expect(rescheduled.status).toBe(200);
+    const scheduleAudits = await env.DB.prepare(`
+      SELECT before_json, after_json
+      FROM audit_log
+      WHERE event_id = ? AND entity_type = 'submission' AND entity_id = ? AND action = 'scheduled'
+      ORDER BY created_at ASC, id ASC
+    `).bind(EVENT_ID, session.id).all<{ before_json: string | null; after_json: string | null }>();
+    expect(scheduleAudits.results).toHaveLength(2);
+    expect(JSON.parse(scheduleAudits.results[1]!.before_json!)).toEqual({
+      starts_at: Date.UTC(2026, 9, 20, 15, 30),
+      duration_min: 30,
+      room_id: ROOM_ID,
+      track_id: TRACK_IN,
+    });
+    expect(JSON.parse(scheduleAudits.results[1]!.after_json!)).toEqual({
+      starts_at: Date.UTC(2026, 9, 20, 16, 0),
+      duration_min: 45,
+      room_id: ROOM_ID,
+      track_id: TRACK_IN,
+    });
+
     const boardResponse = await request(`/api/v1/events/${EVENT_ID}/board?per_page=100`);
     expect(boardResponse.status).toBe(200);
     const board = await body<{ data: Array<{ id: string; stage: string; slot: { room: string; is_published: boolean } | null }>; total: number; columns: Array<{ count: number }> }>(boardResponse);
