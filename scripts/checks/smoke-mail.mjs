@@ -3,7 +3,6 @@ import {
   fromName,
   inboxRowHasLink,
   isCatchAllRecipient,
-  requestJson,
   runSmoke,
   smokeAssert,
   smokeContexts,
@@ -13,11 +12,6 @@ import {
 } from "./inbox-smoke-lib.mjs";
 
 const args = commandArguments();
-
-function confirmationPath(resumeUrl) {
-  const parsed = new URL(resumeUrl);
-  return `${parsed.pathname}${parsed.search}`;
-}
 
 async function runMailForContext(context) {
   const since = new Date(Date.now() - 5_000).toISOString();
@@ -68,19 +62,16 @@ async function runMailForContext(context) {
     );
   } catch (error) {
     if (error?.timeout) {
-      let reread = null;
-      try {
-        reread = await requestJson(context.origin, confirmationPath(resumeUrl));
-      } catch {
-        // Keep the original timeout evidence when the public reread is also unavailable.
-      }
+      // `resumeUrl` is an HTML page, not the JSON confirmation endpoint. The
+      // submitted response already carries the server-derived receipt row;
+      // use that fact instead of pretending an HTML reread can expose it.
       error.details = {
         ...(error.details ?? {}),
         demo_safe: demoSafe,
-        delivery_state: reread?.confirmation?.receipt_email
+        delivery_state: receipt?.receipt_email
           ? "queued-or-sent-but-not-arrived"
           : "suppressed-or-no-outbox-row",
-        receipt_email: reread?.confirmation?.receipt_email ?? null,
+        receipt_email: receipt?.receipt_email ?? null,
       };
     }
     throw error;
