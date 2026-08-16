@@ -10,6 +10,7 @@ import { MIRROR_RECONCILE_MESSAGE_TYPE, runResetJob } from "./lib/reset-demo/res
 import { RESET_DEMO_MESSAGE_TYPE } from "./routes/admin-ops.routes";
 import { processMailQueue, MAIL_MESSAGE_TYPE, runMailSchedule } from "./jobs/mail/consumer";
 import { dispatchPendingMirrorMessages } from "./jobs/mirror/outbox";
+import { dispatchPendingRequestOperations } from "./lib/request-operations";
 import { keepaliveMirror } from "./jobs/mirror/actions";
 import { handleMirrorWebhook } from "./jobs/mirror/inbound";
 import { processMirrorQueue } from "./jobs/mirror/consumer";
@@ -360,6 +361,7 @@ const worker: ExportedHandler<Env> = {
         const now = Date.now();
         await runMailSchedule(env.DB, scheduledQueue, now);
         await drainCalendarCancellations({ db: env.DB, now, queue: scheduledQueue });
+        await dispatchPendingRequestOperations(env.DB, scheduledQueue, Date.now());
         // Request traffic normally dispatches the mirror promptly. The hourly
         // mail cron is the idle-deployment backstop for committed outbox work.
         await dispatchPendingMirrorMessages(env, runId, Date.now());

@@ -110,6 +110,7 @@ describe.sequential("MRQ-80 deliberate decision resend", () => {
       resulting_status: string;
       outbox_id: string;
       outbox_inserted: boolean;
+      operation: { operation_id: string; effect: string; dispatch_state: string };
     }>();
     expect(resendBody).toMatchObject({
       submission_id: SUBMISSION_ID,
@@ -117,6 +118,7 @@ describe.sequential("MRQ-80 deliberate decision resend", () => {
       resulting_status: "accepted",
       outbox_inserted: true,
     });
+    expect(resendBody.operation).toMatchObject({ effect: "changed", dispatch_state: "dispatched" });
 
     const afterDecision = await env.DB.prepare(
       "SELECT id, feedback_md, decided_at, outbox_id FROM submission_decisions WHERE id = ?",
@@ -167,8 +169,13 @@ describe.sequential("MRQ-80 deliberate decision resend", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ queue_revision: summaryBody.queue_revision }),
     });
-    expect(response.status).toBe(202);
-    expect(await response.json()).toMatchObject({ selected: 0, queued: 0, skipped_no_address: 0, remaining: 0, next_cursor: null, outbox_ids: [] });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: "conflict",
+        details: { operation: { reason_code: "NO_DECISIONS_REMAIN", effect: "no_op" } },
+      },
+    });
     const after = await env.DB.prepare("SELECT COUNT(*) AS total FROM outbox WHERE event_id = ?").bind(EVENT_ID).first<{ total: number }>();
     expect(after).toEqual(before);
   });

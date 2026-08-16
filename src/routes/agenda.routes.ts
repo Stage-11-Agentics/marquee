@@ -10,6 +10,8 @@ import {
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { auditStatementFromSelect } from "../lib/audit";
 import { purgePublicEmbedCache } from "../lib/public-site";
+import { explainPublicationSelection } from "../lib/publication-truth";
+import { claimRequestOperation, completeRequestOperation, eventOperationScope } from "../lib/request-operations";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { drainCalendarCancellations, prepareCalendarCancellationBatch } from "../jobs/calendar/invites";
@@ -178,15 +180,22 @@ const agendaSnapshotSchema = z.object({
       submission_id: z.string(),
       title: z.string(),
       starts_at: z.number().int().nullable(),
-      duration_min: z.number().int().positive().nullable(),
+      duration_min: z.number().int().nullable(),
       room: z.string().nullable(),
       building: z.string().nullable(),
       scheduled: z.boolean(),
       can_publish: z.boolean(),
       blocked_reason: z.string().nullable(),
       speakers: z.array(speakerSchema),
+      classification: z.string().optional(),
+      primary_reason_code: z.string().optional(),
+      reason_codes: z.array(z.string()).optional(),
+      reason_details: z.record(z.string(), z.unknown()).optional(),
+      observed_revision: z.object({ submission_updated_at: z.number().int(), agenda_updated_at: z.number().int().nullable() }).nullable().optional(),
+      anomaly: z.enum(["rejected", "withdrawn"]).nullable().optional(),
     })),
     public_agenda_url: z.string(),
+    anomaly_count: z.number().int().nonnegative().optional(),
   }),
   calendar: calendarDebtSchema,
   schedulable_statuses: z.array(z.enum(SCHEDULABLE_STATUS_OPTIONS)),
@@ -233,6 +242,10 @@ const errors = errorResponses([400, 401, 403, 404, 409, 422, 429, 500]);
 
 const batchPublishBody = z.object({
   submission_ids: z.array(z.string().min(1)).min(1).max(MAX_BATCH_PUBLISH_IDS),
+  expected_revisions: z.record(z.string().min(1), z.object({
+    submission_updated_at: z.number().int(),
+    agenda_updated_at: z.number().int().nullable(),
+  })).optional(),
 });
 
 const batchPublishResponse = z.object({
@@ -240,6 +253,14 @@ const batchPublishResponse = z.object({
   live: z.number().int().nonnegative(),
   not_yet_public: z.number().int().nonnegative(),
   public_agenda_url: z.string(),
+  operation: z.object({
+    operation_id: z.string(),
+    effect: z.enum(["changed", "no_op"]),
+    reason_code: z.string(),
+    notice: z.string(),
+    duplicate_skipped: z.number().int().nonnegative(),
+    dispatch_state: z.literal("not_required"),
+  }),
 });
 
 const batchPublishRoute = defineApiRoute(
@@ -263,17 +284,56 @@ const batchPublishRoute = defineApiRoute(
   },
   async (context) => {
     const { eventId } = context.req.valid("param");
-    const { submission_ids: submissionIds } = context.req.valid("json") as { submission_ids: string[] };
+    const {
+      submission_ids: submissionIds,
+      expected_revisions: expectedRevisions = {},
+    } = context.req.valid("json");
     if (new Set(submissionIds).size !== submissionIds.length) {
       throw ApiError.unprocessable("choose each Session only once", "submission_ids");
     }
     const current = await snapshotOrNotFound(context.env.DB, eventId);
-    const candidates = new Map(current.publication.candidates.map((candidate) => [candidate.submission_id, candidate]));
-    if (submissionIds.some((submissionId) => !candidates.get(submissionId)?.can_publish)) {
-      throw ApiError.conflict("one or more selected Sessions are no longer ready to publish; refresh the agenda and try again");
-    }
-
     const actor = await publicationActor(context);
+    const requestId = context.get("requestId") ?? crypto.randomUUID();
+    const operation = await claimRequestOperation({
+      db: context.env.DB,
+      scope: await eventOperationScope(context.env.DB, eventId),
+      route: "events.agenda.publish",
+      requestId,
+      actorKind: actor.kind,
+      actorPersonId: actor.personId,
+      request: { submission_ids: submissionIds, expected_revisions: expectedRevisions },
+    });
+    if (operation.replay) return context.json(operation.replay.body, operation.replay.status as 200);
+    const explanation = await explainPublicationSelection(
+      context.env.DB,
+      eventId,
+      submissionIds,
+      expectedRevisions,
+      operation.operationId,
+    );
+    const refused = explanation.rows.filter((row) => row.classification !== "READY_TO_PUBLISH");
+    if (refused.length > 0) {
+      const allAlreadyLive = refused.every((row) => row.classification === "PUBLIC_LIVE");
+      const reasonCode = allAlreadyLive ? "ALREADY_PUBLISHED" : refused[0]!.primaryReasonCode;
+      const notice = allAlreadyLive
+        ? `Nothing changed — all ${refused.length} selected Sessions are already live`
+        : `Nothing changed — ${refused.length} selected Session${refused.length === 1 ? " was" : "s were"} withheld`;
+      const error = ApiError.conflict(notice, {
+        operation: {
+          operation_id: operation.operationId,
+          effect: "no_op",
+          reason_code: reasonCode,
+          notice,
+          duplicate_skipped: explanation.duplicate_ids.length,
+          dispatch_state: "not_required",
+        },
+        ...explanation,
+      });
+      await completeRequestOperation(context.env.DB, operation.operationId, 409, error.toEnvelope(requestId));
+      throw error;
+    }
+    const candidates = new Map(current.publication.candidates.map((candidate) => [candidate.submission_id, candidate]));
+
     const now = Date.now();
     // One JSON binding keeps a real program under D1's binding limit. The
     // statement-count cap above is for the per-record audit rows in this
@@ -288,6 +348,23 @@ const batchPublishRoute = defineApiRoute(
       SET is_published = 1, updated_at = ?
       WHERE item.event_id = ? AND item.kind = 'session' AND item.is_published = 0
         AND item.submission_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+        AND item.starts_at IS NOT NULL
+        AND item.duration_min > 0
+        AND item.room_id IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM rooms item_room
+          JOIN buildings item_building
+            ON item_building.id = item_room.building_id
+           AND item_building.event_id = item_room.event_id
+          WHERE item_room.id = item.room_id
+            AND item_room.event_id = item.event_id
+        )
+        AND (
+          SELECT COUNT(*) FROM agenda_items item_count
+          WHERE item_count.event_id = item.event_id
+            AND item_count.submission_id = item.submission_id
+            AND item_count.kind = 'session'
+        ) = 1
         AND (
           SELECT COUNT(DISTINCT candidate.submission_id)
           FROM agenda_items candidate
@@ -298,6 +375,17 @@ const batchPublishRoute = defineApiRoute(
             AND candidate.kind = 'session'
             AND candidate.is_published = 0
             AND candidate_submission.status = 'accepted'
+            AND candidate.starts_at IS NOT NULL
+            AND candidate.duration_min > 0
+            AND candidate.room_id IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM rooms candidate_room
+              JOIN buildings candidate_building
+                ON candidate_building.id = candidate_room.building_id
+               AND candidate_building.event_id = candidate_room.event_id
+              WHERE candidate_room.id = candidate.room_id
+                AND candidate_room.event_id = candidate.event_id
+            )
             AND candidate_submission.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
         ) = ?
     `).bind(now, eventId, submissionIdsJson, eventId, submissionIdsJson, submissionIds.length);
@@ -321,7 +409,7 @@ const batchPublishRoute = defineApiRoute(
     // Keep one audit row per submission while retaining one D1 batch call.
     // Each helper-built INSERT ... SELECT has predicates that make audit
     // output conditional on both writes having actually landed.
-    const auditStatements = submissionIds.map((submissionId) => {
+    const auditStatements = submissionIds.map((submissionId: string) => {
       const candidate = candidates.get(submissionId)!;
       return auditStatementFromSelect(database, {
         eventId,
@@ -342,19 +430,48 @@ const batchPublishRoute = defineApiRoute(
       `, eventId, submissionId, now, now);
     });
     const results = await database.batch([agendaUpdate, submissionUpdate, ...auditStatements]);
-    await purgePublicEmbedCache(context.env.CACHE, { eventId });
     const publishedCount = Number(results[0]?.meta?.changes ?? 0);
     const submissionChanges = Number(results[1]?.meta?.changes ?? 0);
     if (publishedCount !== submissionIds.length || submissionChanges !== submissionIds.length) {
-      throw ApiError.conflict("the selected Sessions changed while publishing; refresh the agenda before trying again");
+      const observed = await explainPublicationSelection(
+        database,
+        eventId,
+        submissionIds,
+        expectedRevisions,
+        operation.operationId,
+      );
+      const error = ApiError.conflict("the selected Sessions changed while publishing; refresh the agenda before trying again", {
+        operation: {
+          operation_id: operation.operationId,
+          effect: "no_op",
+          reason_code: "STALE_SELECTION",
+          notice: "Nothing changed — refresh the agenda and review the selected Sessions again",
+          duplicate_skipped: observed.duplicate_ids.length,
+          dispatch_state: "not_required",
+        },
+        ...observed,
+      });
+      await completeRequestOperation(database, operation.operationId, 409, error.toEnvelope(requestId));
+      throw error;
     }
+    await purgePublicEmbedCache(context.env.CACHE, { eventId });
     const publication = await readAgendaPublication(database, eventId, current.event.slug);
-    return context.json({
+    const response = {
       published_count: publishedCount,
       live: publication.live,
       not_yet_public: publication.not_yet_public,
       public_agenda_url: publication.public_agenda_url,
-    }, 200);
+      operation: {
+        operation_id: operation.operationId,
+        effect: "changed" as const,
+        reason_code: "READY_TO_PUBLISH",
+        notice: `Published ${publishedCount} Session${publishedCount === 1 ? "" : "s"}`,
+        duplicate_skipped: explanation.duplicate_ids.length,
+        dispatch_state: "not_required" as const,
+      },
+    };
+    await completeRequestOperation(database, operation.operationId, 200, response);
+    return context.json(response, 200);
   },
 );
 

@@ -34,6 +34,7 @@ export const ERROR_STATUS_CODES = {
   conflict: 409,
   unprocessable: 422,
   rate_limited: 429,
+  service_unavailable: 503,
   internal_error: 500,
 } as const;
 
@@ -105,6 +106,13 @@ export class ApiError extends Error {
   static rateLimited(retryAfterSeconds: number): ApiError {
     return new ApiError("rate_limited", "rate limit exceeded", {
       headers: { "Retry-After": String(Math.max(1, Math.ceil(retryAfterSeconds))) },
+    });
+  }
+
+  static serviceUnavailable(message: string, details?: unknown): ApiError {
+    return new ApiError("service_unavailable", message, {
+      details,
+      headers: { "Retry-After": "60" },
     });
   }
 }

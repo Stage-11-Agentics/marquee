@@ -76,6 +76,7 @@ const ERROR_DESCRIPTIONS: Record<ApiErrorStatus, string> = {
   409: "Stale ETag or lifecycle conflict",
   422: "Syntactically valid but invalid domain state",
   429: "Rate limited",
+  503: "Temporarily unavailable; operation remains pending",
   500: "Unexpected error",
 };
 

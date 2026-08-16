@@ -64,7 +64,7 @@ describe.sequential("MRQ-20 agenda API", () => {
   test("CONTRACT · CNT-12 + AIA-07 show every accepted Session but publish only scheduled ones", async () => {
     const initial = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
     const initialBody = await initial.json<{ publication: { live: number; not_yet_public: number; candidates: Array<{ submission_id: string; title: string; scheduled: boolean; can_publish: boolean; blocked_reason: string | null; starts_at: number | null; room: string | null; building: string | null; speakers: Array<{ name: string }> }> } }>();
-    expect(initialBody.publication).toMatchObject({ live: 0, not_yet_public: 2 });
+    expect(initialBody.publication).toMatchObject({ live: 0, not_yet_public: 1 });
     const placedCandidate = initialBody.publication.candidates.find((candidate) => candidate.submission_id === "sub-agenda-placed");
     expect(placedCandidate).toMatchObject({ submission_id: "sub-agenda-placed", title: "Already placed", scheduled: true, can_publish: true, room: "Room 101", building: "North Hall" });
     expect(placedCandidate?.speakers[0]?.name).toBe("Demo Organizer");
@@ -103,7 +103,7 @@ describe.sequential("MRQ-20 agenda API", () => {
     expect(await published.json<{ published_count: number; live: number; not_yet_public: number; public_agenda_url: string }>()).toMatchObject({
       published_count: 1,
       live: 1,
-      not_yet_public: 1,
+      not_yet_public: 0,
       public_agenda_url: "/agenda?event=aie-nyc-2026",
     });
     expect(await env.DB.prepare("SELECT is_published FROM submissions WHERE id = ?").bind("sub-agenda-placed").first<{ is_published: number }>()).toMatchObject({ is_published: 1 });
@@ -136,7 +136,7 @@ describe.sequential("MRQ-20 agenda API", () => {
       const response = await request(`/api/v1/events/${DEMO_EVENT_ID}/agenda`);
       expect(response.status).toBe(200);
       const body = await response.json<{ publication: { live: number; not_yet_public: number; candidates: Array<{ submission_id: string }> } }>();
-      expect(body.publication).toMatchObject({ live: 1, not_yet_public: 1 });
+      expect(body.publication).toMatchObject({ live: 1, not_yet_public: 0 });
       expect(body.publication.candidates.some((candidate) => candidate.submission_id === "sub-agenda-placed")).toBe(false);
       expect(body.publication.candidates.some((candidate) => candidate.submission_id === "sub-agenda-accepted")).toBe(true);
 

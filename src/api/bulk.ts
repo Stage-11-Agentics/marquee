@@ -80,9 +80,9 @@ export const bulkItemFailureSchema = z
 export const bulkItemResultSchema = z
   .object({
     id: z.string().min(1),
-    outcome: z.enum(["succeeded", "failed"]),
+    outcome: z.enum(["succeeded", "already_in_state", "failed"]),
     resulting_status: z.string().nullable(),
-    error: z.string().optional(),
+    error: z.union([z.string(), z.object({ code: z.string(), message: z.string() })]).optional(),
   })
   .openapi("BulkItemResult");
 
@@ -91,6 +91,7 @@ export const BULK_OPERATION_STATES = [
   "running",
   "completed",
   "completed_with_failures",
+  "completed_noop",
 ] as const;
 
 /**
@@ -103,6 +104,7 @@ export const bulkResultSchema = z
     operation_id: ulidSchema,
     selected: z.number().int().min(0),
     succeeded: z.number().int().min(0),
+    already_in_state: z.number().int().min(0).optional(),
     failed: z.number().int().min(0),
     state: z.enum(BULK_OPERATION_STATES),
     outbox_enqueued: z
@@ -112,8 +114,19 @@ export const bulkResultSchema = z
       .describe("Publication/outbox rows enqueued by the operation"),
     /** Selected live sessions are reported even when the default is to skip them. */
     published_count: z.number().int().min(0).optional(),
+    // Outbox rows use UUID ids; only the durable operation id is a ULID.
+    outbox_ids: z.array(z.string().min(1)).optional(),
     failures: z.array(bulkItemFailureSchema).max(BULK_FAILURE_REPORT_LIMIT).optional(),
     results: z.array(bulkItemResultSchema).max(BULK_ID_LIMIT).optional(),
+    first_failure: bulkItemFailureSchema.nullable().optional(),
+    operation: z.object({
+      operation_id: ulidSchema,
+      effect: z.enum(["changed", "no_op"]),
+      reason_code: z.string().nullable(),
+      notice: z.string().nullable(),
+      duplicate_skipped: z.number().int().min(0),
+      dispatch_state: z.enum(["not_required", "pending", "dispatched"]),
+    }).optional(),
   })
   .openapi("BulkResult");
 
@@ -121,7 +134,7 @@ export type BulkResult = z.infer<typeof bulkResultSchema>;
 
 /** Construct a result with the count invariant checked. */
 export function buildBulkResult(input: BulkResult): BulkResult {
-  if (input.succeeded + input.failed > input.selected) {
+  if (input.succeeded + (input.already_in_state ?? 0) + input.failed > input.selected) {
     throw new Error(
       `bulk result invariant: succeeded(${input.succeeded}) + failed(${input.failed}) > selected(${input.selected})`,
     );

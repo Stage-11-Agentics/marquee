@@ -19,6 +19,7 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { getAuth } from "../lib/auth/auth-middleware";
+import { publicPublicationPredicate } from "../lib/publication-truth";
 import {
   demandStats,
   normalizeThreshold,
@@ -138,9 +139,7 @@ const readAgendaDemand = defineApiRoute(
            JOIN events conference ON conference.id = item.event_id
           WHERE item.event_id = ?
             AND conference.org_id = ?
-            AND item.kind = 'session'
-            AND item.is_published = 1
-            AND submission.status NOT IN ('rejected', 'withdrawn')`,
+            AND ${publicPublicationPredicate({ submission: "submission", agenda: "item", event: "conference" })}`,
       )
       .bind(eventId, orgId)
       .all<PublishedSessionRow>();

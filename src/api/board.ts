@@ -90,6 +90,7 @@ export interface BoardCard {
   format_id: string | null;
   wave: { id: string; name: string } | null;
   slot: BoardSlot | null;
+  post_publish_anomaly: "rejected" | "withdrawn" | null;
 }
 
 export interface BoardColumn {
@@ -129,6 +130,7 @@ interface BoardQueryRow {
   building: string | null;
   timezone: string;
   agenda_published: number | null;
+  post_publish_anomaly: "rejected" | "withdrawn" | null;
 }
 
 interface QueryParts {
@@ -140,9 +142,9 @@ const FROM = `FROM submissions s
 JOIN events event ON event.id = s.event_id
 LEFT JOIN formats format ON format.id = s.format_id
 LEFT JOIN waves wave ON wave.id = s.wave_id
-LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
-LEFT JOIN rooms room ON room.id = ai.room_id
-LEFT JOIN buildings building ON building.id = room.building_id`;
+LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.event_id = s.event_id AND ai.kind = 'session'
+LEFT JOIN rooms room ON room.id = ai.room_id AND room.event_id = ai.event_id
+LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id`;
 
 /**
  * The board is a projection of the record, so stage derivation is deliberately
@@ -267,6 +269,7 @@ function toCard(row: BoardQueryRow): BoardCard {
     format_id: row.format_id,
     wave: row.wave_id === null || row.wave === null ? null : { id: row.wave_id, name: row.wave },
     slot: formatSlot(row),
+    post_publish_anomaly: row.post_publish_anomaly,
   };
 }
 
@@ -327,7 +330,8 @@ export async function listBoard(
       room.name AS room,
       building.name AS building,
       event.timezone,
-      ai.is_published AS agenda_published
+      ai.is_published AS agenda_published,
+      CASE WHEN ai.is_published = 1 AND s.status IN ('rejected', 'withdrawn') THEN s.status ELSE NULL END AS post_publish_anomaly
     ${FROM}
     WHERE ${where}
     ORDER BY ${stableOrder}

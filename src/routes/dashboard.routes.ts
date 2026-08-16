@@ -19,6 +19,7 @@ import { localParts } from "../lib/event-time";
 import { isTaskOverdue } from "../lib/task-due";
 import { readAgendaBuildingComparison, readAgendaConflicts } from "./agenda.queries";
 import { projectCalendarDebt } from "../jobs/calendar/projection";
+import { classifyPublicationFact, readPublicationFacts } from "../lib/publication-truth";
 
 const dashboardCountSchema = z.object({
   id: z.string(),
@@ -116,6 +117,20 @@ async function hasTrackDeletedAtColumn(database: D1Database): Promise<boolean> {
   return row?.present === 1;
 }
 
+async function readDashboardPublicationTruth(database: D1Database, eventId: string) {
+  try {
+    const truth = await readPublicationFacts(database, eventId);
+    return truth.facts.map((fact) => classifyPublicationFact(fact, {
+      eventId,
+      publicBoundaryOpen: truth.publicBoundaryOpen,
+    }));
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/no such (?:table|column)/i.test(message)) return [];
+    throw error;
+  }
+}
+
 async function readDashboard(database: D1Database, eventId: string, now: number): Promise<DashboardSnapshot> {
   const includeCancelledAt = await hasSpeakerTaskCancellationColumn(database);
   const includeTemplateProvenance = await hasSpeakerTaskTemplateProvenance(database);
@@ -142,11 +157,12 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     : `
         (task.due_at = ${utcDayEnd} AND date(task.due_at / 1000, 'unixepoch') < ?)
         OR (task.due_at <> ${utcDayEnd} AND task.due_at < ?)`;
-  const [stageResult, formatResult, trackResult, waveResult, overdueResult, unplacedResult, taskResult, agendaConflicts, showBuildingComparison, notifiedSummary, calendarDebt] = await Promise.all([
+  const [stageResult, formatResult, trackResult, waveResult, overdueResult, unplacedResult, taskResult, agendaConflicts, showBuildingComparison, notifiedSummary, calendarDebt, publicationTruth] = await Promise.all([
     database.prepare(`
       SELECT ${dashboardStageSql(includeCancelledAt)}
       FROM submissions s
-      LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
+      JOIN events event ON event.id = s.event_id
+      LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.event_id = s.event_id AND ai.kind = 'session'
       WHERE s.event_id = ?
     `).bind(eventId).first<Record<string, number | null>>(),
     database.prepare(`
@@ -177,7 +193,9 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
         })} THEN submission.id END) AS accepted_count
       FROM waves wave
       LEFT JOIN submissions submission ON submission.event_id = wave.event_id AND submission.wave_id = wave.id
-      LEFT JOIN agenda_items wave_agenda ON wave_agenda.submission_id = submission.id AND wave_agenda.kind = 'session'
+      LEFT JOIN agenda_items wave_agenda ON wave_agenda.submission_id = submission.id
+        AND wave_agenda.event_id = submission.event_id
+        AND wave_agenda.kind = 'session'
       WHERE wave.event_id = ?
       GROUP BY wave.id, wave.name, wave.decision_on, wave.target_count, wave.sent_at, wave.position
       ORDER BY wave.position ASC, wave.id ASC
@@ -197,7 +215,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     database.prepare(`
       SELECT COUNT(DISTINCT s.id) AS count
       FROM submissions s
-      LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
+      LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.event_id = s.event_id AND ai.kind = 'session'
       WHERE s.event_id = ?
         AND ${submissionStatusPredicate("accepted_any", { includeCancelledAt })}
         AND ai.id IS NULL
@@ -226,6 +244,7 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     readDashboardBuildingComparison(database, eventId),
     summarizeNotNotifiedSubmissions(database, eventId),
     projectCalendarDebt(database, eventId),
+    readDashboardPublicationTruth(database, eventId),
   ]);
 
   const stages = stageResult ?? {};
@@ -300,6 +319,25 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
     note: calendarDebt.blocked.length > 0
       ? `${calendarDebt.blocked.length} recipient${calendarDebt.blocked.length === 1 ? "" : "s"} need an address first`
       : "open the agenda builder to send one batch per speaker",
+  const publicationRows = publicationTruth as ReturnType<typeof classifyPublicationFact>[];
+  const notYetPublic = publicationRows.filter((row) => row.classification === "READY_TO_PUBLISH").length;
+  const liveOnSite = publicationRows.filter((row) => row.classification === "PUBLIC_LIVE").length;
+  const publicationAnomalies = publicationRows.filter((row) => row.classification === "BOARD_ANOMALY").length;
+  const publicationReady: DashboardCount = {
+    id: "not_yet_public",
+    label: "Not yet public",
+    count: notYetPublic,
+    href: submissionsHref({ kind: "session", status: "not_yet_public" }),
+    note: "scheduled and ready to publish",
+  };
+  const liveOnSiteMetric: DashboardCount = {
+    id: "live_on_site",
+    label: "Live on site",
+    count: liveOnSite,
+    href: submissionsHref({ kind: "session", status: "live_on_site" }),
+    note: publicationAnomalies > 0
+      ? `${publicationAnomalies} published Session${publicationAnomalies === 1 ? "" : "s"} reversed after publish`
+      : "accepted Sessions visible on the public site",
   };
 
   return {
@@ -320,6 +358,8 @@ async function readDashboard(database: D1Database, eventId: string, now: number)
       overdueSubmissions,
       unplaced,
       conflicts,
+      publicationReady,
+      liveOnSiteMetric,
     ],
     task_preview: taskResult.results.map((row) => {
       const task = includeTemplateProvenance

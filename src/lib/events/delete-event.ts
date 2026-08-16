@@ -275,6 +275,15 @@ export async function deleteEventCascade(
     prepared(db, `DELETE FROM committees WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM reviewer_track_scopes WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM saved_views WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
+    prepared(
+      db,
+      `DELETE FROM request_operation_outbox
+       WHERE operation_id IN (
+         SELECT operation_id FROM request_operations WHERE event_id IN ${eventIdsSql}
+       )`,
+      ...eventBindings,
+    ),
+    prepared(db, `DELETE FROM request_operations WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM file_comments WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(
       db,

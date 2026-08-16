@@ -35,6 +35,7 @@ export const API_ERROR_CODES = [
   "conflict",
   "unprocessable",
   "rate_limited",
+  "service_unavailable",
   "internal_error",
 ] as const;
 
@@ -96,6 +97,11 @@ export const ERROR_TREATMENTS: Readonly<Record<MarqueeErrorCode, ErrorTreatment>
   rate_limited: {
     sentence: "Going faster than the system allows.",
     recovery: "Retrying shortly — nothing is lost.",
+    retryable: true,
+  },
+  service_unavailable: {
+    sentence: "The system accepted this operation and is finishing its delivery.",
+    recovery: "Retry shortly to see the durable result. Nothing needs to be sent again.",
     retryable: true,
   },
   internal_error: {

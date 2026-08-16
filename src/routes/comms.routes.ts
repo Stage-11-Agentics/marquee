@@ -7,7 +7,6 @@ import { ApiError } from "../api/errors";
 import { authHasRole, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { listCommsAudience, type CommsRecipientRow } from "../jobs/mail/audience";
-import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
 import {
@@ -39,6 +38,7 @@ import {
 } from "../lib/venue-geometry";
 import { hasSpeakerTaskCancellationColumn, submissionFilterSchema } from "./submissions.queries";
 import { auditStatement } from "../lib/audit";
+import { claimRequestOperation, completeRequestOperation, dispatchRequestOperationNow, eventOperationScope, linkRequestOperationOutbox, markRequestOperationDispatchPending } from "../lib/request-operations";
 
 /**
  * Attendee claim mail is not conference communication, and this surface renders
@@ -72,30 +72,47 @@ const templateSchema = z.object({
 });
 
 export const reminderSelectorSchema = z.object({
-  status: z.string().optional(),
-  track_id: z.string().optional(),
-  format_id: z.string().optional(),
+  status: z.string().trim().min(1).optional(),
+  track_id: z.string().trim().min(1).optional(),
+  format_id: z.string().trim().min(1).optional(),
   task_state: z.enum(["open", "done"]).optional(),
   /** Exact selections use json_each(?) rather than one D1 placeholder per row. */
-  submission_ids: z.array(z.string().min(1)).max(500).optional(),
-  person_ids: z.array(z.string().min(1)).max(500).optional(),
+  submission_ids: z.array(z.string().trim().min(1)).max(500).optional(),
+  person_ids: z.array(z.string().trim().min(1)).max(500).optional(),
   /** Board selections preserve the selected person/submission relationship. */
   recipient_pairs: z.array(z.object({
-    person_id: z.string().min(1),
-    submission_id: z.string().min(1).nullable(),
+    person_id: z.string().trim().min(1),
+    submission_id: z.string().trim().min(1).nullable(),
   })).max(500).optional(),
   /** Existing selectors keep their prior semantics unless the caller opts in. */
   role: z.enum(["speaker", "co_speaker", "moderator", "chairperson", "submitter", "sponsor_contact"]).optional(),
-});
+}).strict();
 
-const selectorSchema = reminderSelectorSchema
-  .default({});
+type ReminderSelectorShape = z.infer<typeof reminderSelectorSchema>;
+const selectorSchema = reminderSelectorSchema.superRefine((selector: ReminderSelectorShape, context: z.RefinementCtx) => {
+  const dimensions = ["status", "track_id", "format_id", "task_state", "submission_ids", "person_ids", "recipient_pairs", "role"] as const;
+  if (!dimensions.some((dimension) => {
+    const value = selector[dimension];
+    return Array.isArray(value) ? value.length > 0 : value !== undefined;
+  })) {
+    context.addIssue({ code: "custom", message: "selector must name at least one audience dimension", path: [] });
+  }
+  for (const dimension of ["submission_ids", "person_ids", "recipient_pairs"] as const) {
+    if (selector[dimension]?.length === 0) {
+      context.addIssue({ code: "custom", message: `${dimension} must not be empty`, path: [dimension] });
+    }
+  }
+});
 
 export type ReminderSelector = z.infer<typeof reminderSelectorSchema>;
 export type ReminderRecipientPair = NonNullable<ReminderSelector["recipient_pairs"]>[number];
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function duplicateCount(values: readonly string[]): number {
+  return values.length - new Set(values).size;
 }
 
 function uniqueRecipientPairs(pairs: readonly ReminderRecipientPair[]): ReminderRecipientPair[] {
@@ -191,6 +208,7 @@ const sendResponse = z.object({
   selected: z.number(),
   queued: z.number(),
   duplicate: z.number(),
+  duplicate_skipped: z.number().int().nonnegative(),
   skipped: z.array(skippedRecipientSchema),
   outbox_ids: z.array(z.string()),
   outbox_rows: z.array(z.object({
@@ -199,6 +217,14 @@ const sendResponse = z.object({
     outbox_id: z.string(),
     inserted: z.boolean(),
   })),
+  operation: z.object({
+    operation_id: z.string(),
+    effect: z.enum(["changed", "no_op"]),
+    reason_code: z.string().nullable(),
+    notice: z.string().nullable(),
+    duplicate_skipped: z.number().int().nonnegative(),
+    dispatch_state: z.enum(["not_required", "pending", "dispatched"]),
+  }),
 });
 
 function requireComms(context: Parameters<NonNullable<ApiRouteEntry["handler"]>>[0], eventId: string, write: boolean): void {
@@ -460,6 +486,7 @@ export async function recipientsFor(
        JOIN events conference ON conference.id = s.event_id
        JOIN participations part ON part.submission_id = s.id
        JOIN people p ON p.id = part.person_id
+         AND p.org_id = conference.org_id
        LEFT JOIN agenda_items ai ON ai.id = (
          SELECT selected_agenda.id FROM agenda_items selected_agenda
          WHERE selected_agenda.event_id = s.event_id
@@ -544,6 +571,7 @@ export async function recipientsFor(
          FROM memberships membership
          JOIN people person ON person.id = membership.person_id
          JOIN events event ON event.id = membership.event_id
+           AND person.org_id = event.org_id
          LEFT JOIN speaker_tasks st ON st.id = (
            SELECT selected_task.id FROM speaker_tasks selected_task
            WHERE selected_task.event_id = membership.event_id
@@ -645,20 +673,23 @@ async function skippedRecipientsFor(
   const personIds = unique(missing.map((pair) => pair.person_id));
   const [people, participations, memberships] = await Promise.all([
     db.prepare(
-      `SELECT id, name, email FROM people
-       WHERE id IN (SELECT CAST(value AS TEXT) FROM json_each(?))`,
-    ).bind(JSON.stringify(personIds)).all<ReminderPerson>(),
+      `SELECT person.id, person.name, person.email FROM people person
+       JOIN events event ON event.id = ? AND person.org_id = event.org_id
+       WHERE person.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))`,
+    ).bind(eventId, JSON.stringify(personIds)).all<ReminderPerson>(),
     db.prepare(
       `SELECT participation.person_id, participation.submission_id, participation.role
        FROM participations participation
        JOIN submissions submission ON submission.id = participation.submission_id
-       WHERE submission.event_id = ?
-         AND participation.person_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))`,
+         AND submission.event_id = ?
+       WHERE participation.person_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))`,
     ).bind(eventId, JSON.stringify(personIds)).all<ReminderParticipation>(),
     db.prepare(
-      `SELECT person_id, role FROM memberships
-       WHERE event_id = ?
-         AND person_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))`,
+      `SELECT membership.person_id, membership.role FROM memberships membership
+       JOIN events event ON event.id = membership.event_id
+       JOIN people person ON person.id = membership.person_id AND person.org_id = event.org_id
+       WHERE membership.event_id = ?
+         AND membership.person_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))`,
     ).bind(eventId, JSON.stringify(personIds)).all<ReminderMembership>(),
   ]);
   const peopleById = new Map(people.results.map((person) => [person.id, person]));
@@ -713,7 +744,7 @@ async function resolveReminderSelection(
   if (!exactPairs) return { selected: resolved.length, recipients, skipped };
   const unresolved = await skippedRecipientsFor(db, eventId, selector, exactPairs, resolved);
   return {
-    selected: exactPairs.length,
+    selected: resolved.length,
     recipients,
     skipped: [...skipped, ...unresolved],
   };
@@ -904,7 +935,7 @@ const sendComms = defineApiRoute(
       body: { content: { "application/json": { schema: z.object({ selector: selectorSchema, template_key: z.string().optional(), subject: z.string().optional(), body: z.string().optional() }) } } },
     },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
-    responses: { 202: { content: { "application/json": { schema: sendResponse } }, description: "Messages queued" }, ...errorResponses([400, 401, 403, 500]) },
+    responses: { 202: { content: { "application/json": { schema: sendResponse } }, description: "Messages queued" }, ...errorResponses([400, 401, 403, 404, 429, 500, 503]) },
   },
   async (context) => {
     const { eventId } = context.req.valid("param");
@@ -928,8 +959,60 @@ const sendComms = defineApiRoute(
     } else {
       rejectUnknownMergeFields(body.subject!, body.body!);
     }
+    const requestId = context.get("requestId") ?? crypto.randomUUID();
+    const operation = await claimRequestOperation({
+      db: context.env.DB,
+      scope: await eventOperationScope(context.env.DB, eventId),
+      route: "events.comms.send",
+      idempotencyKey: context.req.header("Idempotency-Key"),
+      requestId,
+      actorKind: actor.kind,
+      actorPersonId: actor.personId,
+      request: body,
+    });
+    if (operation.replay) return context.json(operation.replay.body, operation.replay.status as 202);
+    const duplicateSkipped = duplicateCount(body.selector.submission_ids ?? [])
+      + duplicateCount(body.selector.person_ids ?? [])
+      + ((body.selector.recipient_pairs?.length ?? 0) - uniqueRecipientPairs(body.selector.recipient_pairs ?? []).length);
     const selection = await resolveReminderSelection(context.env.DB, eventId, body.selector);
     const recipients = selection.recipients;
+    if (selection.selected === 0) {
+      const operationResponse = {
+        operation_id: operation.operationId,
+        effect: "no_op" as const,
+        reason_code: "NO_VALID_RECIPIENT",
+        notice: "Nothing changed — that communication selector resolves to nobody in this conference",
+        duplicate_skipped: duplicateSkipped,
+        dispatch_state: "not_required" as const,
+      };
+      const error = new ApiError("not_found", "that communication selector resolves to nobody in this conference", {
+        details: { operation: operationResponse },
+      });
+      const errorBody = error.toEnvelope(requestId);
+      await completeRequestOperation(context.env.DB, operation.operationId, 404, errorBody);
+      throw error;
+    }
+    if (recipients.length === 0) {
+      const response = {
+        selected: selection.selected,
+        queued: 0,
+        duplicate: 0,
+        duplicate_skipped: duplicateSkipped,
+        skipped: selection.skipped,
+        outbox_ids: [],
+        outbox_rows: [],
+        operation: {
+          operation_id: operation.operationId,
+          effect: "no_op" as const,
+          reason_code: "NO_VALID_RECIPIENT",
+          notice: "Nothing changed — no selected recipient has a valid address",
+          duplicate_skipped: duplicateSkipped,
+          dispatch_state: "not_required" as const,
+        },
+      };
+      await completeRequestOperation(context.env.DB, operation.operationId, 202, response);
+      return context.json(response, 202);
+    }
     const queued = await enqueueBulkReminder({
       db: context.env.DB,
       eventId,
@@ -950,11 +1033,28 @@ const sendComms = defineApiRoute(
     for (const item of queued) {
       if (item.inserted) {
         outboxIds.push(item.id);
-        await enqueueMailMessage(context.env.MAIL_QUEUE, item.id);
       } else {
         duplicate += 1;
       }
     }
+    await linkRequestOperationOutbox(context.env.DB, operation.operationId, outboxIds);
+    const pendingResponse = {
+      selected: selection.selected,
+      queued: outboxIds.length,
+      duplicate,
+      duplicate_skipped: duplicateSkipped,
+      skipped: selection.skipped,
+      outbox_ids: outboxIds,
+      outbox_rows: outboxRows,
+      operation: {
+        operation_id: operation.operationId,
+        effect: outboxIds.length > 0 ? "changed" as const : "no_op" as const,
+        reason_code: outboxIds.length > 0 ? null : "DUPLICATE_SKIPPED",
+        notice: outboxIds.length > 0 ? `Queued ${outboxIds.length} message${outboxIds.length === 1 ? "" : "s"}` : "Nothing changed — every selected message was already queued",
+        duplicate_skipped: duplicateSkipped,
+        dispatch_state: outboxIds.length > 0 ? "pending" as const : "not_required" as const,
+      },
+    };
     const auditRows = queued.flatMap((item, index) => {
       const recipient = recipients[index];
       if (!item.inserted || !recipient?.submission_id) return [];
@@ -976,7 +1076,19 @@ const sendComms = defineApiRoute(
       })];
     });
     if (auditRows.length > 0) await context.env.DB.batch(auditRows);
-    return context.json({ selected: selection.selected, queued: outboxIds.length, duplicate, skipped: selection.skipped, outbox_ids: outboxIds, outbox_rows: outboxRows }, 202);
+    if (outboxIds.length > 0) {
+      await markRequestOperationDispatchPending(context.env.DB, operation.operationId, 202, pendingResponse, outboxIds);
+      await dispatchRequestOperationNow(context.env.DB, context.env.MAIL_QUEUE, operation.operationId, outboxIds);
+    }
+    const response = {
+      ...pendingResponse,
+      operation: {
+        ...pendingResponse.operation,
+        dispatch_state: outboxIds.length > 0 ? "dispatched" as const : "not_required" as const,
+      },
+    };
+    await completeRequestOperation(context.env.DB, operation.operationId, 202, response, { outboxIds });
+    return context.json(response, 202);
   },
 );
 

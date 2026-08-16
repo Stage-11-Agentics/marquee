@@ -150,8 +150,8 @@ test("AC-117, AC-93 · the same bulk action twice relies on the UNIQUE idempoten
     headers: { cookie: `mq_session=${session.id}`, "content-type": "application/json" },
     body: JSON.stringify({ selector: { person_ids: [], submission_ids: [] }, template_key: "reminder_generic" }),
   }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
-  expect(emptyResponse.status).toBe(202);
-  expect(await emptyResponse.json<{ selected: number; queued: number; duplicate: number; skipped: unknown[]; outbox_ids: string[]; outbox_rows: unknown[] }>()).toEqual({ selected: 0, queued: 0, duplicate: 0, skipped: [], outbox_ids: [], outbox_rows: [] });
+  expect(emptyResponse.status).toBe(400);
+  expect(await emptyResponse.json()).toMatchObject({ error: { code: "malformed_request" } });
   const emptyCount = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbox WHERE event_id = 'evt_mail'").first<{ n: number }>();
   expect(emptyCount?.n).toBe(0);
 });
@@ -278,7 +278,7 @@ test("CONTRACT · MRQ-180 · exact onboarding pairs queue a co-speaker without a
   }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
   expect(roleFilteredResponse.status).toBe(202);
   expect(await roleFilteredResponse.json()).toMatchObject({
-    selected: 2,
+    selected: 1,
     queued: 1,
     duplicate: 0,
     skipped: [{ person_id: "per_mrq180_co", name: "Marcus Okafor", reason: "does not have the speaker role on this Session" }],

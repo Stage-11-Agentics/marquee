@@ -17,6 +17,7 @@ import { DECISION_RECIPIENT_ROLES, participantListSql, primaryParticipantSql } f
 import { reviewAggregateColumns } from "../lib/review-aggregate";
 import { submissionReferenceSearchPatterns, submissionReferenceSearchSql } from "../lib/submission-reference";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
+import { publicationClassificationPredicate } from "../lib/publication-truth";
 import {
   executeListPage,
   orderClause,
@@ -48,6 +49,8 @@ export const SUBMISSION_STATUS_FILTERS = [
   "onboarding",
   "scheduled",
   "published",
+  "not_yet_public",
+  "live_on_site",
   "not_notified",
 ] as const;
 
@@ -164,6 +167,9 @@ export function submissionStatusPredicate(
   const submission = aliases.submission ?? "s";
   const agenda = aliases.agenda ?? "ai";
   const includeCancelledAt = aliases.includeCancelledAt ?? false;
+  if (status === "not_yet_public" || status === "live_on_site") {
+    return publicationClassificationPredicate(status, { submission, agenda, event: "event" });
+  }
   if (status === "scheduled") return `${agenda}.id IS NOT NULL AND ${agenda}.is_published = 0`;
   if (status === "published") return `${agenda}.id IS NOT NULL AND ${agenda}.is_published = 1`;
   if (status === "waved") return `${submission}.status = 'accepted'
@@ -324,9 +330,9 @@ function filterParts(
 const BASE_FROM = `FROM submissions s
 JOIN events event ON event.id = s.event_id
 LEFT JOIN formats format ON format.id = s.format_id
-LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
-LEFT JOIN rooms room ON room.id = ai.room_id
-LEFT JOIN buildings building ON building.id = room.building_id`;
+LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.event_id = s.event_id AND ai.kind = 'session'
+LEFT JOIN rooms room ON room.id = ai.room_id AND room.event_id = ai.event_id
+LEFT JOIN buildings building ON building.id = room.building_id AND building.event_id = room.event_id`;
 
 function submissionFrom(includeFormMetadata: boolean): string {
   return `${BASE_FROM}${includeFormMetadata ? "\nLEFT JOIN forms form ON form.id = s.form_id AND form.event_id = s.event_id" : ""}`;
