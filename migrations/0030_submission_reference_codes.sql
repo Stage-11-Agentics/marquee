@@ -4,27 +4,43 @@
 ALTER TABLE submissions ADD COLUMN reference_code TEXT;
 
 -- Rank null rows by the immutable creation tuple, after any already-populated
--- floor in the event. The WHERE clause keeps a rerun from renumbering a
+-- floor in the event. Restricting to null rows keeps a rerun from renumbering a
 -- populated row and keeps a partially applied backfill collision-free.
-WITH ranked AS (
+--
+-- The ranking is joined in, never reached through a correlated subquery. That
+-- distinction is the whole migration: a scalar subquery correlated to the row
+-- being written (`WHERE ranked.id = submissions.id`) is not a materialisation
+-- barrier, so SQLite may re-evaluate it per output row -- against rows this same
+-- statement has already updated. The window then re-ranks a shrinking set while
+-- the floor moves underneath it. On an empty table the effect is invisible,
+-- which is why the local migrate-then-seed flow never showed it; on a populated
+-- one it is catastrophic. Against a production snapshot of 1008 submissions the
+-- correlated form emitted 32 distinct codes and gave `SUB-4` to 940 rows, so
+-- `uq_submissions_reference` could not be created. Three rows in one event are
+-- enough to reproduce it.
+--
+-- Here the FROM subquery is uncorrelated -- it never references the outer row --
+-- so it is an ordinary join source, computed once before any write lands. Each
+-- target matches exactly one ranked row because `id` is the primary key on both
+-- sides, which also keeps this clear of SQLite's rule that a multiply-matched
+-- UPDATE ... FROM row picks an arbitrary source.
+UPDATE submissions
+SET reference_code = 'SUB-' || ranked.sequence
+FROM (
   SELECT
-    id,
-    ROW_NUMBER() OVER (PARTITION BY submissions.event_id ORDER BY submissions.created_at, submissions.id)
+    candidate.id AS id,
+    ROW_NUMBER() OVER (PARTITION BY candidate.event_id ORDER BY candidate.created_at, candidate.id)
       + COALESCE(existing.last_sequence, 0) AS sequence
-  FROM submissions
+  FROM submissions AS candidate
   LEFT JOIN (
     SELECT event_id, MAX(CAST(substr(reference_code, 5) AS INTEGER)) AS last_sequence
     FROM submissions
     WHERE reference_code IS NOT NULL
     GROUP BY event_id
-  ) AS existing ON existing.event_id = submissions.event_id
-  WHERE reference_code IS NULL
-)
-UPDATE submissions
-SET reference_code = 'SUB-' || (
-  SELECT ranked.sequence FROM ranked WHERE ranked.id = submissions.id
-)
-WHERE reference_code IS NULL;
+  ) AS existing ON existing.event_id = candidate.event_id
+  WHERE candidate.reference_code IS NULL
+) AS ranked
+WHERE submissions.id = ranked.id;
 
 CREATE UNIQUE INDEX uq_submissions_reference
   ON submissions(event_id, reference_code);
