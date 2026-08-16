@@ -1,3 +1,4 @@
+import type { D1Database } from "@cloudflare/workers-types";
 import type { FormRow } from "../db/schema";
 
 export const SUBMISSION_DEFAULT_LIMIT_KEY = "submission_default_limit";

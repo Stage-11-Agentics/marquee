@@ -29,7 +29,9 @@ test("CONTRACT · MRQ-245 · the builder shows effective inheritance, finite ove
   expect(root.textContent).toContain("7 abstracts per person");
   const setOverride = [...root.querySelectorAll("button")].find((button) => button.textContent === "Set form override");
   expect(setOverride).toBeDefined();
-  act(() => setOverride?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  act(() => {
+    setOverride?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
   expect(patches).toContainEqual({ submitter_limit_inherit: false, per_submitter_limit: 7 });
 
   patches.length = 0;
@@ -43,10 +45,14 @@ test("CONTRACT · MRQ-245 · the builder shows effective inheritance, finite ove
   expect(input.min).toBe("1");
   expect(input.max).toBe("100");
   input.value = "9";
-  act(() => input.dispatchEvent(new Event("input", { bubbles: true })));
+  act(() => {
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   expect(patches).toContainEqual({ per_submitter_limit: 9, submitter_limit_inherit: false });
   const clear = [...root.querySelectorAll("button")].find((button) => button.textContent === "Use conference default");
-  act(() => clear?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  act(() => {
+    clear?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
   expect(patches).toContainEqual({ submitter_limit_inherit: true });
 });
 
