@@ -29,11 +29,59 @@ The public form, refusal paths, and builder all read one effective value.
 - Browser/computer-use, live writes, deployment, review-agent work, the full
   gate, and merge are held by the brief. Stop at the orchestrator handoff.
 
+## Contract decisions (Plan-review Cycle 1; authoritative)
+
+- `submitter_limit_inherit` is the state control on the admin wire. When it is
+  present on PATCH, `true` means inherit and `false` means explicit; the latter
+  requires `per_submitter_limit` in the same request. When the flag is absent,
+  PATCH preserves the current inherit state, and a lone
+  `per_submitter_limit` never converts an inheriting form into an override.
+  The builder sends both fields on every whole-object save, so renames and
+  close-date edits cannot pin an inheriting form to the current effective value.
+  Clearing an override is `submitter_limit_inherit: true`.
+- On create, `per_submitter_limit` loses its Zod `.default(3)` and becomes
+  optional. A create with neither capacity field inherits; a new explicit
+  override sends `submitter_limit_inherit: false` and a number. For compatibility
+  with older create clients, a supplied number without the flag is treated as
+  explicit only on create; new builder/API callers send the flag deliberately.
+  The OpenAPI default disappearing is intentional and is covered by the route
+  behavior rather than by a schema-text assertion.
+- `forms.per_submitter_limit` remains the dormant raw stored value while
+  `submitter_limit_inherit = 1`; no writer maintains it and no admin reader
+  treats it as authoritative. Admin form rows expose both that raw field and
+  `effective_submitter_limit`. The public `form.per_submitter_limit` continues
+  to mean the number the public form enforces, so it becomes the effective
+  number there. Existing explicit rows retain their current raw and effective
+  values.
+- Both form-copy paths carry capacity state. A duplicated form preserves the
+  source's inherit flag and dormant/explicit number. An event-to-event copy
+  arrives inheriting when the source inherits and then resolves against the
+  destination event's default; an overridden source carries its explicit
+  number. Both cases receive behavior coverage near the existing copy tests.
+- The event default is a bounded integer from 1 through 100. Missing or
+  malformed/out-of-range `event_settings.submission_default_limit` values fall
+  back to 3 without throwing on a public request. An explicit form value of 0
+  remains the existing unlimited state; inherited forms use the parsed event
+  default. The public query folds the setting into its existing event join to
+  avoid a serial D1 round-trip, then passes a synchronous event context and raw
+  form to `effectiveSubmitterLimit(event, form)`.
+- The refusal copy keeps the ticket's exact noun, "abstracts", for both form
+  kinds in this ticket; kind-aware nouns are deferred. The CLI form registry
+  exposes the inherit state alongside the raw and effective values so the
+  agent-native surface does not diverge from the builder.
+- The ticket's requested builder e2e is explicitly substituted by a
+  happy-dom/Preact runtime component test because browser/computer-use is held
+  by the brief. The e2e remains an orchestrator-owned follow-up, not an implied
+  claim in this handoff.
+
 ## Draft acceptance scope
 
 - The effective-value matrix is observable: an inheriting form uses the event
   default, an explicit override wins, clearing the override returns to inherit,
   and the event-default fallback is stable when no setting exists.
+- Saving an inheriting form's name, close date, or the builder's whole settings
+  payload leaves it inheriting; changing the event default changes its effective
+  value without a form-capacity write.
 - Migration of a pre-existing form leaves its inherit flag off and preserves its
   previous enforcement value; new forms start with inherit on.
 - Changing the event default changes enforcement and displayed effective values
