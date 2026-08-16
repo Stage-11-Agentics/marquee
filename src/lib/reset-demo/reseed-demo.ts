@@ -33,7 +33,12 @@ export const WIPE_ORDER = [
   "saved_views",
   "audit_log",
   "file_comments",
+  // Cancellation jobs are demo-event material and are discarded with the
+  // reset; the UID high-water table immediately below is deliberately listed
+  // without a DELETE plan because SEQUENCE must survive this operation.
+  "calendar_cancellations",
   "calendar_invites",
+  "calendar_sequence_ledger",
   "speaker_tasks",
   "task_templates",
   "agenda_items",
@@ -121,6 +126,7 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   // Global control-plane state: it must survive a demo reset (see above).
   mirror_credentials: null,
   mirror_state: null,
+  calendar_sequence_ledger: null,
   webhook_deliveries: {
     sql: `DELETE FROM webhook_deliveries WHERE endpoint_id IN (SELECT id FROM webhook_endpoints WHERE event_id IN (${ORG_EVENTS}))`,
     bindings: ORG,
@@ -225,6 +231,10 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   },
   calendar_invites: {
     sql: `DELETE FROM calendar_invites WHERE submission_id IN (SELECT id FROM submissions WHERE event_id IN (${ORG_EVENTS}))`,
+    bindings: ORG,
+  },
+  calendar_cancellations: {
+    sql: `DELETE FROM calendar_cancellations WHERE event_id IN (${ORG_EVENTS})`,
     bindings: ORG,
   },
   speaker_tasks: {

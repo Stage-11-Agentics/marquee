@@ -16,6 +16,7 @@ import { processMirrorQueue } from "./jobs/mirror/consumer";
 import { MIRROR_OUTBOX_MESSAGE_TYPE } from "./jobs/mirror/messages";
 import { MIRROR_INBOUND_MESSAGE_TYPE } from "./jobs/mirror/messages";
 import { MAIL_SCHEDULE_CRON } from "./jobs/mail/schedule";
+import { drainCalendarCancellations } from "./jobs/calendar/invites";
 import type { Principal } from "./api/runtime";
 import type { ApiGrant } from "./api/grants";
 import { BUILD_INFO } from "./lib/observability/build-info";
@@ -348,7 +349,10 @@ const worker: ExportedHandler<Env> = {
     try {
       let outcome = "ran";
       if (controller.cron === MAIL_SCHEDULE_CRON) {
-        await runMailSchedule(env.DB, correlateQueue(env.MAIL_QUEUE, runId), Date.now());
+        const scheduledQueue = correlateQueue(env.MAIL_QUEUE, runId);
+        const now = Date.now();
+        await runMailSchedule(env.DB, scheduledQueue, now);
+        await drainCalendarCancellations({ db: env.DB, now, queue: scheduledQueue });
         // Request traffic normally dispatches the mirror promptly. The hourly
         // mail cron is the idle-deployment backstop for committed outbox work.
         await dispatchPendingMirrorMessages(env, runId, Date.now());

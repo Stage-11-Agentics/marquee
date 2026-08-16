@@ -80,6 +80,16 @@ export const IDEMPOTENCY_REGISTRY = Object.freeze({
   calendar: (submissionId: Id, personId: Id, sequence: number, method: "REQUEST" | "CANCEL"): EntityId =>
     entityId(`${submissionId}:${personId}:${sequence}:${method}`),
 
+  /** Calendar REQUEST: one UID revision. The snapshot and UID own the recipient grain. */
+  calendarRequest: (uid: Id, sequence: number): EntityId => entityId(`${uid}:${sequence}`),
+
+  /**
+   * Calendar CANCEL: one durable uid:sequence intent. The template key is the
+   * method discriminator; retries reuse this exact entity id and provider key
+   * so a byte-identical CANCEL cannot be sent as a second revision.
+   */
+  calendarCancellation: (uid: Id, sequence: number): EntityId => entityId(`${uid}:${sequence}`),
+
   /** Auth mail tied to a minted link: the link row is the one-time send action. */
   authLink: (linkId: Id): EntityId => entityId(linkId),
 

@@ -1217,3 +1217,33 @@ change publication.
 `EVALUATION.md` §2.10 owns the verification rows. Post-deadline band; no gate count changes.
 
 **Next mint: AC-319.**
+
+---
+
+## Amendment 28 — the calendar never lies *(2026-08-16, plumbing fold)*
+
+The calendar delivery record now carries the material that was actually
+delivered, and cancellation is a durable correction over that record rather
+than a fresh read of mutable session data. This is a post-deadline addition;
+it does not change the live competition count or tier arithmetic.
+
+### US-94 · Keep a speaker's calendar truthful
+
+**As a** speaker, **I want** a moved or withdrawn session to update or leave my
+calendar using the same identity and meeting details as the invite I received,
+**so that** a reversal never strands an event or describes a different meeting.
+
+- **AC-319**: Every delivered `METHOD:REQUEST` stamps an immutable snapshot of its title, description, time, duration, timezone, location, geography, URL, attendee, and organizer in the same revision fence as its UID sequence. A `METHOD:CANCEL` uses that snapshot byte-for-byte for the event material, keeps the UID, and advances `SEQUENCE` exactly once. Every explicit re-POST is intentionally a new revision; materiality comparison is deferred to the schedule-update stream.
+- **AC-320**: Unscheduling a session and reversing an acceptance mint one cancellation intent per previously active invite in the same database batch as the agenda deletion. The returned cancellation count equals the intents created by that operation, and the intent remains durable even when the mutable agenda/session projection is gone.
+- **AC-321**: Migration 0026 reconstructs snapshots from the live rows while they still exist. An unbackfillable, missing, or malformed legacy snapshot fails closed as a durable per-invite failure, increments its attempt count, leaves that invite active, and does not abort valid cancellations in the same batch.
+- **AC-322**: Request-owned cancellation paths drain only the idempotency keys they just admitted, so a reversal, unschedule, or person-removal count cannot include another event's work. The cron is the only global drain and remains able to discover queued work without a request scope.
+- **AC-323**: Validation and provider failures increment cancellation attempts, stop admitting a row at the terminal cap, and do not let poisoned rows consume the drain window needed by healthy cancellations. The terminal state is visible as `abandoned`, not an endlessly retrying `failed` row.
+- **AC-324**: A failed cancellation retries with the same UID, sequence, idempotency key, rendered ICS bytes, and original `cancelled_at`/`DTSTAMP`; a later successful delivery changes only delivery state, never calendar material.
+- **AC-325**: The UID sequence floor is seeded from existing invites and survives invite deletion, demo reset, and delete/recreate, so a new request for a known UID can never regress below the durable high-water mark.
+- **AC-326**: A cancellation whose snapshot attendee does not match the intended recipient, or whose organizer does not match the stamped REQUEST organizer, fails closed without sending an outbox message or mutating the invite as cancelled.
+- **AC-327**: If a REQUEST is interrupted after idempotent outbox admission but before its invite/ledger write or queue admission, the resumed request re-admits the existing outbox row without creating a second calendar revision.
+- **AC-328**: Removing a person from an invited session, including a calendar-recipient `submitter`, commits the cancellation intent with participation removal and leaves no active invite for that recipient. Conference deletion and import undo remain the deliberate no-CANCEL paths recorded in the ticket contract.
+
+`EVALUATION.md` §2.11 owns the verification rows. Post-deadline band; no gate count changes. Built by MRQ-228.
+
+**Next mint: AC-329.**

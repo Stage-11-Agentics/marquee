@@ -10,6 +10,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { writeSubmissionDecision } from "../jobs/cascade/decisions";
+import { drainCalendarCancellations, prepareCalendarCancellationBatch } from "../jobs/calendar/invites";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { membershipAllowsGrant, roleForEvent, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { decisionHistory, decisionRecipient } from "../lib/decision-history";
@@ -1688,7 +1689,25 @@ const removeParticipant = defineApiRoute(
     }
     const actor = await actorFor(context);
     const now = Date.now();
+    const calendarRecipientRole = participation.role === "speaker" || participation.role === "submitter";
+    const stillReceivesCalendar = calendarRecipientRole
+      ? await context.env.DB.prepare(
+        `SELECT 1 FROM participations
+          WHERE submission_id = ? AND person_id = ? AND role IN ('speaker', 'submitter') AND id <> ?
+          LIMIT 1`,
+      ).bind(submissionId, participation.person_id, participationId).first()
+      : true;
+    const calendarBatch = calendarRecipientRole && !stillReceivesCalendar
+      ? await prepareCalendarCancellationBatch({
+        db: context.env.DB,
+        eventId,
+        personId: participation.person_id,
+        submissionId,
+        now,
+      })
+      : null;
     await context.env.DB.batch([
+      ...(calendarBatch?.statements ?? []),
       context.env.DB.prepare("DELETE FROM participations WHERE id = ? AND submission_id = ?").bind(participationId, submissionId),
       auditStatement(context.env.DB, {
         eventId,
@@ -1702,6 +1721,14 @@ const removeParticipant = defineApiRoute(
         requestId: actor.requestId,
       }),
     ]);
+    if (calendarBatch && calendarBatch.idempotencyKeys.length > 0) {
+      await drainCalendarCancellations({
+        db: context.env.DB,
+        queue: context.env.MAIL_QUEUE,
+        now,
+        idempotencyKeys: calendarBatch.idempotencyKeys,
+      });
+    }
     return context.json(await loadRecord(context.env.DB, eventId, submissionId), 200);
   },
 );
