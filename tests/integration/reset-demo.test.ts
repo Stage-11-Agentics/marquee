@@ -56,6 +56,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   calendar_cancellations: 0,
   calendar_invites: 0,
   calendar_sequence_ledger: 0,
+  submission_reference_ledger: 1,
   speaker_tasks: 358,
   task_templates: 15,
   agenda_items: 27,
@@ -297,6 +298,14 @@ async function insertUnrelatedTenant(): Promise<void> {
 async function assertResetState(): Promise<void> {
   expect(Object.keys(SEEDED_COUNTS).sort()).toEqual([...WIPE_ORDER].sort());
   expect(await tableCounts()).toEqual(expectedCountsAfterReset());
+  const referenceFloor = await env.DB.prepare(
+    `SELECT l.last_sequence, MAX(CAST(substr(s.reference_code, 5) AS INTEGER)) AS submission_max
+     FROM submission_reference_ledger l
+     LEFT JOIN submissions s ON s.event_id = l.event_id
+     WHERE l.event_id = ?
+     GROUP BY l.event_id, l.last_sequence`,
+  ).bind(DEMO_EVENT_ID).first<{ last_sequence: number; submission_max: number }>();
+  expect(referenceFloor).toEqual({ last_sequence: referenceFloor?.submission_max, submission_max: referenceFloor?.submission_max });
   expect(await env.DB.prepare(
     "SELECT id FROM submission_notes WHERE submission_id IN (SELECT id FROM submissions WHERE event_id = ?)",
   ).bind(DEMO_EVENT_ID).first()).toBeNull();
@@ -347,6 +356,9 @@ test("AC-230 · reset-demo restores the full seeded baseline from dirty state, s
   expect(job?.status).toBe("done");
   expect(job?.result).toMatchObject({ deletedObjects: 1 });
   await assertResetState();
+  const firstReferenceFloor = await env.DB.prepare(
+    "SELECT last_sequence FROM submission_reference_ledger WHERE event_id = ?",
+  ).bind(DEMO_EVENT_ID).first<{ last_sequence: number }>();
   expect(mirrorSend).toHaveBeenCalledTimes(1);
   expect(mirrorSend.mock.calls[0][0]).toMatchObject({ type: "mirror_reconcile" });
 
@@ -364,6 +376,10 @@ test("AC-230 · reset-demo restores the full seeded baseline from dirty state, s
   expect(secondJob?.status).toBe("done");
   expect(secondJob?.result).toMatchObject({ deletedObjects: 0 });
   await assertResetState();
+  const secondReferenceFloor = await env.DB.prepare(
+    "SELECT last_sequence FROM submission_reference_ledger WHERE event_id = ?",
+  ).bind(DEMO_EVENT_ID).first<{ last_sequence: number }>();
+  expect(secondReferenceFloor?.last_sequence).toBeGreaterThan(firstReferenceFloor?.last_sequence ?? 0);
   expect(secondMirrorSend).toHaveBeenCalledTimes(1);
   await assertBothDemoLogins();
 });

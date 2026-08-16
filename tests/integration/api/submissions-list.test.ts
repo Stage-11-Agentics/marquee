@@ -58,7 +58,7 @@ async function buildFixture(): Promise<void> {
       cancelled_at INTEGER
     );
     CREATE TABLE IF NOT EXISTS submissions (
-      id TEXT PRIMARY KEY, event_id TEXT NOT NULL, kind TEXT NOT NULL,
+      id TEXT PRIMARY KEY, reference_code TEXT, event_id TEXT NOT NULL, kind TEXT NOT NULL,
       title TEXT NOT NULL, status TEXT NOT NULL, format_id TEXT,
       wave_id TEXT, origin TEXT NOT NULL, submitted_at INTEGER, updated_at INTEGER NOT NULL,
       search_blob TEXT NOT NULL DEFAULT ''

@@ -37,6 +37,7 @@ export interface PublicFormFile {
 export interface PublicFormConfirmation {
   title: string;
   message: string;
+  reference_code: string;
   email: string;
   /**
    * The address a confirmation email was actually enqueued to, or null when

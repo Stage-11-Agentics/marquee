@@ -122,6 +122,24 @@ function checkDirectSeedShape(rows: Awaited<ReturnType<typeof buildSeedRows>>): 
   const sponsored = submissions.filter((row) => row.sponsorship_id);
   const competitive = submissions.filter((row) => !row.sponsorship_id);
   assert.equal(competitive.length, 1_000, "seed must contain exactly 1,000 competitive submissions");
+  assert.ok(
+    submissions.every((row) => /^SUB-[1-9]\d*$/.test(String(row.reference_code ?? ""))),
+    "every seeded submission must carry a SUB-n reference code",
+  );
+  const codesByEvent = new Map<string, string[]>();
+  for (const row of submissions) {
+    const eventId = String(row.event_id ?? "");
+    codesByEvent.set(eventId, [...(codesByEvent.get(eventId) ?? []), String(row.reference_code)]);
+  }
+  for (const [eventId, codes] of codesByEvent) {
+    assert.equal(new Set(codes).size, codes.length, `seed submission reference codes must be unique for ${eventId}`);
+    const numbers = codes.map((code) => Number(code.slice("SUB-".length)));
+    assert.equal(
+      Math.max(...numbers) - Math.min(...numbers) + 1,
+      numbers.length,
+      `seed submission reference codes must be contiguous for ${eventId}`,
+    );
+  }
   assert.equal(competitive.filter((row) => row.status === "accepted").length, 60, "seed must contain 60 accepted submissions");
   assert.ok(
     competitive.filter((row) => row.status === "accepted" && row.kind === "session" && row.bypass_evaluation === 1).length >= 25,
@@ -147,6 +165,7 @@ function checkDirectSeedShape(rows: Awaited<ReturnType<typeof buildSeedRows>>): 
     speaker_memberships: speakerMembers.size,
     organizer_unreviewed_assignments: unreviewed.length,
     overdue_tasks: overdueTasks.length,
+    submission_reference_codes: submissions.length,
   };
 }
 

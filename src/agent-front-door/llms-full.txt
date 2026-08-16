@@ -1174,6 +1174,8 @@ The command registry is:
 - `node cli/marquee.mjs formats remove <event-id> <format-id>`
 - `node cli/marquee.mjs submissions list <event-id>`
 - `node cli/marquee.mjs submissions show <event-id> <submission-id>`
+- `node cli/marquee.mjs submissions notes <submission-id>`
+- `node cli/marquee.mjs submissions note <submission-id> --set body=<text>`
 - `node cli/marquee.mjs submissions accept <event-id> --filter <key=value>`
 - `node cli/marquee.mjs submissions reject <event-id> --filter <key=value>`
 - `node cli/marquee.mjs review queue <event-id>`
@@ -1305,10 +1307,14 @@ The review queue is made of Abstracts and Sessions. Filter on the server, read a
 ```sh
 node cli/marquee.mjs submissions list "$EVENT_ID" --filter status=submitted --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 node cli/marquee.mjs submissions show "$EVENT_ID" "$SUBMISSION_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs submissions notes "$SUBMISSION_ID" --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
+node cli/marquee.mjs submissions note "$SUBMISSION_ID" --set body="Needs a second look at the speaker's deployment constraints." --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 node cli/marquee.mjs submissions accept "$EVENT_ID" --filter status=submitted --url "$MARQUEE_URL" --token "$MARQUEE_TOKEN" --json
 ```
 
 Use `reject` with the same selector when a Session or Abstract should not advance. A filter is resolved by Marquee; the CLI never turns a paginated page into a guessed ID set.
+
+Notes are internal, append-only staff context. They are attributed to the authenticated seat and never appear on the speaker, public, or outbound surfaces.
 
 ## Review
 

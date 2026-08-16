@@ -221,7 +221,7 @@ describe.sequential("MRQ-15 public conference form", () => {
       }),
     });
     expect(response.status).toBe(201);
-    const body = await json<{ state: string; answers: Record<string, unknown>; draft_id: string | null; confirmation: { email: string; resume_url: string | null; portal_url: string | null } | null }>(response);
+    const body = await json<{ state: string; answers: Record<string, unknown>; draft_id: string | null; confirmation: { email: string; reference_code: string; resume_url: string | null; portal_url: string | null } | null }>(response);
     expect(body.state).toBe("submitted");
     expect(body.answers).toEqual({
       title: "A session without a sales pitch",
@@ -245,9 +245,17 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(saved.results.map((row) => row.key)).not.toContain("vendor_product");
     expect(saved.results.find((row) => row.key === "vendor_product")).toBeUndefined();
     expect(await rowCount("submissions")).toBe(1);
-    const live = await env.DB.prepare("SELECT send_policy, to_email, text, html FROM outbox WHERE template_key = 'submission_confirmation'").first<{ send_policy: string; to_email: string; text: string; html: string }>();
+    expect(body.confirmation?.reference_code).toMatch(/^SUB-[1-9]\d*$/);
+    const savedSubmission = await env.DB.prepare(
+      "SELECT reference_code FROM submissions WHERE form_id = ? ORDER BY created_at DESC LIMIT 1",
+    ).bind(FORM_ID).first<{ reference_code: string | null }>();
+    expect(savedSubmission?.reference_code).toBe(body.confirmation?.reference_code);
+    const live = await env.DB.prepare("SELECT send_policy, to_email, subject, text, html FROM outbox WHERE template_key = 'submission_confirmation'").first<{ send_policy: string; to_email: string; subject: string; text: string; html: string }>();
     expect(live?.send_policy).toBe("always_live");
     expect(live?.to_email).toBe("avery@example.com");
+    expect(live?.subject).toBe(`Abstract ${body.confirmation?.reference_code} received — A session without a sales pitch`);
+    expect(live?.text).toContain(`Abstract ${body.confirmation?.reference_code} received`);
+    expect(live?.html).toContain(`<strong>${body.confirmation?.reference_code}</strong>`);
     expect(live?.text).toContain("Review your conference abstract here:");
     expect(live?.text).toContain("/f/public-cfp?resume=");
     expect(live?.html).toContain("Review your conference abstract");

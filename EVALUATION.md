@@ -786,6 +786,24 @@ schema change for the seam and is unchanged by this fold.
 
 ---
 
+### 2.14 Post-deadline submission-reference band — AC-343 – AC-348 *(Amendment 31, 2026-08-16, MRQ-241)*
+
+**Outside the Wednesday terminal gate, on the same terms as §2.4–§2.13.** Not
+folded into the 210 live in-scope count or tier arithmetic. Story: US-97
+(`sequence/USER_STORIES.md` Amendment 31). Migration 0030, the insert-time
+allocation seam, and the read projections form one reference-code contract.
+
+| AC | Tier | Tag | How verified |
+|---|---|---|---|
+| AC-343 | PD | `auto` | `test:` apply migration 0030 and create submissions through public draft/final, organizer, Sessionize, and seed paths; assert each receives one `SUB-n`, codes are unique per event, two events may both use `SUB-7`, and every route still resolves by the ULID. |
+| AC-344 | PD | `auto` | `test + speed:` query quick search, list, and board with `SUB-41`, `sub-41`, and `sub 41`; assert the same event-scoped record is returned, a sibling event is absent, and the measured code lookup stays inside AC-103's p95 ≤200ms budget. |
+| AC-345 | PD | `auto` | `test + render:` assert the record header exposes a bare-code copy action while retaining the ULID as secondary detail, and assert code fields are present in board/list rows, confirmation screen and subject, CSV output, and the outbound Airtable submission field. A source scan proves the field is absent from the inbound mirror allowlist. |
+| AC-346 | PD | `auto` | `test:` withdraw, reject, and delete submissions including a deleted non-terminal row, then allocate again; assert surviving codes are unchanged and the next code is above the event's prior high-water mark rather than count-based reuse. |
+| AC-347 | PD | `auto` | `test:` force two inserts to contend on the event/reference unique index; assert distinct committed codes, exactly one bounded retry for the collision, no 500, and no retry of an unrelated uniqueness error. |
+| AC-348 | PD | `auto` | `test:` backfill a fixture ordered by `(created_at, id)`, snapshot codes, run the backfill again, and assert byte-identical results, populated-code preservation, and the unique index. |
+
+---
+
 ## 3. Felt checkpoints
 
 Four in-scope ACs are judgements no assertion settles. Each is a scheduled human-use session with an explicit trigger, an explicit method, and a recorded verdict. A checkpoint that has not run is not a pass.
@@ -887,6 +905,8 @@ Two carry enforcement obligations even though their UI is deferred, because retr
 **Amendment 29 — the participant model, finished, 2026-08-16 (MRQ-224).** §2.12 adds the participant-model band: AC-329 – AC-336 minted, and the reserved AC-270 – AC-272 promoted out of reserve because the build now exists (AC-272 recorded as already satisfied by MRQ-160/162 rather than rebuilt). Gate 19b's named limitation changes from the submitter/speaker fusion — closed by this band — to per-person answers, which is what actually remains. Post-deadline; the live in-scope count and tier arithmetic are unchanged.
 
 **Amendment 30 — internal notes on a submission, 2026-08-16 (MRQ-242).** §2.13 adds exactly US-96 and AC-337 – AC-342: one-action note creation without evaluation rows, authenticated people-row attribution, exclusion from speaker/public/outbound surfaces, fixed rendered notes geometry, the evaluation setup CTA, and no-valid-email recovery. The claims manifest is `tests/ac-claims/MRQ-242.json`; migration 0029 remains unchanged. Post-deadline; the live in-scope count and tier arithmetic are unchanged. The next shared mint is US-97 / AC-343 for MRQ-241.
+
+**Amendment 31 — spoken submission references, 2026-08-16 (MRQ-241).** §2.14 adds exactly US-97 and AC-343 – AC-348: event-scoped `SUB-n` allocation across every creation path, durable high-water provenance across deletion and reset, normalized search, organizer/public/Airtable projections, and deterministic idempotent backfill. Migration 0030 is the sole schema change. Post-deadline; the live in-scope count and tier arithmetic are unchanged. The independent exact-head review and runtime proof remain the handoff boundary.
 
 **Amendment 26 — one named mail-idempotency seam, 2026-08-15, plumbing fold.** Folds `USER_STORIES.md` Amendment 26 and `SPEC.md` §3.8. AC-117's verification now includes the full pre-fix registry byte-identity inventory; **AC-314** is the post-deadline lock for durable manual-nudge retries and fresh new nudges. The live count, tier arithmetic, and terminal gate remain unchanged.
 

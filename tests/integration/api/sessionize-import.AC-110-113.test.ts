@@ -88,6 +88,11 @@ describe.sequential("MRQ-31 Sessionize import", () => {
     expect(run.status).toBe(200);
     const result = await run.json<{ counts: { created: number; failed: number; evaluations: number }; rows: Array<{ entity: string; outcome: string; reason: string | null }> }>();
     expect(result.counts).toMatchObject({ created: 5, updated: 1, failed: 1, evaluations: 2 });
+    const importedReferences = await env.DB.prepare(
+      "SELECT reference_code FROM submissions WHERE event_id = ? AND origin = 'import'",
+    ).bind(EVENT_ID).all<{ reference_code: string | null }>();
+    expect(importedReferences.results).toHaveLength(result.rows.filter((row) => row.entity === "session" && row.outcome === "created").length);
+    expect(importedReferences.results.every((row) => /^SUB-[1-9]\d*$/.test(row.reference_code ?? ""))).toBe(true);
     expect(result.rows.some((row) => row.entity === "session" && row.reason?.includes("source status 'undecided' mapped to in_review"))).toBe(true);
 
     const status = await env.DB.prepare("SELECT status FROM submissions WHERE event_id = ? AND external_ref = 'sess-trust-101'").bind(EVENT_ID).first<{ status: string }>();

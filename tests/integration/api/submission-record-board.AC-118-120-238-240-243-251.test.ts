@@ -110,6 +110,8 @@ describe.sequential("MRQ-33 admin record and program board", () => {
       track_ids: [TRACK_IN],
     });
     expect(abstract).toMatchObject({ kind: "abstract", origin: "admin", status: "submitted", bypass_evaluation: false });
+    const abstractReference = await env.DB.prepare("SELECT reference_code FROM submissions WHERE id = ?").bind(abstract.id).first<{ reference_code: string | null }>();
+    expect(abstractReference?.reference_code).toMatch(/^SUB-[1-9]\d*$/);
     expect((abstract.participants as Array<{ person_id: string }>).length).toBeGreaterThan(0);
 
     const session = await createSubmission({
@@ -122,6 +124,8 @@ describe.sequential("MRQ-33 admin record and program board", () => {
       format_id: FORMAT_ID,
     });
     expect(session).toMatchObject({ kind: "session", origin: "admin", status: "accepted", bypass_evaluation: true });
+    const sessionReference = await env.DB.prepare("SELECT reference_code FROM submissions WHERE id = ?").bind(session.id).first<{ reference_code: string | null }>();
+    expect(sessionReference?.reference_code).toMatch(/^SUB-[1-9]\d*$/);
     expect((session.evaluations as unknown[]).length).toBe(0);
 
     const sessionRecord = await request(`/api/v1/events/${EVENT_ID}/submissions/${session.id}`);

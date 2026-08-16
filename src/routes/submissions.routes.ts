@@ -55,6 +55,7 @@ const submissionAgentReviewSchema = z.object({
 });
 const submissionListItemSchema = z.object({
   id: z.string(),
+  reference_code: z.string().nullable(),
   kind: z.enum(["abstract", "session"]),
   title: z.string(),
   status: submissionListItemStatusSchema,

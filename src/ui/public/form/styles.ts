@@ -114,6 +114,8 @@ export const PUBLIC_FORM_STYLES = `
 .public-confirmation { background: var(--panel); border: 1px solid var(--line-strong); border-top: 3px solid var(--ok); margin-top: 26px; padding: clamp(22px, 5vw, 40px); }
 .public-confirmation h2 { font: 500 clamp(25px, 4vw, 38px)/1.1 var(--mono); letter-spacing: -.04em; margin: 0 0 12px; }
 .public-confirmation p { color: var(--ink-soft); font-size: 14px; line-height: 1.6; margin: 7px 0; }
+.public-confirmation .public-reference { color: var(--ink); font: 600 13px/1.4 var(--mono); letter-spacing: .02em; }
+.public-reference span { color: var(--muted); font: 600 10px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .public-confirmation-edit-note { background: var(--alarm-wash); border-left: 3px solid var(--alarm); color: #7c2018 !important; margin: 18px 0 0 !important; padding: 12px 14px; }
 .public-confirmation a { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
 .public-confirmation .public-resume { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }

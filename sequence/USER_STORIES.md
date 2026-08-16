@@ -1321,3 +1321,47 @@ owns the verification rows. MRQ-249 depends on this notes seam. Browser and
 two-seat UI evidence remain a separate held validation axis.
 
 **Next mint: US-97 / AC-343 (MRQ-241).**
+
+---
+
+## Amendment 31 — spoken submission references *(2026-08-16, plumbing fold)*
+
+Submission identity is durable, but the only identifier exposed on several
+organizer surfaces is an opaque ULID. This post-deadline addition gives every
+submission a short reference an organizer can say on a call without changing
+the ULID route contract. It does not change the live competition count or tier
+arithmetic. The serialized fold assigns this band **US-97** and exactly six
+criteria, **AC-343–AC-348**; the next shared mint remains **AC-349**.
+
+### US-97 · Give every submission a speakable reference
+
+**As an** organizer, **I want** each submission to have a short conference-
+scoped reference code, **so that** I can find and discuss it quickly without
+reading an opaque identifier aloud.
+
+- **AC-343**: Every submission creation path — public draft/final submit,
+  organizer add, Sessionize import, and seed — assigns a `SUB-n` code before
+  the row commits. Codes are unique within a conference, two conferences may
+  each hold `SUB-7`, and the ULID remains the route and opaque identity.
+- **AC-344**: Quick search, the submissions list, and the program board match
+  the same submission for `SUB-41`, `sub-41`, and `sub 41`, preserving event
+  isolation and the existing AC-103 p95 ≤200ms budget.
+- **AC-345**: The record header renders a bare reference-code chip with a
+  one-click copy action and demotes the ULID; the code is also present in the
+  board/list sub-line, submitter confirmation screen and subject, CSV export,
+  and the outbound-only Airtable submission field.
+- **AC-346**: Withdraw, reject, and deletion never renumber surviving
+  submissions; after a deletion, the next allocation continues the event's
+  sequence rather than reissuing a removed code.
+- **AC-347**: Concurrent creation attempts receive distinct codes. A unique
+  index race is recognized, retried once at the allocation seam, and never
+  becomes a 500 or an unbounded retry loop; unrelated uniqueness failures are
+  still surfaced normally.
+- **AC-348**: Existing rows backfill deterministically by `(created_at, id)`
+  within each conference, and rerunning the backfill produces byte-identical
+  codes without renumbering already populated rows.
+
+`EVALUATION.md` §2.14 owns the verification rows. Built by MRQ-241. The
+post-deadline band leaves the terminal gate unchanged.
+
+**Next mint: AC-349.**

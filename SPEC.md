@@ -1240,3 +1240,44 @@ repair door.
 `marquee submissions note <submission-id> --set body=<text>`. Both operations
 are staff-scoped, return JSON when requested, and preserve the server-derived
 author and append-only semantics.
+
+## Amendment 31 — spoken submission references *(2026-08-16, plumbing fold)*
+
+Folds `sequence/USER_STORIES.md` Amendment 31 and `EVALUATION.md` §2.14 for
+US-97 / AC-343–AC-348. This is a post-deadline addition and does not change
+the live in-scope count, tier arithmetic, or terminal gate.
+
+### §3.12 delta — per-conference submission reference codes
+
+`submissions.reference_code` is nullable only to make the additive migration
+safe for legacy fixtures while backfill runs; every newly created submission
+gets a code before its insert commits. Codes are `SUB-<positive integer>` and
+are unique within an event, so two conferences may each have `SUB-7`. The
+opaque ULID remains the submission identity and remains the only route key.
+
+Migration `0030_submission_reference_codes.sql` adds the column, backfills
+existing rows deterministically by `(created_at, id)` within each event, adds
+the unique `(event_id, reference_code)` index, and creates the durable
+per-event high-water ledger used for future allocation. The ledger is
+advanced transactionally with each insert, so deleting the highest-numbered
+submission can never make that code available again. Allocation provenance is
+the event-scoped ledger row plus the committed submission row; it is never
+derived from a deletion-sensitive aggregate. A unique-index collision is the
+concurrency backstop and gets one bounded retry of the whole insert operation.
+No other uniqueness failure is retried or hidden.
+
+The allocation seam covers public draft and final submission, organizer
+creation, Sessionize import, and seed writes. Withdraw, reject, and deletion
+do not rewrite surviving codes; subsequent allocation continues above the
+durable event high-water mark. Running the backfill again is a no-op with the
+same result.
+
+Every organizer-facing submission projection carries the code: record header
+chip, quick search, list and board rows, CSV export, and the submitter
+confirmation screen and email subject (`Abstract SUB-n received — <title>`).
+The header chip copies the bare code in one action and demotes the ULID to
+secondary detail. Quick, list, and board matching accept `SUB-41`, `sub-41`,
+and `sub 41` without changing their existing event scoping or speed budget.
+The Airtable submission field is outbound read-only; `reference_code` is not
+an inbound mirror allowlist field and Airtable is never read on a request
+path.

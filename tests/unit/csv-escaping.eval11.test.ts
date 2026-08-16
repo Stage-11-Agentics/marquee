@@ -25,6 +25,7 @@ const CRLF_NAME = "Ada\r\nLovelace";
 function submission(overrides: Partial<ExportableSubmission> = {}): ExportableSubmission {
   return {
     kind: "session",
+    reference_code: "SUB-1",
     id: "sub_1",
     title: "A perfectly ordinary talk",
     speakers: [{ name: "Priya Raman" }],
@@ -108,8 +109,8 @@ describe("csv escaping", () => {
     }
 
     // Flattening is lossy on purpose, and the words survive it.
-    expect(cells(physicalLines(file)[1]!)[2]).toBe("Agents in production: what broke, and why");
-    expect(cells(physicalLines(file)[2]!)[3]).toBe("Ada Lovelace");
+    expect(cells(physicalLines(file)[1]!)[3]).toBe("Agents in production: what broke, and why");
+    expect(cells(physicalLines(file)[2]!)[4]).toBe("Ada Lovelace");
   });
 
   test("CONTRACT · a quote sequence in a title is data, not a column boundary", () => {
@@ -118,7 +119,7 @@ describe("csv escaping", () => {
     const file = submissionsCsv([submission({ title: 'Talk","Fake' })]);
     const row = cells(physicalLines(file)[1]!);
     expect(row).toHaveLength(SUBMISSION_EXPORT_HEADER.length);
-    expect(row[2]).toBe('Talk","Fake');
+    expect(row[3]).toBe('Talk","Fake');
   });
 
   test("CONTRACT · the header is the columns the list promises, in order", () => {
@@ -127,7 +128,7 @@ describe("csv escaping", () => {
     // to itself passes after a rename, a reorder, or a dropped column, which is
     // every change this assertion exists to catch.
     expect(cells(header!)).toEqual([
-      "Type", "ID", "Title", "Speakers", "Status", "Tracks", "Score", "Submitted", "Last updated", "Origin",
+      "Type", "Reference code", "ID", "Title", "Speakers", "Status", "Tracks", "Score", "Submitted", "Last updated", "Origin",
     ]);
     expect(cells(header!)).toEqual([...SUBMISSION_EXPORT_HEADER]);
     // An empty export is a header and nothing else, not an empty file — the

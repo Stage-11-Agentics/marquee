@@ -13,7 +13,7 @@ import { submissionKindLabel, submissionStatusLabel } from "../../lib/submission
 
 /** The columns an organizer gets, in order. */
 export const SUBMISSION_EXPORT_HEADER = [
-  "Type", "ID", "Title", "Speakers", "Status", "Tracks", "Score", "Submitted", "Last updated", "Origin",
+  "Type", "Reference code", "ID", "Title", "Speakers", "Status", "Tracks", "Score", "Submitted", "Last updated", "Origin",
 ] as const;
 
 /**
@@ -24,6 +24,7 @@ export const SUBMISSION_EXPORT_HEADER = [
  */
 export interface ExportableSubmission {
   kind: SubmissionListItem["kind"];
+  reference_code: string | null;
   id: string;
   title: string;
   speakers: ReadonlyArray<{ name: string }>;
@@ -40,7 +41,7 @@ export function submissionsCsv(items: ReadonlyArray<ExportableSubmission>): stri
   const lines = [
     csvRow(SUBMISSION_EXPORT_HEADER),
     ...items.map((item) => csvRow([
-      submissionKindLabel(item.kind), item.id, item.title,
+      submissionKindLabel(item.kind), item.reference_code, item.id, item.title,
       item.speakers.map((speaker) => speaker.name).join("; "), submissionStatusLabel(item.status),
       item.tracks.map((track) => track.name).join("; "), item.score,
       item.submitted_at, item.updated_at, item.origin,

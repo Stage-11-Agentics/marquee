@@ -252,12 +252,12 @@ function CascadeAction({ action, onComplete }: { action: SubmissionNotificationA
 
 function Cell({ item, column, navigate, onCascadeComplete }: { item: SubmissionListItem; column: SubmissionColumnId; navigate: (target: string) => void; onCascadeComplete: () => void }): JSX.Element {
   if (column === "type") return <span class={`chip entity-chip ${item.kind}`}>{submissionKindLabel(item.kind)}</span>;
-  if (column === "id") return <strong class="tabular">{item.id}</strong>;
+  if (column === "id") return <strong class="tabular" title={item.id}>{item.reference_code ?? item.id}</strong>;
   if (column === "title") {
     const slot = slotLabel(item);
     return <>
       <a class="table-title" href={`/submissions/${item.id}`} title={item.title} onClick={(event) => { event.preventDefault(); navigate(`/submissions/${item.id}`); }}>{item.title}</a>
-      <span class="row-meta">{item.id} · {item.origin}</span>
+      <span class="row-meta">{item.reference_code ?? item.id} · {item.origin}</span>
       {item.submitter && <span class="row-meta">{item.submitter.name} · {item.submitter.email}</span>}
       {slot && <span class="slot-row"><span class="chip slot-chip" title={slot}><span>{slot}</span></span>{!item.slot?.is_published && <span class="chip not-public">Not yet public</span>}</span>}
     </>;

@@ -26,6 +26,7 @@ const searchResponse = z.object({ data: z.array(searchResult).max(SEARCH_RESULT_
 
 interface SubmissionSearchRow {
   id: string;
+  reference_code: string | null;
   kind: "abstract" | "session";
   title: string;
   abstract: string | null;
@@ -83,7 +84,7 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
   const formsScope = formScope(scopedPersonId);
   const [submissions, speakers, forms] = await Promise.all([
     database.prepare(
-      `SELECT s.id, s.kind, s.title, s.abstract, s.search_blob
+      `SELECT s.id, s.reference_code, s.kind, s.title, s.abstract, s.search_blob
        FROM submissions s
        WHERE s.event_id = ?${submissionsScope.clause}
        ORDER BY s.title COLLATE NOCASE ASC, s.id ASC`,
@@ -123,9 +124,9 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
         type,
         id: row.id,
         title: row.title,
-        subtitle: `${row.id} · ${type}`,
+        subtitle: `${row.reference_code ?? row.id} · ${type}`,
         href: `/submissions/${encodeURIComponent(row.id)}`,
-        searchText: [row.title, row.id, row.search_blob, row.abstract ?? ""],
+        searchText: [row.title, row.reference_code ?? "", row.id, row.search_blob, row.abstract ?? ""],
       } satisfies SearchCandidate;
     }),
     ...[...people.values()].map((row) => ({

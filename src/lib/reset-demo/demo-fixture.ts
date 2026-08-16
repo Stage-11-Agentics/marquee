@@ -1,4 +1,8 @@
-import { buildDemoSeedRows } from "./seed-modules.ts";
+import {
+  buildDemoSeedRows,
+  submissionReferenceHighWater,
+  type SubmissionReferenceStarts,
+} from "./seed-modules.ts";
 import {
   EVENT_ID,
   FROZEN_NOW,
@@ -6,6 +10,7 @@ import {
   OUTREACH_EVENT_ID,
   STAFF_PERSON_ID,
 } from "../../../scripts/seed/event.ts";
+import type { SeedRow } from "../../../scripts/seed/_sql.ts";
 
 /** Identities used by the shipped full reset seed and route guard. */
 export const SHIPPED_DEMO_ORGANIZATION_ID = ORG_ID;
@@ -34,12 +39,33 @@ export interface DemoFixtureRow {
   bindings: (number | string | null)[];
 }
 
+export interface ShippedDemoFixture {
+  rows: DemoFixtureRow[];
+  referenceHighWater: Map<string, number>;
+}
+
 /**
  * The complete shipped seed, converted to bound inserts for the one production
  * reseed path. The row order is the seed-module dependency order.
  */
-export function shippedDemoFixtureRows(now: number = FROZEN_NOW): DemoFixtureRow[] {
-  return buildDemoSeedRows(now).map(({ table, row }) => {
+export function shippedDemoFixtureRowsWithReferences(
+  now: number = FROZEN_NOW,
+  startingSequences: SubmissionReferenceStarts = new Map(),
+): ShippedDemoFixture {
+  const seedRows = buildDemoSeedRows(now, undefined, startingSequences);
+  return {
+    rows: shippedDemoFixtureRows(seedRows),
+    referenceHighWater: submissionReferenceHighWater(seedRows),
+  };
+}
+
+export function shippedDemoFixtureRows(now?: number): DemoFixtureRow[];
+export function shippedDemoFixtureRows(seedRows: readonly SeedRow[]): DemoFixtureRow[];
+export function shippedDemoFixtureRows(
+  input: number | readonly SeedRow[] = FROZEN_NOW,
+): DemoFixtureRow[] {
+  const seedRows = typeof input === "number" ? buildDemoSeedRows(input) : input;
+  return seedRows.map(({ table, row }) => {
     const columns = Object.keys(row);
     return {
       statement: `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
