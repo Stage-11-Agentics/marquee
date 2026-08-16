@@ -104,17 +104,23 @@ export async function applyMigrations(): Promise<void> {
     const personAliasesMergesApplied = await env.DB.prepare(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'person_aliases'",
     ).first();
-    const existingWipeTables = await env.DB.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${WIPE_ORDER.map(() => "?").join(", ")})`,
-    )
-      .bind(...WIPE_ORDER)
-      .all<{ name: string }>();
-    const existingWipeTableNames = new Set(existingWipeTables.results.map(({ name }) => name));
-    await env.DB.batch(
-      WIPE_ORDER.filter((table) => existingWipeTableNames.has(table)).map((table) =>
-        env.DB.prepare(`DELETE FROM ${table}`),
-      ),
-    );
+    // Disable mirror triggers before the wipe reaches people. WIPE_ORDER
+    // removes pending rows before deleting those parents; clearing state first
+    // prevents the delete itself from re-enqueuing a stale people tombstone.
+    await env.DB.prepare("DELETE FROM mirror_state").run();
+    await env.DB.batch(WIPE_ORDER.flatMap((table) => {
+      // These two WIPE_ORDER entries are lifecycle steps, not physical tables:
+      // detached person headshots must be severed before their attachment rows
+      // and people rows are wiped. Production reset uses the scoped plans; the
+      // test reset keeps the same ordering while clearing the whole isolate.
+      if (table === "people_headshots") {
+        return [env.DB.prepare("UPDATE people SET headshot_attachment_id = NULL")];
+      }
+      if (table === "people_headshot_attachments") {
+        return [env.DB.prepare("DELETE FROM attachments WHERE owner_type = 'person_headshot'")];
+      }
+      return [env.DB.prepare(`DELETE FROM ${table}`)];
+    }));
     if (calendarTruthApplied) {
       // WIPE_ORDER already clears both calendar tables for test isolation.
       // Production reset deliberately preserves the ledger through its null

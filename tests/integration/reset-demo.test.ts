@@ -102,6 +102,10 @@ const SEEDED_COUNTS: Record<string, number> = {
   person_lists: 0,
   person_events: 2,
   people: 1109,
+  person_aliases: 0,
+  person_merges: 0,
+  people_headshots: 0,
+  people_headshot_attachments: 0,
   // Org-scoped like people, and swept after them: `people.company_id` points here.
   companies: 2,
   attachments: 40,
@@ -142,7 +146,15 @@ async function dispatchResetJob(jobId: string, mirrorSend: (message: unknown) =>
 
 async function tableCounts(): Promise<Record<string, number>> {
   const results = await env.DB.batch(
-    WIPE_ORDER.map((table) => env.DB.prepare("SELECT COUNT(*) AS n FROM " + table)),
+    WIPE_ORDER.map((table) => {
+      if (table === "people_headshots") {
+        return env.DB.prepare("SELECT COUNT(*) AS n FROM people WHERE headshot_attachment_id IS NOT NULL");
+      }
+      if (table === "people_headshot_attachments") {
+        return env.DB.prepare("SELECT COUNT(*) AS n FROM attachments WHERE owner_type = 'person_headshot'");
+      }
+      return env.DB.prepare("SELECT COUNT(*) AS n FROM " + table);
+    }),
   );
   return Object.fromEntries(
     WIPE_ORDER.map((table, index) => [
