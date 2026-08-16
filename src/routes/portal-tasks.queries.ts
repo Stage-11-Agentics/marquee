@@ -13,8 +13,8 @@ import { parseUploadOwnerConfig, policyFor } from "../lib/r2/policy";
 import { listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
 import { readTaskFileConfig } from "../lib/task-template-config";
 import { isTaskOverdue } from "../lib/task-due";
-import { isFieldApplicable, projectApplicableAnswers } from "../lib/form-conditions";
-import { listFormFields, type FormFieldView } from "./forms.queries";
+import { isFieldApplicable, projectApplicableAnswers, type FormLengthRule } from "../lib/form-conditions";
+import { listFormFields, listFormLengthRules, type FormFieldView } from "./forms.queries";
 
 export interface PortalTaskEvent {
   id: string;
@@ -99,6 +99,7 @@ export function taskPayload(
   fields: FormFieldView[],
   answers: Record<string, unknown>,
   versions: FileVersionList | null,
+  lengthRules: readonly FormLengthRule[] = [],
 ): Record<string, unknown> {
   if (task.kind === "acknowledge") {
     return { kind: task.kind, acknowledged: parseObject(task.response_json).acknowledged === true };
@@ -121,7 +122,7 @@ export function taskPayload(
       latest_source: versions?.latest_source ?? "pointer",
     };
   }
-  const projection = projectApplicableAnswers(fields, answers);
+  const projection = projectApplicableAnswers(fields, answers, lengthRules);
   return {
     kind: task.kind,
     form_id: task.form_id,
@@ -220,6 +221,7 @@ export async function listPortalTasks(
 
   return Promise.all(rows.results.map(async (task) => {
     const fields = task.kind === "form" && task.form_id ? await listFormFields(db, task.form_id) : [];
+    const lengthRules = task.kind === "form" && task.form_id ? await listFormLengthRules(db, task.form_id, fields) : [];
     const submissionAnswers = await readSubmissionAnswers(db, task.submission_id);
     const responseAnswers = task.kind === "form" ? parseObject(task.response_json) : {};
     const answers = { ...submissionAnswers, ...responseAnswers };
@@ -249,7 +251,7 @@ export async function listPortalTasks(
         templateDueAt: task.template_due_at,
         timezone: event.timezone,
       }, Date.now()),
-      payload: taskPayload(task, fields, answers, versionsByTask.get(task.id) ?? null),
+      payload: taskPayload(task, fields, answers, versionsByTask.get(task.id) ?? null, lengthRules),
     };
   }));
 }

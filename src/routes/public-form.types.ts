@@ -26,6 +26,16 @@ export interface PublicFormField {
   condition: unknown;
 }
 
+export interface PublicFormLengthRule {
+  id: string;
+  label: string;
+  field_keys: string[];
+  max_chars: number;
+  sort_order: number;
+  disabled: boolean;
+  missing_field_keys: string[];
+}
+
 export interface PublicFormFile {
   attachment_id: string;
   filename: string;
@@ -98,6 +108,7 @@ export interface PublicFormState {
     min_speakers: number;
     max_speakers: number;
     max_sponsors: number;
+    length_rules: PublicFormLengthRule[];
   };
   state: PublicFormStateName;
   outcome: PublicFormOutcome | null;

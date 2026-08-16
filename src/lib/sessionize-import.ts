@@ -1145,6 +1145,7 @@ async function cleanupImportSetup(db: D1Database, eventId: string): Promise<void
   const submissionCount = await db.prepare("SELECT COUNT(*) AS count FROM submissions WHERE form_id = ?").bind(formId).first<{ count: number }>();
   if (Number(submissionCount?.count ?? 0) === 0) {
     await db.batch([
+      db.prepare("DELETE FROM form_length_rules WHERE form_id = ?").bind(formId),
       db.prepare("DELETE FROM form_fields WHERE form_id = ?").bind(formId),
       db.prepare("DELETE FROM forms WHERE id = ?").bind(formId),
     ]);

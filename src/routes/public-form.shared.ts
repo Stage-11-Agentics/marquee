@@ -1,8 +1,9 @@
-import type { FormFieldView } from "./forms.queries";
-import { findFormBySlug, listFormFields } from "./forms.queries";
+import type { FormFieldView, FormLengthRuleView } from "./forms.queries";
+import { findFormBySlug, listFormFields, listFormLengthRules } from "./forms.queries";
 import type { FormRow, PersonRow, SubmissionRow } from "../db/schema";
 import {
   projectApplicableAnswers,
+  type FormLengthRule,
   type FormAnswerValue,
   type FormValidationIssue,
   type ProjectedFormAnswers,
@@ -45,6 +46,7 @@ export interface PublicFormRecord {
   form: FormRow;
   conference: { name: string; slug: string; timezone: string };
   fields: FormFieldView[];
+  lengthRules: FormLengthRuleView[];
   state: PublicFormStateName;
   submission: SubmissionRow | null;
   answers: Record<string, unknown>;
@@ -601,6 +603,7 @@ export async function loadPublicForm(
   // all see the same field set. Filtering only at the render layer would leave
   // a required legacy field enforced by a control nobody can see.
   const fields = collectableFields(await listFormFields(db, form.id));
+  const lengthRules = await listFormLengthRules(db, form.id, fields);
   const resume = await resolvePublicFormResume(db, form, slug, options.resumeToken, options.now ?? Date.now());
   const submission = resume.submission;
   const answers = submission ? await readAnswers(db, submission.id) : {};
@@ -633,6 +636,7 @@ export async function loadPublicForm(
     form,
     conference: { name: row.conference_name, slug: row.conference_slug, timezone: row.conference_timezone },
     fields,
+    lengthRules,
     state,
     submission,
     answers,
@@ -741,6 +745,15 @@ export function toPublicFormState(
       min_speakers: Number(record.form.min_speakers),
       max_speakers: advertisedMaxSpeakers(Number(record.form.max_speakers), record.fields),
       max_sponsors: Number(record.form.max_sponsors),
+      length_rules: record.lengthRules.map((rule) => ({
+        id: rule.id,
+        label: rule.label,
+        field_keys: rule.field_keys,
+        max_chars: rule.max_chars,
+        sort_order: rule.sort_order,
+        disabled: rule.disabled,
+        missing_field_keys: rule.missing_field_keys,
+      })),
     },
     state: record.state,
     outcome: record.submissionOutcome,
@@ -791,8 +804,9 @@ export function publicIssues(issues: FormValidationIssue[]): FormValidationIssue
 export function projectPublicAnswers(
   fields: readonly FormFieldView[],
   rawAnswers: Record<string, unknown>,
+  lengthRules: readonly FormLengthRule[] = [],
 ): PublicFormWriteResult {
-  const projected = projectApplicableAnswers(fields, rawAnswers);
+  const projected = projectApplicableAnswers(fields, rawAnswers, lengthRules);
   return { projected, issues: publicIssues(projected.issues) };
 }
 

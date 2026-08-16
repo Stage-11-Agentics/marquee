@@ -214,6 +214,20 @@ export const COPY_TABLES: readonly CopyTable[] = [
     verbatim: ["key", "label", "help_text", "type", "required", "position", "config", "condition", "library_field_version"],
   },
   {
+    table: "form_length_rules",
+    set: "forms",
+    key: "id",
+    scope: { kind: "subquery", column: "form_id", sql: FORMS_OF_EVENT },
+    orderBy: "sort_order, id",
+    remap: { form_id: "forms" },
+    nulls: [],
+    constants: {},
+    stamps: ["created_at", "updated_at"],
+    // Field keys are the form's stable public identifiers, not database ids, so
+    // the rule travels unchanged while form_id follows the copied form.
+    verbatim: ["label", "field_keys", "max_chars", "sort_order"],
+  },
+  {
     table: "form_admins",
     set: "forms",
     key: "id",

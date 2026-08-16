@@ -1,8 +1,8 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { resolveSort, executeListPage, parsePagination, type SortRegistry } from "../api/pagination";
-import type { FormFieldRow, FormRow } from "../db/schema";
+import type { FormFieldRow, FormLengthRuleRow, FormRow } from "../db/schema";
 import { boundSourceOf, resolveBoundOptions } from "../lib/bound-options";
-import { fieldPreviewProjection, parseFormCondition } from "../lib/form-conditions";
+import { evaluateFormLengthRules, fieldPreviewProjection, parseFormCondition, type FormLengthRule } from "../lib/form-conditions";
 import { effectiveSubmitterLimit, submissionDefaultFor } from "../lib/submission-capacity";
 
 export const FORM_SORTS = {
@@ -71,12 +71,23 @@ export interface FormFieldView {
   updated_at: number;
 }
 
+export interface FormLengthRuleView extends FormLengthRule {
+  id: string;
+  form_id: string;
+  sort_order: number;
+  disabled: boolean;
+  missing_field_keys: string[];
+  created_at: number;
+  updated_at: number;
+}
+
 export interface FormDetail extends FormListItem {
   reminder_offset_hours: number | null;
   thankyou_template_key: string | null;
   admin_notify_person_ids: string[];
   turnstile_required: boolean;
   fields: FormFieldView[];
+  length_rules: FormLengthRuleView[];
   admins: FormAdminView[];
   preview_fields: ReturnType<typeof fieldPreviewProjection>;
 }
@@ -246,6 +257,37 @@ export async function listFormFields(db: D1Database, formId: string): Promise<Fo
   return resolveBoundOptions(db, form.event_id, fields);
 }
 
+export async function listFormLengthRules(
+  db: D1Database,
+  formId: string,
+  fields?: readonly FormFieldView[],
+): Promise<FormLengthRuleView[]> {
+  const rows = await db
+    .prepare("SELECT * FROM form_length_rules WHERE form_id = ? ORDER BY sort_order ASC, id ASC")
+    .bind(formId)
+    .all<FormLengthRuleRow>();
+  const resolvedFields = fields ?? await listFormFields(db, formId);
+  const fieldInputs = resolvedFields.map((field) => ({ key: field.key, type: field.type, condition: field.condition }));
+  return rows.results.map((row) => {
+    const fieldKeys = parseJson<string[]>(row.field_keys, []).filter((key): key is string => typeof key === "string");
+    const evaluation = evaluateFormLengthRules([
+      { id: row.id, label: row.label, field_keys: fieldKeys, max_chars: Number(row.max_chars), sort_order: Number(row.sort_order) },
+    ], fieldInputs, {}).at(0)!;
+    return {
+      id: row.id,
+      form_id: row.form_id,
+      label: row.label,
+      field_keys: fieldKeys,
+      max_chars: Number(row.max_chars),
+      sort_order: Number(row.sort_order),
+      disabled: evaluation.disabled,
+      missing_field_keys: evaluation.missing_field_keys,
+      created_at: Number(row.created_at),
+      updated_at: Number(row.updated_at),
+    };
+  });
+}
+
 export async function listFormAdmins(db: D1Database, formId: string): Promise<FormAdminView[]> {
   const rows = await db
     .prepare(
@@ -265,6 +307,7 @@ export async function readFormDetail(db: D1Database, form: FormRow): Promise<For
     listFormAdmins(db, form.id),
     submissionDefaultFor(db, form.event_id),
   ]);
+  const lengthRules = await listFormLengthRules(db, form.id, fields);
   const summary = normalizeForm({ ...form, response_count: responseCount }, eventDefault);
   return {
     ...summary,
@@ -273,6 +316,7 @@ export async function readFormDetail(db: D1Database, form: FormRow): Promise<For
     admin_notify_person_ids: parseJson<string[]>(form.admin_notify_person_ids, []),
     turnstile_required: form.turnstile_required === 1,
     fields,
+    length_rules: lengthRules,
     admins,
     preview_fields: fieldPreviewProjection(fields),
   };

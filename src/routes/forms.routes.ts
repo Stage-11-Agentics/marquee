@@ -5,12 +5,18 @@ import { ApiError } from "../api/errors";
 import { createListQuerySchema, createListResponseSchema } from "../api/list";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
-import type { FieldLibraryRow, FormFieldRow, FormFieldType, FormRow } from "../db/schema";
+import type {
+  FieldLibraryRow,
+  FormFieldRow,
+  FormFieldType,
+  FormLengthRuleRow,
+  FormRow,
+} from "../db/schema";
 import { writeAudit } from "../lib/audit";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole, roleForEvent, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { normalizeFieldConfig, resolveBoundOptions } from "../lib/bound-options";
-import { parseFormCondition } from "../lib/form-conditions";
+import { isCombinedLengthField, parseFormCondition } from "../lib/form-conditions";
 import {
   conditionNote,
   isParticipantMachineryKey,
@@ -22,7 +28,9 @@ import {
   findForm,
   effectiveFormStatus,
   type FormFieldView,
+  type FormLengthRuleView,
   listFormAdmins,
+  listFormLengthRules,
   listFormFields,
   listForms,
   normalizeField,
@@ -39,6 +47,7 @@ const libraryQuerySchema = z.object({
   form_id: z.string().min(1).optional(),
 });
 const copyLibraryParams = formParams;
+const lengthRuleParams = formParams.extend({ ruleId: z.string().min(1) });
 
 const conditionClauseSchema = z.object({
   fieldKey: z.string().min(1).max(120),
@@ -112,6 +121,19 @@ const formAdminSchema = z.object({
   email: z.string(),
 });
 
+const formLengthRuleSchema = z.object({
+  id: z.string(),
+  form_id: z.string(),
+  label: z.string(),
+  field_keys: z.array(z.string()),
+  max_chars: z.number().int().positive(),
+  sort_order: z.number().int().nonnegative(),
+  disabled: z.boolean(),
+  missing_field_keys: z.array(z.string()),
+  created_at: z.number().int(),
+  updated_at: z.number().int(),
+});
+
 const formDetailSchema = formSummarySchema
   .extend({
     reminder_offset_hours: z.number().int().nonnegative().nullable(),
@@ -119,6 +141,7 @@ const formDetailSchema = formSummarySchema
     admin_notify_person_ids: z.array(z.string()),
     turnstile_required: z.boolean(),
     fields: z.array(formFieldSchema),
+    length_rules: z.array(formLengthRuleSchema),
     admins: z.array(formAdminSchema),
     preview_fields: z.array(
       z.object({
@@ -227,6 +250,13 @@ const missingConditionWarningSchema = z.object({
 const libraryCopyResponseSchema = formFieldSchema.extend({ warning: missingConditionWarningSchema.nullable() });
 const reorderFieldsSchema = z.object({ field_ids: z.array(z.string().min(1)).min(1).max(200) });
 const adminBodySchema = z.object({ person_id: z.string().min(1) });
+const createLengthRuleSchema = z.object({
+  label: z.string().trim().min(1).max(240),
+  field_keys: z.array(z.string().trim().min(1).max(120)).min(1).max(40),
+  max_chars: z.number().int().positive().max(1_000_000),
+  sort_order: z.number().int().min(0).max(10_000).default(0),
+});
+const patchLengthRuleSchema = createLengthRuleSchema.partial();
 
 function eventAllowed(auth: Exclude<ReturnType<typeof getAuth>, null>, eventId: string): boolean {
   if (auth.kind === "session") return roleForEvent(auth.memberships, eventId) !== null;
@@ -284,6 +314,39 @@ async function getOwnedForm(context: Context<ApiEnv>, eventId: string, formId: s
   const form = await findForm(context.env.DB, eventId, formId);
   if (!form) throw ApiError.notFound("form not found");
   return form;
+}
+
+async function validateLengthRuleFields(db: D1Database, formId: string, fieldKeys: readonly string[]): Promise<void> {
+  if (new Set(fieldKeys).size !== fieldKeys.length) throw ApiError.unprocessable("combined limit fields must be unique", "field_keys");
+  const fields = await listFormFields(db, formId);
+  const byKey = new Map(fields.map((field) => [field.key, field]));
+  const invalid = fieldKeys.filter((key) => {
+    const field = byKey.get(key);
+    return !field || !isCombinedLengthField(field);
+  });
+  if (invalid.length > 0) {
+    throw ApiError.unprocessable("combined limits can only include text fields from this form", "field_keys", {
+      issues: invalid.map((fieldKey) => ({ fieldKey, message: "Choose a text field from this form." })),
+    });
+  }
+}
+
+async function lengthRuleResponse(db: D1Database, formId: string, ruleId: string): Promise<FormLengthRuleView> {
+  const fields = await listFormFields(db, formId);
+  const rules = await listFormLengthRules(db, formId, fields);
+  const rule = rules.find((entry) => entry.id === ruleId);
+  if (!rule) throw ApiError.notFound("combined limit not found");
+  return rule;
+}
+
+async function getLengthRuleRow(context: Context<ApiEnv>, eventId: string, formId: string, ruleId: string, write = false): Promise<FormLengthRuleRow> {
+  await getOwnedForm(context, eventId, formId, write);
+  const rule = await context.env.DB
+    .prepare("SELECT * FROM form_length_rules WHERE id = ? AND form_id = ?")
+    .bind(ruleId, formId)
+    .first<FormLengthRuleRow>();
+  if (!rule) throw ApiError.notFound("combined limit not found");
+  return rule;
 }
 
 function validateFormSettings(
@@ -616,6 +679,7 @@ const deleteEventForm = defineApiRoute(
     try {
       await context.env.DB.batch([
         context.env.DB.prepare("DELETE FROM form_admins WHERE form_id = ?").bind(formId),
+        context.env.DB.prepare("DELETE FROM form_length_rules WHERE form_id = ?").bind(formId),
         context.env.DB.prepare("DELETE FROM form_fields WHERE form_id = ?").bind(formId),
         context.env.DB.prepare("DELETE FROM forms WHERE id = ? AND event_id = ? AND status = 'draft'").bind(formId, eventId),
       ]);
@@ -641,6 +705,7 @@ const duplicateEventForm = defineApiRoute(
     const { eventId, formId } = context.req.valid("param");
     const source = await getOwnedForm(context, eventId, formId, true);
     const fields = await context.env.DB.prepare("SELECT * FROM form_fields WHERE form_id = ? ORDER BY position ASC, id ASC").bind(formId).all<FormFieldRow>();
+    const lengthRules = await context.env.DB.prepare("SELECT * FROM form_length_rules WHERE form_id = ? ORDER BY sort_order ASC, id ASC").bind(formId).all<FormLengthRuleRow>();
     const admins = await context.env.DB.prepare("SELECT person_id FROM form_admins WHERE form_id = ? ORDER BY person_id").bind(formId).all<{ person_id: string }>();
     const now = Date.now();
     const id = crypto.randomUUID();
@@ -665,6 +730,12 @@ const duplicateEventForm = defineApiRoute(
       ).bind(
         crypto.randomUUID(), id, field.key, field.label, field.help_text, field.type, field.required,
         field.position, field.config, field.condition, field.library_field_id, field.library_field_version, now, now,
+      )),
+      ...lengthRules.results.map((rule) => context.env.DB.prepare(
+        `INSERT INTO form_length_rules (id, form_id, label, field_keys, max_chars, sort_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(
+        crypto.randomUUID(), id, rule.label, rule.field_keys, rule.max_chars, rule.sort_order, now, now,
       )),
       ...admins.results.map((admin) => context.env.DB.prepare(
         "INSERT INTO form_admins (id, form_id, person_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
@@ -1203,6 +1274,100 @@ const reorderFormFields = defineApiRoute(
   },
 );
 
+const listFormLengthRulesRoute = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/forms/{formId}/length-rules",
+    operationId: "listFormLengthRules",
+    summary: "List combined form character limits",
+    tags: ["Forms"],
+    request: { params: formParams },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: jsonResponse(z.object({ data: z.array(formLengthRuleSchema) }), "Combined limits"), ...errorResponses([401, 403, 404, 429, 500]) },
+  },
+  async (context) => {
+    const { eventId, formId } = context.req.valid("param");
+    const form = await getOwnedForm(context, eventId, formId);
+    return context.json({ data: await listFormLengthRules(context.env.DB, form.id) }, 200);
+  },
+);
+
+const createFormLengthRule = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/forms/{formId}/length-rules",
+    operationId: "createFormLengthRule",
+    summary: "Create a combined form character limit",
+    tags: ["Forms"],
+    request: { params: formParams, body: { content: { "application/json": { schema: createLengthRuleSchema } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 201: jsonResponse(formLengthRuleSchema, "Created combined limit"), ...errorResponses([400, 401, 403, 404, 409, 422, 500]) },
+  },
+  async (context) => {
+    const { eventId, formId } = context.req.valid("param");
+    await getOwnedForm(context, eventId, formId, true);
+    const body = context.req.valid("json");
+    await validateLengthRuleFields(context.env.DB, formId, body.field_keys);
+    const now = Date.now();
+    const id = crypto.randomUUID();
+    await context.env.DB.prepare(
+      `INSERT INTO form_length_rules (id, form_id, label, field_keys, max_chars, sort_order, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(id, formId, body.label, JSON.stringify(body.field_keys), body.max_chars, body.sort_order, now, now).run();
+    return context.json(await lengthRuleResponse(context.env.DB, formId, id), 201);
+  },
+);
+
+const updateFormLengthRule = defineApiRoute(
+  {
+    method: "patch",
+    path: "/api/v1/events/{eventId}/forms/{formId}/length-rules/{ruleId}",
+    operationId: "updateFormLengthRule",
+    summary: "Edit a combined form character limit",
+    tags: ["Forms"],
+    request: { params: lengthRuleParams, body: { content: { "application/json": { schema: patchLengthRuleSchema } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: jsonResponse(formLengthRuleSchema, "Updated combined limit"), ...errorResponses([400, 401, 403, 404, 409, 422, 500]) },
+  },
+  async (context) => {
+    const { eventId, formId, ruleId } = context.req.valid("param");
+    const current = await getLengthRuleRow(context, eventId, formId, ruleId, true);
+    const body = context.req.valid("json");
+    if (body.field_keys !== undefined) await validateLengthRuleFields(context.env.DB, formId, body.field_keys);
+    const updates: string[] = [];
+    const values: (string | number)[] = [];
+    if (body.label !== undefined) { updates.push("label = ?"); values.push(body.label); }
+    if (body.field_keys !== undefined) { updates.push("field_keys = ?"); values.push(JSON.stringify(body.field_keys)); }
+    if (body.max_chars !== undefined) { updates.push("max_chars = ?"); values.push(body.max_chars); }
+    if (body.sort_order !== undefined) { updates.push("sort_order = ?"); values.push(body.sort_order); }
+    if (updates.length > 0) {
+      updates.push("updated_at = ?");
+      values.push(Math.max(Date.now(), Number(current.updated_at) + 1));
+      await context.env.DB.prepare(`UPDATE form_length_rules SET ${updates.join(", ")} WHERE id = ? AND form_id = ?`).bind(...values, ruleId, formId).run();
+    }
+    return context.json(await lengthRuleResponse(context.env.DB, formId, ruleId), 200);
+  },
+);
+
+const deleteFormLengthRule = defineApiRoute(
+  {
+    method: "delete",
+    path: "/api/v1/events/{eventId}/forms/{formId}/length-rules/{ruleId}",
+    operationId: "deleteFormLengthRule",
+    summary: "Delete a combined form character limit",
+    tags: ["Forms"],
+    request: { params: lengthRuleParams },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: jsonResponse(z.object({ deleted: z.boolean() }), "Deleted combined limit"), ...errorResponses([401, 403, 404, 500]) },
+  },
+  async (context) => {
+    const { eventId, formId, ruleId } = context.req.valid("param");
+    await getLengthRuleRow(context, eventId, formId, ruleId, true);
+    await context.env.DB.prepare("DELETE FROM form_length_rules WHERE id = ? AND form_id = ?").bind(ruleId, formId).run();
+    return context.json({ deleted: true }, 200);
+  },
+);
+
 const listFormAdminsRoute = defineApiRoute(
   {
     method: "get",
@@ -1295,6 +1460,10 @@ export const apiRoutes = [
   reorderFormFields,
   updateFormField,
   deleteFormField,
+  listFormLengthRulesRoute,
+  createFormLengthRule,
+  updateFormLengthRule,
+  deleteFormLengthRule,
   listFormAdminsRoute,
   addFormAdmin,
   removeFormAdmin,

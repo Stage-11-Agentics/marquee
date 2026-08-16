@@ -32,6 +32,7 @@ import { contentOf, isContentAction, recordTimelinePage } from "../lib/history";
 import { purgePublicEmbedCache } from "../lib/public-site";
 import { PUBLISHED_CONTENT_REFUSAL, requirePublishedConfirmation } from "../lib/publication-guard";
 import { withSubmissionReferenceAllocation } from "../lib/submission-reference";
+import { listFormLengthRules } from "./forms.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const submissionParams = eventParams.extend({ submissionId: z.string().min(1) });
@@ -998,7 +999,8 @@ async function validateOwnedIds(
       const field = suppliedFields[index]!;
       rawAnswers[field.key] = answer.value_json === undefined ? answer.value_text ?? null : answer.value_json;
     }
-    const projection = projectApplicableAnswers(fields.results, rawAnswers);
+    const lengthRules = body.form_id ? await listFormLengthRules(db, body.form_id) : [];
+    const projection = projectApplicableAnswers(fields.results, rawAnswers, lengthRules);
     const suppliedKeys = new Set(suppliedFields.map((field) => field!.key));
     const issues = projection.issues.filter((issue) => suppliedKeys.has(issue.fieldKey));
     if (issues.length > 0) {
@@ -1275,7 +1277,8 @@ const patchDraft = defineApiRoute(
         if (!field) throw ApiError.unprocessable("every answer field must belong to this draft's form", "answers");
         rawAnswers[field.key] = answer.value_json === undefined ? answer.value_text ?? null : answer.value_json;
       }
-      const projection = projectApplicableAnswers(fields.results, rawAnswers);
+      const lengthRules = await listFormLengthRules(context.env.DB, submission.form_id);
+      const projection = projectApplicableAnswers(fields.results, rawAnswers, lengthRules);
       // This is still a draft: incomplete visible answers remain valid draft
       // state, while the queue derives the missing-field attention from the
       // same projection. Persist only its normalized, currently applicable map.

@@ -134,6 +134,10 @@ const publicFormSchema = z.object({
     id: z.string(), name: z.string(), slug: z.string(), kind: z.enum(["abstract", "session"]),
     status: z.enum(["open", "closed"]), welcome_md: z.string(), closes_at: z.number().int().nullable(), per_submitter_limit: z.number().int(),
     min_speakers: z.number().int(), max_speakers: z.number().int(), max_sponsors: z.number().int(),
+    length_rules: z.array(z.object({
+      id: z.string(), label: z.string(), field_keys: z.array(z.string()), max_chars: z.number().int().positive(),
+      sort_order: z.number().int().nonnegative(), disabled: z.boolean(), missing_field_keys: z.array(z.string()),
+    })),
   }),
   state: publicStateSchema,
   outcome: z.enum(["accepted", "waitlisted", "rejected"]).nullable(),
@@ -774,7 +778,7 @@ async function createDraft(
   }
 
   const raw = rawAnswersFromBody(answerMap(body), body.email);
-  const projected = projectPublicAnswers(base.fields, raw);
+  const projected = projectPublicAnswers(base.fields, raw, base.lengthRules);
   const roster = rosterFromBody(body, base.roster, raw);
   // The draft's owner is the person the resume link belongs to, and the
   // disclosure is what says who that is. Deriving it from `speaker_email`
@@ -876,7 +880,7 @@ async function autosaveDraft(
     throw ApiError.conflict("This call is closed. Answers and files can no longer be changed.");
   }
   const raw = rawAnswersFromBody(answerMap(body), body.email);
-  const projected = projectPublicAnswers(base.fields, raw);
+  const projected = projectPublicAnswers(base.fields, raw, base.lengthRules);
   const now = Date.now();
   const event = await findEventContext(context.env.DB, base.form.event_id);
   if (!event) throw ApiError.notFound("This conference is no longer available.");
@@ -962,7 +966,7 @@ async function editSubmittedSubmission(
   // sends the whole form, but merging makes a copied resume request safe and
   // prevents an omitted field from being silently erased.
   const raw = rawAnswersFromBody({ ...base.answers, ...answerMap(body) });
-  const projected = projectPublicAnswers(base.fields, raw);
+  const projected = projectPublicAnswers(base.fields, raw, base.lengthRules);
   const domainIssues = [
     ...projected.issues,
     ...requiredSubmissionIssues(base.fields, projected.projected.answers, base.form, base.roster, {}),
@@ -1060,7 +1064,7 @@ async function handlePublicSubmission(
   }
 
   const raw = rawAnswersFromBody(answerMap(body), body.email);
-  const projected = projectPublicAnswers(base.fields, raw);
+  const projected = projectPublicAnswers(base.fields, raw, base.lengthRules);
   // `raw`, not the projected answers: the legacy `co_speaker_*` pair is no
   // longer part of the served field set, so projection drops it. A form still
   // carrying those fields sends its co-speaker as two answers, and this is the

@@ -33,7 +33,7 @@ import {
   projectApplicableAnswers,
 } from "../lib/form-conditions";
 import { portalStatusProjection } from "../lib/portal-status";
-import { listFormFields } from "./forms.queries";
+import { listFormFields, listFormLengthRules } from "./forms.queries";
 import { sponsorContactTaskAccess } from "../lib/sponsors/task-access";
 import { applySponsorWriteback } from "../lib/sponsors/session-writeback";
 import {
@@ -1165,10 +1165,11 @@ async function completeTask(
   } else {
     if (!task.form_id) throw ApiError.conflict("this form task has no form definition");
     const fields = await listFormFields(db, task.form_id);
+    const lengthRules = await listFormLengthRules(db, task.form_id, fields);
     const existing = await readSubmissionAnswers(db, task.submission_id);
     const rawAnswers = body.answers ?? {};
     const merged = { ...existing, ...rawAnswers };
-    const projection = projectApplicableAnswers(fields, merged);
+    const projection = projectApplicableAnswers(fields, merged, lengthRules);
     if (projection.issues.length > 0) {
       throw ApiError.unprocessable("complete the visible required fields", projection.issues[0]?.fieldKey, projection.issues);
     }
