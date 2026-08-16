@@ -262,7 +262,6 @@ export function getConflicts(
       const right = sessions[next]!;
       if (left.kind === "break" && right.kind === "break") continue;
       const sharedPeople = sharedConflictParticipants(left.speakers, right.speakers);
-      const shared = sharedPeople[0] ?? null;
       if (overlaps(left, right)) {
         if (left.room_id === right.room_id) {
           conflicts.push({
@@ -271,7 +270,13 @@ export function getConflicts(
             session_ids: [left.id, right.id],
           });
         }
-        if (shared) {
+        // Every shared person, not `sharedPeople[0]`. Two people on both sides
+        // of one overlap used to raise a single flag, and an organizer who
+        // resolved the person it named was told the schedule was clear while
+        // the second clash stood. Panels put four people on a session, so the
+        // pair sharing two of them is ordinary rather than exotic — and the
+        // transit loop directly below has always iterated the whole list.
+        for (const shared of sharedPeople) {
           conflicts.push({
             kind: "person",
             message: `${shared.name} is double-booked across two sessions.`,
