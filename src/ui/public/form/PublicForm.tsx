@@ -7,7 +7,13 @@ import { isFieldApplicable, projectApplicableAnswers } from "../../../lib/form-c
 import { putFileToR2 } from "../../upload/upload-client";
 import { reconcileEchoedAnswers } from "./echo";
 import { apiFetch, errorSummary, MarqueeApiError } from "../../shell/api-client";
-import type { PublicFormField, PublicFormState } from "../../../routes/public-form.types";
+import {
+  PUBLIC_PARTICIPANT_ROLES,
+  type PublicFormField,
+  type PublicFormOnBehalfOf,
+  type PublicFormParticipant,
+  type PublicFormState,
+} from "../../../routes/public-form.types";
 import { removeTurnstileWidget, renderTurnstileWidget, resetTurnstileWidget, type TurnstileApi } from "./turnstile";
 
 interface PublicFormProps {
@@ -149,9 +155,44 @@ function publicValidationIssues(error: unknown): Array<{ fieldKey?: string; mess
   });
 }
 
+/** Field keys the participant section owns; the generic list skips them. */
+const PARTICIPANT_OWNED_FIELD_KEYS = ["co_speaker_name", "co_speaker_email"] as const;
+
+/** A slot is a participant being typed, so every part of it is optional until it is not. */
+type ParticipantSlot = { name: string; email: string; role: PublicFormParticipant["role"] };
+type OnBehalfOfSlot = { name: string; email: string };
+
+const PARTICIPANT_ROLE_LABELS: Record<PublicFormParticipant["role"], string> = {
+  co_speaker: "Co-speaker",
+  moderator: "Moderator",
+};
+
+function emptySlot(): ParticipantSlot {
+  return { name: "", email: "", role: "co_speaker" };
+}
+
+/** Only complete slots are sent; the server treats a half-typed one as a refusal at Submit. */
+function completeParticipants(slots: readonly ParticipantSlot[]): PublicFormParticipant[] {
+  return slots.flatMap((slot) => slot.name.trim() && slot.email.trim()
+    ? [{ name: slot.name.trim(), email: slot.email.trim(), role: slot.role }]
+    : []);
+}
+
+function completeOnBehalfOf(slot: OnBehalfOfSlot | null): PublicFormOnBehalfOf | null {
+  if (!slot) return null;
+  return slot.name.trim() && slot.email.trim() ? { name: slot.name.trim(), email: slot.email.trim() } : null;
+}
+
 export function PublicForm({ initial }: PublicFormProps) {
   const [state, setState] = useState(initial);
   const [answers, setAnswers] = useState<Record<string, unknown>>(initial.answers);
+  const [participants, setParticipants] = useState<ParticipantSlot[]>(
+    initial.participants.map((entry) => ({ ...entry })),
+  );
+  const [onBehalfOf, setOnBehalfOf] = useState<OnBehalfOfSlot | null>(initial.on_behalf_of ? { ...initial.on_behalf_of } : null);
+  /* Read synchronously by an in-flight request, for the same reason answersRef is. */
+  const participantsRef = useRef<ParticipantSlot[]>(initial.participants.map((entry) => ({ ...entry })));
+  const onBehalfOfRef = useRef<OnBehalfOfSlot | null>(initial.on_behalf_of ? { ...initial.on_behalf_of } : null);
   /* The latest answers, readable synchronously by an in-flight request that has
      to know what the person typed while it was away. */
   const answersRef = useRef<Record<string, unknown>>(initial.answers);
@@ -234,7 +275,11 @@ export function PublicForm({ initial }: PublicFormProps) {
   }
 
   const visibleFields = useMemo(
-    () => state.fields.filter((field) => isFieldApplicable(field, answers)),
+    // The old fixed co-speaker pair is not drawn as two more text boxes beside
+    // a list that already collects the same people. `participants` carries
+    // whatever those answers held, so nothing a submitter typed is lost.
+    () => state.fields.filter((field) =>
+      !PARTICIPANT_OWNED_FIELD_KEYS.includes(field.key as never) && isFieldApplicable(field, answers)),
     [state.fields, answers],
   );
 
@@ -408,7 +453,7 @@ export function PublicForm({ initial }: PublicFormProps) {
       const payload = await apiFetch<PublicFormState>(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/drafts`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ answers: sent, email, turnstileToken: token }),
+        body: JSON.stringify({ answers: sent, email, turnstileToken: token, ...rosterPayload() }),
         route: "/api/v1/public/forms/{slug}/drafts",
       });
       if (!payload || !("state" in payload)) throw new Error("The draft response was unreadable.");
@@ -421,6 +466,26 @@ export function PublicForm({ initial }: PublicFormProps) {
       setPageError(publicErrorMessage(error));
       return null;
     } finally { setBusy(false); }
+  }
+
+  function writeParticipants(next: ParticipantSlot[]) {
+    participantsRef.current = next;
+    setParticipants(next);
+    setDirty(true);
+  }
+
+  function writeOnBehalfOf(next: OnBehalfOfSlot | null) {
+    onBehalfOfRef.current = next;
+    setOnBehalfOf(next);
+    setDirty(true);
+  }
+
+  /** The roster half of every write body, read from the refs an in-flight request can see. */
+  function rosterPayload(): { participants: PublicFormParticipant[]; on_behalf_of: PublicFormOnBehalfOf | null } {
+    return {
+      participants: completeParticipants(participantsRef.current),
+      on_behalf_of: completeOnBehalfOf(onBehalfOfRef.current),
+    };
   }
 
   async function saveDraft() {
@@ -449,7 +514,7 @@ export function PublicForm({ initial }: PublicFormProps) {
     const sent = answersRef.current;
     try {
       const payload = await apiFetch<PublicFormState>(`/api/v1/public/forms/${encodeURIComponent(state.form.slug)}/drafts/${encodeURIComponent(state.resume_token)}`, {
-        method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ answers: sent }),
+        method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ answers: sent, ...rosterPayload() }),
         route: "/api/v1/public/forms/{slug}/drafts/{token}",
       });
       if (!payload || !("state" in payload)) throw new Error("The autosave response was unreadable.");
@@ -574,7 +639,7 @@ export function PublicForm({ initial }: PublicFormProps) {
         method: editingSubmitted ? "PATCH" : "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify(editingSubmitted
           ? { answers }
-          : { answers, resumeToken: state.resume_token ?? undefined, turnstileToken: token }),
+          : { answers, resumeToken: state.resume_token ?? undefined, turnstileToken: token, ...rosterPayload() }),
         route: editingSubmitted
           ? "/api/v1/public/forms/{slug}/submissions/{token}"
           : "/api/v1/public/forms/{slug}/submissions",
@@ -679,10 +744,73 @@ export function PublicForm({ initial }: PublicFormProps) {
   const collectsParticipants = state.fields.some((field) => field.key === "speaker_name" || field.key === "speaker_email");
   const additionalSlots = Math.max(0, state.form.max_speakers - 1);
   const coSpeakerSlots = additionalSlots === 0
-    ? "no co-speaker slot"
+    ? "no room for anyone else"
     : additionalSlots === 1
-      ? "one optional co-speaker slot"
-      : `${additionalSlots} optional co-speaker slots`;
+      ? "room for one more person"
+      : `room for ${additionalSlots} more people`;
+  const primaryName = typeof answers.speaker_name === "string" ? answers.speaker_name.trim() : "";
+  const canAddParticipant = participants.length < additionalSlots;
+
+  /**
+   * Who is presenting.
+   *
+   * The primary speaker's own answers stay where the organizer put them in the
+   * form builder; this section names them and then collects everyone else, so
+   * one person's details are never asked for twice. Every slot is the same
+   * height and the add control sits below a list that only grows downwards, so
+   * adding a person moves nothing that was already on the screen.
+   */
+  const participantSection = collectsParticipants
+    ? <section class="public-participants" aria-labelledby="public-participants-heading">
+        <div class="public-participants-head">
+          <h2 id="public-participants-heading">Who is presenting?</h2>
+          <span class="public-kicker">{1 + participants.length} of {state.form.max_speakers}</span>
+        </div>
+        <label class="public-behalf-toggle">
+          <input
+            type="checkbox"
+            checked={onBehalfOf !== null}
+            disabled={closed}
+            onChange={(event) => writeOnBehalfOf((event.currentTarget as HTMLInputElement).checked ? { name: "", email: "" } : null)}
+          />
+          <span>I'm submitting on behalf of someone else</span>
+        </label>
+        <div class={`public-behalf-fields${onBehalfOf ? " is-open" : ""}`} aria-hidden={onBehalfOf === null}>
+          {onBehalfOf && <>
+            <label class="public-participant-field"><span>Your name</span><input type="text" value={onBehalfOf.name} disabled={closed} onInput={(event) => writeOnBehalfOf({ ...onBehalfOf, name: (event.currentTarget as HTMLInputElement).value })} /></label>
+            <label class="public-participant-field"><span>Your contact address</span><input type="email" value={onBehalfOf.email} disabled={closed} onInput={(event) => writeOnBehalfOf({ ...onBehalfOf, email: (event.currentTarget as HTMLInputElement).value })} /></label>
+            <p class="public-participant-note">Confirmation and the decision come to you. The speaker's own tasks, profile request and calendar invite go to them.</p>
+          </>}
+        </div>
+        <div class="public-participant-card is-primary">
+          <span class="public-participant-role-static">Speaker</span>
+          <strong class="public-participant-name">{primaryName || "The speaker named in the answers below"}</strong>
+        </div>
+        {participants.map((slot, index) => <div class="public-participant-card" key={`participant-${index}`}>
+          <label class="public-participant-field public-participant-role">
+            <span>Role</span>
+            <select
+              value={slot.role}
+              disabled={closed}
+              onChange={(event) => writeParticipants(participants.map((entry, position) =>
+                position === index ? { ...entry, role: (event.currentTarget as HTMLSelectElement).value as ParticipantSlot["role"] } : entry))}
+            >
+              {PUBLIC_PARTICIPANT_ROLES.map((role) => <option value={role}>{PARTICIPANT_ROLE_LABELS[role]}</option>)}
+            </select>
+          </label>
+          <label class="public-participant-field"><span>Name</span><input type="text" value={slot.name} disabled={closed} onInput={(event) => writeParticipants(participants.map((entry, position) => position === index ? { ...entry, name: (event.currentTarget as HTMLInputElement).value } : entry))} /></label>
+          <label class="public-participant-field"><span>Contact address</span><input type="email" value={slot.email} disabled={closed} onInput={(event) => writeParticipants(participants.map((entry, position) => position === index ? { ...entry, email: (event.currentTarget as HTMLInputElement).value } : entry))} /></label>
+          <button class="public-participant-remove" type="button" disabled={closed} onClick={() => writeParticipants(participants.filter((_, position) => position !== index))}>Remove</button>
+        </div>)}
+        {/* AC-29: the limit sentence sits above the first add control, not below it. */}
+        <p class="public-participant-limit">Include at least {minimumParticipants}; this form has {coSpeakerSlots}.</p>
+        <div class="public-participant-actions">
+          <button class="public-participant-add" type="button" disabled={closed || !canAddParticipant} onClick={() => writeParticipants([...participants, emptySlot()])}>+ Add a person</button>
+          <span class="public-participant-full" aria-hidden={canAddParticipant}>{canAddParticipant ? " " : "This form is full."}</span>
+        </div>
+        <div class={`public-field-error${errors.participants || errors.on_behalf_of ? " has-message" : ""}`} role={errors.participants || errors.on_behalf_of ? "alert" : undefined} aria-hidden={!(errors.participants || errors.on_behalf_of)}>{errors.participants ?? errors.on_behalf_of ?? " "}</div>
+      </section>
+    : null;
   const saveStatus = busy
     ? "Saving…"
     : state.resume_token
@@ -697,7 +825,7 @@ export function PublicForm({ initial }: PublicFormProps) {
     : closed
       ? "This form is not accepting answers right now, so its fields are closed for editing."
       : "Your answers stay here while you work. A resume link goes to the address you enter.";
-  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at !== null && !publicFormIsEffectivelyClosed(state) && <span>Closes {formatEventDateTime(state.form.closes_at, state.conference.timezone)}</span>}<span class={`public-save-status${saveStatus ? " has-value" : ""}`} aria-live="polite" aria-hidden={!saveStatus}>{saveStatus}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}{!editingSubmitted && state.state === "submitted" && state.submission_edit_reason ? <div class="public-notice alarm" role="status">{state.submission_edit_reason}</div> : null}<div class={`public-error${pageError ? " has-message" : ""}`} ref={pageErrorRef} role={pageError ? "alert" : undefined} tabIndex={-1} aria-hidden={!pageError}>{pageError ?? " "}</div><form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div>{collectsParticipants && <p class="public-participant-limit">Include at least {minimumParticipants}; this form has {coSpeakerSlots}.</p>}<fieldset class="public-form-fields" disabled={closed}>{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} ref={(node) => { turnstileHost.current = node as HTMLElement | null; }} dangerouslySetInnerHTML={{ __html: "" }} /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></fieldset>{state.resume_url && <div class="public-draft-resume" role="status"><strong>{editingSubmitted ? "Private edit link" : "Private resume link"}</strong><span>{resumeCopy}</span><div class="public-draft-resume-actions"><a class="public-resume-link" href={resumePath ?? "#"}>{resumePath}</a><button class="public-copy-link" type="button" onClick={() => { void copyResumeLink(); }}>{copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy resume link"}</button></div></div>}<div class="public-form-footer"><div class="public-form-footer-copy">{draftEmailPrompt && !state.resume_token && !closed && <div class="public-draft-email"><label for="public-draft-email">Contact address for your resume link</label><input id="public-draft-email" ref={draftEmailRef} type="email" value={answerEmail(answers)} onInput={(event) => setAnswer("speaker_email", (event.currentTarget as HTMLInputElement).value)} /><span>We will send a private link here so you can return to this draft.</span></div>}<span class="public-security">{securityCopy}</span></div><div class="public-form-actions"><button class="public-save-draft" type="button" data-save-draft onMouseDown={() => { preserveDraftOnBlur.current = true; }} onClick={() => { void saveDraft(); }} disabled={busy || closed || editingSubmitted}>Save draft</button><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : editingSubmitted ? "Save changes" : "Submit abstract"}</button></div></div></form></main><PublicFooter /></div>;
+  return <div class="public-form" data-public-form><PublicHeader state={state} /><main class="public-form-main"><section class="public-intro"><h1>{state.form.name}</h1><p>{state.form.welcome_md || "Share the idea you want the conference to make room for."}</p><div class="public-meta"><span>{state.conference.name}</span>{state.form.closes_at !== null && !publicFormIsEffectivelyClosed(state) && <span>Closes {formatEventDateTime(state.form.closes_at, state.conference.timezone)}</span>}<span class={`public-save-status${saveStatus ? " has-value" : ""}`} aria-live="polite" aria-hidden={!saveStatus}>{saveStatus}</span></div><div class="public-progress" aria-label="Form progress">{[0, 1, 2, 3, 4].map((step) => <i class={step <= Math.min(4, Math.floor(Object.keys(answers).length / Math.max(1, state.fields.length) * 5)) ? "is-active" : ""} />)}</div></section>{state.message && <div class={`public-notice${closed && state.state !== "submitted" ? " alarm" : ""}`} role="status">{state.message}</div>}{!editingSubmitted && state.state === "submitted" && state.submission_edit_reason ? <div class="public-notice alarm" role="status">{state.submission_edit_reason}</div> : null}<div class={`public-error${pageError ? " has-message" : ""}`} ref={pageErrorRef} role={pageError ? "alert" : undefined} tabIndex={-1} aria-hidden={!pageError}>{pageError ?? " "}</div><form class="public-form-card" onSubmit={submit}><div class="public-form-card-head"><h2>Abstract details</h2><span class="public-kicker">{visibleFields.length} answers</span></div>{participantSection}<fieldset class="public-form-fields" disabled={closed}>{visibleFields.map(renderField)}<div class="public-security"><div class="cf-turnstile" data-sitekey={state.turnstile_site_key ?? ""} ref={(node) => { turnstileHost.current = node as HTMLElement | null; }} dangerouslySetInnerHTML={{ __html: "" }} /><input type="hidden" data-turnstile-token value={turnstileToken} /></div></fieldset>{state.resume_url && <div class="public-draft-resume" role="status"><strong>{editingSubmitted ? "Private edit link" : "Private resume link"}</strong><span>{resumeCopy}</span><div class="public-draft-resume-actions"><a class="public-resume-link" href={resumePath ?? "#"}>{resumePath}</a><button class="public-copy-link" type="button" onClick={() => { void copyResumeLink(); }}>{copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy resume link"}</button></div></div>}<div class="public-form-footer"><div class="public-form-footer-copy">{draftEmailPrompt && !state.resume_token && !closed && <div class="public-draft-email"><label for="public-draft-email">Contact address for your resume link</label><input id="public-draft-email" ref={draftEmailRef} type="email" value={answerEmail(answers)} onInput={(event) => setAnswer("speaker_email", (event.currentTarget as HTMLInputElement).value)} /><span>We will send a private link here so you can return to this draft.</span></div>}<span class="public-security">{securityCopy}</span></div><div class="public-form-actions"><button class="public-save-draft" type="button" data-save-draft onMouseDown={() => { preserveDraftOnBlur.current = true; }} onClick={() => { void saveDraft(); }} disabled={busy || closed || editingSubmitted}>Save draft</button><button class="public-submit" type="submit" disabled={busy || closed}>{busy ? "Saving…" : editingSubmitted ? "Save changes" : "Submit abstract"}</button></div></div></form></main><PublicFooter /></div>;
 }
 
 function PublicHeader({ state }: { state: PublicFormState }) {

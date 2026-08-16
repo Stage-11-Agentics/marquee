@@ -23,6 +23,33 @@ export const PUBLIC_FORM_STYLES = `
 .public-form-card-head { align-items: center; background: var(--sunk); border-bottom: 1px solid var(--line-strong); display: flex; justify-content: space-between; padding: 13px 16px; }
 .public-form-card-head h2 { font: 600 11px/1.2 var(--mono); letter-spacing: .15em; margin: 0; text-transform: uppercase; }
 .public-participant-limit { background: var(--accent-soft); border-bottom: 1px solid var(--line-strong); color: var(--accent-ink); font-size: 12px; line-height: 1.5; margin: 0; padding: 12px 20px; }
+
+/* Who is presenting. Every slot is one height and the add control sits below a
+   list that only grows downwards, so adding or removing a person never moves a
+   control the submitter is reaching for. The on-behalf-of panel reserves its
+   own height for the same reason. */
+.public-participants { border-bottom: 1px solid var(--line-strong); display: grid; gap: 12px; padding: 16px 20px; }
+.public-participants-head { align-items: center; display: flex; justify-content: space-between; }
+.public-participants-head h2 { font: 600 11px/1.2 var(--mono); letter-spacing: .15em; margin: 0; text-transform: uppercase; }
+.public-behalf-toggle { align-items: center; display: flex; font-size: 12.5px; gap: 8px; line-height: 1.5; }
+.public-behalf-fields { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); min-height: 0; }
+.public-behalf-fields.is-open { min-height: 96px; }
+.public-participant-card { align-items: end; border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 10px; grid-template-columns: 148px minmax(160px, 1fr) minmax(180px, 1fr) 92px; min-height: 74px; padding: 12px; }
+.public-participant-card.is-primary { align-items: center; background: var(--sunk); grid-template-columns: 148px 1fr; }
+.public-participant-role-static { color: var(--muted); font: 600 10px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.public-participant-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.public-participant-field { display: grid; gap: 5px; min-width: 0; }
+.public-participant-field > span { color: var(--muted); font-size: 11px; }
+.public-participant-field input, .public-participant-field select { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); font: inherit; font-size: 12.5px; min-height: 36px; padding: 7px 9px; width: 100%; }
+/* Fixed width: the select must not resize as roles of different lengths are chosen. */
+.public-participant-role select { width: 148px; }
+.public-participant-remove { background: none; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; min-height: 36px; width: 92px; }
+.public-participant-remove:hover:not(:disabled) { border-color: var(--alarm); color: var(--alarm); }
+.public-participant-note { color: var(--muted); font-size: 11.5px; grid-column: 1 / -1; line-height: 1.5; margin: 0; }
+.public-participant-actions { align-items: center; display: flex; gap: 10px; min-height: 38px; }
+.public-participant-add { background: var(--surface); border: 1px dashed var(--line-strong); border-radius: 6px; color: var(--ink); cursor: pointer; font: inherit; font-size: 12.5px; min-height: 38px; padding: 8px 14px; }
+.public-participant-add:disabled { color: var(--muted); cursor: not-allowed; }
+.public-participant-full { color: var(--muted); font-size: 11.5px; }
 /* A fieldset, so a closed or at-limit call disables every control under it in
    one attribute. The reset keeps its layout identical to the div it replaced. */
 .public-form-fields { border: 0; display: grid; gap: 23px; margin: 0; min-width: 0; padding: 24px 20px; }
