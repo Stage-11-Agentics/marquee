@@ -266,6 +266,7 @@ export function run(ctx: SeedContext): void {
     status: "open",
     opens_at: CFP_OPENS,
     closes_at: CFP_CLOSES,
+    submitter_limit_inherit: 1,
     created_at: now,
     updated_at: now,
   });
@@ -327,6 +328,7 @@ export function run(ctx: SeedContext): void {
     status: "open",
     opens_at: null,
     closes_at: null,
+    submitter_limit_inherit: 1,
     created_at: now,
     updated_at: now,
   });

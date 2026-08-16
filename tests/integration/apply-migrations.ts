@@ -38,6 +38,7 @@ import airtableDecisionActorMigrationSql from "../../migrations/0027_airtable_de
 import participantFanoutMigrationSql from "../../migrations/0028_participant_fanout.sql?raw";
 import submissionNotesMigrationSql from "../../migrations/0029_submission_notes.sql?raw";
 import submissionReferenceCodesMigrationSql from "../../migrations/0030_submission_reference_codes.sql?raw";
+import submissionCapacityMigrationSql from "../../migrations/0031_submission_capacity.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -142,6 +143,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(participantFanoutMigrationSql),
     ...splitStatements(submissionNotesMigrationSql),
     ...splitStatements(submissionReferenceCodesMigrationSql),
+    ...splitStatements(submissionCapacityMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

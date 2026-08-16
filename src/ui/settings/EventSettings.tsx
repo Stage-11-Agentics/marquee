@@ -51,6 +51,7 @@ interface SettingsModel {
   formats: Format[];
   tracks: Track[];
   speaker_social_platforms: SocialPlatformId[];
+  submission_default_limit: number;
   schedule_window: {
     outside_window_session_count: number;
   };
@@ -231,7 +232,11 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
       await requestJson<{ data: SettingsModel }>(`/api/v1/events/${encodeURIComponent(eventId)}`, "/api/v1/events/{eventId}", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...model.event, speaker_social_platforms: model.speaker_social_platforms }),
+        body: JSON.stringify({
+          ...model.event,
+          speaker_social_platforms: model.speaker_social_platforms,
+          submission_default_limit: model.submission_default_limit,
+        }),
       });
       // The timezone is the clock every other shell screen uses. Refresh the
       // shared event context immediately after its write, before a later format
@@ -309,6 +314,13 @@ export function EventSettings({ eventId, navigate }: Props): JSX.Element {
             <Field label="Timezone" className="span-2"><select value={model.event.timezone} onChange={(event) => updateModel((current) => ({ ...current, event: { ...current.event, timezone: event.currentTarget.value } }))}>{[...new Set([model.event.timezone, ...EVENT_TIMEZONES])].map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select><small>Agenda and calendar invites inherit this timezone.</small></Field>
             <Field label="Venue" className="span-2"><input value={model.event.venue ?? ""} onInput={(event) => updateModel((current) => ({ ...current, event: { ...current.event, venue: event.currentTarget.value } }))} /></Field>
             <Field label="Conference logo" className="span-2"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) updateModel((current) => ({ ...current, event: { ...current.event, logo_key: file.name } })); }} /><small>{model.event.logo_key ? `Selected: ${model.event.logo_key}` : "PNG, JPG, or WebP"}</small></Field>
+          </div>
+        </section>
+
+        <section class="card settings-list-card" id="submission-capacity">
+          <header class="card-head"><div><h2>Submission capacity</h2><span class="subtle">The default for forms that inherit the conference setting</span></div></header>
+          <div class="card-body settings-fields">
+            <Field label="Abstracts per person" className="span-2"><input type="number" min="1" max="100" value={model.submission_default_limit} onInput={(event) => updateModel((current) => ({ ...current, submission_default_limit: Number(event.currentTarget.value) || 1 }))} /><small>Forms can override this number. Existing legacy unlimited form rows remain unlimited until explicitly changed.</small></Field>
           </div>
         </section>
 

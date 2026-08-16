@@ -175,6 +175,7 @@ export const COPY_TABLES: readonly CopyTable[] = [
       "kind",
       "welcome_md",
       "per_submitter_limit",
+      "submitter_limit_inherit",
       "min_speakers",
       "max_speakers",
       "max_sponsors",

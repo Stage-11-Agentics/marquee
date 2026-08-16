@@ -3,6 +3,7 @@ import { resolveSort, executeListPage, parsePagination, type SortRegistry } from
 import type { FormFieldRow, FormRow } from "../db/schema";
 import { boundSourceOf, resolveBoundOptions } from "../lib/bound-options";
 import { fieldPreviewProjection, parseFormCondition } from "../lib/form-conditions";
+import { effectiveSubmitterLimit, submissionDefaultFor } from "../lib/submission-capacity";
 
 export const FORM_SORTS = {
   name: { column: "f.name", direction: "asc" as const },
@@ -34,6 +35,8 @@ export interface FormListItem {
   closes_at: number | null;
   welcome_md: string;
   per_submitter_limit: number;
+  submitter_limit_inherit: boolean;
+  effective_submitter_limit: number;
   min_speakers: number;
   max_speakers: number;
   max_sponsors: number;
@@ -102,7 +105,10 @@ export function effectiveFormStatus(
     : row.status;
 }
 
-function normalizeForm(row: FormRow & { response_count?: number | null }): FormListItem {
+export function normalizeForm(
+  row: FormRow & { response_count?: number | null },
+  eventDefault: number,
+): FormListItem {
   const responseCount = Number(row.response_count ?? 0);
   const status = effectiveFormStatus(row);
   return {
@@ -116,6 +122,11 @@ function normalizeForm(row: FormRow & { response_count?: number | null }): FormL
     closes_at: asNumber(row.closes_at),
     welcome_md: row.welcome_md,
     per_submitter_limit: Number(row.per_submitter_limit),
+    submitter_limit_inherit: Number(row.submitter_limit_inherit) === 1,
+    effective_submitter_limit: effectiveSubmitterLimit(
+      { submission_default_limit: eventDefault },
+      row,
+    ),
     min_speakers: Number(row.min_speakers),
     max_speakers: Number(row.max_speakers),
     max_sponsors: Number(row.max_sponsors),
@@ -187,8 +198,11 @@ export async function listForms(db: D1Database, input: FormListInput) {
        LIMIT ? OFFSET ?`,
     )
     .bind(...bindings, page.limit, page.offset);
-  const result = await executeListPage({ count, data, page });
-  return { ...result, data: result.data.map((row) => normalizeForm(row as FormRow & { response_count?: number | null })) };
+  const [eventDefault, result] = await Promise.all([
+    submissionDefaultFor(db, input.eventId),
+    executeListPage({ count, data, page }),
+  ]);
+  return { ...result, data: result.data.map((row) => normalizeForm(row as FormRow & { response_count?: number | null }, eventDefault)) };
 }
 
 export async function findForm(db: D1Database, eventId: string, formId: string): Promise<FormRow | null> {
@@ -239,12 +253,13 @@ export async function listFormAdmins(db: D1Database, formId: string): Promise<Fo
 }
 
 export async function readFormDetail(db: D1Database, form: FormRow): Promise<FormDetail> {
-  const [responseCount, fields, admins] = await Promise.all([
+  const [responseCount, fields, admins, eventDefault] = await Promise.all([
     countFormResponses(db, form.id),
     listFormFields(db, form.id),
     listFormAdmins(db, form.id),
+    submissionDefaultFor(db, form.event_id),
   ]);
-  const summary = normalizeForm({ ...form, response_count: responseCount });
+  const summary = normalizeForm({ ...form, response_count: responseCount }, eventDefault);
   return {
     ...summary,
     reminder_offset_hours: asNumber(form.reminder_offset_hours),
