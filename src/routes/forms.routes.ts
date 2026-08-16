@@ -49,6 +49,17 @@ const conditionSchema = z
   .object({ all: z.array(conditionClauseSchema).max(40) })
   .nullable();
 const configSchema = z.record(z.string(), z.unknown()).default({});
+const formFieldTypeSchema = z.enum([
+  "short_text",
+  "long_text",
+  "single_select",
+  "multi_select",
+  "url",
+  "email",
+  "file",
+  "number",
+  "date",
+]);
 
 const formSummarySchema = z
   .object({
@@ -82,17 +93,7 @@ const formFieldSchema = z
     key: z.string(),
     label: z.string(),
     help_text: z.string().nullable(),
-    type: z.enum([
-      "short_text",
-      "long_text",
-      "single_select",
-      "multi_select",
-      "url",
-      "email",
-      "file",
-      "number",
-      "date",
-    ]),
+    type: formFieldTypeSchema,
     required: z.boolean(),
     position: z.number().int().nonnegative(),
     config: configSchema,
@@ -190,17 +191,7 @@ const fieldLibraryBodySchema = z.object({
   key: z.string().trim().min(1).max(120).regex(/^[a-z][a-z0-9_]*$/),
   label: z.string().trim().min(1).max(240),
   help_text: z.string().max(2_000).nullable().optional(),
-  type: z.enum([
-    "short_text",
-    "long_text",
-    "single_select",
-    "multi_select",
-    "url",
-    "email",
-    "file",
-    "number",
-    "date",
-  ]),
+  type: formFieldTypeSchema,
   required: z.boolean().default(false),
   config: configSchema,
   condition: conditionSchema.default(null),
@@ -212,17 +203,7 @@ const libraryFieldSchema = z.object({
   key: z.string(),
   label: z.string(),
   help_text: z.string().nullable(),
-  type: z.enum([
-    "short_text",
-    "long_text",
-    "single_select",
-    "multi_select",
-    "url",
-    "email",
-    "file",
-    "number",
-    "date",
-  ]),
+  type: formFieldTypeSchema,
   required: z.boolean(),
   config: configSchema,
   condition: conditionSchema,
