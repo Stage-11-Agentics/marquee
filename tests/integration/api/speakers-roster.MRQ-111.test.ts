@@ -146,6 +146,13 @@ test("CONTRACT · MRQ-111 · SPK-01 · the roster lists every speaker regardless
 });
 
 test("CONTRACT · MRQ-111 · 24n · the acceptance boundary writes the membership row the portal reads", async () => {
+  const memberPersonIds = async (): Promise<string[]> => {
+    const rows = await env.DB
+      .prepare("SELECT person_id FROM memberships WHERE event_id = ? AND role = 'speaker'")
+      .bind(EVENT_ID)
+      .all<{ person_id: string }>();
+    return rows.results.map((row) => row.person_id).sort();
+  };
   const before = await env.DB
     .prepare("SELECT COUNT(*) AS count FROM memberships WHERE event_id = ? AND role = 'speaker'")
     .bind(EVENT_ID)
@@ -154,19 +161,28 @@ test("CONTRACT · MRQ-111 · 24n · the acceptance boundary writes the membershi
 
   await reconcileTaskSet(env.DB, EVENT_ID, ["sub_mrq111_accepted"], NOW);
 
-  const after = await env.DB
-    .prepare("SELECT person_id FROM memberships WHERE event_id = ? AND role = 'speaker'")
-    .bind(EVENT_ID)
-    .all<{ person_id: string }>();
-  expect(after.results.map((row) => row.person_id)).toEqual([ACCEPTED_SPEAKER]);
+  // MRQ-224 widened the membership bridge from (speaker, co_speaker) to every
+  // on-stage role, so the accepted session's moderator is here too. That row is
+  // what gates portal sign-in, headshot ownership, and the comms audience — a
+  // moderator who cannot open their own portal cannot do the work the
+  // conference just committed them to.
+  //
+  // OPEN QUESTION, deliberately not resolved here. `roster-source.ts` UNIONs
+  // `memberships(role = 'speaker')`, so this row also lists an accepted
+  // moderator on the speaker roster — which SPK-01 below says is not what the
+  // roster is. MRQ-224 asks for "ICS + membership + roster row"; MRQ-111 says
+  // the roster is the speaker list and excludes moderators. Both cannot be
+  // true, and the resolution is an operator ruling, not a builder's guess:
+  // either the roster gains a role column and shows moderators as moderators,
+  // or the membership role stops being a single 'speaker' value. This build
+  // changed only the membership row and left `speakerRosterPersonSource`
+  // untouched, so the seeded moderator below — who never went through
+  // acceptance — still stays off the roster and SPK-01 still holds.
+  expect(await memberPersonIds()).toEqual([ACCEPTED_SPEAKER, MODERATOR_PERSON].sort());
 
-  // Idempotent: re-running acceptance must not mint a second row.
+  // Idempotent: re-running acceptance must not mint a second row per person.
   await reconcileTaskSet(env.DB, EVENT_ID, ["sub_mrq111_accepted"], NOW + 1_000);
-  const again = await env.DB
-    .prepare("SELECT COUNT(*) AS count FROM memberships WHERE event_id = ? AND role = 'speaker'")
-    .bind(EVENT_ID)
-    .first<{ count: number }>();
-  expect(Number(again?.count)).toBe(1);
+  expect(await memberPersonIds()).toEqual([ACCEPTED_SPEAKER, MODERATOR_PERSON].sort());
 });
 
 test("CONTRACT · MRQ-111 · SPK-02 · an organizer bio edit survives a re-read and is attributable", async () => {

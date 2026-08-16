@@ -10,6 +10,7 @@ import { z } from "@hono/zod-openapi";
 
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { errorFields } from "../lib/observability/log";
+import { DECISION_RECIPIENT_ROLES, primaryParticipantSql } from "../lib/participants";
 import { runDiagnostics } from "./telemetry.routes";
 import type { Env } from "../index";
 import {
@@ -140,15 +141,22 @@ async function tolerant<T>(read: () => Promise<T>, fallback: T): Promise<T> {
   }
 }
 
-const SPEAKER_PICK = `
-  FROM participations health_part
-  JOIN people health_person ON health_person.id = health_part.person_id
-  WHERE health_part.submission_id = s.id
-    AND health_part.role IN ('speaker', 'submitter')
-  ORDER BY CASE health_part.role WHEN 'speaker' THEN 0 ELSE 1 END,
-           health_part.position ASC,
-           health_part.id ASC
-  LIMIT 1`;
+/**
+ * Who the decision was addressed to, so "not notified" names a real person.
+ *
+ * The same ladder the cascade itself uses (`DECISION_RECIPIENT_ROLES`): a view
+ * that reports which decision never reached its recipient has to be reading the
+ * recipient the cascade would have written to, or its `no_valid_address` reason
+ * names the wrong participant.
+ */
+function decisionRecipient(column: "name" | "email"): string {
+  return primaryParticipantSql({
+    submissionId: "s.id",
+    column,
+    order: DECISION_RECIPIENT_ROLES,
+    fallback: `(SELECT fallback_submitter.${column} FROM people fallback_submitter WHERE fallback_submitter.id = s.submitter_person_id)`,
+  });
+}
 
 /**
  * The one query that matters: who was decided and has not been told.
@@ -216,8 +224,8 @@ async function readOwed(database: D1Database, eventId: string): Promise<{ rows: 
             ob.suppressed_reason AS suppressed_reason,
             ob.error AS outbox_error,
             ob.delivery_state AS delivery_state,
-            (SELECT health_person.name ${SPEAKER_PICK}) AS person_name,
-            (SELECT health_person.email ${SPEAKER_PICK}) AS person_email
+            ${decisionRecipient("name")} AS person_name,
+            ${decisionRecipient("email")} AS person_email
           ${OWED_FROM}
           ORDER BY d.decided_at ASC, s.id ASC
           LIMIT ?

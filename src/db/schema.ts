@@ -533,6 +533,8 @@ export interface SubmissionRow extends MutableRecord {
   last_saved_at: EpochMilliseconds | null;
   last_write_source: LastWriteSource;
   origin: SubmissionOrigin;
+  /** The participant roster the public form was filled in with; see migration 0028. */
+  participants_json: JsonText | null;
   primary_track_id: Id | null;
   resume_token_hash: string | null;
   search_blob: string;
@@ -690,6 +692,8 @@ export interface AgendaItemRow extends MutableRecord {
 }
 
 export interface TaskTemplateRow extends MutableRecord {
+  /** JSON array of participation roles this template is assigned to. */
+  applies_to_roles: JsonText;
   auto_assign: 0 | 1;
   description: string;
   due_at: EpochMilliseconds | null;

@@ -32,6 +32,7 @@
  * roster is an organizer act and wants its own control.
  */
 import { newUlid } from "../api/ids";
+import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "./participants";
 
 export interface SpeakerMembershipInput {
   orgId: string;
@@ -68,9 +69,13 @@ export function speakerMembershipStatement(db: D1Database, input: SpeakerMembers
 }
 
 /**
- * Bridge every speaker and co-speaker of the given accepted submissions into
- * the event's membership list. Called from the acceptance cascade, where the
+ * Bridge every on-stage participant of the given accepted submissions into the
+ * event's membership list. Called from the acceptance cascade, where the
  * conference has just committed to these people.
+ *
+ * The population is `WORK_HOLDING_PARTICIPATION_ROLES`, not a list spelled out
+ * here: a moderator the conference has accepted needs the portal seat this row
+ * gates exactly as much as a speaker does.
  *
  * The person set is read first and the rows are then built through `newUlid`
  * rather than minted by an `INSERT … SELECT`: membership ids are ULIDs
@@ -94,7 +99,7 @@ export async function acceptedSpeakerMembershipStatements(
        JOIN submissions submission ON submission.id = part.submission_id
        WHERE submission.event_id = ?
          AND submission.status = 'accepted'
-         AND part.role IN ('speaker', 'co_speaker')
+         AND ${roleInSql("part", WORK_HOLDING_PARTICIPATION_ROLES)}
          AND submission.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
        ORDER BY part.person_id ASC`,
     )

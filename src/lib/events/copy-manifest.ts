@@ -284,7 +284,11 @@ export const COPY_TABLES: readonly CopyTable[] = [
     nulls: [],
     constants: {},
     stamps: ["created_at", "updated_at"],
-    verbatim: ["name", "kind", "description", "due_at", "due_offset_days", "file_config", "position", "auto_assign"],
+    // `applies_to_roles` copies verbatim, and that is the whole point of it
+    // being here: it is the organizer's targeting decision, and a clone that
+    // dropped it would silently re-widen every narrowed template back to the
+    // default inside an operation that reports success.
+    verbatim: ["name", "kind", "description", "due_at", "due_offset_days", "file_config", "position", "auto_assign", "applies_to_roles"],
     // A fixed calendar deadline belongs to the conference it was set for, and
     // it cannot simply be nulled: CHECK ((due_at IS NULL) <> (due_offset_days
     // IS NULL)) requires exactly one of the pair, and `due_offset_days` counts
