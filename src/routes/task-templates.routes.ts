@@ -10,6 +10,7 @@ import { resolveTaskDueAt } from "../lib/task-due";
 import { normalizeTaskFileConfig, readTaskFileConfig, TaskFileConfigError, type TaskFileConfig } from "../lib/task-template-config";
 import {
   readTaskAppliesToRoles,
+  roleInSql,
   WORK_HOLDING_PARTICIPATION_ROLES,
   writeTaskAppliesToRoles,
 } from "../lib/participants";
@@ -842,7 +843,7 @@ const listTaskAssignees = defineApiRoute(
     await eventExists(context.env.DB, eventId);
     const rows = await context.env.DB.prepare(
       `WITH candidate AS (
-         SELECT person_id FROM memberships WHERE event_id = ? AND role IN ('speaker', 'co_speaker', 'moderator', 'chairperson')
+         SELECT person_id FROM memberships WHERE event_id = ? AND ${roleInSql("memberships", WORK_HOLDING_PARTICIPATION_ROLES)}
          UNION
          SELECT part.person_id FROM participations part
          JOIN submissions submission ON submission.id = part.submission_id

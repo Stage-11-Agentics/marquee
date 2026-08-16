@@ -40,8 +40,6 @@ export const MEMBERSHIP_ROLES = [
   "chairperson",
 ] as const;
 
-/** The staff half: everything a person is seated as that is not on stage. */
-export const STAFF_MEMBERSHIP_ROLES = ["owner", "program_lead", "ops", "reviewer"] as const;
 export const MAGIC_LINK_PURPOSES = [
   "login",
   "draft_resume",

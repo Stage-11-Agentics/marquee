@@ -113,9 +113,27 @@ function safeParse(value: string): unknown {
   }
 }
 
+function roleList(roles: readonly string[]): string {
+  return roles.map((role) => `'${role}'`).join(", ");
+}
+
 /** `role IN (…)` over a named set. Never built from request input. */
 export function roleInSql(alias: string, roles: readonly string[]): string {
-  return `${alias}.role IN (${roles.map((role) => `'${role}'`).join(", ")})`;
+  return `${alias}.role IN (${roleList(roles)})`;
+}
+
+/**
+ * `role NOT IN (…)` over a named set.
+ *
+ * The complement needs its own helper because the sets it complements grow.
+ * `memberships.role` is two vocabularies in one column, and every predicate
+ * meaning "staff" was written as `role <> 'speaker'` — true for a moderator the
+ * moment the on-stage vocabulary widened, which would have handed them a staff
+ * seat. Spelling the complement out at each call site has the same failure
+ * mode one widening later.
+ */
+export function roleNotInSql(alias: string, roles: readonly string[]): string {
+  return `${alias}.role NOT IN (${roleList(roles)})`;
 }
 
 /**

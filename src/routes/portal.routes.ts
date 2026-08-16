@@ -8,6 +8,7 @@
  */
 
 import { z } from "@hono/zod-openapi";
+import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "../lib/participants";
 
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
@@ -275,7 +276,7 @@ async function requireProfileSession(context: import("hono").Context<ApiEnv>): P
     SELECT 1 AS present
     FROM memberships
     WHERE org_id = ? AND person_id = ? AND event_id IS NOT NULL
-      AND role IN ('speaker', 'reviewer')
+      AND (${roleInSql("memberships", WORK_HOLDING_PARTICIPATION_ROLES)} OR role = 'reviewer')
     LIMIT 1
   `).bind(auth.orgId, auth.personId).first<{ present: number }>();
   if (!membership) throw ApiError.notFound("speaker profile not found");
@@ -307,7 +308,7 @@ async function findSpeakerEvent(
     .prepare(
       `SELECT e.id, e.name, e.slug, e.starts_on, e.ends_on, e.timezone, e.status
        FROM events e
-       JOIN memberships m ON m.event_id = e.id AND m.person_id = ? AND m.org_id = ? AND m.role IN ('speaker', 'co_speaker', 'moderator', 'chairperson')
+       JOIN memberships m ON m.event_id = e.id AND m.person_id = ? AND m.org_id = ? AND ${roleInSql("m", WORK_HOLDING_PARTICIPATION_ROLES)}
        WHERE 1 = 1 ${predicate}
        ORDER BY e.starts_on ASC, e.id ASC
        LIMIT 1`,
@@ -401,7 +402,7 @@ async function speakerParticipationFor(
     : `JOIN memberships membership
          ON membership.event_id = submission.event_id
         AND membership.person_id = ?
-        AND membership.role = 'speaker'`;
+        AND ${roleInSql("membership", WORK_HOLDING_PARTICIPATION_ROLES)}`;
   const scopedPredicate = scopedParticipationId
     ? "AND participation.role = 'co_speaker' AND participation.id = ?"
     : "";
@@ -716,7 +717,7 @@ async function listSubmissions(db: D1Database, event: EventProjection, personId:
              JOIN people other_person ON other_person.id = other.person_id
              WHERE other.submission_id = s.id
                AND other.person_id != ?
-               AND other.role IN ('speaker', 'co_speaker', 'moderator', 'chairperson')
+               AND ${roleInSql("other", WORK_HOLDING_PARTICIPATION_ROLES)}
              GROUP BY other_person.id, other_person.name, other.role
              ORDER BY other.position, other.id
            ) ordered
@@ -1077,7 +1078,7 @@ async function speakerTaskFor(db: D1Database, auth: SessionAuth, taskId: string)
        JOIN task_templates template ON template.id = task.template_id AND template.event_id = task.event_id
        LEFT JOIN submissions submission ON submission.id = task.submission_id AND submission.event_id = task.event_id
        JOIN memberships membership ON membership.event_id = task.event_id
-         AND membership.person_id = task.person_id AND membership.role = 'speaker'
+         AND membership.person_id = task.person_id AND ${roleInSql("membership", WORK_HOLDING_PARTICIPATION_ROLES)}
        WHERE task.id = ? AND task.person_id = ?`,
     )
     .bind(auth.orgId, taskId, auth.personId)
@@ -1253,7 +1254,7 @@ async function editableTalk(
          EXISTS (SELECT 1 FROM participations submitter
            WHERE submitter.submission_id = submission.id AND submitter.person_id = ? AND submitter.role = 'submitter') AS is_submitter,
          EXISTS (SELECT 1 FROM memberships speaker_membership
-           WHERE speaker_membership.event_id = submission.event_id AND speaker_membership.person_id = ? AND speaker_membership.role IN ('speaker', 'co_speaker', 'moderator', 'chairperson')) AS has_speaker_membership
+           WHERE speaker_membership.event_id = submission.event_id AND speaker_membership.person_id = ? AND ${roleInSql("speaker_membership", WORK_HOLDING_PARTICIPATION_ROLES)}) AS has_speaker_membership
        FROM submissions submission
        JOIN events conference ON conference.id = submission.event_id AND conference.org_id = ?
        LEFT JOIN forms form ON form.id = submission.form_id AND form.event_id = submission.event_id
@@ -1267,7 +1268,7 @@ async function editableTalk(
                  AND speaker_participation_access.person_id = ?
                  AND speaker_participation_access.role IN ('speaker', 'co_speaker'))
              AND EXISTS (SELECT 1 FROM memberships speaker_access
-               WHERE speaker_access.event_id = submission.event_id AND speaker_access.person_id = ? AND speaker_access.role IN ('speaker', 'co_speaker', 'moderator', 'chairperson'))
+               WHERE speaker_access.event_id = submission.event_id AND speaker_access.person_id = ? AND ${roleInSql("speaker_access", WORK_HOLDING_PARTICIPATION_ROLES)})
            )
          )`,
     )

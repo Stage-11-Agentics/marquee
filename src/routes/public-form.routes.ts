@@ -868,14 +868,22 @@ async function autosaveDraft(
   // The disclosure is recorded on the draft and applied at submit, where the
   // record's submitter is set. Moving it here would rewrite the owner of a
   // draft on a timer, mid-typing.
+  //
+  // But the profile fields branch on it exactly as `createDraft` and the submit
+  // handler do. Under the disclosure the speaker card describes somebody else,
+  // and writing it here filed an executive's name, bio, company and title
+  // against their comms manager's own record — on every autosave, so within
+  // seconds of the box being ticked. Submit could not heal it either: it finds
+  // the submitter by address and short-circuits the upsert, so the wrong
+  // identity was permanent.
   await upsertPublicPerson({
     db: context.env.DB,
     orgId: event.org_id,
     email: person.email,
-    name: answerText(projected.projected.answers, "speaker_name") ?? person.name,
-    company: answerText(projected.projected.answers, "speaker_company"),
-    title: answerText(projected.projected.answers, "speaker_role"),
-    bio: answerText(projected.projected.answers, "biography"),
+    name: roster.onBehalfOf?.name ?? answerText(projected.projected.answers, "speaker_name") ?? person.name,
+    company: roster.onBehalfOf ? null : answerText(projected.projected.answers, "speaker_company"),
+    title: roster.onBehalfOf ? null : answerText(projected.projected.answers, "speaker_role"),
+    bio: roster.onBehalfOf ? null : answerText(projected.projected.answers, "biography"),
     now,
   });
   await replaceProjectedAnswers(context.env.DB, base.submission.id, base.fields, projected.projected.answers, now);

@@ -17,6 +17,7 @@
  */
 
 import type { D1Database } from "@cloudflare/workers-types";
+import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "../participants";
 
 export const MEDIA_LINK_TTL_MS = 24 * 60 * 60_000;
 const MEDIA_LINK_CLOCK_SKEW_MS = 60_000;
@@ -109,7 +110,7 @@ export async function mediaAttachmentIsActive(db: D1Database, attachment: MediaA
       `SELECT 1 AS active
          FROM participations
         WHERE submission_id = ? AND person_id = ?
-          AND role IN ('speaker', 'co_speaker')
+          AND ${roleInSql("participations", WORK_HOLDING_PARTICIPATION_ROLES)}
           AND confirmation_status <> 'declined'
         LIMIT 1`,
     ).bind(task.submission_id, task.person_id).first<{ active: number }>();
@@ -138,7 +139,7 @@ export async function mediaAttachmentIsActive(db: D1Database, attachment: MediaA
     const membership = await db.prepare(
       `SELECT 1 AS active
          FROM memberships
-        WHERE event_id = ? AND person_id = ? AND role = 'speaker'
+        WHERE event_id = ? AND person_id = ? AND ${roleInSql("memberships", WORK_HOLDING_PARTICIPATION_ROLES)}
           AND confirmation_status <> 'declined'
         LIMIT 1`,
     ).bind(attachment.event_id, attachment.owner_id).first<{ active: number }>();

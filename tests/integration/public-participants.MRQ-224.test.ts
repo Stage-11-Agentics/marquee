@@ -387,3 +387,73 @@ test("AC-270 · unticking the disclosure at Submit moves the submitter back to t
   const receipt = await env.DB.prepare("SELECT to_email FROM outbox WHERE template_key = 'submission_confirmation' LIMIT 1").first<{ to_email: string }>();
   expect(receipt?.to_email).toBe("robin@example.com");
 });
+
+test("AC-270, AC-271 · autosaving under the disclosure never writes the speaker over the submitter", async () => {
+  // The identity branch `createDraft` and Submit both carry, missing from
+  // autosave. Under the disclosure the speaker card describes somebody else, so
+  // an unguarded autosave filed the executive's name, bio, company and title
+  // against their comms manager's own `people` row — on every PATCH, within
+  // seconds of the box being ticked.
+  //
+  // Submit could not heal it: it finds the submitter by address and
+  // short-circuits the upsert, so the wrong identity was permanent. That is why
+  // this asserts the row directly rather than only the outcome.
+  const draft = await createDraft({
+    answers: { title: "The keynote", speaker_name: "Robin Alvarez", speaker_email: "robin@example.com" },
+    on_behalf_of: { name: "Sam Chen", email: "sam@example.com" },
+  });
+
+  const patched = await request(`/api/v1/public/forms/${SLUG}/drafts/${encodeURIComponent(draft.resume_token)}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      answers: {
+        title: "The keynote, revised",
+        speaker_name: "Robin Alvarez",
+        speaker_email: "robin@example.com",
+        speaker_company: "Northwind",
+        speaker_role: "Chief Executive",
+        biography: "Robin has run three companies.",
+      },
+      on_behalf_of: { name: "Sam Chen", email: "sam@example.com" },
+    }),
+  });
+  expect(patched.status).toBe(200);
+
+  const submitter = await env.DB
+    .prepare("SELECT name, email, company, title, bio FROM people WHERE email = 'sam@example.com'")
+    .first<{ name: string; email: string; company: string | null; title: string | null; bio: string | null }>();
+  expect(submitter?.name).toBe("Sam Chen");
+  expect(submitter?.company).toBe(null);
+  expect(submitter?.title).toBe(null);
+  expect(submitter?.bio).toBe(null);
+
+  // The speaker's own row is where those fields belong, written through the
+  // scoped path rather than onto whoever happened to be filling the form in.
+  const speaker = await env.DB
+    .prepare("SELECT name FROM people WHERE email = 'robin@example.com'")
+    .first<{ name: string }>();
+  expect(speaker?.name).toBe("Robin Alvarez");
+
+  // And Submit still lands correctly on top of an autosaved draft.
+  const submitted = await submit({
+    answers: {
+      title: "The keynote, revised",
+      speaker_name: "Robin Alvarez",
+      speaker_email: "robin@example.com",
+      speaker_company: "Northwind",
+      speaker_role: "Chief Executive",
+      biography: "Robin has run three companies.",
+    },
+    resumeToken: draft.resume_token,
+    on_behalf_of: { name: "Sam Chen", email: "sam@example.com" },
+  });
+  expect(submitted.status).toBe(201);
+  const submission = await latestSubmission();
+  expect((await participationsFor(submission.id)).map((row) => `${row.role}:${row.name}`).sort())
+    .toEqual(["speaker:Robin Alvarez", "submitter:Sam Chen"]);
+  const healed = await env.DB
+    .prepare("SELECT name, bio FROM people WHERE email = 'sam@example.com'")
+    .first<{ name: string; bio: string | null }>();
+  expect(healed?.name).toBe("Sam Chen");
+  expect(healed?.bio).toBe(null);
+});
