@@ -10,7 +10,7 @@ import { enqueueOutbox, enqueuePublicFormConfirmation, enqueueSmokeHarnessMail, 
 import { isMailScheduleCron, selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "../../src/jobs/mail/schedule";
 import { mergeDataForRecipient } from "../../src/jobs/mail/merge-data";
 import { enqueueBulkReminder, enqueuePreCloseReminders, enqueueTrigger } from "../../src/jobs/mail/triggers";
-import { findTemplate, renderStoredTemplate, TRIGGER_TEMPLATE_KEYS } from "../../src/jobs/mail/templates";
+import { COMMUNICATION_TEMPLATE_KEYS, findTemplate, renderStoredTemplate, TRIGGER_TEMPLATE_KEYS } from "../../src/jobs/mail/templates";
 import { renderMail } from "../../src/jobs/mail/render";
 import { dueAtFromDateInput } from "../../src/lib/task-due";
 import { applyMigrations, env } from "./apply-migrations";
@@ -318,7 +318,7 @@ test("AC-93 · preview does not resolve a person outside the requested event", a
   expect(await response.json()).not.toHaveProperty("to_email");
 });
 
-test("AC-125 · G3 · all seven automated triggers plus bulk are suppressed before delivery in demo mode", async () => {
+test("AC-125 · G3 · all automated triggers plus bulk are suppressed before delivery in demo mode", async () => {
   const ids: string[] = [];
   for (const [index, templateKey] of TRIGGER_TEMPLATE_KEYS.entries()) {
     const result = await enqueueTrigger({
@@ -345,9 +345,9 @@ test("AC-125 · G3 · all seven automated triggers plus bulk are suppressed befo
   });
   ids.push(...bulk.map((row) => row.id));
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM outbox").first<{ n: number }>();
-  expect(count?.n).toBe(8);
+  expect(count?.n).toBe(ids.length);
   const fake = provider();
-  expect(await processMailOutbox(env.DB, env, ids, { provider: fake, now: NOW, sleep: async () => undefined })).toEqual({ sent: 0, suppressed: 8, failed: 0 });
+  expect(await processMailOutbox(env.DB, env, ids, { provider: fake, now: NOW, sleep: async () => undefined })).toEqual({ sent: 0, suppressed: ids.length, failed: 0 });
   expect(fake.batches).toHaveLength(0);
   expect(fake.singles).toHaveLength(0);
   const statusRows = await env.DB.prepare(
@@ -357,7 +357,7 @@ test("AC-125 · G3 · all seven automated triggers plus bulk are suppressed befo
     status: "suppressed",
     send_policy: "demo_safe",
     suppressed_reason: "demo_mode_not_allowlisted",
-    count: 8,
+    count: ids.length,
   }]);
   console.log("MRQ-45 demo matrix: outbox_rows=" + (count?.n ?? 0) + " suppressed=" + (statusRows.results[0]?.count ?? 0) + " sent=0 provider_batches=" + fake.batches.length + " provider_singles=" + fake.singles.length);
 });
@@ -666,7 +666,7 @@ test("AC-126 · the manifest route exposes authenticated template storage throug
   const response = await app.request("/api/v1/events/evt_mail/templates", { headers: { cookie: `mq_session=${session.id}` } }, env, { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
   expect(response.status).toBe(200);
   const body = await response.json<{ data: Array<{ id: string; key: string; enabled: number }> }>();
-  expect(body.data).toHaveLength(9);
+  expect(body.data).toHaveLength(COMMUNICATION_TEMPLATE_KEYS.length);
   expect(body.data.map((template) => template.key)).toEqual(expect.arrayContaining([...TRIGGER_TEMPLATE_KEYS]));
   const rejectedAuthTemplate = await app.request("/api/v1/events/evt_mail/templates", {
     method: "POST",

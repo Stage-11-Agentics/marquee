@@ -46,7 +46,8 @@ function isUniqueConstraint(error: unknown): boolean {
   return /unique constraint|UNIQUE constraint|constraint failed/i.test(message);
 }
 
-async function findByIdempotencyKey(db: D1Database, idempotencyKey: string): Promise<OutboxRow | null> {
+/** Exported so enqueue sites can select before minting credentials or rendering mail. */
+export async function findByIdempotencyKey(db: D1Database, idempotencyKey: string): Promise<OutboxRow | null> {
   return db
     .prepare("SELECT * FROM outbox WHERE idempotency_key = ?")
     .bind(idempotencyKey)

@@ -26,6 +26,8 @@ export const MERGE_FIELDS = [
   "task.due_date",
   "form.closes_at",
   "auth.link",
+  "draft.resume_link",
+  "draft.missing_fields",
   "decision.feedback",
   "decision.resulting_status",
   "decision.recommendation",
@@ -40,7 +42,8 @@ export type MergeField = (typeof MERGE_FIELDS)[number];
  * that internal-only field out of both its palette and its send validator.
  */
 export const COMMUNICATION_MERGE_FIELDS = MERGE_FIELDS.filter(
-  (field): field is Exclude<MergeField, "auth.link"> => field !== "auth.link",
+  (field): field is Exclude<MergeField, "auth.link" | "draft.resume_link"> =>
+    field !== "auth.link" && field !== "draft.resume_link",
 );
 
 /** The one token grammar used by both extraction and rendering. */

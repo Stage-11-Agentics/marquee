@@ -2,17 +2,10 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import type { EmailTemplateRow, Id } from "../../db/schema";
 import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../../lib/auth/draft-resume-copy";
+import { TRIGGER_TEMPLATE_KEYS } from "../../lib/mail-template-keys";
 import { renderMail, type MergeData, type RenderedMail } from "./render";
 
-export const TRIGGER_TEMPLATE_KEYS = [
-  "submission_confirmation",
-  "form_closing_reminder",
-  "added_to_submission",
-  "acceptance",
-  "rejection",
-  "task_assigned",
-  "task_overdue",
-] as const;
+export { TRIGGER_TEMPLATE_KEYS } from "../../lib/mail-template-keys";
 
 export const SUPPORT_TEMPLATE_KEYS = ["reminder_generic", "custom"] as const;
 /** Reviewer reminders use a direct reviewer recipient, not the speaker audience engine. */
@@ -48,6 +41,11 @@ export const DEFAULT_TEMPLATES: Record<MailTemplateKey, DefaultTemplate> = {
     name: "Form closing reminder",
     subject: "The call for proposals closes soon",
     body_md: "Hi {{speaker.first_name}},\n\nThe form closes on {{form.closes_at}}.",
+  },
+  draft_close_reminder: {
+    name: "Draft close reminder",
+    subject: "Finish {{submission.title}} before the call closes",
+    body_md: "Hi {{speaker.first_name}},\n\nYour draft **{{submission.title}}** is still open, but the call closes on {{form.closes_at}}.\n\nStill needed: {{draft.missing_fields}}\n\nResume your draft: {{draft.resume_link}}",
   },
   added_to_submission: {
     name: "Added to a submission",
@@ -132,7 +130,7 @@ export function defaultTemplateRow(eventId: Id, key: CommunicationTemplateKey): 
   };
 }
 
-/** Event-scoped overrides win, while a fresh event still exposes all seven toggles. */
+/** Event-scoped overrides win, while a fresh event still exposes every trigger toggle. */
 export async function listCommunicationTemplates(
   db: D1Database,
   eventId: Id,

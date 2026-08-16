@@ -14,6 +14,7 @@ const inventory = [
   { name: "decision", template: "acceptance", person: "person-1", before: "submission-1", actual: IDEMPOTENCY_REGISTRY.decision("submission-1") },
   { name: "decision retry", template: "rejection", person: "person-1", before: "decision-1", actual: IDEMPOTENCY_REGISTRY.decisionRetry("decision-1") },
   { name: "pre-close reminder", template: "form_closing_reminder", person: "person-1", before: "form-1", actual: IDEMPOTENCY_REGISTRY.preCloseReminder("form-1") },
+  { name: "draft-close reminder", template: "draft_close_reminder", person: "person-1", before: "submission-1", actual: IDEMPOTENCY_REGISTRY.draftCloseReminder("submission-1") },
   { name: "overdue reminder", template: "task_overdue", person: "person-1", before: "task-1", actual: IDEMPOTENCY_REGISTRY.overdueTaskReminder("task-1") },
   { name: "co-speaker invitation", template: "added_to_submission", person: "person-1", before: "participation-1", actual: IDEMPOTENCY_REGISTRY.coSpeakerInvitation("participation-1") },
   { name: "form confirmation", template: "submission_confirmation", person: "person-1", before: "submission-1", actual: IDEMPOTENCY_REGISTRY.formConfirmation("submission-1") },
@@ -44,6 +45,7 @@ describe("outbox idempotency registry", () => {
 
   test("CONTRACT · MRQ-226 · draft-resume grain preserves the submission audit join", () => {
     expect(IDEMPOTENCY_REGISTRY.draftResume("submission-1")).toBe("submission-1");
+    expect(IDEMPOTENCY_REGISTRY.draftCloseReminder("submission-1")).toBe("submission-1");
   });
 
   test("CONTRACT · MRQ-226 · Bug B custom-send seeds separate composes without changing the row entity", () => {

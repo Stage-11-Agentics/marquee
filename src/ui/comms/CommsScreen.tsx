@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { COMMUNICATION_MERGE_FIELDS, mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../../lib/mail-merge-fields";
+import { TRIGGER_TEMPLATE_KEYS } from "../../lib/mail-template-keys";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { idempotencyKeyForCompose } from "../shell/compose-idempotency";
@@ -76,15 +77,7 @@ interface Filters {
   task_state: "" | "open" | "done";
 }
 
-const TRIGGER_KEYS = [
-  "submission_confirmation",
-  "form_closing_reminder",
-  "added_to_submission",
-  "acceptance",
-  "rejection",
-  "task_assigned",
-  "task_overdue",
-] as const;
+const TRIGGER_KEYS = TRIGGER_TEMPLATE_KEYS;
 async function request<T>(path: string, route: string, init: RequestInit = {}): Promise<T> {
   return apiFetch<T>(path, {
     ...init,
