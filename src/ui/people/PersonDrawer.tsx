@@ -23,6 +23,7 @@ import {
   formatMoment,
   removeTag,
   setStage,
+  undoPersonMerge,
   updatePerson,
   type PersonActivity,
   type PersonRecord,
@@ -34,11 +35,13 @@ export function PersonDrawer({
   onClose,
   onChanged,
   navigate,
+  onMerge,
 }: {
   personId: string;
   onClose: () => void;
   onChanged?: () => void;
   navigate?: (target: string) => void;
+  onMerge?: () => void;
 }): JSX.Element {
   const [record, setRecord] = useState<PersonRecord | null>(null);
   const [error, setError] = useState("");
@@ -189,6 +192,7 @@ export function PersonDrawer({
                 disabled={busy}
                 onClick={() => void run(() => updatePerson(personId, { do_not_contact: !record.person.do_not_contact }))}
               >{record.person.do_not_contact ? "Clear do-not-contact" : "Mark do-not-contact"}</Button>
+              <Button small disabled={busy} onClick={() => onMerge?.()}>Merge into another person…</Button>
             </div>
           </section>
 
@@ -350,7 +354,13 @@ export function PersonDrawer({
                           row reads exactly as the same row does in the
                           organization log and on a submission's timeline. */}
                       <div class="people-feed-text">{entry.summary}{entry.detail ? ` — ${entry.detail}` : ""}</div>
-                      <div class="people-feed-when">{formatMoment(entry.created_at)}{entry.actor_name ? ` · ${entry.actor_name}` : ""}</div>
+                      <div class="people-feed-when">
+                        {formatMoment(entry.created_at)}{entry.actor_name ? " · " + entry.actor_name : ""}
+                        {entry.undo_merge_id ? <Button small disabled={busy} onClick={() => void run(async () => {
+                          const outcome = await undoPersonMerge(entry.undo_merge_id!);
+                          if (outcome.status === "undo_blocked") throw new Error("Merge Undo was blocked: " + (outcome.reason ?? "receipt is no longer clean"));
+                        })}>Undo</Button> : null}
+                      </div>
                     </div>
                   </div>)}
                 </div>

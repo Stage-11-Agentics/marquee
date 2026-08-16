@@ -41,6 +41,7 @@ import submissionReferenceCodesMigrationSql from "../../migrations/0030_submissi
 import submissionCapacityMigrationSql from "../../migrations/0031_submission_capacity.sql?raw";
 import calendarBatchPartsMigrationSql from "../../migrations/0032_calendar_batch_parts.sql?raw";
 import fieldLibraryMigrationSql from "../../migrations/0033_field_library.sql?raw";
+import personAliasesMergesMigrationSql from "../../migrations/0035_person_aliases_merges.sql?raw";
 import formLengthRulesMigrationSql from "../../migrations/0037_form_length_rules.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
@@ -100,6 +101,9 @@ export async function applyMigrations(): Promise<void> {
     const calendarBatchPartsApplied = await env.DB.prepare(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'outbox_calendar_parts'",
     ).first();
+    const personAliasesMergesApplied = await env.DB.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'person_aliases'",
+    ).first();
     const existingWipeTables = await env.DB.prepare(
       `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${WIPE_ORDER.map(() => "?").join(", ")})`,
     )
@@ -122,6 +126,11 @@ export async function applyMigrations(): Promise<void> {
     }
     if (!calendarBatchPartsApplied) {
       for (const statement of splitStatements(calendarBatchPartsMigrationSql)) {
+        await env.DB.prepare(`${statement};`).run();
+      }
+    }
+    if (!personAliasesMergesApplied) {
+      for (const statement of splitStatements(personAliasesMergesMigrationSql)) {
         await env.DB.prepare(`${statement};`).run();
       }
     }
@@ -167,6 +176,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(submissionCapacityMigrationSql),
     ...splitStatements(calendarBatchPartsMigrationSql),
     ...splitStatements(fieldLibraryMigrationSql),
+    ...splitStatements(personAliasesMergesMigrationSql),
     ...splitStatements(formLengthRulesMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();

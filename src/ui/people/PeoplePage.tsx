@@ -17,7 +17,7 @@ import { errorSummary, MarqueeApiError } from "../shell/api-client";
 import { useEventContext } from "../shell/event-context";
 import { disambiguatedNames } from "../../lib/duplicate-names";
 import { PersonDrawer } from "./PersonDrawer";
-import { AddPersonModal, ComposeModal, ImportAttendeesModal, ImportPeopleModal, SaveListModal } from "./PeopleModals";
+import { AddPersonModal, ComposeModal, ImportAttendeesModal, ImportPeopleModal, PersonMergeModal, SaveListModal } from "./PeopleModals";
 import { ListsPanel } from "./ListsPanel";
 import {
   activeCriteria,
@@ -32,6 +32,7 @@ import {
   formatMoment,
   hasFilters,
   saveControl,
+  undoPersonMerge,
   type OrgSummary,
   type PeopleFilters,
   type PeoplePage as PeoplePayload,
@@ -123,8 +124,10 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
   const [summary, setSummary] = useState<OrgSummary | null>(null);
   const [lists, setLists] = useState<SavedPersonList[] | null>(null);
   const [listsError, setListsError] = useState("");
-  const [modal, setModal] = useState<"" | "import" | "attendees" | "compose" | "savelist" | "addperson">("");
+  const [modal, setModal] = useState<"" | "import" | "attendees" | "compose" | "savelist" | "addperson" | "merge">("");
+  const [mergeIds, setMergeIds] = useState<string[]>([]);
   const [toast, setToast] = useState("");
+  const [toastUndoMergeId, setToastUndoMergeId] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [exporting, setExporting] = useState(false);
   // Four states, and telling them apart is the point. "Deleted" and "the
@@ -241,7 +244,22 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
   // organizer has to actually read, so the line stays up long enough to read it.
   const announce = (message: string) => {
     setToast(message);
+    setToastUndoMergeId(null);
     window.setTimeout(() => setToast(""), 8000);
+  };
+  const openMerge = (ids: string[]) => {
+    setMergeIds(ids);
+    setModal("merge");
+  };
+  const undoMerge = async (mergeId: string) => {
+    try {
+      const outcome = await undoPersonMerge(mergeId);
+      setReloadToken((token) => token + 1);
+      setToastUndoMergeId(null);
+      setToast(outcome.status === "undone" ? "Merge undone" : "Merge Undo was blocked: " + (outcome.reason ?? "receipt is no longer clean"));
+    } catch (caught) {
+      setToast("Merge Undo failed: " + errorSummary(caught));
+    }
   };
 
   const removeList = async (list: SavedPersonList) => {
@@ -414,6 +432,7 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
     <div class="people-statusbar">
       {selected.size > 0 ? <>
         <span class="people-selcount">{selected.size} selected</span>
+        <Button small disabled={selected.size !== 2} onClick={() => openMerge([...selected.keys()])}>Merge…</Button>
         <Button small onClick={() => setModal("compose")}>Communicate</Button>
         <Button small onClick={() => setModal("savelist")}>{control.label}</Button>
         <button type="button" class="people-chip" onClick={() => setSelected(new Map())}>
@@ -529,12 +548,15 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
     </div> : null}
     </>}
 
-    {toast ? <div class="people-hint" role="status" style={{ marginTop: "var(--s3)" }}>{toast}</div> : null}
+    {toast ? <div class="people-hint" role="status" style={{ marginTop: "var(--s3)" }}>
+      {toast}{toastUndoMergeId ? <Button small onClick={() => void undoMerge(toastUndoMergeId)}>Undo</Button> : null}
+    </div> : null}
 
     {openPersonId ? <PersonDrawer
       personId={openPersonId}
       onClose={closePerson}
       navigate={navigate}
+      onMerge={() => openMerge([openPersonId])}
       onChanged={() => setReloadToken((token) => token + 1)}
     /> : null}
 
@@ -583,6 +605,23 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
         setModal("");
         announce(`List “${list.name}” saved`);
         navigate?.("/lists");
+      }}
+    /> : null}
+
+    {modal === "merge" ? <PersonMergeModal
+      personIds={mergeIds}
+      onClose={() => setModal("")}
+      onMerged={(result) => {
+        setModal("");
+        setSelected(new Map());
+        setMergeIds([]);
+        setReloadToken((token) => token + 1);
+        setToast("People merged · receipt " + result.merge_id);
+        setToastUndoMergeId(result.merge_id);
+        window.setTimeout(() => {
+          setToast("");
+          setToastUndoMergeId(null);
+        }, 12000);
       }}
     /> : null}
   </div>;

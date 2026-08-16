@@ -407,8 +407,12 @@ const undoPeopleImport = defineApiRoute(
       // every attendee import permanently un-undoable, which is precisely the
       // shape of the bug this exclusion exists to prevent. Attendances at any
       // OTHER conference, and claim rows anywhere, still block.
+      const importReferenceCount = await context.env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM import_rows WHERE target_id = ? AND entity IN ('person', 'speaker') AND import_id <> ?",
+      ).bind(row.target_id, importId).first<{ n: number }>();
       const references = (await personHasReferences(context.env.DB, row.target_id))
-        .filter((label) => label !== "event_attendances" || !attendanceEventId);
+        .filter((label) => label !== "event_attendances" || !attendanceEventId)
+        .filter((label) => label !== "import_rows.target_id" || Number(importReferenceCount?.n ?? 0) > 0);
       const strandedAttendance = attendanceEventId
         ? await context.env.DB.prepare(
             `SELECT COUNT(*) AS n FROM event_attendances
@@ -420,6 +424,12 @@ const undoPeopleImport = defineApiRoute(
         addSkip(row, { target_id: row.target_id, reason: "has_references", fields: [], references });
         continue;
       }
+      // Keep the manifest row, but clear its live polymorphic target before
+      // the guarded person delete. A receipt is historical; it must not become
+      // the last reference that makes its own undo impossible.
+      statements.push(context.env.DB.prepare(
+        "UPDATE import_rows SET target_id = NULL, updated_at = ? WHERE import_id = ? AND row_index = ? AND target_id = ?",
+      ).bind(now, importId, row.row_index, row.target_id));
       const resultIndex = statements.length;
       statements.push(context.env.DB.prepare(
         `DELETE FROM people

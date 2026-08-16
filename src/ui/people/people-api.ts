@@ -81,6 +81,7 @@ export interface PersonActivity {
   detail: string | null;
   actor_name: string | null;
   created_at: number;
+  undo_merge_id?: string;
 }
 
 export interface PersonActivityPage {
@@ -135,6 +136,61 @@ export interface PeopleImportUndoResult {
     references: string[];
   }>;
   retained_manifest: true;
+}
+
+export interface PersonMergePreview {
+  org_id: string;
+  retired: Person;
+  survivor: Person;
+  default_survivor_id: string;
+  fields: Array<{
+    field: string;
+    survivor_value: unknown;
+    retired_value: unknown;
+    result: unknown;
+    source: string;
+    collision: boolean;
+    reason?: string;
+  }>;
+  collisions: Array<{
+    table: string;
+    key: string;
+    kept_id: string | null;
+    retired_id: string;
+    outcome: string;
+    reason: string;
+  }>;
+  summary: {
+    moved: number;
+    deduped: number;
+    dropped: number;
+    aliases_created: number;
+    aliases_repointed: number;
+    collisions: number;
+    references: Record<string, number>;
+  };
+  continuity: string;
+  event_scope: string[];
+  can_undo: true;
+}
+
+export interface PersonMergeExecuteResult {
+  merge_id: string;
+  status: "clean" | "undone" | "undo_blocked";
+  retired_person_id: string;
+  survivor_person_id: string;
+  summary: PersonMergePreview["summary"];
+  continuity: string;
+  can_undo: boolean;
+}
+
+export interface PersonMergeUndoResult {
+  merge_id: string;
+  status: "undone" | "undo_blocked";
+  restored: number;
+  skipped: number;
+  skipped_rows: Array<{ table: string; primary_key: string; reason: string }>;
+  reason?: string;
 }
 
 export interface PersonListConfig {
@@ -269,6 +325,21 @@ export function fetchPersonActivity(personId: string, page: number, cursor?: str
       ...(signal ? { signal } : {}),
     },
   );
+}
+
+export function previewPersonMerge(input: { person_ids: [string, string]; survivor_id?: string }): Promise<{ preview: PersonMergePreview }> {
+  return write("/api/v1/org/people/merge/preview", "/api/v1/org/people/merge/preview", input);
+}
+
+export function executePersonMerge(
+  input: { person_ids: [string, string]; survivor_id?: string },
+  idempotencyKey = crypto.randomUUID(),
+): Promise<PersonMergeExecuteResult> {
+  return write("/api/v1/org/people/merge", "/api/v1/org/people/merge", input, "POST", { "Idempotency-Key": idempotencyKey });
+}
+
+export function undoPersonMerge(mergeId: string): Promise<PersonMergeUndoResult> {
+  return write("/api/v1/org/people/merge/" + encodeURIComponent(mergeId) + "/undo", "/api/v1/org/people/merge/{mergeId}/undo", {}, "POST");
 }
 
 function write<Result>(path: string, route: string, body: unknown, method = "POST", extraHeaders: HeadersInit = {}): Promise<Result> {

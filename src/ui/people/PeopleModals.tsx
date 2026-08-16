@@ -8,7 +8,7 @@
  * an agent or do it themselves and get the same result.
  */
 import type { JSX } from "preact";
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import { AgentBriefPanel } from "../shell/AgentBrief";
 import { errorSummary } from "../shell/api-client";
@@ -18,8 +18,12 @@ import { attendeeImportBrief, peopleImportBrief } from "./people-brief";
 import {
   createList,
   createPerson,
+  executePersonMerge,
+  fetchPeople,
+  fetchPerson,
   importPeople,
   undoImportedPeople,
+  previewPersonMerge,
   previewOrgMail,
   sendOrgMail,
   saveControl,
@@ -28,6 +32,8 @@ import {
   type Person,
   type SavedPersonList,
   type PeopleImportUndoResult,
+  type PersonMergeExecuteResult,
+  type PersonMergePreview,
 } from "./people-api";
 
 function undoSkipCopy(skip: PeopleImportUndoResult["skipped_rows"][number]): string {
@@ -450,5 +456,173 @@ export function ImportAttendeesModal({
       do in one pass, and re-running it never duplicates anyone. This year's attendee is next
       year's speaker prospect, so they arrive with notes, tags and lists already working.
     </p>
+  </Modal>;
+}
+
+export function PersonMergeModal({
+  personIds,
+  onClose,
+  onMerged,
+}: {
+  personIds: string[];
+  onClose: () => void;
+  onMerged: (result: PersonMergeExecuteResult) => void;
+}): JSX.Element {
+  const [ids, setIds] = useState<string[]>(personIds.filter(Boolean).slice(0, 2));
+  const [search, setSearch] = useState("");
+  const [candidates, setCandidates] = useState<Person[]>([]);
+  const [records, setRecords] = useState<Person[]>([]);
+  const [preview, setPreview] = useState<PersonMergePreview | null>(null);
+  const [survivorId, setSurvivorId] = useState("");
+  const [result, setResult] = useState<PersonMergeExecuteResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (ids.length === 0) return;
+    let live = true;
+    Promise.all(ids.map((id) => fetchPerson(id)))
+      .then((rows) => { if (live) setRecords(rows.map((row) => row.person)); })
+      .catch((caught: unknown) => { if (live) setError(errorSummary(caught)); });
+    return () => { live = false; };
+  }, [ids.join(",")]);
+
+  useEffect(() => {
+    if (ids.length >= 2 || search.trim().length < 2) {
+      setCandidates([]);
+      return;
+    }
+    let live = true;
+    fetchPeople({ q: search, company: "", title: "", tag: "", listId: "" }, 1, 8)
+      .then((payload) => { if (live) setCandidates(payload.data.filter((person) => !ids.includes(person.id))); })
+      .catch((caught: unknown) => { if (live) setError(errorSummary(caught)); });
+    return () => { live = false; };
+  }, [search, ids.join(",")]);
+
+  useEffect(() => {
+    if (ids.length !== 2 || busy || result) {
+      if (ids.length !== 2) setPreview(null);
+      return;
+    }
+    let live = true;
+    setError("");
+    const pair = [ids[0]!, ids[1]!] as [string, string];
+    previewPersonMerge({
+      person_ids: pair,
+      ...(survivorId ? { survivor_id: survivorId } : {}),
+    })
+      .then((payload) => {
+        if (!live) return;
+        setPreview(payload.preview);
+        if (!survivorId) setSurvivorId(payload.preview.default_survivor_id);
+      })
+      .catch((caught: unknown) => { if (live) setError(errorSummary(caught)); });
+    return () => { live = false; };
+  }, [ids.join(","), survivorId, result, busy]);
+
+  const addCandidate = (id: string) => {
+    if (ids.length >= 2 || ids.includes(id)) return;
+    setIds((current) => [...current, id]);
+    setSearch("");
+    setCandidates([]);
+    setSurvivorId("");
+  };
+
+  const execute = async () => {
+    if (ids.length !== 2 || !survivorId || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const next = await executePersonMerge({ person_ids: [ids[0]!, ids[1]!] as [string, string], survivor_id: survivorId });
+      setResult(next);
+      onMerged(next);
+    } catch (caught) {
+      setError(errorSummary(caught));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removePerson = (id: string) => {
+    if (personIds.length === 1 && id === personIds[0]) return;
+    setIds((current) => current.filter((candidate) => candidate !== id));
+    setPreview(null);
+    setSurvivorId("");
+  };
+  const personById = new Map(records.map((person) => [person.id, person]));
+  const displayPerson = (id: string) => personById.get(id) ?? candidates.find((person) => person.id === id);
+  const valueText = (value: unknown): string => {
+    if (value === null || value === undefined || value === "") return "Blank";
+    if (typeof value === "string") return value;
+    return JSON.stringify(value);
+  };
+
+  return <Modal
+    title="Merge people"
+    meta={result ? "Merge receipt recorded — history and Undo remain on the survivor" : "One identity, one history — choose the record that remains"}
+    onClose={onClose}
+    foot={result
+      ? <Button onClick={onClose}>Done</Button>
+      : <>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={busy || !preview || !survivorId} onClick={() => void execute()}>
+          {busy ? "Merging…" : "Merge people"}
+        </Button>
+      </>}
+  >
+    {result ? <div class="people-preview" role="status">
+      <div class="people-preview-subject">People merged</div>
+      <div class="people-preview-body">{result.continuity}</div>
+      <div class="people-hint">Receipt <span class="tabular">{result.merge_id}</span> · {result.summary.moved} moved · {result.summary.deduped} deduped · {result.summary.dropped} dropped</div>
+      <div class="people-hint">Undo is available from the toast and the survivor activity feed while this receipt is clean.</div>
+    </div> : <>
+      {ids.length < 2 ? <label class="people-field">
+        <span>Find the other person by name, email, or company</span>
+        <input autoFocus value={search} onInput={(event) => setSearch((event.currentTarget as HTMLInputElement).value)} />
+        {candidates.length > 0 ? <div class="people-preview">
+          {candidates.map((candidate) => <button type="button" class="people-rowlink" key={candidate.id} onClick={() => addCandidate(candidate.id)}>
+            {candidate.name} · {candidate.email}{candidate.company ? " · " + candidate.company : ""}
+          </button>)}
+        </div> : null}
+      </label> : null}
+      <div class="people-preview">
+        <div class="people-preview-subject">Selected identities</div>
+        {ids.map((id, index) => {
+          const person = displayPerson(id);
+          return <div class="people-drawer-action-row" key={id}>
+            <span><strong>{index === 0 ? "Source" : "Source 2"}</strong> · {person?.name ?? id} · {person?.email ?? "Reading…"}</span>
+            {personIds.length !== 1 || id !== personIds[0] ? <Button small onClick={() => removePerson(id)}>Remove</Button> : null}
+          </div>;
+        })}
+      </div>
+      {preview ? <>
+        <div class="people-preview">
+          <div class="people-preview-subject">Choose the survivor</div>
+          <div class="people-radio-row">
+            {[preview.retired, preview.survivor].map((person) => <label key={person.id}>
+              <input type="radio" name="merge-survivor" checked={survivorId === person.id} onChange={() => setSurvivorId(person.id)} />
+              Keep {person.name} · {person.email}
+            </label>)}
+          </div>
+          <p class="people-hint">Default: the person with more conference connections. You can override it before writing.</p>
+        </div>
+        <table class="people-table">
+          <thead><tr><th>Identity field</th><th>Survivor</th><th>Retired</th><th>Result</th></tr></thead>
+          <tbody>{preview.fields.map((field) => <tr key={field.field}>
+            <th scope="row">{field.field}</th>
+            <td>{valueText(field.survivor_value)}</td>
+            <td>{valueText(field.retired_value)}</td>
+            <td class={field.source === "retired" ? "accent" : ""}>{valueText(field.result)}{field.collision ? " · named conflict" : ""}</td>
+          </tr>)}</tbody>
+        </table>
+        <p class="people-hint">{preview.continuity}</p>
+        <p class="people-hint tabular">{preview.summary.moved} references move · {preview.summary.deduped} collisions dedupe · {preview.summary.dropped} rows drop · {preview.event_scope.length} conferences touched · receipt id printed after commit</p>
+        {preview.collisions.length > 0 ? <ul class="people-hint">
+          {preview.collisions.map((collision) => <li key={collision.table + collision.retired_id}>{collision.table} · {collision.reason}</li>)}
+        </ul> : null}
+        <p class="people-hint">This operation is one durable change and can be undone while the survivor remains clean.</p>
+      </> : ids.length === 2 ? <p class="people-state">Comparing the two identities…</p> : null}
+    </>}
+    {error ? <div class="people-state error" role="alert">{error}</div> : <div />}
   </Modal>;
 }

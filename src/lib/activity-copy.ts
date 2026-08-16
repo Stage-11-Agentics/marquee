@@ -50,6 +50,8 @@ const SUMMARIES: Readonly<Record<string, string>> = {
   [ORG_ACTIVITY_ACTIONS.tokenRevoked]: "API token revoked",
   [ORG_ACTIVITY_ACTIONS.defaultsChanged]: "Organization defaults changed",
   [ORG_ACTIVITY_ACTIONS.ownershipTransferred]: "Ownership transferred",
+  "person.merged": "People merged",
+  "person.merge_undone": "People merge undone",
 
   // The conference-level actions the person and submission lenses read. They
   // predate this file; naming them here is what turns a timeline of
@@ -252,6 +254,10 @@ export function describeActivity(entry: {
       return { summary, detail: payloadField(after, "subject") ?? payloadField(after, "template_key") };
     case "submission.calendar_sent":
       return { summary, detail: payloadField(after, "method") };
+    case "person.merged":
+      return { summary, detail: joinDetail([payloadField(after, "merge_id") ? `Receipt ${payloadField(after, "merge_id")}` : null, "Undo available"]) };
+    case "person.merge_undone":
+      return { summary, detail: payloadField(after, "merge_id") ? `Receipt ${payloadField(after, "merge_id")}` : null };
     default:
       return { summary, detail: null };
   }

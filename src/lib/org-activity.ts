@@ -194,6 +194,7 @@ export async function orgActivityPage(
 const PERSON_FEED_SOURCES = `
   SELECT entry.id AS id, 'audit' AS kind, entry.action AS action,
          entry.before_json AS before_json, entry.after_json AS after_json,
+         CASE WHEN entry.action = 'person.merged' THEN json_extract(entry.after_json, '$.merge_id') END AS undo_merge_id,
          COALESCE(entry.actor_name, actor.name) AS actor_name, entry.created_at AS created_at
     FROM audit_log entry
     LEFT JOIN events entry_event ON entry_event.id = entry.event_id
@@ -202,7 +203,7 @@ const PERSON_FEED_SOURCES = `
    WHERE (entry.org_id = ?1 OR entry_event.org_id = ?1)
      AND entry.entity_type = 'person' AND entry.entity_id = ?2
   UNION ALL
-  SELECT annotation.id, annotation.kind, NULL, NULL, annotation.value_json,
+  SELECT annotation.id, annotation.kind, NULL, NULL, annotation.value_json, NULL,
          actor.name, annotation.created_at
     FROM person_events annotation
     LEFT JOIN people actor ON actor.id = annotation.actor_person_id AND actor.org_id = annotation.org_id
@@ -210,7 +211,7 @@ const PERSON_FEED_SOURCES = `
   UNION ALL
   SELECT message.id, 'email', message.status, NULL,
          json_object('subject', message.subject, 'status', message.status),
-         NULL, message.created_at
+         NULL, NULL, message.created_at
     FROM outbox message
     JOIN events message_event ON message_event.id = message.event_id AND message_event.org_id = ?1
    WHERE message.person_id = ?2`;
@@ -221,6 +222,7 @@ export interface PersonFeedEntry extends ActivityLine {
   kind: string;
   actor_name: string | null;
   created_at: number;
+  undo_merge_id?: string;
 }
 
 interface PersonFeedRow {
@@ -229,6 +231,7 @@ interface PersonFeedRow {
   action: string | null;
   before_json: string | null;
   after_json: string | null;
+  undo_merge_id: string | null;
   actor_name: string | null;
   created_at: number;
 }
@@ -269,7 +272,14 @@ export async function personFeedPage(
       const line = row.kind === "audit"
         ? describeActivity({ action: row.action ?? "", before: parseJson(row.before_json), after })
         : describeOther(row.kind, after);
-      return { ...line, id: row.id, kind: row.kind, actor_name: row.actor_name, created_at: row.created_at };
+      return {
+        ...line,
+        id: row.id,
+        kind: row.kind,
+        actor_name: row.actor_name,
+        created_at: row.created_at,
+        ...(row.undo_merge_id ? { undo_merge_id: row.undo_merge_id } : {}),
+      };
     }),
     total: Number(count?.total ?? 0),
     nextCursor: rows.results.length >= page.limit && last ? encodeKeysetCursor(last) : null,

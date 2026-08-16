@@ -23,6 +23,7 @@ import { DEMO_ROLE_TO_MEMBERSHIP, demoRoleForEmail, findDemoPersona } from "../l
 import { findDemoEvent } from "../lib/demo-event";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
+import { resolvePersonForSignin } from "../lib/auth/person-signin";
 
 /**
  * Auth still sets and clears the session cookie in its handlers. It is a
@@ -99,10 +100,10 @@ const magicLinkRequestSchema = z.object({
   /**
    * Optional: `/signin` is a universal door and its visitor has no event in
    * hand. Absent, the person is resolved by email across `people` — the
-   * deliberate single-org shortcut this deployment already takes for org-level
-   * writes (MRQ-131). Multi-org disambiguation is explicitly a later ticket.
+   * A tenant narrowing value only. It grants no access and is never echoed.
    */
   event_id: z.string().min(1).optional(),
+  org_id: z.string().min(1).optional(),
   redirect_to: z.string().optional(),
 });
 const magicLinkResponseSchema = z.object({
@@ -241,7 +242,12 @@ const requestMagicLink = defineApiRoute(
     const demoSeat = await openDemoSeatForEmail(context, body.email, body.redirect_to);
     if (demoSeat) return demoSeat;
 
-    const person = await findPersonForSignin(context.env.DB, body.email, body.event_id);
+    const resolution = await resolvePersonForSignin(context.env.DB, {
+      email: body.email,
+      eventId: body.event_id,
+      orgId: body.org_id,
+    });
+    const person = resolution.kind === "found" ? resolution.person : null;
     let onScreenLink: string | undefined;
 
     // Every branch below falls through to the same generic acknowledgement. No
@@ -574,36 +580,6 @@ async function openDemoSeatForEmail(
 
 /** One unused, unexpired login link per person per minute. */
 const LOGIN_LINK_COOLDOWN_MS = 60_000;
-
-/**
- * Who is asking, when the caller may not have said which conference.
- *
- * With an `event_id` the lookup stays scoped to that event's organization,
- * exactly as it always has. Without one — the universal `/signin` door — the
- * oldest matching row wins, which is the single-org shortcut this deployment
- * already takes elsewhere and the only answer that is stable under a retry.
- */
-async function findPersonForSignin(
-  db: D1Database,
-  email: string,
-  eventId: string | undefined,
-): Promise<PersonRow | null> {
-  const address = email.trim().toLowerCase();
-  if (eventId !== undefined) {
-    const event = await db.prepare("SELECT * FROM events WHERE id = ?").bind(eventId).first<EventRow>();
-    if (!event) return null;
-    const scoped = await db
-      .prepare("SELECT * FROM people WHERE org_id = ? AND email = ?")
-      .bind(event.org_id, address)
-      .first<PersonRow>();
-    return scoped ?? null;
-  }
-  const person = await db
-    .prepare("SELECT * FROM people WHERE email = ? ORDER BY created_at ASC, id ASC LIMIT 1")
-    .bind(address)
-    .first<PersonRow>();
-  return person ?? null;
-}
 
 /**
  * A live link already in flight means this request mints nothing.

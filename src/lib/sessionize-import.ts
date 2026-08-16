@@ -4,6 +4,8 @@ import { isPublishedSession } from "./publication-guard";
 import { prepareCalendarCancellationBatch } from "../jobs/calendar/invites";
 import { speakerMembershipStatement } from "./speaker-membership";
 import { withSubmissionReferenceAllocation } from "./submission-reference";
+import { activeMergeForImportedPerson } from "./person-merge";
+import { personReferences } from "./person-references";
 
 export type SessionizeEntity = "sessions" | "speakers";
 
@@ -37,6 +39,15 @@ export interface ImportRunCounts {
   sessions: number;
   speakers: number;
   evaluations: number;
+}
+
+export class SessionizeImportBlockedError extends Error {
+  readonly code = "person_merged" as const;
+
+  constructor(readonly mergeId: string, readonly personId: string, readonly survivorId: string) {
+    super("Sessionize undo is blocked while a people merge is clean; undo the merge first.");
+    this.name = "SessionizeImportBlockedError";
+  }
 }
 
 interface EventRow {
@@ -1005,7 +1016,12 @@ async function importSession(
   return { outcome, evaluation };
 }
 
-async function cleanupImportedPerson(db: D1Database, personId: string): Promise<void> {
+async function cleanupImportedPerson(db: D1Database, personId: string, importId?: string): Promise<void> {
+  if (importId) {
+    await db.prepare(
+      "UPDATE import_rows SET target_id = NULL, updated_at = ? WHERE import_id = ? AND target_id = ? AND entity IN ('person', 'speaker')",
+    ).bind(Date.now(), importId, personId).run();
+  }
   const references = await db.prepare(
     `SELECT
        (SELECT COUNT(*) FROM participations WHERE person_id = ?) AS participations,
@@ -1014,6 +1030,8 @@ async function cleanupImportedPerson(db: D1Database, personId: string): Promise<
        (SELECT COUNT(*) FROM memberships WHERE person_id = ?) AS memberships`,
   ).bind(personId, personId, personId, personId, personId).first<{ participations: number; submissions: number; evaluations: number; memberships: number }>();
   if (!references || Number(references.participations) || Number(references.submissions) || Number(references.evaluations) || Number(references.memberships)) return;
+  const remaining = await personReferences(db, personId);
+  if (remaining.length > 0) return;
   await db.prepare("UPDATE people SET headshot_attachment_id = NULL WHERE id = ? AND id LIKE '%_import_%'").bind(personId).run();
   await db.prepare("DELETE FROM attachments WHERE owner_type = 'person_headshot' AND owner_id = ?").bind(personId).run();
   await db.prepare("DELETE FROM people WHERE id = ? AND id LIKE '%_import_%'").bind(personId).run();
@@ -1213,6 +1231,12 @@ export async function undoSessionizeImport(db: D1Database, eventId: string, impo
   if (!imported) throw new Error("import not found");
   if (imported.undone_at !== null || imported.status === "undone") return { undone: 0, retained_manifest: true };
   const rows = await db.prepare("SELECT * FROM import_rows WHERE import_id = ? ORDER BY CASE WHEN entity = 'session' THEN 0 ELSE 1 END, row_index DESC").bind(importId).all<ImportRowRow>();
+  const event = await db.prepare("SELECT org_id FROM events WHERE id = ?").bind(eventId).first<{ org_id: string }>();
+  const speakerTargets = [...new Set(rows.results.filter((row) => row.entity === "speaker" && row.target_id).map((row) => row.target_id as string))];
+  for (const personId of speakerTargets) {
+    const activeMerge = await activeMergeForImportedPerson(db, event?.org_id ?? "", personId);
+    if (activeMerge) throw new SessionizeImportBlockedError(activeMerge.mergeId, personId, activeMerge.survivorId);
+  }
   let undone = 0;
   for (const row of rows.results) {
     let snapshot = row.before_json ? JSON.parse(row.before_json) as ImportSnapshot : null;
@@ -1230,21 +1254,21 @@ export async function undoSessionizeImport(db: D1Database, eventId: string, impo
     if (snapshot && membershipCreatedMarker) await removeImportedSpeakerMembership(db, eventId, row.target_id, snapshot);
     if (snapshot && snapshot.submission === null && snapshot.person === null) {
       if (row.entity === "session") await deleteCreatedSubmission(db, row.target_id);
-      else await cleanupImportedPerson(db, row.target_id);
+      else await cleanupImportedPerson(db, row.target_id, importId);
     } else if (snapshot) {
       await restoreSnapshot(db, snapshot);
     } else if (row.entity === "session") {
       await deleteCreatedSubmission(db, row.target_id);
     } else if (row.entity === "speaker") {
-      await cleanupImportedPerson(db, row.target_id);
+      await cleanupImportedPerson(db, row.target_id, importId);
     }
     if (row.entity === "speaker" && snapshot?.person === null) {
-      await cleanupImportedPerson(db, row.target_id);
+      await cleanupImportedPerson(db, row.target_id, importId);
     }
     undone += 1;
   }
   const syntheticReviewers = await db.prepare("SELECT id FROM people WHERE id LIKE 'person_reviewer_import_%'").all<{ id: string }>();
-  for (const person of syntheticReviewers.results) await cleanupImportedPerson(db, person.id);
+  for (const person of syntheticReviewers.results) await cleanupImportedPerson(db, person.id, importId);
   await cleanupImportSetup(db, eventId);
   const now = Date.now();
   await db.prepare("UPDATE imports SET status = 'undone', undone_at = ?, updated_at = ? WHERE id = ? AND event_id = ?").bind(now, now, importId, eventId).run();

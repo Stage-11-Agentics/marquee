@@ -8,6 +8,7 @@ import {
   normalizeMapping,
   readImportManifest,
   runSessionizeImport,
+  SessionizeImportBlockedError,
   speakerEmailMappingError,
   undoSessionizeImport,
   type ImportRunCounts,
@@ -212,7 +213,20 @@ const undoImport = defineApiRoute(
   async (context) => {
     const { eventId, importId } = context.req.valid("param");
     await readImport(context, eventId, importId);
-    return context.json(await undoSessionizeImport(context.env.DB, eventId, importId), 200);
+    try {
+      return context.json(await undoSessionizeImport(context.env.DB, eventId, importId), 200);
+    } catch (error) {
+      if (error instanceof SessionizeImportBlockedError) {
+        throw ApiError.conflict(error.message, {
+          code: error.code,
+          merge_id: error.mergeId,
+          person_id: error.personId,
+          survivor_id: error.survivorId,
+          retained_manifest: true,
+        });
+      }
+      throw error;
+    }
   },
 );
 
