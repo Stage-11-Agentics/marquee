@@ -220,3 +220,5 @@ exact migration-number checks before and after rebase, targeted test evidence,
 and explicit notes for the Adoption Orchestrator about any prototype/spec
 marker. The branch remains held for the orchestrator's non-author review and
 subsequent lifecycle decisions; this plan-only head stops before all of that.
+
+## Reset 2026-08-16 by agent:delegator-mrq-229
