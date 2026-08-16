@@ -11,10 +11,10 @@ import { MarqueeApiError } from "../../src/ui/shell/api-client";
 const dom = globalThis.document;
 let root: HTMLElement | null = null;
 
-function mount(node: ReturnType<typeof h>): void {
+function mount(node: unknown): void {
   root = dom.createElement("div");
   document.body.appendChild(root);
-  act(() => render(node, root!));
+  act(() => render(node as any, root!));
 }
 
 async function settle(): Promise<void> {
