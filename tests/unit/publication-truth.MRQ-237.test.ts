@@ -87,6 +87,21 @@ describe("MRQ-237 publication truth partition", () => {
     });
   });
 
+  test("CONTRACT · AIA-07 · accepted status and agenda-item publication are authoritative, not the legacy mirror", () => {
+    expect(classifyPublicationFact(fact({ submissionIsPublished: true }), open)).toMatchObject({
+      classification: "READY_TO_PUBLISH",
+      primaryReasonCode: "READY_TO_PUBLISH",
+    });
+    expect(classifyPublicationFact(fact({ submissionIsPublished: false, agendaItems: [item({ isPublished: true })] }), open)).toMatchObject({
+      classification: "PUBLIC_LIVE",
+      primaryReasonCode: "ALREADY_PUBLISHED",
+    });
+    expect(classifyPublicationFact(fact({ status: "rejected", submissionIsPublished: true }), open)).toMatchObject({
+      classification: "EXISTING_ITEM_WITHHELD",
+      primaryReasonCode: "NOT_ACCEPTED",
+    });
+  });
+
   test("CONTRACT · MRQ-237 · malformed slots and a closed public boundary remain named rather than silently publishable", () => {
     expect(classifyPublicationFact(fact({ agendaItems: [item({ startsAt: null })] }), open)).toMatchObject({
       classification: "EXISTING_ITEM_MALFORMED",

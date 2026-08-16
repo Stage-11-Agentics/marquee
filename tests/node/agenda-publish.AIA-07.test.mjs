@@ -18,10 +18,6 @@ test("CONTRACT · AIA-07 batch publication is an accepted, scheduled, dual-table
   assert.match(route, /submission\.id IN \(SELECT CAST\(value AS TEXT\) FROM json_each\(\?\)\)/);
   assert.match(route, /candidate_submission\.id IN \(SELECT CAST\(value AS TEXT\) FROM json_each\(\?\)\)/);
   assert.match(route, /the selected Sessions changed while publishing/);
-  assert.match(queries, /item\.is_published = 0/);
-  assert.match(queries, /published_item\.is_published = 1/);
-  assert.match(queries, /submission\.status = 'accepted'/);
-  assert.doesNotMatch(queries, /submission\.is_published = 0/);
   assert.match(queries, /blocked_reason/);
   assert.match(queries, /public_agenda_url/);
 });
