@@ -161,6 +161,21 @@ async function claimRow(db: D1Database, id: string, now: number): Promise<Outbox
   return db.prepare("SELECT * FROM outbox WHERE id = ?").bind(id).first<OutboxRow>();
 }
 
+async function syncCalendarCancellation(
+  db: D1Database,
+  row: OutboxRow,
+  status: "sent" | "suppressed" | "failed",
+  now: number,
+  error: string | null = null,
+): Promise<void> {
+  if (row.template_key !== "calendar_cancel" || row.entity_id === null) return;
+  await db.prepare(
+    `UPDATE calendar_cancellations
+     SET status = ?, last_error = ?, updated_at = ?
+     WHERE idempotency_key = ?`,
+  ).bind(status, error, now, row.entity_id).run();
+}
+
 async function suppressRow(db: D1Database, row: OutboxRow, now: number): Promise<void> {
   await db
     .prepare(
@@ -170,6 +185,7 @@ async function suppressRow(db: D1Database, row: OutboxRow, now: number): Promise
     )
     .bind("demo_mode_not_allowlisted", now, row.id, PROCESSING_SENTINEL)
     .run();
+  await syncCalendarCancellation(db, row, "suppressed", now);
 }
 
 async function markSent(db: D1Database, row: OutboxRow, providerMessageId: string | null, now: number): Promise<boolean> {
@@ -184,7 +200,9 @@ async function markSent(db: D1Database, row: OutboxRow, providerMessageId: strin
     )
     .bind(providerMessageId, now, now, row.id, PROCESSING_SENTINEL)
     .run();
-  return (result.meta.changes ?? 0) === 1;
+  const changed = (result.meta.changes ?? 0) === 1;
+  if (changed) await syncCalendarCancellation(db, row, "sent", now);
+  return changed;
 }
 
 /**
@@ -246,6 +264,7 @@ async function markFailed(db: D1Database, row: OutboxRow, error: unknown, now: n
     )
     .bind(message.slice(0, 500), now, row.id, PROCESSING_SENTINEL)
     .run();
+  await syncCalendarCancellation(db, row, "failed", now, message.slice(0, 500));
 }
 
 export async function processMailOutbox(

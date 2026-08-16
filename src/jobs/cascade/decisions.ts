@@ -8,7 +8,10 @@ import { sha256Hex } from "../../lib/auth/random-token";
 import { acceptedSpeakerMembershipStatements } from "../../lib/speaker-membership";
 import { purgePublicEmbedCache, type PublicEmbedCache } from "../../lib/public-site";
 import { PUBLISHED_SESSION_REFUSAL } from "../../lib/publication-guard";
-import { cancelCalendarInvites } from "../calendar/invites";
+import {
+  drainCalendarCancellations,
+  prepareCalendarCancellationBatch,
+} from "../calendar/invites";
 import { enqueueMailMessage } from "../mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../mail/idempotency";
 import { enqueueTrigger } from "../mail/triggers";
@@ -969,8 +972,9 @@ function reversalFailure(id: Id, error: string): AcceptanceReversalResult {
 /**
  * Reverse an accepted submission through the same record-owned cascade. The
  * three choices are persisted as row-level effects; no branch merely toggles
- * a UI flag. Calendar cancellation runs before the agenda row is removed so
- * the shared UID/SEQUENCE invite lifecycle remains available to the builder.
+ * a UI flag. Calendar cancellation intent and agenda deletion share one D1
+ * batch, so a reversal cannot remove the only mutable source before the
+ * durable snapshot job exists.
  */
 export async function writeAcceptanceReversal(
   input: AcceptanceReversalInput,
@@ -1001,18 +1005,30 @@ export async function writeAcceptanceReversal(
   const emailsCancelled = input.emails === "cancel"
     ? await suppressQueuedSubmissionEmails(input.db, input.eventId, submission.id, now)
     : 0;
-  const calendarDeliveries = input.calendar === "cancel"
-    ? await cancelCalendarInvites({
+  const calendarBatch = input.calendar === "cancel"
+    ? await prepareCalendarCancellationBatch({
       db: input.db,
       eventId: input.eventId,
+      submissionId: submission.id,
+      now,
+    })
+    : null;
+  const agendaDelete = input.db
+    .prepare("DELETE FROM agenda_items WHERE event_id = ? AND submission_id = ?")
+    .bind(input.eventId, submission.id);
+  await input.db.batch([
+    ...(calendarBatch?.statements ?? []),
+    agendaDelete,
+  ]);
+  const calendarDeliveries = input.calendar === "cancel"
+    ? await drainCalendarCancellations({
+      db: input.db,
       origin: input.origin,
       queue: input.queue,
-      submissionId: submission.id,
       now,
       smokeHarness: input.smokeHarness,
     })
     : [];
-
   // Keep the legacy submission flag and the agenda projection in one durable
   // reversal batch. The agenda row is the public source of truth; clearing the
   // old flag at the same boundary prevents record/list disagreement for callers

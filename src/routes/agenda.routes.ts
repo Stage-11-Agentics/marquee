@@ -12,6 +12,7 @@ import { auditStatementFromSelect } from "../lib/audit";
 import { purgePublicEmbedCache } from "../lib/public-site";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
+import { drainCalendarCancellations, prepareCalendarCancellationBatch } from "../jobs/calendar/invites";
 import { getAuth } from "../lib/auth/auth-middleware";
 import type { Context } from "hono";
 import { z } from "@hono/zod-openapi";
@@ -531,16 +532,35 @@ const removeAgendaItem = defineApiRoute(
   async (context) => {
     const { eventId, itemId } = context.req.valid("param");
     const expected = requireIfMatch(context.req.raw, itemId);
-    const outcome = await compareAndSwapResource({
-      expected,
-      now: Date.now(),
-      prepareWrite: ({ expectedUpdatedAt }) => context.env.DB.prepare(
+    const current = await readAgendaItemVersion(context.env.DB, eventId, itemId);
+    if (!current) throw ApiError.notFound();
+    const now = Date.now();
+    const calendarBatch = current.kind === "session" && current.submission_id !== null
+      ? await prepareCalendarCancellationBatch({
+        db: context.env.DB,
+        eventId,
+        submissionId: current.submission_id,
+        now,
+        guard: { agendaItemId: itemId, expectedUpdatedAt: expected.updatedAt },
+      })
+      : null;
+    const results = await context.env.DB.batch([
+      ...(calendarBatch?.statements ?? []),
+      context.env.DB.prepare(
         "DELETE FROM agenda_items WHERE id = ? AND event_id = ? AND updated_at = ?",
-      ).bind(itemId, eventId, expectedUpdatedAt),
-      readCurrent: () => readAgendaItemVersion(context.env.DB, eventId, itemId),
-      versionOf: (item) => ({ id: item.id, updatedAt: item.updated_at }),
-    });
-    assertCasUpdated(outcome);
+      ).bind(itemId, eventId, expected.updatedAt),
+    ]);
+    const deleted = Number(results.at(-1)?.meta?.changes ?? 0);
+    if (deleted !== 1) {
+      const latest = await readAgendaItemVersion(context.env.DB, eventId, itemId);
+      if (!latest) throw ApiError.notFound();
+      throw new ApiError("conflict", "stale ETag: the resource changed since the supplied version", {
+        headers: { ETag: strongEtag(latest.id, latest.updated_at) },
+      });
+    }
+    if (calendarBatch && calendarBatch.intents.length > 0) {
+      await drainCalendarCancellations({ db: context.env.DB, queue: context.env.MAIL_QUEUE, now });
+    }
     return context.body(null, 204);
   },
 );

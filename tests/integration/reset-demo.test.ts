@@ -52,7 +52,9 @@ const SEEDED_COUNTS: Record<string, number> = {
   // withdrawal cascade uses, which is where the portal reads "why" from.
   audit_log: 1,
   file_comments: 0,
+  calendar_cancellations: 0,
   calendar_invites: 0,
+  calendar_sequence_ledger: 0,
   speaker_tasks: 358,
   task_templates: 15,
   agenda_items: 27,

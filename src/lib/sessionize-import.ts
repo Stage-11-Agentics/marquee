@@ -1,6 +1,7 @@
 import type { ImportRowRow, MembershipRow } from "../db/schema";
 
 import { isPublishedSession } from "./publication-guard";
+import { prepareCalendarCancellationBatch } from "../jobs/calendar/invites";
 import { speakerMembershipStatement } from "./speaker-membership";
 
 export type SessionizeEntity = "sessions" | "speakers";
@@ -922,7 +923,19 @@ async function importSession(
     }
   }
   for (const old of relations.participations) {
-    if (!desiredParticipationIds.has(old.id)) await db.prepare("DELETE FROM participations WHERE id = ? AND submission_id = ?").bind(old.id, id).run();
+    if (!desiredParticipationIds.has(old.id)) {
+      const calendarBatch = await prepareCalendarCancellationBatch({
+        db,
+        eventId: event.id,
+        personId: old.person_id,
+        submissionId: id,
+        now,
+      });
+      await db.batch([
+        ...calendarBatch.statements,
+        db.prepare("DELETE FROM participations WHERE id = ? AND submission_id = ?").bind(old.id, id),
+      ]);
+    }
   }
   const desiredAnswerIds = new Set<string>();
   for (const [key, value] of Object.entries(customFields)) {

@@ -5,6 +5,7 @@ import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import { reconcileTaskSet } from "../jobs/cascade/decisions";
+import { drainCalendarCancellations, prepareCalendarCancellationBatch } from "../jobs/calendar/invites";
 import { auditStatement } from "../lib/audit";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { revokeAccessStatements, revokeConferenceAccessStatements } from "../lib/auth/access-revocation";
@@ -233,6 +234,18 @@ const removeFromConference = defineApiRoute(
     const now = Date.now();
     const actor = await actorOf(context);
     const submissionIds = [...new Set(holdings.map((row) => row.submission_id))];
+    const calendarBatches = [];
+    for (const submissionId of submissionIds) {
+      calendarBatches.push(await prepareCalendarCancellationBatch({
+        db: context.env.DB,
+        eventId,
+        personId,
+        submissionId,
+        now,
+      }));
+    }
+    const calendarStatements = calendarBatches.flatMap((batch) => batch.statements);
+    const hasCalendarIntents = calendarBatches.some((batch) => batch.intents.length > 0);
 
     // One transaction. Authority, work, and every credential end together:
     // a request that failed between the participation delete and the task
@@ -272,7 +285,15 @@ const removeFromConference = defineApiRoute(
         now,
         requestId: actor.requestId,
       }),
+      // Calendar intent is prepared from the pre-delete snapshot above and
+      // committed on this same fence. The person and session rows may then
+      // disappear without making an already-sent REQUEST uncancellable.
+      ...calendarStatements,
     ]);
+
+    if (hasCalendarIntents) {
+      await drainCalendarCancellations({ db: context.env.DB, queue: context.env.MAIL_QUEUE, now });
+    }
 
     // After the participations are gone, so the reconciler sees the truth: it
     // derives its task set from participations, so a person with none is no

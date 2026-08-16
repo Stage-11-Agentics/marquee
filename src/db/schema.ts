@@ -118,6 +118,7 @@ export const OUTBOX_BOUNCE_SUBTYPES = [
   "General",
 ] as const;
 export const CALENDAR_METHODS = ["REQUEST", "CANCEL"] as const;
+export const CALENDAR_CANCELLATION_STATUSES = ["queued", "sent", "suppressed", "failed"] as const;
 export const WEBHOOK_EVENT_TYPES = [
   "submission.created",
   "submission.status_changed",
@@ -161,6 +162,7 @@ export type OutboxDeliveryState = (typeof OUTBOX_DELIVERY_STATES)[number];
 export type OutboxBounceType = (typeof OUTBOX_BOUNCE_TYPES)[number];
 export type OutboxBounceSubtype = (typeof OUTBOX_BOUNCE_SUBTYPES)[number];
 export type CalendarMethod = (typeof CALENDAR_METHODS)[number];
+export type CalendarCancellationStatus = (typeof CALENDAR_CANCELLATION_STATUSES)[number];
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
 export type WebhookDeliveryStatus = (typeof WEBHOOK_DELIVERY_STATUSES)[number];
 export type MirrorOperation = (typeof MIRROR_OPERATIONS)[number];
@@ -723,11 +725,40 @@ export interface SpeakerTaskRow extends MutableRecord {
 export interface CalendarInviteRow extends MutableRecord {
   last_method: CalendarMethod;
   last_sent_at: EpochMilliseconds | null;
+  organizer_email: string;
   person_id: Id;
+  request_snapshot: JsonText | null;
   sequence: number;
-  status: string;
+  status: "active" | "cancelled";
   submission_id: Id;
   uid: string;
+}
+
+/** Durable high-water mark; intentionally has no event or submission FK. */
+export interface CalendarSequenceLedgerRow {
+  last_sequence: number;
+  uid: string;
+  updated_at: EpochMilliseconds;
+}
+
+/** A self-contained CANCEL intent that may outlive every conference row. */
+export interface CalendarCancellationRow {
+  attempts: number;
+  cancelled_at: EpochMilliseconds;
+  created_at: EpochMilliseconds;
+  event_id: Id;
+  id: Id;
+  idempotency_key: string;
+  last_error: string | null;
+  organizer_email: string;
+  outbox_id: Id | null;
+  person_id: Id | null;
+  sequence: number;
+  snapshot_json: JsonText;
+  status: CalendarCancellationStatus;
+  to_email: string;
+  uid: string;
+  updated_at: EpochMilliseconds;
 }
 
 export interface MirrorOutboxRow extends MutableRecord {
@@ -941,7 +972,9 @@ export const CORE_TABLE_NAMES = [
   "agenda_items",
   "task_templates",
   "speaker_tasks",
+  "calendar_cancellations",
   "calendar_invites",
+  "calendar_sequence_ledger",
   "mirror_credentials",
   "mirror_outbox",
   "mirror_state",
@@ -967,7 +1000,7 @@ export const CORE_TABLE_NAMES = [
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 61 as const;
+export const CORE_TABLE_COUNT = 63 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -985,7 +1018,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 61>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 63>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -994,7 +1027,9 @@ export const CORE_TABLES = {
   audit_log: "audit_log",
   auth_sessions: "auth_sessions",
   buildings: "buildings",
+  calendar_cancellations: "calendar_cancellations",
   calendar_invites: "calendar_invites",
+  calendar_sequence_ledger: "calendar_sequence_ledger",
   committee_members: "committee_members",
   committees: "committees",
   comparisons: "comparisons",
@@ -1058,7 +1093,9 @@ export interface CoreTableRows {
   audit_log: AuditLogRow;
   auth_sessions: AuthSessionRow;
   buildings: BuildingRow;
+  calendar_cancellations: CalendarCancellationRow;
   calendar_invites: CalendarInviteRow;
+  calendar_sequence_ledger: CalendarSequenceLedgerRow;
   committee_members: CommitteeMemberRow;
   committees: CommitteeRow;
   comparisons: ComparisonRow;
@@ -1124,7 +1161,9 @@ interface CoreDefaultColumns {
   audit_log: never;
   auth_sessions: never;
   buildings: never;
+  calendar_cancellations: never;
   calendar_invites: "sequence";
+  calendar_sequence_ledger: never;
   committee_members: never;
   committees: never;
   comparisons: never;

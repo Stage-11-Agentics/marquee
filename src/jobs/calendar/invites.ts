@@ -1,4 +1,4 @@
-import type { D1Database, Queue } from "@cloudflare/workers-types";
+import type { D1Database, D1PreparedStatement, Queue } from "@cloudflare/workers-types";
 
 import type { Id } from "../../db/schema";
 import { buildingGeo, sessionLocation } from "../../lib/venue-geometry";
@@ -13,6 +13,8 @@ import {
 } from "./ics";
 
 const DEFAULT_ORIGIN = "https://marquee.stage11.dev";
+const DEFAULT_ORGANIZER_EMAIL = "marquee@stage11.systems";
+const DEFAULT_ORGANIZER_NAME = "Marquee";
 
 interface CalendarSessionRow {
   abstract: string | null;
@@ -40,17 +42,54 @@ interface CalendarRecipientRow {
 interface CalendarInviteRow {
   id: Id;
   last_method: "REQUEST" | "CANCEL";
+  organizer_email: string;
   person_id: Id;
+  request_snapshot: string | null;
   sequence: number;
-  status: string;
+  status: "active" | "cancelled";
   uid: string;
+}
+
+interface CalendarSequenceLedgerRow {
+  last_sequence: number;
+}
+
+interface CalendarCancellationRow {
+  attempts: number;
+  cancelled_at: number;
+  event_id: Id;
+  id: Id;
+  idempotency_key: string;
+  last_error: string | null;
+  organizer_email: string;
+  outbox_id: Id | null;
+  person_id: Id | null;
+  sequence: number;
+  snapshot_json: string;
+  status: "queued" | "sent" | "suppressed" | "failed";
+  to_email: string;
+  uid: string;
+  updated_at: number;
+}
+
+export interface CalendarRequestSnapshot {
+  attendee: { email: string; name: string };
+  description: string;
+  duration_min: number;
+  geo: { lat: number; lng: number } | null;
+  location: string;
+  organizer: { email: string; name: string };
+  starts_at: number;
+  timezone: string;
+  title: string;
+  url: string;
 }
 
 export interface CalendarDeliveryResult {
   method: "REQUEST" | "CANCEL";
   outbox_id: Id;
   outbox_inserted: boolean;
-  person_id: Id;
+  person_id: Id | null;
   sequence: number;
   uid: string;
 }
@@ -65,8 +104,114 @@ export interface CalendarInviteSummary {
   uid: string;
 }
 
+interface CalendarCancellationIntent {
+  eventId: Id;
+  idempotencyKey: string;
+  personId: Id;
+  sequence: number;
+  snapshot: CalendarRequestSnapshot;
+  uid: string;
+}
+
+export interface CalendarCancellationBatch {
+  intents: readonly CalendarCancellationIntent[];
+  statements: D1PreparedStatement[];
+}
+
+export interface CalendarCancellationGuard {
+  agendaItemId?: Id;
+  expectedUpdatedAt?: number;
+}
+
 function originFor(value: string | undefined): string {
   return (value ?? DEFAULT_ORIGIN).replace(/\/+$/, "");
+}
+
+function validEmail(value: unknown): value is string {
+  return typeof value === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) && !/[\r\n]/.test(value);
+}
+
+function validCalendarUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseGeo(value: unknown): { lat: number; lng: number } | null | undefined {
+  if (value === null) return null;
+  if (!isObject(value) || typeof value.lat !== "number" || typeof value.lng !== "number") return undefined;
+  if (!Number.isFinite(value.lat) || !Number.isFinite(value.lng)) return undefined;
+  return { lat: value.lat, lng: value.lng };
+}
+
+/** Parse and validate the immutable REQUEST material before it can drive a CANCEL. */
+export function parseCalendarRequestSnapshot(value: string | null): CalendarRequestSnapshot | null {
+  if (!value) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!isObject(parsed)) return null;
+    const attendee = parsed.attendee;
+    const organizer = parsed.organizer;
+    const geo = parseGeo(parsed.geo);
+    if (
+      !isObject(attendee)
+      || !validEmail(attendee.email)
+      || typeof attendee.name !== "string"
+      || !isObject(organizer)
+      || !validEmail(organizer.email)
+      || typeof organizer.name !== "string"
+      || typeof parsed.title !== "string"
+      || typeof parsed.description !== "string"
+      || typeof parsed.starts_at !== "number"
+      || !Number.isInteger(parsed.starts_at)
+      || typeof parsed.duration_min !== "number"
+      || !Number.isInteger(parsed.duration_min)
+      || parsed.duration_min <= 0
+      || typeof parsed.timezone !== "string"
+      || typeof parsed.location !== "string"
+      || geo === undefined
+      || !validCalendarUrl(parsed.url)
+    ) return null;
+    return {
+      attendee: { email: attendee.email.trim(), name: attendee.name },
+      description: parsed.description,
+      duration_min: parsed.duration_min,
+      geo,
+      location: parsed.location,
+      organizer: { email: organizer.email.trim(), name: organizer.name },
+      starts_at: parsed.starts_at,
+      timezone: parsed.timezone,
+      title: parsed.title,
+      url: parsed.url,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function snapshotJson(snapshot: CalendarRequestSnapshot): string {
+  // Keep this object literal ordered and stable: it is the byte source for
+  // every retry and the next schedule-update ticket's staleness comparison.
+  return JSON.stringify({
+    attendee: snapshot.attendee,
+    description: snapshot.description,
+    duration_min: snapshot.duration_min,
+    geo: snapshot.geo,
+    location: snapshot.location,
+    organizer: snapshot.organizer,
+    starts_at: snapshot.starts_at,
+    timezone: snapshot.timezone,
+    title: snapshot.title,
+    url: snapshot.url,
+  });
 }
 
 async function sessionFor(db: D1Database, eventId: Id, submissionId: Id): Promise<CalendarSessionRow | null> {
@@ -103,67 +248,91 @@ async function recipientsFor(db: D1Database, submissionId: Id): Promise<Calendar
     )
     .bind(submissionId)
     .all<CalendarRecipientRow>();
-  return rows.results.filter((row) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email.trim()));
+  return rows.results.filter((row) => validEmail(row.email));
 }
 
-function eventInput(
+function snapshotFor(
   session: CalendarSessionRow,
   recipient: CalendarRecipientRow,
-  input: {
-    dtstamp: number;
-    method: "REQUEST" | "CANCEL";
-    origin: string;
-    sequence: number;
-    uid: string;
-  },
-): CalendarEventInput & { origin: string } {
+  origin: string,
+): CalendarRequestSnapshot {
   const building = session.building_name === null
     ? null
     : { name: session.building_name, address: session.building_address ?? "" };
   return {
-    attendeeEmail: recipient.email,
-    attendeeName: recipient.name,
+    attendee: { email: recipient.email.trim(), name: recipient.name },
     description: session.abstract ?? session.title,
-    dtstamp: input.dtstamp,
-    durationMin: session.duration_min,
+    duration_min: session.duration_min,
     geo: buildingGeo({ lat: session.building_lat, lng: session.building_lng }),
     location: sessionLocation(session.room_name, building),
-    method: input.method,
-    organizerEmail: "marquee@stage11.systems",
-    organizerName: "Marquee",
-    sequence: input.sequence,
-    startsAt: session.starts_at,
-    title: session.title,
+    organizer: { email: DEFAULT_ORGANIZER_EMAIL, name: DEFAULT_ORGANIZER_NAME },
+    starts_at: session.starts_at,
     timezone: session.event_timezone,
-    uid: input.uid,
-    url: `${input.origin}/s/${encodeURIComponent(session.submission_id)}`,
-    origin: input.origin,
+    title: session.title,
+    url: `${origin}/s/${encodeURIComponent(session.submission_id)}`,
   };
 }
 
-async function queueCalendarMaterial(
-  db: D1Database,
-  queue: Queue<unknown>,
-  session: CalendarSessionRow,
-  recipient: CalendarRecipientRow,
+function eventInputFromSnapshot(
+  snapshot: CalendarRequestSnapshot,
   input: {
     dtstamp: number;
     method: "REQUEST" | "CANCEL";
-    origin: string;
     sequence: number;
     uid: string;
-    smokeHarness?: boolean;
   },
-): Promise<{ material: CalendarMailMaterial; outboxId: Id; inserted: boolean }> {
-  const material = buildCalendarMail(eventInput(session, recipient, input));
+): CalendarEventInput & { origin: string } {
+  return {
+    attendeeEmail: snapshot.attendee.email,
+    attendeeName: snapshot.attendee.name,
+    description: snapshot.description,
+    dtstamp: input.dtstamp,
+    durationMin: snapshot.duration_min,
+    geo: snapshot.geo,
+    location: snapshot.location,
+    method: input.method,
+    organizerEmail: snapshot.organizer.email,
+    organizerName: snapshot.organizer.name,
+    sequence: input.sequence,
+    startsAt: snapshot.starts_at,
+    title: snapshot.title,
+    timezone: snapshot.timezone,
+    uid: input.uid,
+    url: snapshot.url,
+    origin: new URL(snapshot.url).origin,
+  };
+}
+
+async function queueCalendarMaterial(input: {
+  db: D1Database;
+  dtstamp: number;
+  eventId: Id;
+  method: "REQUEST" | "CANCEL";
+  personId: Id | null;
+  queue: Queue<unknown>;
+  sequence: number;
+  snapshot: CalendarRequestSnapshot;
+  smokeHarness?: boolean;
+  uid: string;
+  requeueExisting?: boolean;
+}): Promise<{ material: CalendarMailMaterial; outboxId: Id; inserted: boolean }> {
+  const material = buildCalendarMail(eventInputFromSnapshot(input.snapshot, {
+    dtstamp: input.dtstamp,
+    method: input.method,
+    sequence: input.sequence,
+    uid: input.uid,
+  }));
   const enqueue = input.smokeHarness ? enqueueSmokeHarnessMail : enqueueOutbox;
+  const entityId = input.method === "CANCEL"
+    ? IDEMPOTENCY_REGISTRY.calendarCancellation(input.uid, input.sequence)
+    : IDEMPOTENCY_REGISTRY.calendarRequest(input.uid, input.sequence);
   const outbox = await enqueue({
-    db,
-    eventId: session.event_id,
+    db: input.db,
+    eventId: input.eventId,
     templateKey: `calendar_${input.method.toLowerCase()}`,
-    entityId: IDEMPOTENCY_REGISTRY.calendar(session.submission_id, recipient.person_id, input.sequence, input.method),
-    personId: recipient.person_id,
-    toEmail: recipient.email,
+    entityId,
+    personId: input.personId,
+    toEmail: input.snapshot.attendee.email,
     subject: material.subject,
     text: material.text,
     html: material.html,
@@ -171,14 +340,114 @@ async function queueCalendarMaterial(
     icsBody: material.icsBody,
     now: input.dtstamp,
   });
-  if (outbox.inserted) await enqueueMailMessage(queue, outbox.id);
+  const existing = outbox.inserted
+    ? null
+    : await input.db.prepare("SELECT status FROM outbox WHERE id = ?").bind(outbox.id).first<{ status: string }>();
+  // A request can be interrupted after the idempotent outbox INSERT and before
+  // its queue send. Re-admit an existing queued row on the resumed run; the
+  // outbox key keeps this a delivery retry, not a second calendar revision.
+  if (outbox.inserted || input.requeueExisting || existing?.status === "queued") {
+    await enqueueMailMessage(input.queue, outbox.id);
+  }
   return { material, outboxId: outbox.id, inserted: outbox.inserted };
 }
 
-/**
- * Queue one request per speaker/submitter. The event id is kept separately
- * from the calendar material so the outbox remains event-scoped.
- */
+async function ledgerFor(db: D1Database, uid: string): Promise<CalendarSequenceLedgerRow | null> {
+  return db.prepare("SELECT last_sequence FROM calendar_sequence_ledger WHERE uid = ?").bind(uid).first<CalendarSequenceLedgerRow>();
+}
+
+function nextSequence(current: number | null, ledger: CalendarSequenceLedgerRow | null): number {
+  return Math.max(current === null ? 0 : current + 1, ledger ? ledger.last_sequence + 1 : 0);
+}
+
+function ledgerStatement(db: D1Database, uid: string, sequence: number, now: number): D1PreparedStatement {
+  return db.prepare(
+    `INSERT INTO calendar_sequence_ledger (uid, last_sequence, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(uid) DO UPDATE SET
+       last_sequence = MAX(calendar_sequence_ledger.last_sequence, excluded.last_sequence),
+       updated_at = excluded.updated_at`,
+  ).bind(uid, sequence, now);
+}
+
+function ledgerStatements(
+  db: D1Database,
+  uid: string,
+  sequence: number,
+  now: number,
+  guard: CalendarCancellationGuard | undefined,
+  submissionId: Id,
+): D1PreparedStatement[] {
+  if (!guard?.agendaItemId || guard.expectedUpdatedAt === undefined) {
+    return [ledgerStatement(db, uid, sequence, now)];
+  }
+  const guarded = guardExistsSql(guard);
+  const existsBindings = guarded.bindings.map((binding, index) => index === 1 ? submissionId : binding);
+  return [
+    db.prepare(
+      `INSERT OR IGNORE INTO calendar_sequence_ledger (uid, last_sequence, updated_at)
+       SELECT ?, ?, ?
+       WHERE 1 = 1${guarded.sql}`,
+    ).bind(uid, sequence, now, ...existsBindings),
+    db.prepare(
+      `UPDATE calendar_sequence_ledger
+       SET last_sequence = MAX(last_sequence, ?), updated_at = ?
+       WHERE uid = ?${guarded.sql}`,
+    ).bind(sequence, now, uid, ...existsBindings),
+  ];
+}
+
+/** Update the invite and high-water in one D1 batch after the idempotent outbox admission. */
+async function recordRequest(input: {
+  current: CalendarInviteRow | null;
+  db: D1Database;
+  now: number;
+  personId: Id;
+  sequence: number;
+  snapshot: CalendarRequestSnapshot;
+  submissionId: Id;
+  uid: string;
+  organizerEmail: string;
+}): Promise<void> {
+  const inviteStatement = input.current
+    ? input.db.prepare(
+      `UPDATE calendar_invites
+       SET sequence = ?, last_method = 'REQUEST', last_sent_at = ?, status = 'active',
+           request_snapshot = ?, updated_at = ?
+       WHERE id = ?`,
+    ).bind(
+      input.sequence,
+      input.now,
+      snapshotJson(input.snapshot),
+      input.now,
+      input.current.id,
+    )
+    : input.db.prepare(
+      `INSERT INTO calendar_invites
+        (id, submission_id, person_id, uid, sequence, last_method, last_sent_at,
+         status, request_snapshot, organizer_email, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'REQUEST', ?, 'active', ?, ?, ?, ?)`,
+    ).bind(
+      crypto.randomUUID(),
+      input.submissionId,
+      input.personId,
+      input.uid,
+      input.sequence,
+      input.now,
+      snapshotJson(input.snapshot),
+      input.organizerEmail,
+      input.now,
+      input.now,
+    );
+  await input.db.batch([
+    // The ledger and snapshot update share the same batch fence. A resumed
+    // request can therefore never expose a newer sequence with old material.
+    ledgerStatement(input.db, input.uid, input.sequence, input.now),
+    inviteStatement,
+  ]);
+}
+
+/** Queue one REQUEST per speaker/submitter, preserving one UID per recipient. */
 export async function sendCalendarInvites(input: {
   db: D1Database;
   eventId: Id;
@@ -197,39 +466,42 @@ export async function sendCalendarInvites(input: {
   const result: CalendarDeliveryResult[] = [];
 
   for (const recipient of recipients) {
-    const current = await input.db
-      .prepare("SELECT id, person_id, uid, sequence, last_method, status FROM calendar_invites WHERE submission_id = ? AND person_id = ?")
-      .bind(input.submissionId, recipient.person_id)
-      .first<CalendarInviteRow>();
-    const sequence = current ? current.sequence + 1 : 0;
+    const [current, ledger] = await Promise.all([
+      input.db
+        .prepare(
+          `SELECT id, person_id, uid, sequence, last_method, status, request_snapshot, organizer_email
+           FROM calendar_invites WHERE submission_id = ? AND person_id = ?`,
+        )
+        .bind(input.submissionId, recipient.person_id)
+        .first<CalendarInviteRow>(),
+      ledgerFor(input.db, calendarUid(input.submissionId, recipient.person_id)),
+    ]);
     const uid = current?.uid ?? calendarUid(input.submissionId, recipient.person_id);
-    const delivery = await queueCalendarMaterial(input.db, input.queue, session, recipient, {
+    const sequence = nextSequence(current?.sequence ?? null, ledger);
+    const snapshot = snapshotFor(session, recipient, origin);
+    const delivery = await queueCalendarMaterial({
+      db: input.db,
       dtstamp: now,
+      eventId: input.eventId,
       method: "REQUEST",
-      origin,
+      personId: recipient.person_id,
+      queue: input.queue,
       sequence,
-      uid,
+      snapshot,
       smokeHarness: input.smokeHarness,
+      uid,
     });
-    if (current) {
-      await input.db
-        .prepare(
-          `UPDATE calendar_invites
-           SET sequence = ?, last_method = 'REQUEST', last_sent_at = ?, status = 'active', updated_at = ?
-           WHERE id = ?`,
-        )
-        .bind(sequence, now, now, current.id)
-        .run();
-    } else {
-      await input.db
-        .prepare(
-          `INSERT INTO calendar_invites
-            (id, submission_id, person_id, uid, sequence, last_method, last_sent_at, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 0, 'REQUEST', ?, 'active', ?, ?)`,
-        )
-        .bind(crypto.randomUUID(), input.submissionId, recipient.person_id, uid, now, now, now)
-        .run();
-    }
+    await recordRequest({
+      current: current ?? null,
+      db: input.db,
+      now,
+      personId: recipient.person_id,
+      sequence,
+      snapshot,
+      submissionId: input.submissionId,
+      uid,
+      organizerEmail: current?.organizer_email ?? snapshot.organizer.email,
+    });
     result.push({
       method: "REQUEST",
       outbox_id: delivery.outboxId,
@@ -242,7 +514,237 @@ export async function sendCalendarInvites(input: {
   return result;
 }
 
-/** Emit METHOD:CANCEL for every prior invite while preserving UID and sequence. */
+async function activeInvitesForCancellation(input: {
+  db: D1Database;
+  personId?: Id;
+  submissionId: Id;
+}): Promise<CalendarInviteRow[]> {
+  const personFilter = input.personId === undefined ? "" : " AND invite.person_id = ?";
+  const bindings = input.personId === undefined
+    ? [input.submissionId]
+    : [input.submissionId, input.personId];
+  const rows = await input.db
+    .prepare(
+      `SELECT invite.id, invite.person_id, invite.uid, invite.sequence, invite.last_method,
+              invite.status, invite.request_snapshot, invite.organizer_email
+       FROM calendar_invites invite
+       WHERE invite.submission_id = ? AND invite.status = 'active'${personFilter}
+       ORDER BY invite.person_id ASC`,
+    )
+    .bind(...bindings)
+    .all<CalendarInviteRow>();
+  return rows.results;
+}
+
+function guardExistsSql(guard: CalendarCancellationGuard | undefined): { sql: string; bindings: (string | number)[] } {
+  if (!guard?.agendaItemId || guard.expectedUpdatedAt === undefined) return { sql: "", bindings: [] };
+  return {
+    sql: " AND EXISTS (SELECT 1 FROM agenda_items WHERE id = ? AND event_id = (SELECT event_id FROM submissions WHERE id = ?) AND updated_at = ?)",
+    bindings: [guard.agendaItemId, "", guard.expectedUpdatedAt],
+  };
+}
+
+/**
+ * Prepare cancellation intent + invite/ledger statements. Callers that delete
+ * an agenda row append that DELETE to the same db.batch, making the intent
+ * durable on the deletion fence rather than relying on a later best effort.
+ */
+export async function prepareCalendarCancellationBatch(input: {
+  db: D1Database;
+  eventId: Id;
+  personId?: Id;
+  submissionId: Id;
+  now: number;
+  guard?: CalendarCancellationGuard;
+}): Promise<CalendarCancellationBatch> {
+  const [session, invites] = await Promise.all([
+    sessionFor(input.db, input.eventId, input.submissionId),
+    activeInvitesForCancellation(input),
+  ]);
+  const intents: CalendarCancellationIntent[] = [];
+  const statements: D1PreparedStatement[] = [];
+  for (const invite of invites) {
+    const fallbackRecipient = await input.db
+      .prepare("SELECT email, name, id AS person_id FROM people WHERE id = ?")
+      .bind(invite.person_id)
+      .first<CalendarRecipientRow>();
+    const snapshot = parseCalendarRequestSnapshot(invite.request_snapshot)
+      ?? (session && fallbackRecipient && validEmail(fallbackRecipient.email)
+        ? snapshotFor(session, fallbackRecipient, DEFAULT_ORIGIN)
+        : null);
+    if (!snapshot) throw new Error(`calendar cancellation snapshot unavailable for ${invite.uid}`);
+    if (snapshot.organizer.email.trim().toLowerCase() !== invite.organizer_email.trim().toLowerCase()) {
+      throw new Error(`calendar cancellation organizer mismatch for ${invite.uid}`);
+    }
+    if (!validEmail(snapshot.attendee.email)) throw new Error(`calendar cancellation attendee is invalid for ${invite.uid}`);
+    const ledger = await ledgerFor(input.db, invite.uid);
+    const sequence = nextSequence(invite.sequence, ledger);
+    const idempotencyKey = String(IDEMPOTENCY_REGISTRY.calendarCancellation(invite.uid, sequence));
+    const intent: CalendarCancellationIntent = {
+      eventId: input.eventId,
+      idempotencyKey,
+      personId: invite.person_id,
+      sequence,
+      snapshot,
+      uid: invite.uid,
+    };
+    intents.push(intent);
+    const guard = guardExistsSql(input.guard);
+    // The guard is intentionally checked in both the intent and the invite
+    // update. A stale unschedule request therefore creates no durable job.
+    const existsBindings = guard.bindings.map((binding, index) => index === 1 ? input.submissionId : binding);
+    const existsClause = guard.sql;
+    statements.push(
+      input.db.prepare(
+        `INSERT OR IGNORE INTO calendar_cancellations
+          (id, idempotency_key, event_id, person_id, uid, sequence, to_email, organizer_email,
+           snapshot_json, cancelled_at, status, attempts, outbox_id, last_error, created_at, updated_at)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0, NULL, NULL, ?, ?
+         WHERE 1 = 1${existsClause}`,
+      ).bind(
+        crypto.randomUUID(),
+        idempotencyKey,
+        input.eventId,
+        invite.person_id,
+        invite.uid,
+        sequence,
+        snapshot.attendee.email,
+        invite.organizer_email,
+        snapshotJson(snapshot),
+        input.now,
+        input.now,
+        input.now,
+        ...existsBindings,
+      ),
+      ...ledgerStatements(input.db, invite.uid, sequence, input.now, input.guard, input.submissionId),
+      input.db.prepare(
+        `UPDATE calendar_invites
+         SET sequence = ?, last_method = 'CANCEL', status = 'cancelled', updated_at = ?
+         WHERE id = ? AND status = 'active'${existsClause}`,
+      ).bind(sequence, input.now, invite.id, ...existsBindings),
+    );
+  }
+  return { intents, statements };
+}
+
+function cancellationResult(row: CalendarCancellationRow, inserted: boolean): CalendarDeliveryResult {
+  return {
+    method: "CANCEL",
+    outbox_id: row.outbox_id ?? "",
+    outbox_inserted: inserted,
+    person_id: row.person_id,
+    sequence: row.sequence,
+    uid: row.uid,
+  };
+}
+
+/**
+ * Admit queued/failed CANCELs to the normal mail outbox. Failed outbox rows
+ * are reopened at the same idempotency key; the snapshot and cancelled_at are
+ * never regenerated, so every retry is byte-identical.
+ */
+export async function drainCalendarCancellations(input: {
+  db: D1Database;
+  queue: Queue<unknown>;
+  origin?: string;
+  now?: number;
+  smokeHarness?: boolean;
+  limit?: number;
+}): Promise<CalendarDeliveryResult[]> {
+  const now = input.now ?? Date.now();
+  const rows = await input.db
+    .prepare(
+      `SELECT attempts, cancelled_at, event_id, id, idempotency_key, last_error,
+              organizer_email, outbox_id, person_id, sequence, snapshot_json, status,
+              to_email, uid, updated_at
+       FROM calendar_cancellations
+       WHERE status IN ('queued', 'failed')
+       ORDER BY updated_at ASC, id ASC
+       LIMIT ?`,
+    )
+    .bind(input.limit ?? 100)
+    .all<CalendarCancellationRow>();
+  const result: CalendarDeliveryResult[] = [];
+  for (const row of rows.results) {
+    const event = await input.db.prepare("SELECT 1 AS present FROM events WHERE id = ?").bind(row.event_id).first<{ present: number }>();
+    if (!event) {
+      // Conference deletion is a deliberate no-CANCEL path. The FK-free job
+      // remains inspectable, but it must not attempt to recreate an outbox row
+      // whose event parent has already been removed.
+      await input.db.prepare(
+        "UPDATE calendar_cancellations SET status = 'suppressed', last_error = ?, updated_at = ? WHERE id = ?",
+      ).bind("calendar event no longer exists", now, row.id).run();
+      continue;
+    }
+    const snapshot = parseCalendarRequestSnapshot(row.snapshot_json);
+    if (!snapshot) {
+      await input.db.prepare(
+        "UPDATE calendar_cancellations SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?",
+      ).bind("calendar cancellation snapshot is invalid", now, row.id).run();
+      continue;
+    }
+    if (snapshot.attendee.email.trim().toLowerCase() !== row.to_email.trim().toLowerCase()) {
+      await input.db.prepare(
+        "UPDATE calendar_cancellations SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?",
+      ).bind("calendar attendee does not match the outbox recipient", now, row.id).run();
+      continue;
+    }
+    if (snapshot.organizer.email.trim().toLowerCase() !== row.organizer_email.trim().toLowerCase()) {
+      await input.db.prepare(
+        "UPDATE calendar_cancellations SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?",
+      ).bind("calendar organizer does not match the REQUEST snapshot", now, row.id).run();
+      continue;
+    }
+
+    const entityId = String(IDEMPOTENCY_REGISTRY.calendarCancellation(row.uid, row.sequence));
+    let outbox = await input.db.prepare(
+      `SELECT id, status FROM outbox
+       WHERE event_id = ? AND template_key = 'calendar_cancel' AND entity_id = ?
+       LIMIT 1`,
+    ).bind(row.event_id, entityId).first<{ id: Id; status: string }>();
+    let inserted = false;
+    if (outbox?.status === "sent") {
+      await input.db.prepare("UPDATE calendar_cancellations SET status = 'sent', updated_at = ? WHERE id = ?").bind(now, row.id).run();
+      continue;
+    }
+    if (outbox?.status === "suppressed") {
+      await input.db.prepare("UPDATE calendar_cancellations SET status = 'suppressed', updated_at = ? WHERE id = ?").bind(now, row.id).run();
+      continue;
+    }
+    if (outbox?.status === "failed") {
+      await input.db.prepare(
+        "UPDATE outbox SET status = 'queued', error = NULL, suppressed_reason = NULL, updated_at = ? WHERE id = ? AND status = 'failed'",
+      ).bind(now, outbox.id).run();
+    }
+    if (!outbox) {
+      const delivery = await queueCalendarMaterial({
+        db: input.db,
+        dtstamp: row.cancelled_at,
+        eventId: row.event_id,
+        method: "CANCEL",
+        personId: row.person_id,
+        queue: input.queue,
+        sequence: row.sequence,
+        snapshot,
+        smokeHarness: input.smokeHarness,
+        uid: row.uid,
+      });
+      outbox = { id: delivery.outboxId, status: "queued" };
+      inserted = delivery.inserted;
+    } else {
+      await enqueueMailMessage(input.queue, outbox.id);
+    }
+    await input.db.prepare(
+      `UPDATE calendar_cancellations
+       SET status = 'queued', attempts = attempts + 1, outbox_id = ?, last_error = NULL, updated_at = ?
+       WHERE id = ?`,
+    ).bind(outbox.id, now, row.id).run();
+    result.push(cancellationResult({ ...row, outbox_id: outbox.id }, inserted));
+  }
+  return result;
+}
+
+/** Emit durable CANCEL intent for every active invite, even with no agenda row. */
 export async function cancelCalendarInvites(input: {
   db: D1Database;
   eventId: Id;
@@ -250,59 +752,26 @@ export async function cancelCalendarInvites(input: {
   queue: Queue<unknown>;
   submissionId: Id;
   now?: number;
+  personId?: Id;
   /** Only the explicit authenticated smoke route may use the live G3 policy. */
   smokeHarness?: boolean;
 }): Promise<CalendarDeliveryResult[]> {
   const now = input.now ?? Date.now();
-  const session = await sessionFor(input.db, input.eventId, input.submissionId);
-  if (!session) return [];
-  const invites = await input.db
-    .prepare(
-      `SELECT invite.id, invite.person_id, invite.uid, invite.sequence, invite.last_method, invite.status,
-              person.email, person.name
-       FROM calendar_invites invite
-       JOIN people person ON person.id = invite.person_id
-       WHERE invite.submission_id = ?
-         AND invite.status <> 'cancelled'
-       ORDER BY invite.person_id ASC`,
-    )
-    .bind(input.submissionId)
-    .all<CalendarInviteRow & { email: string; name: string }>();
-  const origin = originFor(input.origin);
-  const result: CalendarDeliveryResult[] = [];
-
-  for (const invite of invites.results) {
-    const sequence = invite.sequence + 1;
-    const delivery = await queueCalendarMaterial(input.db, input.queue, session, {
-      person_id: invite.person_id,
-      email: invite.email,
-      name: invite.name,
-    }, {
-      dtstamp: now,
-      method: "CANCEL",
-      origin,
-      sequence,
-      uid: invite.uid,
-      smokeHarness: input.smokeHarness,
-    });
-    await input.db
-      .prepare(
-        `UPDATE calendar_invites
-         SET sequence = ?, last_method = 'CANCEL', last_sent_at = ?, status = 'cancelled', updated_at = ?
-         WHERE id = ? AND status <> 'cancelled'`,
-      )
-      .bind(sequence, now, now, invite.id)
-      .run();
-    result.push({
-      method: "CANCEL",
-      outbox_id: delivery.outboxId,
-      outbox_inserted: delivery.inserted,
-      person_id: invite.person_id,
-      sequence,
-      uid: invite.uid,
-    });
-  }
-  return result;
+  const batch = await prepareCalendarCancellationBatch({
+    db: input.db,
+    eventId: input.eventId,
+    personId: input.personId,
+    submissionId: input.submissionId,
+    now,
+  });
+  if (batch.statements.length > 0) await input.db.batch(batch.statements);
+  return drainCalendarCancellations({
+    db: input.db,
+    now,
+    origin: input.origin,
+    queue: input.queue,
+    smokeHarness: input.smokeHarness,
+  });
 }
 
 export async function calendarInvitesForSubmission(
@@ -313,9 +782,9 @@ export async function calendarInvitesForSubmission(
   const rows = await db
     .prepare(
       `SELECT invite.id, invite.person_id, invite.uid, invite.sequence, invite.last_method,
-              invite.status, person.email
+              invite.status, invite.request_snapshot, person.email
        FROM calendar_invites invite
-       JOIN people person ON person.id = invite.person_id
+       LEFT JOIN people person ON person.id = invite.person_id
        WHERE invite.submission_id = ? AND EXISTS (
          SELECT 1 FROM submissions submission
          WHERE submission.id = invite.submission_id AND submission.event_id = ?
@@ -323,6 +792,14 @@ export async function calendarInvitesForSubmission(
        ORDER BY invite.person_id ASC`,
     )
     .bind(submissionId, eventId)
-    .all<CalendarInviteSummary>();
-  return rows.results;
+    .all<CalendarInviteSummary & { request_snapshot: string | null }>();
+  return rows.results.map((row) => ({
+    email: parseCalendarRequestSnapshot(row.request_snapshot)?.attendee.email ?? row.email,
+    id: row.id,
+    last_method: row.last_method,
+    person_id: row.person_id,
+    sequence: row.sequence,
+    status: row.status,
+    uid: row.uid,
+  }));
 }

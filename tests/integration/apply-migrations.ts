@@ -33,6 +33,7 @@ import attendeeSchedulesMigrationSql from "../../migrations/0022_attendee_schedu
 import sponsorsMigrationSql from "../../migrations/0023_sponsors.sql?raw";
 import airtableOutboundMigrationSql from "../../migrations/0024_airtable_outbound.sql?raw";
 import airtableConnectMigrationSql from "../../migrations/0025_airtable_connect.sql?raw";
+import calendarTruthMigrationSql from "../../migrations/0026_calendar_truth.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -85,9 +86,22 @@ export async function applyMigrations(): Promise<void> {
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'organizations'",
   ).first();
   if (alreadyApplied) {
-    await env.DB.batch(
-      WIPE_ORDER.map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
-    );
+    const calendarTruthApplied = await env.DB.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'calendar_cancellations'",
+    ).first();
+    await env.DB.batch(WIPE_ORDER.map((table) => env.DB.prepare(`DELETE FROM ${table}`)));
+    if (calendarTruthApplied) {
+      // Production demo reset deliberately preserves these durable calendar
+      // records. Test files need an isolated starting floor instead.
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM calendar_cancellations"),
+        env.DB.prepare("DELETE FROM calendar_sequence_ledger"),
+      ]);
+    } else {
+      for (const statement of splitStatements(calendarTruthMigrationSql)) {
+        await env.DB.prepare(`${statement};`).run();
+      }
+    }
     return;
   }
   for (const statement of [
@@ -122,6 +136,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(sponsorsMigrationSql),
     ...splitStatements(airtableOutboundMigrationSql),
     ...splitStatements(airtableConnectMigrationSql),
+    ...splitStatements(calendarTruthMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

@@ -53,4 +53,12 @@ describe("outbox idempotency registry", () => {
     );
     expect(IDEMPOTENCY_REGISTRY.customRecipient("submission-1")).toBe("submission-1");
   });
+
+  test("MRQ-228 · calendar retries use the UID revision slot for both methods", () => {
+    expect(IDEMPOTENCY_REGISTRY.calendarRequest("uid-1", 4)).toBe("uid-1:4");
+    expect(IDEMPOTENCY_REGISTRY.calendarCancellation("uid-1", 4)).toBe("uid-1:4");
+    expect(IDEMPOTENCY_REGISTRY.calendarCancellation("uid-1", 5)).not.toBe(
+      IDEMPOTENCY_REGISTRY.calendarCancellation("uid-1", 4),
+    );
+  });
 });
