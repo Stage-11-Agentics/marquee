@@ -6,7 +6,7 @@ import { ToastHost } from "../shell/OverlayHosts";
 import { QuickSearch } from "../shell/QuickSearch";
 import { Sidebar } from "../shell/Sidebar";
 import { Topbar } from "../shell/Topbar";
-import { useIdentity } from "../shell/identity";
+import { useDemoEventPresent, useIdentity } from "../shell/identity";
 import { useEventContext } from "../shell/event-context";
 import { NoConference } from "../shell/NoConference";
 import { matchRoute } from "../shell/route-table";
@@ -29,6 +29,7 @@ export function DeliveryHealthShell({ eventName }: { eventName: string }): JSX.E
   const navigationButtonRef = useRef<HTMLButtonElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const identity = useIdentity();
+  const demoEventPresent = useDemoEventPresent();
   const [resetting, setResetting] = useState(false);
   const [toast, setToast] = useState("");
 
@@ -39,13 +40,13 @@ export function DeliveryHealthShell({ eventName }: { eventName: string }): JSX.E
   }, []);
   const closeNavigation = useCallback(() => setDrawerOpen(false), []);
   const resetDemo = useCallback(async () => {
-    if (resetting) return;
+    if (demoEventPresent !== true || resetting) return;
     if (!window.confirm("Reset the demo conference? This removes demo edits, submissions, uploads, and queued work.")) return;
     setResetting(true);
     const rebuilt = await runDemoReset(setToast);
     if (rebuilt) window.setTimeout(() => window.location.reload(), 250);
     else setResetting(false);
-  }, [resetting]);
+  }, [demoEventPresent, resetting]);
 
   const systemHealth = new URLSearchParams(window.location.search).get("view") === "system";
   const route = systemHealth
@@ -61,6 +62,7 @@ export function DeliveryHealthShell({ eventName }: { eventName: string }): JSX.E
         navigate={navigate}
         resetting={resetting}
         onReset={() => void resetDemo()}
+        showResetDemo={demoEventPresent === true}
         drawerOpen={drawerOpen}
         onClose={closeNavigation}
       />

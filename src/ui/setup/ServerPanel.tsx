@@ -3,13 +3,13 @@ import { useCallback, useEffect, useState } from "preact/hooks";
 
 import { apiFetch, errorSummary } from "../shell/api-client";
 import { Button, Card, CardBody, CardHeader, Chip } from "../shell/components";
+import { useDemoEventPresent } from "../shell/identity";
 import { RESEND_DASHBOARD_URL } from "../../lib/mail/config";
 import "./setup.css";
 
 /** The shared server-panel seam: setup and organization settings use this body. */
 export const INSTANCE_STATUS_ROUTE = "/api/v1/instance/status";
 export const REMOVE_DEMO_ROUTE = "/api/v1/admin/remove-demo";
-const AUTH_ME_ROUTE = "/api/v1/auth/me";
 
 export const SERVER_LEAD_COPY = "What this Marquee is connected to, and whether each piece is working.";
 
@@ -68,7 +68,7 @@ export function ServerPanel({ showDemoControls = false }: ServerPanelProps): JSX
   const [openFix, setOpenFix] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const [removed, setRemoved] = useState(false);
-  const [demoPresent, setDemoPresent] = useState(false);
+  const demoEventPresent = useDemoEventPresent();
 
   useEffect(() => {
     let cancelled = false;
@@ -79,11 +79,6 @@ export function ServerPanel({ showDemoControls = false }: ServerPanelProps): JSX
         setHost(body.data.host);
       })
       .catch((caught) => { if (!cancelled) setError(errorSummary(caught)); });
-    if (showDemoControls) {
-      void apiFetch<{ demo_event_id: string | null }>(AUTH_ME_ROUTE, { route: AUTH_ME_ROUTE })
-        .then((body) => { if (!cancelled) setDemoPresent(body.demo_event_id !== null); })
-        .catch(() => undefined);
-    }
     return () => { cancelled = true; };
   }, [showDemoControls]);
 
@@ -141,7 +136,7 @@ export function ServerPanel({ showDemoControls = false }: ServerPanelProps): JSX
         <span class="setup-error" role="status" aria-live="polite">
           {error.length > 0 ? error : removed ? "Demo removed." : ""}
         </span>
-        {demoPresent && <Button onClick={() => void removeDemo()} disabled={removing} aria-busy={removing}>
+        {demoEventPresent === true && <Button onClick={() => void removeDemo()} disabled={removing} aria-busy={removing}>
           {removing ? "Removing…" : "Remove demo data"}
         </Button>}
       </div>}

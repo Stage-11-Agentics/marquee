@@ -1252,7 +1252,7 @@ export function AgendaPage({ eventId }: Props): JSX.Element {
     <AgendaDayStatus snapshot={snapshot} day={selectedDay} />
     {notice && <div class="agenda-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss notice">×</button></div>}
     {snapshot.sessions.length === 0 && snapshot.unscheduled.length === 0
-      ? <EmptyState title="No Sessions are ready for the agenda" copy="Accepted Sessions will appear here when the conference is ready to place them. Open the submission list to check the next candidates." action={<Button variant="primary" onClick={() => window.location.assign("/submissions?status=accepted_any&placement=unplaced")}>Open accepted submissions</Button>} />
+      ? <EmptyState title="No Sessions are ready for the agenda" copy="Accept a submission first. Once a Session is accepted, it will appear here ready to place. Open accepted submissions from the full submissions list." action={<Button variant="primary" onClick={() => window.location.assign("/submissions")}>Open submissions</Button>} />
       : <div class="agenda-layout">
         <Pool snapshot={snapshot} query={poolQuery} setQuery={setPoolQuery} track={track} onDragStart={onDragStart} onDrop={onPoolDrop} onArm={armPoolItem} armedPlacement={armedPlacement} />
         <section class="card agenda-board wide-grid-scroll" ref={boardRef} aria-label={`${view} agenda view`}>{renderBoard()}</section>

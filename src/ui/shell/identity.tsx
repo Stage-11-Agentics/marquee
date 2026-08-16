@@ -185,3 +185,16 @@ export function AccountMenu({ identity, onClose }: { identity: Identity | null; 
     </button>
   </div>;
 }
+
+/** The shared demo-event signal used by every destructive demo control. */
+export function useDemoEventPresent(): boolean | null {
+  const [present, setPresent] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void loadAuthMe()
+      .then((body) => { if (!cancelled) setPresent(typeof body.demo_event_id === "string" && body.demo_event_id.length > 0); })
+      .catch(() => { if (!cancelled) setPresent(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return present;
+}

@@ -69,19 +69,18 @@ function WaveRow({ wave, navigate }: { wave: DashboardWave; navigate: Props["nav
 function DashboardContents({ snapshot, navigate, eventId }: { snapshot: DashboardSnapshot; navigate: Props["navigate"]; eventId: string }): JSX.Element {
   const { attention } = snapshot;
   const hasProgram = snapshot.pipeline.some((item) => item.count > 0);
-  // Setup surfaces belong to a conference that has not started yet. A running
-  // programme has answered these questions already, and a dashboard that keeps
-  // asking is a dashboard nobody reads — so the checklist and the Instance panel
-  // appear exactly while they are the operator's next move.
+  // The checklist remains visible after the first program record so an undone
+  // setup step cannot disappear at the moment it becomes relevant. Only the
+  // instance-level panel stays in the fresh-program phase.
   const inSetup = !hasProgram;
   // Register chrome: palette themes get DEFAULT_CHROME, so every section
   // below renders exactly the Flight Deck markup for Day/Night; register
   // themes swap in their tropes, all wired to the same snapshot.
   const chrome = chromeFor(useThemeId());
   return <>
-    {inSetup && <ErrorBoundary label="Conference setup">
-      <SetupChecklistCard eventId={eventId} navigate={navigate} />
-    </ErrorBoundary>}
+    <ErrorBoundary label="Conference setup">
+      <SetupChecklistCard eventId={eventId} navigate={navigate} inSetup={inSetup} />
+    </ErrorBoundary>
     {inSetup && <ErrorBoundary label="The instance panel">
       <InstancePanel />
     </ErrorBoundary>}
