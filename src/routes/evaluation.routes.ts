@@ -353,7 +353,7 @@ async function ownedTrackIds(
     throw ApiError.unprocessable("reviewer responsibilities must be unique", "track_ids");
   }
   const placeholders = trackIds.map(() => "?").join(", ");
-  const tracks = await db.prepare(`SELECT id FROM tracks WHERE event_id = ? AND id IN (${placeholders})`)
+  const tracks = await db.prepare(`SELECT id FROM tracks WHERE event_id = ? AND deleted_at IS NULL AND id IN (${placeholders})`)
     .bind(eventId, ...trackIds).all<{ id: string }>();
   if (tracks.results.length !== trackIds.length) {
     throw ApiError.unprocessable("every reviewer responsibility must belong to this conference", "track_ids");

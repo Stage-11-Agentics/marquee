@@ -31,6 +31,21 @@ export interface FormConditionClause {
   value?: FormAnswerValue;
 }
 
+/**
+ * Canonical names for the derived answer keys accepted by routing. Older
+ * rules used the domain column names (`track`, `format_id`, and so on), while
+ * the current rule contract uses the answer keys the evaluator exposes. Keep
+ * this mapping beside the evaluator so every writer and reader agrees on the
+ * same field universe.
+ */
+export function canonicalRoutingFieldKey(value: string): string {
+  const field = value.trim().toLocaleLowerCase().replaceAll("-", "_");
+  if (["track", "tracks", "track_id"].includes(field)) return "tracks";
+  if (["format", "format_id"].includes(field)) return "format";
+  if (["vendor", "vendor_flag"].includes(field)) return "vendor";
+  return value.trim();
+}
+
 /** Persisted in `form_fields.condition` as JSON. */
 export interface FormCondition {
   all: FormConditionClause[];
@@ -81,6 +96,18 @@ const COMBINED_LENGTH_FIELD_TYPES = new Set(["short_text", "long_text", "email",
 
 export function isCombinedLengthField(field: Pick<FormFieldAnswerInput, "type">): boolean {
   return typeof field.type === "string" && COMBINED_LENGTH_FIELD_TYPES.has(field.type);
+}
+
+export type RoutingConditionState = "matched" | "skipped" | "dangling" | "invalid";
+
+export interface RoutingConditionEvaluation {
+  state: RoutingConditionState;
+  reason: string | null;
+}
+
+interface RoutingConditionValidationInput {
+  eventFieldKeys: ReadonlySet<string> | readonly string[];
+  formFieldKeys?: ReadonlySet<string> | readonly string[];
 }
 
 type DecodeResult =
@@ -147,36 +174,118 @@ function scalarEqual(actual: unknown, expected: unknown): boolean {
   return actual === expected || String(actual) === String(expected);
 }
 
-function clauseMatches(clause: FormConditionClause, answers: Record<string, unknown>): boolean {
-  const actual = answers[clause.fieldKey];
-  switch (clause.op) {
+function normalizeOperator(operator: string): FormConditionOperator | null {
+  switch (operator.trim().toLocaleLowerCase()) {
     case "equals":
     case "eq":
     case "is":
-      return scalarEqual(actual, clause.value);
+      return "equals";
     case "not_equals":
     case "neq":
     case "is_not":
-      return !scalarEqual(actual, clause.value);
+      return "not_equals";
     case "contains":
     case "includes":
-      return Array.isArray(actual)
-        ? actual.some((item) => scalarEqual(item, clause.value))
-        : typeof actual === "string" && typeof clause.value === "string"
-          ? actual.includes(clause.value)
-          : false;
+      return "contains";
     case "not_contains":
     case "not_includes":
-      return !clauseMatches({ ...clause, op: "contains" }, answers);
+      return "not_contains";
     case "answered":
     case "exists":
-      return isPresent(actual);
+      return "answered";
     case "not_answered":
     case "not_exists":
-      return !isPresent(actual);
+      return "not_answered";
     default:
-      return false;
+      return null;
   }
+}
+
+function containsText(actual: string, expected: string): boolean {
+  return actual.toLocaleLowerCase().includes(expected.toLocaleLowerCase());
+}
+
+/**
+ * The canonical six-operator matcher. Presence is deliberately checked for
+ * negative operators: a blank answer is not evidence that it is different.
+ * Routing and form applicability both call this function; they only differ in
+ * whether they first classify a field as absent from the event/form schema.
+ */
+export function clauseMatches(clause: FormConditionClause, answers: Record<string, unknown>): boolean {
+  const actual = answers[clause.fieldKey];
+  const operator = normalizeOperator(clause.op);
+  if (!operator) return false;
+  switch (operator) {
+    case "equals":
+      return isPresent(actual) && scalarEqual(actual, clause.value);
+    case "not_equals":
+      return isPresent(actual) && !scalarEqual(actual, clause.value);
+    case "contains":
+      return Array.isArray(actual)
+        ? actual.length > 0 && actual.some((item) => scalarEqual(item, clause.value))
+        : typeof actual === "string" && typeof clause.value === "string" && isPresent(actual)
+          ? containsText(actual, clause.value)
+          : false;
+    case "not_contains":
+      return Array.isArray(actual)
+        ? actual.length > 0 && !actual.some((item) => scalarEqual(item, clause.value))
+        : typeof actual === "string" && typeof clause.value === "string" && isPresent(actual)
+          ? !containsText(actual, clause.value)
+          : false;
+    case "answered":
+      return isPresent(actual);
+    case "not_answered":
+      return !isPresent(actual);
+  }
+}
+
+function validRoutingValue(value: unknown): boolean {
+  return (typeof value === "string" && value.trim().length > 0)
+    || typeof value === "number"
+    || typeof value === "boolean";
+}
+
+function asKeySet(value: ReadonlySet<string> | readonly string[] | undefined): Set<string> {
+  return value instanceof Set ? new Set(value) : new Set(value ?? []);
+}
+
+/** Validate a saved routing condition without evaluating it against answers. */
+export function validateRoutingConditions(
+  clauses: readonly FormConditionClause[],
+  input: RoutingConditionValidationInput,
+): RoutingConditionEvaluation {
+  if (clauses.length < 1 || clauses.length > 5) return { state: "invalid", reason: "Routing rules need 1-5 conditions." };
+  const eventKeys = asKeySet(input.eventFieldKeys);
+  const formKeys = input.formFieldKeys === undefined ? null : asKeySet(input.formFieldKeys);
+  for (const clause of clauses) {
+    const operator = normalizeOperator(clause.op);
+    if (!clause.fieldKey.trim() || !operator) return { state: "invalid", reason: "Routing condition is malformed." };
+    if ((operator === "answered" || operator === "not_answered") && clause.value !== undefined) {
+      return { state: "invalid", reason: `${operator} does not accept a value.` };
+    }
+    if (operator !== "answered" && operator !== "not_answered" && !validRoutingValue(clause.value)) {
+      return { state: "invalid", reason: `${operator} needs a non-empty value.` };
+    }
+    if (!eventKeys.has(clause.fieldKey)) return { state: "dangling", reason: `Field ${clause.fieldKey} no longer exists.` };
+    if (formKeys && !formKeys.has(clause.fieldKey)) return { state: "skipped", reason: `This form does not ask ${clause.fieldKey}.` };
+  }
+  return { state: "matched", reason: null };
+}
+
+/** Evaluate an answer-aware routing rule after schema applicability is known. */
+export function evaluateRoutingConditions(
+  clauses: readonly FormConditionClause[],
+  input: {
+    eventFieldKeys: ReadonlySet<string> | readonly string[];
+    formFieldKeys: ReadonlySet<string> | readonly string[];
+    answers: Record<string, unknown>;
+  },
+): RoutingConditionEvaluation {
+  const applicability = validateRoutingConditions(clauses, input);
+  if (applicability.state !== "matched") return applicability;
+  return clauses.every((clause) => clauseMatches(clause, input.answers))
+    ? { state: "matched", reason: null }
+    : { state: "invalid", reason: null };
 }
 
 /**

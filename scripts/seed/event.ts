@@ -8,6 +8,7 @@
  */
 
 import { seedId } from "../../src/lib/ids.ts";
+import { taxonomyNameKey } from "../../src/lib/taxonomy.ts";
 import type { SeedContext, SeedModule } from "./_sql.ts";
 
 export const ORG_ID = seedId("org", "aie-ny");
@@ -38,6 +39,18 @@ export const TRACK_IDS = {
   rag: seedId("trk", "rag"),
   sec: seedId("trk", "sec"),
   leadership: seedId("trk", "leadership"),
+} as const;
+
+export const TAG_IDS = {
+  vendor: seedId("tag", "vendor-content"),
+  handsOn: seedId("tag", "hands-on"),
+  advanced: seedId("tag", "advanced-review"),
+} as const;
+
+export const LEVEL_IDS = {
+  introductory: seedId("lvl", "introductory"),
+  intermediate: seedId("lvl", "intermediate"),
+  advanced: seedId("lvl", "advanced"),
 } as const;
 
 export const BUILDING_IDS = {
@@ -157,11 +170,30 @@ export function run(ctx: SeedContext): void {
       id,
       event_id: EVENT_ID,
       name,
+      name_key: taxonomyNameKey(name),
       color,
       position,
       created_at: now,
       updated_at: now,
     });
+  }
+
+  const tags: Array<[string, string, number]> = [
+    [TAG_IDS.vendor, "Vendor content", 0],
+    [TAG_IDS.handsOn, "Hands-on", 1],
+    [TAG_IDS.advanced, "Advanced review", 2],
+  ];
+  for (const [id, name, position] of tags) {
+    ctx.add("tags", { id, event_id: EVENT_ID, name, name_key: taxonomyNameKey(name), position, created_at: now, updated_at: now });
+  }
+
+  const levels: Array<[string, string, number]> = [
+    [LEVEL_IDS.introductory, "Introductory", 0],
+    [LEVEL_IDS.intermediate, "Intermediate", 1],
+    [LEVEL_IDS.advanced, "Advanced", 2],
+  ];
+  for (const [id, name, position] of levels) {
+    ctx.add("levels", { id, event_id: EVENT_ID, name, name_key: taxonomyNameKey(name), position, created_at: now, updated_at: now });
   }
 
   // MRQ-62 / Amendment 14: Sheraton stays primary, while the overflow venue
@@ -287,6 +319,7 @@ export function run(ctx: SeedContext): void {
     { key: "audience_outcome", label: "What will attendees be able to do after your session?", help_text: "Name one concrete outcome for the audience.", type: "long_text", required: 1, config: { minLength: 20, maxLength: 500 }, condition: null },
     { key: "format", label: "Format", help_text: "Choose the format you want to present.", type: "single_select", required: 1, config: { source: "formats" }, condition: null },
     { key: "tracks", label: "Tracks", help_text: "Choose one or more. The first selected track is primary for agenda placement.", type: "multi_select", required: 1, config: { source: "tracks", minItems: 1 }, condition: null },
+    { key: "audience_level", label: "Audience level", help_text: "Choose the level this session is designed for.", type: "single_select", required: 0, config: { source: "levels" }, condition: null },
     { key: "speaker_name", label: "Primary speaker name", help_text: null, type: "short_text", required: 1, config: {}, condition: null },
     { key: "speaker_email", label: "Primary speaker email", help_text: null, type: "email", required: 1, config: {}, condition: null },
     { key: "speaker_role", label: "Primary speaker role", help_text: null, type: "short_text", required: 1, config: {}, condition: null },
@@ -315,6 +348,21 @@ export function run(ctx: SeedContext): void {
       updated_at: now,
     });
   }
+
+  // A product answer is a positive routing example in the shipped conference:
+  // the rule replaces the primary track and adds a durable event tag. The
+  // action-only track/tag projection is also the contract the builder edits.
+  ctx.add("routing_rules", {
+    id: seedId("rule", "vendor-content"),
+    event_id: EVENT_ID,
+    name: "Vendor content → Agents review",
+    when_json: JSON.stringify({ all: [{ fieldKey: "vendor_content", op: "equals", value: "Yes" }] }),
+    then_json: JSON.stringify({ track_id: TRACK_IDS.agents, add_tag_ids: [TAG_IDS.vendor] }),
+    position: 0,
+    enabled: 1,
+    created_at: now,
+    updated_at: now,
+  });
 
   // "Hotel and Travel Reservations" is a form task, so the schema requires a
   // backing form. forms.kind has no task-form value (flagged SPEC/schema

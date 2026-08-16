@@ -247,7 +247,7 @@ export async function countFormResponses(db: D1Database, formId: string): Promis
  */
 export async function listFormFields(db: D1Database, formId: string): Promise<FormFieldView[]> {
   const rows = await db
-    .prepare("SELECT * FROM form_fields WHERE form_id = ? ORDER BY position ASC, id ASC")
+    .prepare("SELECT * FROM form_fields WHERE form_id = ? AND deleted_at IS NULL ORDER BY position ASC, id ASC")
     .bind(formId)
     .all<FormFieldRow>();
   const fields = rows.results.map(normalizeField);

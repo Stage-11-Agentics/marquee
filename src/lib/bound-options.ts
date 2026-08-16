@@ -16,7 +16,7 @@ import type { FormFieldType } from "../db/schema";
  * Binding removes the copy. The options a bound field offers ARE the rows the
  * resolver reads, so the two cannot disagree.
  */
-export const BOUND_SOURCES = ["formats", "tracks"] as const;
+export const BOUND_SOURCES = ["formats", "tracks", "levels"] as const;
 
 export type BoundSource = (typeof BOUND_SOURCES)[number];
 
@@ -26,6 +26,7 @@ export type BoundFieldType = "single_select" | "multi_select";
 export const BOUND_SOURCE_LABELS: Record<BoundSource, string> = {
   formats: "Formats",
   tracks: "Tracks",
+  levels: "Levels",
 };
 
 function isSelectType(type: FormFieldType): type is BoundFieldType {
@@ -39,7 +40,8 @@ function isSelectType(type: FormFieldType): type is BoundFieldType {
  */
 export function isBoundSourceCompatible(source: BoundSource, type: FormFieldType): type is BoundFieldType {
   return (source === "formats" && type === "single_select")
-    || (source === "tracks" && type === "multi_select");
+    || (source === "tracks" && type === "multi_select")
+    || (source === "levels" && type === "single_select");
 }
 
 export function isBoundSource(value: unknown): value is BoundSource {
@@ -74,12 +76,17 @@ export function normalizeFieldConfig(
   if (!isBoundSource(config.source)) {
     return { error: `Options source must be one of ${BOUND_SOURCES.join(", ")}.` };
   }
+  if (config.source === "levels" && Object.prototype.hasOwnProperty.call(config, "options") && config.options !== undefined) {
+    return { error: "Conference levels use the event's level list; custom options are not allowed." };
+  }
   if (!isSelectType(type) || !isBoundSourceCompatible(config.source, type)) {
     return {
       error: config.source === "formats"
         ? "Conference formats must be used by a single-select field."
         : config.source === "tracks"
           ? "Conference tracks must be used by a multi-select field."
+          : config.source === "levels"
+            ? "Conference levels must be used by a single-select field."
           : "Only single-select and multi-select fields can take their options from conference settings.",
     };
   }
@@ -92,8 +99,9 @@ async function readSourceNames(
   source: BoundSource,
   eventId: string,
 ): Promise<string[]> {
+  const activeWhere = source === "formats" ? "" : " AND deleted_at IS NULL";
   const rows = await db
-    .prepare(`SELECT name FROM ${source} WHERE event_id = ? ORDER BY position ASC, id ASC`)
+    .prepare(`SELECT name FROM ${source} WHERE event_id = ?${activeWhere} ORDER BY position ASC, id ASC`)
     .bind(eventId)
     .all<{ name: string }>();
   return rows.results.map((row) => row.name);

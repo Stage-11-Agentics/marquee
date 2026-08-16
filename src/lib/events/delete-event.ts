@@ -240,6 +240,8 @@ export async function deleteEventCascade(
     prepared(db, `DELETE FROM submission_decisions WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM submission_answers WHERE submission_id IN ${submissionsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM submission_tracks WHERE submission_id IN ${submissionsSql}`, ...eventBindings),
+    prepared(db, `DELETE FROM submission_tags WHERE submission_id IN ${submissionsSql}`, ...eventBindings),
+    prepared(db, `DELETE FROM submission_arrivals WHERE submission_id IN ${submissionsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM participations WHERE submission_id IN ${submissionsSql}`, ...eventBindings),
     prepared(
       db,
@@ -356,6 +358,8 @@ export async function deleteEventCascade(
     ),
     prepared(db, `DELETE FROM outbox WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM routing_rules WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
+    prepared(db, `DELETE FROM tags WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
+    prepared(db, `DELETE FROM levels WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM waves WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM rooms WHERE event_id IN ${eventIdsSql}`, ...eventBindings),
     prepared(db, `DELETE FROM buildings WHERE event_id IN ${eventIdsSql}`, ...eventBindings),

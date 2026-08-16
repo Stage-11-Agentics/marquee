@@ -14,6 +14,7 @@ import { SHIPPED_DEMO_ORGANIZATION_ID } from "../lib/reset-demo/demo-fixture";
 import { SOCIAL_PLATFORM_IDS, type SocialPlatformId } from "../lib/social-links";
 import { enabledSocialPlatformsFor, writeEnabledSocialPlatforms } from "../lib/social-platform-setting";
 import { submissionDefaultFor, writeSubmissionDefault } from "../lib/submission-capacity";
+import { normalizeTaxonomyName, taxonomyNameKey } from "../lib/taxonomy";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const formatParams = eventParams.extend({ formatId: z.string().min(1) });
@@ -182,7 +183,7 @@ async function settingsFor(db: D1Database, eventId: string): Promise<{ event: Pu
     ).bind(eventId).all<FormatRow>(),
     db.prepare(
       `SELECT id, event_id, name, color, position, created_at, updated_at
-       FROM tracks WHERE event_id = ? ORDER BY position, id`,
+       FROM tracks WHERE event_id = ? AND deleted_at IS NULL ORDER BY position, id`,
     ).bind(eventId).all<TrackRow>(),
     enabledSocialPlatformsFor(db, eventId),
     submissionDefaultFor(db, eventId),
@@ -277,14 +278,15 @@ async function formatFor(db: D1Database, eventId: string, formatId: string): Pro
 async function trackFor(db: D1Database, eventId: string, trackId: string): Promise<TrackRow> {
   const track = await db.prepare(
     `SELECT id, event_id, name, color, position, created_at, updated_at
-     FROM tracks WHERE id = ? AND event_id = ?`,
+     FROM tracks WHERE id = ? AND event_id = ? AND deleted_at IS NULL`,
   ).bind(trackId, eventId).first<TrackRow>();
   if (!track) throw ApiError.notFound("track not found");
   return track;
 }
 
 async function normalizePositions(db: D1Database, table: "formats" | "tracks", eventId: string): Promise<void> {
-  const rows = await db.prepare(`SELECT id FROM ${table} WHERE event_id = ? ORDER BY position, id`).bind(eventId).all<{ id: string }>();
+  const active = table === "tracks" ? " AND deleted_at IS NULL" : "";
+  const rows = await db.prepare(`SELECT id FROM ${table} WHERE event_id = ?${active} ORDER BY position, id`).bind(eventId).all<{ id: string }>();
   await assignPositions(db, table, eventId, rows.results.map((row) => row.id));
 }
 
@@ -303,7 +305,8 @@ async function reorderPosition(
   id: string,
   requestedPosition: number,
 ): Promise<void> {
-  const rows = await db.prepare(`SELECT id FROM ${table} WHERE event_id = ? ORDER BY position, id`).bind(eventId).all<{ id: string }>();
+  const active = table === "tracks" ? " AND deleted_at IS NULL" : "";
+  const rows = await db.prepare(`SELECT id FROM ${table} WHERE event_id = ?${active} ORDER BY position, id`).bind(eventId).all<{ id: string }>();
   const ordered = rows.results.map((row) => row.id);
   const currentIndex = ordered.indexOf(id);
   if (currentIndex < 0) throw ApiError.notFound(`${table.slice(0, -1)} not found`);
@@ -710,7 +713,7 @@ const listTracks = defineApiRoute(
     const { eventId } = context.req.valid("param");
     await eventFor(context.env.DB, eventId);
     const rows = await context.env.DB.prepare(
-      "SELECT id, event_id, name, color, position, created_at, updated_at FROM tracks WHERE event_id = ? ORDER BY position, id",
+      "SELECT id, event_id, name, color, position, created_at, updated_at FROM tracks WHERE event_id = ? AND deleted_at IS NULL ORDER BY position, id",
     ).bind(eventId).all<TrackRow>();
     return context.json({ data: rows.results }, 200);
   },
@@ -733,11 +736,17 @@ const createTrack = defineApiRoute(
     const body = context.req.valid("json");
     const id = crypto.randomUUID();
     const now = Date.now();
-    const existing = await context.env.DB.prepare("SELECT COUNT(*) AS count FROM tracks WHERE event_id = ?").bind(eventId).first<{ count: number }>();
+    const existing = await context.env.DB.prepare("SELECT COUNT(*) AS count FROM tracks WHERE event_id = ? AND deleted_at IS NULL").bind(eventId).first<{ count: number }>();
     const desiredPosition = body.position ?? Number(existing?.count ?? 0);
-    await context.env.DB.prepare(
-      "INSERT INTO tracks (id, event_id, name, color, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind(id, eventId, body.name, body.color, desiredPosition, now, now).run();
+    const name = normalizeTaxonomyName(body.name);
+    try {
+      await context.env.DB.prepare(
+        "INSERT INTO tracks (id, event_id, name, name_key, color, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).bind(id, eventId, name, taxonomyNameKey(name), body.color, desiredPosition, now, now).run();
+    } catch (error) {
+      if (error instanceof Error && /unique|constraint/i.test(error.message)) throw ApiError.conflict("track name is already in use");
+      throw error;
+    }
     await reorderPosition(context.env.DB, "tracks", eventId, id, desiredPosition);
     return context.json({ data: await trackFor(context.env.DB, eventId, id) }, 201);
   },
@@ -758,9 +767,15 @@ const updateTrack = defineApiRoute(
     const { eventId, trackId } = context.req.valid("param");
     const current = await trackFor(context.env.DB, eventId, trackId);
     const body = context.req.valid("json");
-    await context.env.DB.prepare(
-      "UPDATE tracks SET name = ?, color = ?, position = ?, updated_at = ? WHERE id = ? AND event_id = ?",
-    ).bind(body.name ?? current.name, body.color ?? current.color, current.position, Date.now(), trackId, eventId).run();
+    const name = body.name === undefined ? current.name : normalizeTaxonomyName(body.name);
+    try {
+      await context.env.DB.prepare(
+        "UPDATE tracks SET name = ?, name_key = ?, color = ?, position = ?, updated_at = ? WHERE id = ? AND event_id = ? AND deleted_at IS NULL",
+      ).bind(name, taxonomyNameKey(name), body.color ?? current.color, current.position, Date.now(), trackId, eventId).run();
+    } catch (error) {
+      if (error instanceof Error && /unique|constraint/i.test(error.message)) throw ApiError.conflict("track name is already in use");
+      throw error;
+    }
     if (body.position !== undefined) await reorderPosition(context.env.DB, "tracks", eventId, trackId, body.position);
     return context.json({ data: await trackFor(context.env.DB, eventId, trackId) }, 200);
   },
@@ -780,14 +795,10 @@ const deleteTrack = defineApiRoute(
   async (context) => {
     const { eventId, trackId } = context.req.valid("param");
     await trackFor(context.env.DB, eventId, trackId);
-    try {
-      await context.env.DB.prepare("DELETE FROM tracks WHERE id = ? AND event_id = ?").bind(trackId, eventId).run();
-    } catch {
-      throw ApiError.conflict("track is still used by a conference record");
-    }
+    await context.env.DB.prepare("UPDATE tracks SET deleted_at = ?, updated_at = ? WHERE id = ? AND event_id = ? AND deleted_at IS NULL").bind(Date.now(), Date.now(), trackId, eventId).run();
     await normalizePositions(context.env.DB, "tracks", eventId);
     const rows = await context.env.DB.prepare(
-      "SELECT id, event_id, name, color, position, created_at, updated_at FROM tracks WHERE event_id = ? ORDER BY position, id",
+      "SELECT id, event_id, name, color, position, created_at, updated_at FROM tracks WHERE event_id = ? AND deleted_at IS NULL ORDER BY position, id",
     ).bind(eventId).all<TrackRow>();
     return context.json({ data: rows.results }, 200);
   },

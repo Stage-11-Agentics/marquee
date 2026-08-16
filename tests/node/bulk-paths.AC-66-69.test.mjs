@@ -407,6 +407,20 @@ const EXPECTED_PLACEHOLDER_SITES = [
   },
   {
     file: "src/routes/public-form-routing.ts",
+    owner: "activeTaxonomyAction",
+    binding: "rows",
+    expression: 'action.addTagIds.map(() => "?")',
+    classification: "bounded by routing-rules add_tag_ids.max(50); the event binding plus 50 tag IDs stays below D1's 100-binding cap",
+  },
+  {
+    file: "src/routes/public-form-routing.ts",
+    owner: "reviewerCanBeAssignedToTracks",
+    binding: "row",
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk writes; explicit 80-ID reviewer-scope chunks stay below D1's binding cap",
+  },
+  {
+    file: "src/routes/public-form-routing.ts",
     owner: "selectSubmissionRouting",
     binding: "tracks",
     expression: 'input.trackIds.map(() => "?")',
@@ -428,10 +442,10 @@ const EXPECTED_PLACEHOLDER_SITES = [
   },
   {
     file: "src/routes/public-form.routes.ts",
-    owner: "moveAttachments",
-    binding: "placeholders",
-    expression: 'attachmentIds.map(() => "?")',
-    classification: "outside named bulk families; draft attachment ownership read/update; answer-derived IDs",
+    owner: "attachmentStatements",
+    binding: null,
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk families; explicit 80-ID draft attachment ownership chunks stay below D1's binding cap",
   },
   {
     file: "src/routes/public-form.routes.ts",
@@ -460,6 +474,13 @@ const EXPECTED_PLACEHOLDER_SITES = [
     binding: "result",
     expression: 'trackIds.map(() => "?")',
     classification: "bounded by the track_ids/tracks.max(20) submission-record schema",
+  },
+  {
+    file: "src/routes/submission-routing.routes.ts",
+    owner: "ownedTaxonomy",
+    binding: null,
+    expression: 'chunk.map(() => "?")',
+    classification: "outside named bulk writes; explicit 80-ID taxonomy ownership chunks keep the event binding below D1's cap",
   },
   {
     file: "src/routes/submissions.queries.ts",

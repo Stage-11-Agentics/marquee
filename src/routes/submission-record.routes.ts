@@ -8,6 +8,7 @@ import { LIST_DEFAULTS } from "../api/list";
 import { parseKeysetPagination, totalPages } from "../api/pagination";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
+import type { FormFieldRow } from "../db/schema";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { drainCalendarCancellations, prepareCalendarCancellationBatch } from "../jobs/calendar/invites";
@@ -25,6 +26,8 @@ import {
   type StoredFileAnswer,
 } from "../lib/file-answers";
 import { projectApplicableAnswers, type FormAnswerValue } from "../lib/form-conditions";
+import { normalizeField, type FormFieldView } from "./forms.queries";
+import { projectedAnswerRemovals, projectedAnswerStatements } from "./public-form.shared";
 import { errorFields } from "../lib/observability/log";
 import { requireDraftRead, requireSubmissionRead } from "../lib/auth/program-access";
 import { auditStatement, auditStatementFromSelect, writeAudit } from "../lib/audit";
@@ -113,6 +116,7 @@ const patchDraftInput = z.object({
   title: z.string().trim().min(1).max(500).optional(),
   abstract: z.string().nullable().optional(),
   answers: z.array(answerInput).max(200).optional(),
+  explicitly_removed_field_ids: z.array(z.string().min(1)).max(200).default([]),
 });
 
 const contentInput = z.object({
@@ -157,6 +161,9 @@ interface BaseRecordRow {
   format_id: string | null;
   format: string | null;
   primary_track_id: string | null;
+  level_id: string | null;
+  level_name: string | null;
+  level_deleted_at: number | null;
   origin: "public" | "admin" | "import";
   vendor_affiliation: string;
   wave_id: string | null;
@@ -439,6 +446,7 @@ async function editableContentFor(
  * and thereby says the same thing out loud.
  */
 interface AnswerProjection extends Record<string, unknown> {
+  deleted_at: number | null;
   id: string;
   field_id: string | null;
   key: string | null;
@@ -461,6 +469,7 @@ async function projectAnswers(
 ): Promise<AnswerProjection[]> {
   const answers: AnswerProjection[] = input.rows.map((answer) => ({
     ...answer,
+    deleted_at: answer.field_deleted_at === null || answer.field_deleted_at === undefined ? null : Number(answer.field_deleted_at),
     id: String(answer.id),
     field_id: answer.field_id === null ? null : String(answer.field_id),
     key: answer.key === null ? null : String(answer.key),
@@ -475,7 +484,7 @@ async function projectAnswers(
     const unanswered = await db.prepare(`
       SELECT field.id, field.key, field.label, field.type
       FROM form_fields field
-      WHERE field.form_id = ? AND field.type = 'file'
+      WHERE field.form_id = ? AND field.type = 'file' AND field.deleted_at IS NULL
         AND NOT EXISTS (
           SELECT 1 FROM submission_answers answer
           WHERE answer.submission_id = ? AND answer.field_id = field.id
@@ -489,6 +498,7 @@ async function projectAnswers(
         key: field.key,
         label: field.label,
         type: field.type,
+        deleted_at: null,
         value_text: null,
         value_json: null,
         file: missingFileAnswer(),
@@ -561,7 +571,8 @@ async function loadRecord(
       s.id, s.reference_code, s.event_id, event.name AS event_name, event.timezone,
       s.form_id, form.name AS form_name, s.kind, s.bypass_evaluation,
       s.title, s.abstract, s.status, s.format_id, format.name AS format,
-      s.primary_track_id, s.origin, s.vendor_affiliation, s.wave_id, wave.name AS wave,
+      s.primary_track_id, s.level_id, level.name AS level_name, level.deleted_at AS level_deleted_at,
+      s.origin, s.vendor_affiliation, s.wave_id, wave.name AS wave,
       s.submitter_person_id, s.decided_at, s.decided_by_person_id, s.submitted_at,
       s.last_saved_at, s.is_published, s.external_ref, s.applied_rule_id,
       routing_rule.name AS applied_rule_name,
@@ -572,6 +583,7 @@ async function loadRecord(
     JOIN events event ON event.id = s.event_id
     LEFT JOIN forms form ON form.id = s.form_id
     LEFT JOIN formats format ON format.id = s.format_id
+    LEFT JOIN levels level ON level.id = s.level_id AND level.event_id = s.event_id
     LEFT JOIN waves wave ON wave.id = s.wave_id
     LEFT JOIN routing_rules routing_rule ON routing_rule.id = s.applied_rule_id AND routing_rule.event_id = s.event_id
     LEFT JOIN agenda_items ai ON ai.submission_id = s.id AND ai.kind = 'session'
@@ -581,7 +593,7 @@ async function loadRecord(
   `).bind(eventId, submissionId).first<BaseRecordRow>();
   if (!row) throw ApiError.notFound("submission not found");
 
-  const [participants, answers, tracks, decisions, reversals, evaluations, comparisons, history, rounds, criteria, reviewerOptions, decisionSends] = await Promise.all([
+  const [participants, tags, answers, tracks, decisions, reversals, evaluations, comparisons, history, rounds, criteria, reviewerOptions, decisionSends] = await Promise.all([
     db.prepare(`
       SELECT participation.id, participation.person_id, person.name, person.email, person.company,
         person.title, participation.role, participation.position, participation.confirmation_status,
@@ -592,19 +604,26 @@ async function loadRecord(
       ORDER BY participation.position, participation.id
     `).bind(submissionId).all<Record<string, unknown>>(),
     db.prepare(`
-      SELECT answer.id, answer.field_id, field.key, field.label, field.type, answer.value_text, answer.value_json
+      SELECT tag.id, tag.name, tag.name_key, tag.deleted_at, submission_tag.created_at
+      FROM submission_tags submission_tag
+      JOIN tags tag ON tag.id = submission_tag.tag_id AND tag.event_id = ?
+      WHERE submission_tag.submission_id = ?
+      ORDER BY tag.position, tag.id
+    `).bind(eventId, submissionId).all<Record<string, unknown>>(),
+    db.prepare(`
+      SELECT answer.id, answer.field_id, field.key, field.label, field.type, field.deleted_at AS field_deleted_at, answer.value_text, answer.value_json
       FROM submission_answers answer
       LEFT JOIN form_fields field ON field.id = answer.field_id
       WHERE answer.submission_id = ?
       ORDER BY field.position, answer.id
     `).bind(submissionId).all<Record<string, unknown>>(),
     db.prepare(`
-      SELECT carried.track_id AS id, track.name, track.color, carried.is_primary
+      SELECT carried.track_id AS id, track.name, track.name_key, track.color, track.deleted_at, carried.is_primary
       FROM submission_tracks carried
-      JOIN tracks track ON track.id = carried.track_id
+      JOIN tracks track ON track.id = carried.track_id AND track.event_id = ?
       WHERE carried.submission_id = ?
       ORDER BY carried.is_primary DESC, track.position, track.id
-    `).bind(submissionId).all<Record<string, unknown>>(),
+    `).bind(eventId, submissionId).all<Record<string, unknown>>(),
     db.prepare(`
       SELECT decision.id, decision.decision, decision.resulting_status, decision.feedback_md,
         decision.decided_at, decision.decided_by_person_id,
@@ -832,6 +851,8 @@ async function loadRecord(
     form: row.form_id === null ? null : { id: row.form_id, name: row.form_name },
     format: row.format_id === null ? null : { id: row.format_id, name: row.format },
     primary_track_id: row.primary_track_id,
+    level: row.level_id === null ? null : { id: row.level_id, name: row.level_name, deleted_at: row.level_deleted_at === null ? null : Number(row.level_deleted_at) },
+    tags: tags.results.map((tag) => ({ ...tag, deleted_at: tag.deleted_at === null ? null : Number(tag.deleted_at) })),
     wave: row.wave_id === null ? null : { id: row.wave_id, name: row.wave },
     submitter_person_id: row.submitter_person_id,
     submitted_at: row.submitted_at,
@@ -937,6 +958,10 @@ async function loadRecord(
       // which is exactly when the organizer finds out about them. The one gate
       // is the grant the participants routes enforce.
       can_edit_participants: canWriteProgram,
+      // Routing is an organizer-owned projection, and its replacement route is
+      // gated by the same grant as track/participant writes. Keep the control
+      // server-computed so a read-only record never offers a save that must 403.
+      can_edit_routing: canWriteProgram,
       // Overriding a recorded score is the chair's authority over the review,
       // not the reviewer's, so it answers `program:write` and nothing else.
       can_override_scores: canWriteProgram,
@@ -953,7 +978,7 @@ async function validateOwnedIds(
 ): Promise<{ trackIds: string[]; formatId: string | null; waveId: string | null; answers: AnswerInput[] }> {
   const trackIds = [...new Set([...(body.track_ids ?? body.tracks ?? []), ...(body.primary_track_id ? [body.primary_track_id] : [])])];
   if (trackIds.length > 0) {
-    const result = await db.prepare(`SELECT id FROM tracks WHERE event_id = ? AND id IN (${trackIds.map(() => "?").join(",")})`).bind(eventId, ...trackIds).all<{ id: string }>();
+    const result = await db.prepare(`SELECT id FROM tracks WHERE event_id = ? AND deleted_at IS NULL AND id IN (${trackIds.map(() => "?").join(",")})`).bind(eventId, ...trackIds).all<{ id: string }>();
     if (result.results.length !== trackIds.length) throw ApiError.unprocessable("every track must belong to this conference", "track_ids");
   }
   const formatId = body.format_id ?? null;
@@ -983,6 +1008,7 @@ async function validateOwnedIds(
       FROM form_fields field
       JOIN forms form ON form.id = field.form_id AND form.event_id = ?
       WHERE field.form_id = COALESCE(?, (SELECT form_id FROM form_fields WHERE id = ?))
+        AND field.deleted_at IS NULL
     `).bind(eventId, body.form_id ?? null, answers[0]!.field_id).all<{
       id: string;
       key: string;
@@ -1263,15 +1289,9 @@ const patchDraft = defineApiRoute(
 
     if (body.answers !== undefined) {
       if (!submission.form_id) throw ApiError.unprocessable("a draft without a form cannot accept field answers", "answers");
-      const fields = await context.env.DB.prepare("SELECT id, key, required, type, config, condition FROM form_fields WHERE form_id = ? ORDER BY position, id").bind(submission.form_id).all<{
-        id: string;
-        key: string;
-        required: 0 | 1;
-        type: string;
-        config: string | null;
-        condition: string | null;
-      }>();
-      const fieldsById = new Map(fields.results.map((field) => [field.id, field]));
+      const fields = await context.env.DB.prepare("SELECT * FROM form_fields WHERE form_id = ? AND deleted_at IS NULL ORDER BY position, id").bind(submission.form_id).all<FormFieldRow>();
+      const fieldViews: FormFieldView[] = fields.results.map(normalizeField);
+      const fieldsById = new Map(fieldViews.map((field) => [field.id, field]));
       const rawAnswers: Record<string, unknown> = await readSubmissionAnswers(context.env.DB, submissionId);
       for (const answer of body.answers) {
         const field = fieldsById.get(answer.field_id);
@@ -1279,7 +1299,7 @@ const patchDraft = defineApiRoute(
         rawAnswers[field.key] = answer.value_json === undefined ? answer.value_text ?? null : answer.value_json;
       }
       const lengthRules = await listFormLengthRules(context.env.DB, submission.form_id);
-      const projection = projectApplicableAnswers(fields.results, rawAnswers, lengthRules);
+      const projection = projectApplicableAnswers(fieldViews, rawAnswers, lengthRules);
       const lengthIssues = projection.issues.filter((issue) => issue.kind === "form_length_rule");
       if (lengthIssues.length > 0) {
         throw ApiError.unprocessable("one or more answers exceed a combined character limit", lengthIssues[0]!.fieldKey, lengthIssues);
@@ -1287,21 +1307,21 @@ const patchDraft = defineApiRoute(
       // This is still a draft: incomplete visible answers remain valid draft
       // state, while the queue derives the missing-field attention from the
       // same projection. Persist only its normalized, currently applicable map.
-      const fieldsByKey = new Map(fields.results.map((field) => [field.key, field]));
-      statements.push(context.env.DB.prepare("DELETE FROM submission_answers WHERE submission_id = ?").bind(submissionId));
-      for (const [key, value] of Object.entries(projection.answers)) {
-        const field = fieldsByKey.get(key);
-        if (!field) continue;
-        statements.push(context.env.DB.prepare(`
-          INSERT INTO submission_answers (id, submission_id, field_id, value_text, value_json, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          newUlid(), submissionId, field.id,
-          typeof value === "string" ? value : null,
-          typeof value === "string" ? null : JSON.stringify(value),
-          now, now,
-        ));
-      }
+      const suppliedKeys = new Set<string>(body.answers.map((answer: AnswerInput) => fieldsById.get(answer.field_id)?.key).filter((key: string | undefined): key is string => key !== undefined));
+      const inferredRemovals = await projectedAnswerRemovals(
+        context.env.DB,
+        submissionId,
+        fieldViews,
+        projection.answers,
+        suppliedKeys,
+      );
+      const removals = [...new Set([...inferredRemovals, ...body.explicitly_removed_field_ids])];
+      statements.push(...await projectedAnswerStatements(context.env.DB, submissionId, fieldViews, projection.answers, now, removals));
+    } else if (body.explicitly_removed_field_ids.length > 0) {
+      if (!submission.form_id) throw ApiError.unprocessable("a draft without a form cannot accept field answers", "explicitly_removed_field_ids");
+      const fields = await context.env.DB.prepare("SELECT * FROM form_fields WHERE form_id = ? AND deleted_at IS NULL ORDER BY position, id").bind(submission.form_id).all<FormFieldRow>();
+      const fieldViews: FormFieldView[] = fields.results.map(normalizeField);
+      statements.push(...await projectedAnswerStatements(context.env.DB, submissionId, fieldViews, {}, now, body.explicitly_removed_field_ids));
     }
     await context.env.DB.batch(statements);
     return context.json(await loadRecord(context.env.DB, eventId, submissionId, canWriteProgram(context, eventId), canViewSubmissionNotes(context, eventId)), 200);
@@ -1428,7 +1448,7 @@ const scheduleSubmission = defineApiRoute(
     const room = await context.env.DB.prepare("SELECT id FROM rooms WHERE id = ? AND event_id = ?").bind(body.room_id, eventId).first();
     if (!room) throw ApiError.unprocessable("room does not belong to this conference", "room_id");
     if (body.track_id) {
-      const track = await context.env.DB.prepare("SELECT id FROM tracks WHERE id = ? AND event_id = ?").bind(body.track_id, eventId).first();
+      const track = await context.env.DB.prepare("SELECT id FROM tracks WHERE id = ? AND event_id = ? AND deleted_at IS NULL").bind(body.track_id, eventId).first();
       if (!track) throw ApiError.unprocessable("track does not belong to this conference", "track_id");
     }
     const actor = await actorFor(context);

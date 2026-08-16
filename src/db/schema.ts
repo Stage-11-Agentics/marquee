@@ -242,8 +242,26 @@ export interface FormatRow extends MutableRecord {
 
 export interface TrackRow extends MutableRecord {
   color: string;
+  deleted_at: EpochMilliseconds | null;
   event_id: Id;
   name: string;
+  name_key: string;
+  position: number;
+}
+
+export interface TagRow extends MutableRecord {
+  deleted_at: EpochMilliseconds | null;
+  event_id: Id;
+  name: string;
+  name_key: string;
+  position: number;
+}
+
+export interface LevelRow extends MutableRecord {
+  deleted_at: EpochMilliseconds | null;
+  event_id: Id;
+  name: string;
+  name_key: string;
   position: number;
 }
 
@@ -496,6 +514,7 @@ export interface FormRow extends MutableRecord {
 export interface FormFieldRow extends MutableRecord {
   condition: JsonText | null;
   config: JsonText;
+  deleted_at: EpochMilliseconds | null;
   form_id: Id;
   help_text: string | null;
   library_field_id: Id | null;
@@ -569,6 +588,7 @@ export interface OutboxRow extends MutableRecord {
 }
 
 export interface RoutingRuleRow extends MutableRecord {
+  deleted_at: EpochMilliseconds | null;
   enabled: 0 | 1;
   event_id: Id;
   name: string;
@@ -591,6 +611,7 @@ export interface SubmissionRow extends MutableRecord {
   kind: FormKind;
   last_saved_at: EpochMilliseconds | null;
   last_write_source: LastWriteSource;
+  level_id: Id | null;
   origin: SubmissionOrigin;
   /** The participant roster the public form was filled in with; see migration 0028. */
   participants_json: JsonText | null;
@@ -618,6 +639,19 @@ export interface SubmissionTrackRow extends MutableRecord {
   is_primary: 0 | 1;
   submission_id: Id;
   track_id: Id;
+}
+
+export interface SubmissionTagRow extends MutableRecord {
+  submission_id: Id;
+  tag_id: Id;
+}
+
+export interface SubmissionArrivalRow {
+  applied_at: EpochMilliseconds;
+  created_at: EpochMilliseconds;
+  submission_id: Id;
+  resume_token_hash: string | null;
+  updated_at: EpochMilliseconds;
 }
 
 export interface SubmissionDecisionRow extends MutableRecord {
@@ -1048,9 +1082,13 @@ export const CORE_TABLE_NAMES = [
   "outbox",
   "outbox_calendar_parts",
   "routing_rules",
+  "tags",
+  "levels",
   "submissions",
   "submission_answers",
   "submission_tracks",
+  "submission_tags",
+  "submission_arrivals",
   "submission_decisions",
   "submission_notes",
   "submission_reference_ledger",
@@ -1097,7 +1135,7 @@ export const CORE_TABLE_NAMES = [
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 70 as const;
+export const CORE_TABLE_COUNT = 74 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -1115,7 +1153,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 70>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 74>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -1170,6 +1208,7 @@ export const CORE_TABLES = {
   round_assignments: "round_assignments",
   round_promotions: "round_promotions",
   routing_rules: "routing_rules",
+  submission_arrivals: "submission_arrivals",
   rubric_criteria: "rubric_criteria",
   saved_views: "saved_views",
   speaker_tasks: "speaker_tasks",
@@ -1178,7 +1217,10 @@ export const CORE_TABLES = {
   submission_notes: "submission_notes",
   submission_reference_ledger: "submission_reference_ledger",
   submission_tracks: "submission_tracks",
+  submission_tags: "submission_tags",
   submissions: "submissions",
+  tags: "tags",
+  levels: "levels",
   task_templates: "task_templates",
   tracks: "tracks",
   waves: "waves",
@@ -1243,6 +1285,7 @@ export interface CoreTableRows {
   round_assignments: RoundAssignmentRow;
   round_promotions: RoundPromotionRow;
   routing_rules: RoutingRuleRow;
+  submission_arrivals: SubmissionArrivalRow;
   rubric_criteria: RubricCriterionRow;
   saved_views: SavedViewRow;
   speaker_tasks: SpeakerTaskRow;
@@ -1251,7 +1294,10 @@ export interface CoreTableRows {
   submission_notes: SubmissionNoteRow;
   submission_reference_ledger: SubmissionReferenceLedgerRow;
   submission_tracks: SubmissionTrackRow;
+  submission_tags: SubmissionTagRow;
   submissions: SubmissionRow;
+  tags: TagRow;
+  levels: LevelRow;
   task_templates: TaskTemplateRow;
   tracks: TrackRow;
   waves: WaveRow;
@@ -1327,6 +1373,7 @@ interface CoreDefaultColumns {
   round_assignments: never;
   round_promotions: never;
   routing_rules: "enabled";
+  submission_arrivals: never;
   rubric_criteria: never;
   saved_views: never;
   speaker_tasks: "description" | "last_write_source" | "status";
@@ -1335,6 +1382,7 @@ interface CoreDefaultColumns {
   submission_notes: never;
   submission_reference_ledger: never;
   submission_tracks: "is_primary";
+  submission_tags: never;
   submissions:
     | "is_published"
     | "last_write_source"
@@ -1343,6 +1391,8 @@ interface CoreDefaultColumns {
     | "vendor_affiliation";
   task_templates: "auto_assign" | "description";
   tracks: never;
+  tags: never;
+  levels: never;
   waves: never;
   webhook_deliveries: "attempts";
   webhook_endpoints: "enabled";
@@ -1371,6 +1421,8 @@ export type OrganizationInsert = CoreInsert<"organizations">;
 export type EventInsert = CoreInsert<"events">;
 export type FormatInsert = CoreInsert<"formats">;
 export type TrackInsert = CoreInsert<"tracks">;
+export type TagInsert = CoreInsert<"tags">;
+export type LevelInsert = CoreInsert<"levels">;
 export type BuildingInsert = CoreInsert<"buildings">;
 export type RoomInsert = CoreInsert<"rooms">;
 export type WaveInsert = CoreInsert<"waves">;
@@ -1398,6 +1450,8 @@ export type RoutingRuleInsert = CoreInsert<"routing_rules">;
 export type SubmissionInsert = CoreInsert<"submissions">;
 export type SubmissionAnswerInsert = CoreInsert<"submission_answers">;
 export type SubmissionTrackInsert = CoreInsert<"submission_tracks">;
+export type SubmissionTagInsert = CoreInsert<"submission_tags">;
+export type SubmissionArrivalInsert = CoreInsert<"submission_arrivals">;
 export type SubmissionDecisionInsert = CoreInsert<"submission_decisions">;
 export type SubmissionNoteInsert = CoreInsert<"submission_notes">;
 export type SubmissionReferenceLedgerInsert = CoreInsert<"submission_reference_ledger">;

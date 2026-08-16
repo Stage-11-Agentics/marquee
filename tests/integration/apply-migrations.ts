@@ -42,6 +42,7 @@ import submissionCapacityMigrationSql from "../../migrations/0031_submission_cap
 import calendarBatchPartsMigrationSql from "../../migrations/0032_calendar_batch_parts.sql?raw";
 import fieldLibraryMigrationSql from "../../migrations/0033_field_library.sql?raw";
 import personAliasesMergesMigrationSql from "../../migrations/0035_person_aliases_merges.sql?raw";
+import routingTagsMigrationSql from "../../migrations/0036_routing_tags.sql?raw";
 import formLengthRulesMigrationSql from "../../migrations/0037_form_length_rules.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
@@ -175,6 +176,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(calendarBatchPartsMigrationSql),
     ...splitStatements(fieldLibraryMigrationSql),
     ...splitStatements(personAliasesMergesMigrationSql),
+    ...splitStatements(routingTagsMigrationSql),
     ...splitStatements(formLengthRulesMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
