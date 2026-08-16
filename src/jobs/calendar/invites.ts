@@ -3,6 +3,7 @@ import type { D1Database, Queue } from "@cloudflare/workers-types";
 import type { Id } from "../../db/schema";
 import { buildingGeo, sessionLocation } from "../../lib/venue-geometry";
 import { enqueueMailMessage } from "../mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../mail/idempotency";
 import { enqueueOutbox, enqueueSmokeHarnessMail } from "../mail/outbox";
 import {
   buildCalendarMail,
@@ -160,7 +161,7 @@ async function queueCalendarMaterial(
     db,
     eventId: session.event_id,
     templateKey: `calendar_${input.method.toLowerCase()}`,
-    entityId: `${session.submission_id}:${recipient.person_id}:${input.sequence}:${input.method}`,
+    entityId: IDEMPOTENCY_REGISTRY.calendar(session.submission_id, recipient.person_id, input.sequence, input.method),
     personId: recipient.person_id,
     toEmail: recipient.email,
     subject: material.subject,

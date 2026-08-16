@@ -24,6 +24,7 @@ import {
   type ArrivalSession,
 } from "../lib/venue-geometry";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
 import { firstName } from "../jobs/mail/merge-data";
 import {
@@ -458,7 +459,7 @@ async function notifyProgramLeadsOfDecline(
     eventId: row.event_id,
     templateKey: "custom",
     recipients: leads.results.map((lead) => ({
-      entityId: row.id,
+      entityId: IDEMPOTENCY_REGISTRY.customRecipient(row.id),
       personId: lead.id,
       toEmail: lead.email,
       data: {

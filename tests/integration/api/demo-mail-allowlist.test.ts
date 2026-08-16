@@ -17,6 +17,7 @@ import type { OutboxRow } from "../../../src/db/schema";
 import { app } from "../../../src/index";
 import { createSession } from "../../../src/lib/auth/auth-sessions";
 import { demoMailWouldBeSuppressed, processMailOutbox, type MailProvider } from "../../../src/jobs/mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../../../src/jobs/mail/idempotency";
 import { enqueueOutbox } from "../../../src/jobs/mail/outbox";
 import { demoMailAllowlistFor, DEMO_MAIL_ALLOWLIST_LIMIT } from "../../../src/lib/demo-mail-allowlist";
 import { applyMigrations, env } from "../apply-migrations";
@@ -284,7 +285,7 @@ test("CONTRACT · a foreign write cannot arm real mail inside another organizati
     db: env.DB,
     eventId: OTHER_EVENT,
     templateKey: "reminder_generic",
-    entityId: "entity-cross-org",
+    entityId: IDEMPOTENCY_REGISTRY.customRecipient("entity-cross-org"),
     personId: null,
     toEmail: "attacker@example.com",
     data: { "speaker.first_name": "Nobody" },
@@ -323,7 +324,7 @@ test("CONTRACT · an allowlisted recipient's outbox row reads sent, never held i
     db: env.DB,
     eventId: DEMO_EVENT,
     templateKey: "reminder_generic",
-    entityId: "entity-allowed",
+    entityId: IDEMPOTENCY_REGISTRY.customRecipient("entity-allowed"),
     personId: null,
     toEmail: "judge@example.com",
     data: { "speaker.first_name": "Judge" },
@@ -332,7 +333,7 @@ test("CONTRACT · an allowlisted recipient's outbox row reads sent, never held i
     db: env.DB,
     eventId: DEMO_EVENT,
     templateKey: "reminder_generic",
-    entityId: "entity-held",
+    entityId: IDEMPOTENCY_REGISTRY.customRecipient("entity-held"),
     personId: null,
     toEmail: "someone.else@example.com",
     data: { "speaker.first_name": "Someone" },

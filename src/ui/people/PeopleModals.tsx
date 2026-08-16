@@ -8,10 +8,11 @@
  * an agent or do it themselves and get the same result.
  */
 import type { JSX } from "preact";
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 
 import { AgentBriefPanel } from "../shell/AgentBrief";
 import { errorSummary } from "../shell/api-client";
+import { idempotencyKeyForCompose } from "../shell/compose-idempotency";
 import { Button } from "../shell/components";
 import { attendeeImportBrief, peopleImportBrief } from "./people-brief";
 import {
@@ -200,6 +201,7 @@ export function ComposeModal({
   const [preview, setPreview] = useState<{ to_email: string; subject: string; text: string; excluded_people: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const composeIdempotencyRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const showPreview = async () => {
     setError("");
@@ -215,7 +217,11 @@ export function ComposeModal({
     setBusy(true);
     setError("");
     try {
-      onSent(await sendOrgMail({ person_ids: personIds, subject, body }));
+      const idempotencyKey = idempotencyKeyForCompose(
+        composeIdempotencyRef,
+        JSON.stringify({ personIds, subject, body }),
+      );
+      onSent(await sendOrgMail({ person_ids: personIds, subject, body }, idempotencyKey));
     } catch (caught) {
       setError(errorSummary(caught));
     } finally {

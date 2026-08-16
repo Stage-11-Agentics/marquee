@@ -8,6 +8,7 @@ import { portalPreviewRedirect } from "../lib/auth/portal-preview";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole } from "../lib/auth/scope-resolution";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const speakerParams = eventParams.extend({ personId: z.string().min(1) });
@@ -94,7 +95,7 @@ const inviteSpeakers = defineApiRoute(
         personId: speaker.id,
         toEmail: speaker.email,
         templateKey: "portal_invite",
-        entityId: link.id,
+        entityId: IDEMPOTENCY_REGISTRY.authLink(link.id),
         ...mail,
         now,
       });

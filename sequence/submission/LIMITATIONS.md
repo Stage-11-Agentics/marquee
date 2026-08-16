@@ -57,9 +57,12 @@ Verified against build `30b53f5ae78e`, 2026-08-12.
 - **Optimistic concurrency is narrow**: the agenda mutation routes carry
   compare-and-swap version guards; other writes are last-write-wins.
 - **Pagination is offset-based** (`page`/`per_page`), not cursor-based.
-- **No request-level `Idempotency-Key` contract.** Idempotency exists where it
-  matters operationally — outbox dedupe, durable bulk `operation_id`s,
-  idempotent task reconciliation — but not as a generic header.
+- **Request-level `Idempotency-Key` is limited to ad-hoc communications.** The
+  conference and organization send routes publish the optional header; first-party
+  compose clients generate a durable key and reuse it for retries, while an
+  omitted header deliberately means a new nudge. Other writes still rely on
+  their own outbox grains, durable bulk `operation_id`s, or idempotent task
+  reconciliation; this is not a generic header on every API write.
 - **Speed budgets are instruments, not CI gates.** 14 per-surface budgets are
   measurable in one command (`npm run check:speed`, real browser); they do not
   run in CI.

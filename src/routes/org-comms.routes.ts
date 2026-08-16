@@ -21,6 +21,7 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 import { mergeDataForRecipient } from "../jobs/mail/merge-data";
 import { renderAdHocMail } from "../jobs/mail/render";
 import type { MailTemplateKey } from "../jobs/mail/templates";
@@ -31,6 +32,10 @@ import { mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../l
 const audienceSchema = z.object({
   person_ids: z.array(z.string().min(1)).min(1).max(500).optional(),
   list_id: z.string().min(1).optional(),
+});
+const idempotencyKeyHeaders = z.object({
+  "idempotency-key": z.string().trim().min(1).max(200).optional()
+    .describe("Durable key for retrying one ad-hoc compose; omit for a new nudge."),
 });
 
 interface RecipientPerson {
@@ -164,6 +169,7 @@ const sendOrgMail = defineApiRoute(
       "Queues through the same outbox, suppression, and delivery log as every other message the product sends; every send is logged per recipient.",
     tags: ["People"],
     request: {
+      headers: idempotencyKeyHeaders,
       body: {
         content: {
           "application/json": {
@@ -208,8 +214,9 @@ const sendOrgMail = defineApiRoute(
       eventId,
       // Same ad-hoc key the conference-scoped send uses for a typed message.
       templateKey: "custom" as MailTemplateKey,
+      sendId: context.req.header("Idempotency-Key")?.trim() || crypto.randomUUID(),
       recipients: audience.people.map((person) => ({
-        entityId: person.id,
+        entityId: IDEMPOTENCY_REGISTRY.customRecipient(person.id),
         personId: person.id,
         toEmail: person.email,
         data: mergeDataFor(person),

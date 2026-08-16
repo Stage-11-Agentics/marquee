@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { type OnboardingFilter, type OnboardingRow, type OnboardingSnapshot, type OnboardingSpeakerDetail } from "../../routes/onboarding.queries";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
+import { idempotencyKeyForCompose } from "../shell/compose-idempotency";
 import { Button, Chip, EmptyState, PageHeader } from "../shell/components";
 import { lockBodyScroll } from "../shell/OverlayHosts";
 import { orderNewestFirst } from "../shell/wide-grid";
@@ -194,6 +195,7 @@ function ComposeDrawer({ eventId, rows, displayNames, onClose }: { eventId: stri
   const [result, setResult] = useState<SendResponse | null>(null);
   const [busy, setBusy] = useState<"preview" | "send" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const composeIdempotencyRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const custom = templateKey === CUSTOM_TEMPLATE;
   const activeTemplate = templates.find((template) => template.key === templateKey) ?? FALLBACK_TEMPLATE;
   const recipientRows = rows.map((row) => ({ row, submissionId: reminderSubmission(row) }));
@@ -232,11 +234,23 @@ function ComposeDrawer({ eventId, rows, displayNames, onClose }: { eventId: stri
     if (personIds.length === 0) return;
     setBusy("send"); setError(null); setResult(null);
     try {
+      const headers = custom
+        ? {
+          "Idempotency-Key": idempotencyKeyForCompose(
+            composeIdempotencyRef,
+            JSON.stringify({ eventId, templateKey, recipientPairs, subject, body }),
+          ),
+        }
+        : undefined;
       const next = await requestJson<SendResponse>(`/api/v1/events/${encodeURIComponent(eventId)}/comms/send`, "/api/v1/events/{eventId}/comms/send", {
         method: "POST",
+        ...(headers ? { headers } : {}),
         body: JSON.stringify({ selector: { recipient_pairs: recipientPairs, task_state: "open" }, ...message }),
       });
       setResult(next);
+      // The successful response closes this compose. A failed request leaves
+      // the ref untouched so the operator's retry reuses its key.
+      composeIdempotencyRef.current = null;
     } catch (caught) { setError(errorSummary(caught)); }
     finally { setBusy(null); }
   };

@@ -1,7 +1,8 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import type { Id } from "../../db/schema";
-import { enqueueOutbox, type EnqueuedOutbox } from "./outbox";
+import { IDEMPOTENCY_REGISTRY, type EntityId } from "./idempotency";
+import { buildIdempotencyKey, enqueueOutbox, type EnqueuedOutbox } from "./outbox";
 import { selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "./schedule";
 import { findTemplate, TRIGGER_TEMPLATE_KEYS, type MailTemplateKey } from "./templates";
 import type { MergeData } from "./render";
@@ -13,7 +14,7 @@ export interface TriggerInput {
   db: D1Database;
   eventId: Id;
   templateKey: TriggerKey;
-  entityId: Id;
+  entityId: EntityId;
   personId: Id;
   toEmail: string;
   data?: MergeData;
@@ -28,7 +29,7 @@ export interface TriggerInput {
 export async function enqueueTrigger(input: TriggerInput): Promise<EnqueuedOutbox | null> {
   const template = await findTemplate(input.db, input.eventId, input.templateKey);
   if (template.enabled !== 1) return null;
-  return enqueueOutbox(input);
+  return enqueueOutbox({ ...input, entityId: IDEMPOTENCY_REGISTRY.trigger(input.entityId) });
 }
 
 export async function enqueueBulkReminder(input: {
@@ -36,13 +37,15 @@ export async function enqueueBulkReminder(input: {
   eventId: Id;
   templateKey?: MailTemplateKey;
   recipients: Array<{
-    entityId: Id;
+    entityId: EntityId;
     personId: Id;
     toEmail: string;
     data?: MergeData;
   }>;
   subject?: string;
   body?: string;
+  /** Stable across retries of one compose; absent means this is a new send. */
+  sendId?: Id;
   now?: number;
 }): Promise<EnqueuedOutbox[]> {
   const templateKey = input.templateKey ?? "reminder_generic";
@@ -61,6 +64,13 @@ export async function enqueueBulkReminder(input: {
         data: recipient.data,
         subject: input.subject,
         body: input.body,
+        idempotencyKey: input.sendId === undefined
+          ? undefined
+          : await buildIdempotencyKey(
+            templateKey,
+            IDEMPOTENCY_REGISTRY.customSend(input.sendId, recipient.entityId),
+            recipient.personId,
+          ),
         now: input.now,
       }),
     );
@@ -80,7 +90,7 @@ export async function enqueuePreCloseReminderRows(db: D1Database, now = Date.now
       db,
       eventId: row.eventId,
       templateKey: row.templateKey,
-      entityId: row.entityId,
+      entityId: IDEMPOTENCY_REGISTRY.preCloseReminder(row.entityId),
       personId: row.personId,
       toEmail: row.toEmail,
       data: row.data,
@@ -105,7 +115,7 @@ export async function enqueueOverdueTaskReminderRows(db: D1Database, now = Date.
       db,
       eventId: candidate.eventId,
       templateKey: candidate.templateKey,
-      entityId: candidate.entityId,
+      entityId: IDEMPOTENCY_REGISTRY.overdueTaskReminder(candidate.entityId),
       personId: candidate.personId,
       toEmail: candidate.toEmail,
       data: candidate.data,

@@ -440,7 +440,7 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 | AC-114 | `auto` | `test:` merge fields for speaker name and submission title render with real seeded values. |
 | AC-115 | `auto` | `e2e:` bulk reject shows a rendered preview of one real recipient's version before sending. |
 | AC-116 | `auto` | `e2e:` rejected submitter's portal shows the outcome; outbox carries the email. |
-| AC-117 | `auto` | `test:` invoke the bulk action twice — exactly one outbox row per (template, submission); `Idempotency-Key` present on each provider call. |
+| AC-117 | `auto` | `test:` invoke the repeated templated bulk action twice — exactly one outbox row per (template, submission), with `Idempotency-Key` present on each provider call. Ad-hoc compose retries are covered by AC-314 because they use a durable request header, while an omitted header intentionally starts a new nudge. The full pre-fix write-site inventory then compares every unchanged registry entity id and resulting hash byte-for-byte, so a central refactor cannot silently rename a grain. |
 
 **US-22 · Manual admin entry**
 
@@ -695,6 +695,19 @@ Suite refs: `test:` unit/integration · `e2e:` Playwright · `speed:` · `seed:`
 
 ---
 
+### 2.9 Post-deadline mail-idempotency band — AC-314 *(Amendment 26, 2026-08-15)*
+
+**Outside the Wednesday terminal gate, on the same terms as §2.4–§2.8.** Not
+folded into the 210 live in-scope count or tier arithmetic. The criterion is
+appended to US-45/US-68; the implementation seam is the frozen registry in
+`src/jobs/mail/idempotency.ts`.
+
+| AC | Tier | Tag | How verified |
+|---|---|---|---|
+| AC-314 | PD | `auto` | `test:` first-party compose clients send a durable `Idempotency-Key`; a client-level retry with the same key produces one outbox row per recipient, while a new nudge with no header produces another row even when recipient and copy are identical. The draft-resume seam remains the fresh per-request submission id so its delivery still joins submission history; the registry inventory preserves unchanged key bytes and a type-level fixture rejects raw-string `entityId` values. |
+
+---
+
 ## 3. Felt checkpoints
 
 Four in-scope ACs are judgements no assertion settles. Each is a scheduled human-use session with an explicit trigger, an explicit method, and a recorded verdict. A checkpoint that has not run is not a pass.
@@ -792,6 +805,8 @@ Two carry enforcement obligations even though their UI is deferred, because retr
 ---
 
 ## Amendment log
+
+**Amendment 26 — one named mail-idempotency seam, 2026-08-15, plumbing fold.** Folds `USER_STORIES.md` Amendment 26 and `SPEC.md` §3.8. AC-117's verification now includes the full pre-fix registry byte-identity inventory; **AC-314** is the post-deadline lock for durable manual-nudge retries and fresh new nudges. The live count, tier arithmetic, and terminal gate remain unchanged.
 
 **Amendment 21 — the organization is a record, and an invite carries its seat, 2026-08-14, client-directed.** Folds `USER_STORIES.md` Amendment 21 (US-88 – US-89, AC-294 – AC-301) as new §2.6, a **post-deadline** band on §2.4's terms: outside the Wednesday terminal gate, unenforced by `trace:ac` until MRQ-207's claims manifest lands, and leaving §2's live in-scope count (210), the tier counts, the cut line, and the terminal gate deliberately unchanged. Two rulings underneath it are worth naming because they are refusals as much as additions. **Null is a value here:** every organization default may be unset, and unset is contractually distinct from chosen — collapsing the two would pin every silent organization to whatever the product's default happened to be on the day it changed. **And revocation is asserted per arm, not in aggregate:** AC-298 requires one failing-first assertion for each of session, unexpired link, and named token, because a test that only asserted "their next request 401s" passes cleanly against a build that leaves a live sign-in link in a fired volunteer's inbox — the link has not been presented yet. Invite-only stands; no join-request queue is added. Amendment numbers this round are shared across the three contract documents so two concurrent folds cannot collide, which is why this file's log jumps from 14; **Amendment 22 and AC-302 – AC-307 belong to MRQ-204**. Binding design: `sequence/org-settings-design.md`, prototype v1.15. Built by MRQ-207.
 **Amendment 22 — conference deletion, 2026-08-14, merge-captain allocation.** Folds `USER_STORIES.md` Amendment 22 (US-90 – US-91, AC-302 – AC-307) as new §2.7, a post-deadline band enforced by MRQ-204's claims manifest. It leaves the existing 210 live in-scope count, tier arithmetic, and Wednesday terminal gate unchanged. The binding cascade is the T2 contract and the prototype's Danger zone confirmation flow; the seeded demo delegates to the same event-deletion primitive.

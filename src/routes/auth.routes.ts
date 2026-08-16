@@ -22,6 +22,7 @@ import type { DemoRole } from "../lib/auth/demo-seat";
 import { DEMO_ROLE_TO_MEMBERSHIP, demoRoleForEmail, findDemoPersona } from "../lib/auth/demo-seat";
 import { findDemoEvent } from "../lib/demo-event";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 
 /**
  * Auth still sets and clears the session cookie in its handlers. It is a
@@ -279,7 +280,7 @@ const requestMagicLink = defineApiRoute(
         const outboxId = await enqueueAuthMail(context.env.DB, {
           eventId: event.id,
           personId: person.id,
-          entityId: link.id,
+          entityId: IDEMPOTENCY_REGISTRY.authLink(link.id),
           toEmail: person.email,
           templateKey: "magic_link_login",
           ...mail,

@@ -7,6 +7,7 @@ import { ApiError } from "../api/errors";
 import type { FormFieldView } from "./forms.queries";
 import type { PersonRow } from "../db/schema";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 import { enqueuePublicFormConfirmation, enqueueOutbox } from "../jobs/mail/outbox";
 import { escapeHtml } from "../jobs/mail/render";
 import { findTemplate } from "../jobs/mail/templates";
@@ -331,7 +332,7 @@ async function enqueueCoSpeakerInvitation(
   const invitation = await enqueueOutbox({
     db: context.env.DB,
     eventId: input.eventId,
-    entityId: input.participant.id,
+    entityId: IDEMPOTENCY_REGISTRY.coSpeakerInvitation(input.participant.id),
     personId: input.participant.person.id,
     toEmail: input.participant.person.email,
     templateKey: "added_to_submission",
@@ -557,7 +558,7 @@ async function createDraft(
     personId: person.id,
     toEmail: email,
     templateKey: "draft_resume",
-    entityId: submissionId,
+    entityId: IDEMPOTENCY_REGISTRY.draftResume(submissionId),
     subject: PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT,
     text: `${PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT} here: ${resumeUrl}`,
     html: `<p><a href="${resumeUrl}">${PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT}</a></p>`,
@@ -876,7 +877,7 @@ async function handlePublicSubmission(
     const confirmation = await enqueuePublicFormConfirmation({
       db: context.env.DB,
       eventId: base.form.event_id,
-      entityId: submissionId,
+      entityId: IDEMPOTENCY_REGISTRY.formConfirmation(submissionId),
       personId: person.id,
       toEmail: email!,
       typedAddress: email!,
@@ -904,7 +905,7 @@ async function handlePublicSubmission(
       const notice = await enqueueOutbox({
         db: context.env.DB,
         eventId: base.form.event_id,
-        entityId: `${submissionId}:admin:${admin.id}`,
+        entityId: IDEMPOTENCY_REGISTRY.adminNotification(submissionId, admin.id),
         personId: admin.id,
         toEmail: admin.email,
         templateKey: "custom",

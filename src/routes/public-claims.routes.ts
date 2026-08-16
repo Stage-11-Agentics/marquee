@@ -26,6 +26,7 @@ import {
   renderClaimMail,
 } from "../lib/attendee-claim-mail";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 import { enqueueOutbox } from "../jobs/mail/outbox";
 import {
   CODE_PATTERN,
@@ -232,7 +233,7 @@ const requestScheduleClaim = defineApiRoute(
       // A resend is a new request, so it gets a new identity and actually
       // sends — the idempotency key exists to stop double-submits, not to make
       // "email it to me again" a no-op.
-      entityId: `${ATTENDEE_CLAIM_TEMPLATE_KEY}:${code}:${now}`,
+      entityId: IDEMPOTENCY_REGISTRY.attendeeClaim(code, now),
       personId: null,
       toEmail: normalizeClaimEmail(email),
       subject: mail.subject,

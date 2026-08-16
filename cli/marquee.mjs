@@ -2,6 +2,7 @@
 
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
+import { randomUUID } from "node:crypto";
 
 import { COMMAND_REGISTRY, COPY_SETS, commandsUnder, renderHelp } from "./registry.mjs";
 import { MarqueeClient } from "./client.mjs";
@@ -22,6 +23,7 @@ const VALUE_OPTIONS = new Set([
   "--body",
   "--format",
   "--request-id",
+  "--idempotency-key",
   "--level",
   "--event",
   "--set",
@@ -322,7 +324,7 @@ async function executeOrgCommand(command, verb, arguments_, options, client) {
       ...(audience.list_id ? { list_id: audience.list_id } : {}),
       subject,
       body,
-    });
+    }, { headers: { "Idempotency-Key": option(options, "--idempotency-key") ?? randomUUID() } });
   }
   if (root === "lists" && verb === "list") return client.get("/api/v1/org/lists");
   if (root === "lists" && verb === "save") return client.post("/api/v1/org/lists", requireSetValues(command, options));
@@ -479,10 +481,12 @@ async function execute(command, arguments_, options, flags, client) {
     const body = option(options, "--body");
     if (template && (subject !== undefined || body !== undefined)) usageError("--template is exclusive with --subject and --body");
     if (!template && (subject === undefined || body === undefined)) usageError("remind requires --template or both --subject and --body");
+    const idempotencyKey = option(options, "--idempotency-key");
+    if (template && idempotencyKey) usageError("--idempotency-key applies to ad-hoc reminders, not stored templates");
     return client.post(`/api/v1/events/${encodeURIComponent(eventId)}/comms/send`, {
       selector,
       ...(template ? { template_key: template } : { subject, body }),
-    });
+    }, template ? undefined : { headers: { "Idempotency-Key": idempotencyKey ?? randomUUID() } });
   }
   if (root === "submissions" && (verb === "schedule" || verb === "publish")) {
     const submissionId = arguments_[1];

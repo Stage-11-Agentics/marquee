@@ -8,6 +8,7 @@ import { authHasRole, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { listCommsAudience, type CommsRecipientRow } from "../jobs/mail/audience";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 import { enqueueBulkReminder } from "../jobs/mail/triggers";
 import {
   COMMUNICATION_TEMPLATE_KEYS,
@@ -54,6 +55,10 @@ const NOT_ATTENDEE_MAIL = "template_key <> 'attendee_schedule_claim'";
 const eventParams = z.object({ eventId: z.string().min(1) });
 const templateParams = eventParams.extend({ templateId: z.string().min(1) });
 const personParams = eventParams.extend({ personId: z.string().min(1) });
+const idempotencyKeyHeaders = z.object({
+  "idempotency-key": z.string().trim().min(1).max(200).optional()
+    .describe("Durable key for retrying one ad-hoc compose; omit for a new nudge."),
+});
 
 const templateSchema = z.object({
   id: z.string(),
@@ -866,9 +871,11 @@ const sendComms = defineApiRoute(
     path: "/api/v1/events/{eventId}/comms/send",
     operationId: "sendCommunication",
     summary: "Queue a templated or ad-hoc communication",
+    description: "Ad-hoc sends accept Idempotency-Key for retries of one compose; omitting it makes each request a new nudge.",
     tags: ["Comms"],
     request: {
       params: eventParams,
+      headers: idempotencyKeyHeaders,
       body: { content: { "application/json": { schema: z.object({ selector: selectorSchema, template_key: z.string().optional(), subject: z.string().optional(), body: z.string().optional() }) } } },
     },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
@@ -899,7 +906,8 @@ const sendComms = defineApiRoute(
       db: context.env.DB,
       eventId,
       templateKey: (body.template_key ?? "custom") as MailTemplateKey,
-      recipients: recipients.map((recipient) => ({ entityId: recipient.submission_id ?? recipient.person_id, personId: recipient.person_id, toEmail: recipient.email, data: mergeDataFor(recipient) })),
+      sendId: hasAdHoc ? (context.req.header("Idempotency-Key")?.trim() || crypto.randomUUID()) : undefined,
+      recipients: recipients.map((recipient) => ({ entityId: IDEMPOTENCY_REGISTRY.customRecipient(recipient.submission_id ?? recipient.person_id), personId: recipient.person_id, toEmail: recipient.email, data: mergeDataFor(recipient) })),
       subject: body.subject,
       body: body.body,
     });

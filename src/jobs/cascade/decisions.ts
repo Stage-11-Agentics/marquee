@@ -9,6 +9,7 @@ import { acceptedSpeakerMembershipStatements } from "../../lib/speaker-membershi
 import { purgePublicEmbedCache, type PublicEmbedCache } from "../../lib/public-site";
 import { cancelCalendarInvites } from "../calendar/invites";
 import { enqueueMailMessage } from "../mail/consumer";
+import { IDEMPOTENCY_REGISTRY } from "../mail/idempotency";
 import { enqueueTrigger } from "../mail/triggers";
 
 export type DecisionAction = "accept" | "reject" | "waitlist";
@@ -434,7 +435,9 @@ async function enqueueDecisionMail(
     db: input.db,
     eventId: input.eventId,
     templateKey,
-    entityId: input.entityId ?? input.submission.id,
+    entityId: input.entityId === undefined
+      ? IDEMPOTENCY_REGISTRY.decision(input.submission.id)
+      : IDEMPOTENCY_REGISTRY.decisionRetry(input.entityId),
     personId: input.submission.person_id,
     toEmail: input.submission.person_email.trim(),
     data: {
