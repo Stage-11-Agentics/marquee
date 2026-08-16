@@ -33,22 +33,34 @@
  */
 import { newUlid } from "../api/ids";
 import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "./participants";
+import { ON_STAGE_MEMBERSHIP_ROLES } from "./roster-source";
 
 export interface SpeakerMembershipInput {
   orgId: string;
   eventId: string;
   personId: string;
   now: number;
+  /**
+   * The role the seat was earned in. Defaults to `speaker`, which is what every
+   * organizer-facing writer means: "Add speaker", the Sessionize import, and
+   * the roster status control are all declaring a speaker, and there is often
+   * no participation to read a role from. Only the acceptance cascade passes
+   * something else, because only it knows the participation the seat came from.
+   */
+  role?: MembershipSeatRole;
   /** Stamped when the organizer is inviting rather than merely recording. */
   invitedAt?: number | null;
 }
+
+/** The on-stage seat vocabulary `memberships.role` accepts (migration 0028). */
+export type MembershipSeatRole = (typeof ON_STAGE_MEMBERSHIP_ROLES)[number];
 
 export function speakerMembershipStatement(db: D1Database, input: SpeakerMembershipInput): D1PreparedStatement {
   return db
     .prepare(
       `INSERT INTO memberships
          (id, org_id, event_id, person_id, role, confirmation_status, confirmed_at, invited_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'speaker', 'pending', NULL, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?, ?)
        ON CONFLICT (org_id, event_id, person_id, role) WHERE event_id IS NOT NULL
        DO UPDATE SET
          invited_at = COALESCE(memberships.invited_at, excluded.invited_at),
@@ -62,6 +74,7 @@ export function speakerMembershipStatement(db: D1Database, input: SpeakerMembers
       input.orgId,
       input.eventId,
       input.personId,
+      input.role ?? "speaker",
       input.invitedAt ?? null,
       input.now,
       input.now,
@@ -92,20 +105,40 @@ export async function acceptedSpeakerMembershipStatements(
   if (ids.length === 0) return [];
   const event = await db.prepare("SELECT org_id FROM events WHERE id = ?").bind(eventId).first<{ org_id: string }>();
   if (!event) return [];
+  // The seat carries the role it was earned in, and a person on two sessions
+  // keeps the most speaking-forward of them: someone who speaks on one talk and
+  // moderates another is a speaker of this conference, and a seat that recorded
+  // `moderator` would take them off its roster. Declaration order in
+  // `WORK_HOLDING_PARTICIPATION_ROLES` is that precedence.
+  const rank = WORK_HOLDING_PARTICIPATION_ROLES
+    .map((role, index) => `WHEN '${role}' THEN ${index}`)
+    .join(" ");
   const people = await db
     .prepare(
-      `SELECT DISTINCT part.person_id
+      `SELECT part.person_id, part.role
        FROM participations part
        JOIN submissions submission ON submission.id = part.submission_id
        WHERE submission.event_id = ?
          AND submission.status = 'accepted'
          AND ${roleInSql("part", WORK_HOLDING_PARTICIPATION_ROLES)}
          AND submission.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+         AND part.id = (
+           SELECT ranked.id
+           FROM participations ranked
+           JOIN submissions ranked_submission ON ranked_submission.id = ranked.submission_id
+           WHERE ranked.person_id = part.person_id
+             AND ranked_submission.event_id = submission.event_id
+             AND ranked_submission.status = 'accepted'
+             AND ${roleInSql("ranked", WORK_HOLDING_PARTICIPATION_ROLES)}
+           ORDER BY CASE ranked.role ${rank} ELSE ${WORK_HOLDING_PARTICIPATION_ROLES.length} END,
+                    ranked.id ASC
+           LIMIT 1
+         )
        ORDER BY part.person_id ASC`,
     )
     .bind(eventId, JSON.stringify(ids))
-    .all<{ person_id: string }>();
+    .all<{ person_id: string; role: MembershipSeatRole }>();
   return people.results.map((row) =>
-    speakerMembershipStatement(db, { orgId: event.org_id, eventId, personId: row.person_id, now }),
+    speakerMembershipStatement(db, { orgId: event.org_id, eventId, personId: row.person_id, role: row.role, now }),
   );
 }

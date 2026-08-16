@@ -2,9 +2,20 @@ import type { Id, MembershipRole, MembershipRow } from "../../db/schema";
 import type { Principal } from "../../api/runtime";
 import type { ApiGrant } from "../../api/grants";
 
-/** SPEC §4.1: public < speaker < reviewer < ops < program_lead < owner. */
+/**
+ * SPEC §4.1: public < speaker < reviewer < ops < program_lead < owner.
+ *
+ * Every on-stage seat ranks exactly where `speaker` does. A membership is a
+ * seat, and the seat a moderator holds carries the same authority a speaker's
+ * does — their own portal and their own profile, nothing else. Ranking them
+ * above `speaker` would hand a moderator an organizer's reach; ranking them
+ * below would leave the portal this ticket exists to open shut.
+ */
 const ROLE_RANK: Record<MembershipRole, number> = {
   speaker: 1,
+  co_speaker: 1,
+  moderator: 1,
+  chairperson: 1,
   reviewer: 2,
   ops: 3,
   program_lead: 4,
@@ -13,6 +24,9 @@ const ROLE_RANK: Record<MembershipRole, number> = {
 
 const GRANTS_BY_ROLE: Record<MembershipRole, readonly ApiGrant[]> = {
   speaker: ["speaker:write"],
+  co_speaker: ["speaker:write"],
+  moderator: ["speaker:write"],
+  chairperson: ["speaker:write"],
   reviewer: ["review:write", "speaker:write"],
   ops: ["program:read", "review:write", "speaker:write", "comms:send"],
   program_lead: [
@@ -89,6 +103,9 @@ export function authHasRole(
   }
   const minimumGrantByRole: Record<MembershipRole, ApiGrant> = {
     speaker: "speaker:write",
+    co_speaker: "speaker:write",
+    moderator: "speaker:write",
+    chairperson: "speaker:write",
     reviewer: "review:write",
     ops: "program:read",
     program_lead: "program:write",

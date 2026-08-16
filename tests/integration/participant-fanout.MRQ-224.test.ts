@@ -143,12 +143,23 @@ test("AC-330 · a template with unreadable targeting reaches everyone, never nob
 test("AC-333 · acceptance seats every on-stage participant in the event", async () => {
   await reconcileTaskSet(env.DB, EVENT_ID, [SUBMISSION_ID], NOW);
   const rows = await env.DB
-    .prepare("SELECT person_id FROM memberships WHERE event_id = ? AND role = 'speaker'")
+    .prepare(
+      `SELECT person_id, role FROM memberships
+       WHERE event_id = ? AND role IN ('speaker', 'co_speaker', 'moderator', 'chairperson')`,
+    )
     .bind(EVENT_ID)
-    .all<{ person_id: string }>();
+    .all<{ person_id: string; role: string }>();
   // The membership row is what portal sign-in, headshot ownership, and the
-  // comms audience read. The moderator is the person this ticket exists for.
-  expect(rows.results.map((row) => row.person_id).sort()).toEqual([CO_SPEAKER, MODERATOR, SPEAKER].sort());
+  // comms audience read, and every on-stage role now has one — the moderator is
+  // the person this ticket exists for. It carries the role the seat was earned
+  // in (operator ruling, 2026-08-16), so a seat is not a claim to be a speaker
+  // and the speaker roster can tell them apart.
+  expect(rows.results.map((row) => `${row.person_id}:${row.role}`).sort()).toEqual([
+    `${CO_SPEAKER}:co_speaker`,
+    `${MODERATOR}:moderator`,
+    `${SPEAKER}:speaker`,
+  ].sort());
+  // A submitter who never steps on stage holds no seat at all.
   expect(rows.results.map((row) => row.person_id)).not.toContain(OFF_STAGE_SUBMITTER);
 });
 
@@ -191,4 +202,27 @@ test("AC-331 · the copy manifest carries the targeting a clone would otherwise 
   expect(templates.verbatim).toContain("applies_to_roles");
   expect(templates.nulls).not.toContain("applies_to_roles");
   expect(Object.keys(templates.constants)).not.toContain("applies_to_roles");
+});
+
+test("AC-333 · a person who speaks on one session and moderates another is seated as a speaker", async () => {
+  // One seat per person, and it carries the most speaking-forward role they
+  // hold here. A seat that recorded `moderator` for someone who also speaks
+  // would take them off the roster they belong on — the ruling separates seat
+  // from speaker-ness, and this is the case where the two must not disagree.
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at)
+       VALUES ('sub_mrq224_second', ?, 'session', 'The other talk', 'accepted', 'admin', ?, ?, ?)`,
+    ).bind(EVENT_ID, OFF_STAGE_SUBMITTER, NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at)
+       VALUES ('part_mrq224_second', 'sub_mrq224_second', ?, 'speaker', 0, 'pending', ?, ?)`,
+    ).bind(MODERATOR, NOW, NOW),
+  ]);
+  await reconcileTaskSet(env.DB, EVENT_ID, [SUBMISSION_ID, "sub_mrq224_second"], NOW);
+  const seat = await env.DB
+    .prepare("SELECT role FROM memberships WHERE event_id = ? AND person_id = ?")
+    .bind(EVENT_ID, MODERATOR)
+    .all<{ role: string }>();
+  expect(seat.results.map((row) => row.role)).toEqual(["speaker"]);
 });

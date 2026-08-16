@@ -146,12 +146,18 @@ test("CONTRACT · MRQ-111 · SPK-01 · the roster lists every speaker regardless
 });
 
 test("CONTRACT · MRQ-111 · 24n · the acceptance boundary writes the membership row the portal reads", async () => {
-  const memberPersonIds = async (): Promise<string[]> => {
+  // Every on-stage seat, with the role it was earned in — not just the ones
+  // that say 'speaker'. Reading only 'speaker' would have hidden the whole
+  // point of the ruling behind a filter.
+  const seats = async (): Promise<string[]> => {
     const rows = await env.DB
-      .prepare("SELECT person_id FROM memberships WHERE event_id = ? AND role = 'speaker'")
+      .prepare(
+        `SELECT person_id, role FROM memberships
+         WHERE event_id = ? AND role IN ('speaker', 'co_speaker', 'moderator', 'chairperson')`,
+      )
       .bind(EVENT_ID)
-      .all<{ person_id: string }>();
-    return rows.results.map((row) => row.person_id).sort();
+      .all<{ person_id: string; role: string }>();
+    return rows.results.map((row) => `${row.person_id}:${row.role}`).sort();
   };
   const before = await env.DB
     .prepare("SELECT COUNT(*) AS count FROM memberships WHERE event_id = ? AND role = 'speaker'")
@@ -161,28 +167,51 @@ test("CONTRACT · MRQ-111 · 24n · the acceptance boundary writes the membershi
 
   await reconcileTaskSet(env.DB, EVENT_ID, ["sub_mrq111_accepted"], NOW);
 
-  // MRQ-224 widened the membership bridge from (speaker, co_speaker) to every
-  // on-stage role, so the accepted session's moderator is here too. That row is
-  // what gates portal sign-in, headshot ownership, and the comms audience — a
-  // moderator who cannot open their own portal cannot do the work the
-  // conference just committed them to.
+  // THE RULED INVARIANT (operator, 2026-08-16). A membership row is a SEAT at
+  // this event, not a claim to be a speaker. Every accepted on-stage role gets
+  // one, because that row is what gates portal sign-in — a moderator who cannot
+  // open their own portal cannot do the work the conference just committed them
+  // to. Participation role is the only speaker-ness authority, and speaker-only
+  // surfaces filter on it rather than on a membership existing.
   //
-  // OPEN QUESTION, deliberately not resolved here. `roster-source.ts` UNIONs
-  // `memberships(role = 'speaker')`, so this row also lists an accepted
-  // moderator on the speaker roster — which SPK-01 below says is not what the
-  // roster is. MRQ-224 asks for "ICS + membership + roster row"; MRQ-111 says
-  // the roster is the speaker list and excludes moderators. Both cannot be
-  // true, and the resolution is an operator ruling, not a builder's guess:
-  // either the roster gains a role column and shows moderators as moderators,
-  // or the membership role stops being a single 'speaker' value. This build
-  // changed only the membership row and left `speakerRosterPersonSource`
-  // untouched, so the seeded moderator below — who never went through
-  // acceptance — still stays off the roster and SPK-01 still holds.
-  expect(await memberPersonIds()).toEqual([ACCEPTED_SPEAKER, MODERATOR_PERSON].sort());
+  // So both halves are asserted together, because the whole question was
+  // whether they can hold at once: the moderator IS seated, and is NOT a
+  // speaker of this conference.
+  expect(await seats()).toEqual([`${ACCEPTED_SPEAKER}:speaker`, `${MODERATOR_PERSON}:moderator`].sort());
+  const seated = await roster();
+  expect(seated.data.map((row) => row.name)).toContain("Marcus Okafor");
+  expect(seated.data.map((row) => row.name)).not.toContain("Alex Chen");
 
   // Idempotent: re-running acceptance must not mint a second row per person.
   await reconcileTaskSet(env.DB, EVENT_ID, ["sub_mrq111_accepted"], NOW + 1_000);
-  expect(await memberPersonIds()).toEqual([ACCEPTED_SPEAKER, MODERATOR_PERSON].sort());
+  expect(await seats()).toEqual([`${ACCEPTED_SPEAKER}:speaker`, `${MODERATOR_PERSON}:moderator`].sort());
+});
+
+test("CONTRACT · MRQ-111 · SPK-01 · an organizer's declaration stands where no participation can speak", async () => {
+  // `participations.submission_id` is NOT NULL, so a speaker an organizer adds
+  // before there is a session has no participation row to be read. Their
+  // membership is the organizer's own declaration and it is the only evidence
+  // there is, so it stands — this is why the roster's membership half survives
+  // the ruling rather than being deleted with it.
+  const created = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Toni Vance", email: "toni@example.com" }),
+  });
+  expect(created.status).toBe(201);
+  expect((await roster()).data.map((row) => row.name)).toContain("Toni Vance");
+
+  // An organizer hand-adding someone writes a `speaker` seat, and it stands —
+  // even for a person who also moderates a session here. The declaration is
+  // about the conference, the moderator participation is about one panel, and
+  // the organizer is the authority on the first.
+  const alsoAdded = await request(`/api/v1/events/${EVENT_ID}/speakers`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Alex Chen", email: "alex@example.com" }),
+  });
+  expect(alsoAdded.status).toBe(201);
+  expect((await roster()).data.map((row) => row.name)).toContain("Alex Chen");
 });
 
 test("CONTRACT · MRQ-111 · SPK-02 · an organizer bio edit survives a re-read and is attributable", async () => {

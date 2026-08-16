@@ -76,7 +76,10 @@ async function participationsFor(submissionId: string): Promise<Array<{ role: st
 
 async function latestSubmission(): Promise<{ id: string; submitter_person_id: string; participants_json: string | null }> {
   return (await env.DB
-    .prepare("SELECT id, submitter_person_id, participants_json FROM submissions WHERE event_id = ? ORDER BY created_at DESC LIMIT 1")
+    // `id` breaks the tie: `created_at` is milliseconds and two submissions in
+    // one test can share one, which would make this helper return an arbitrary
+    // row and every assertion built on it a coin toss.
+    .prepare("SELECT id, submitter_person_id, participants_json FROM submissions WHERE event_id = ? ORDER BY created_at DESC, id DESC LIMIT 1")
     .bind(EVENT_ID)
     .first<{ id: string; submitter_person_id: string; participants_json: string | null }>())!;
 }

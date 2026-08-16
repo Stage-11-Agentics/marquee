@@ -22,13 +22,26 @@ export interface ApiTokenScopes {
 }
 
 export const EVENT_STATUSES = ["draft", "live"] as const;
+/**
+ * `memberships.role` is two vocabularies in one column: staff seats, and the
+ * on-stage seats that mirror `participations.role` (migration 0028). A
+ * membership is a seat at the event, not a claim to be a speaker — every
+ * accepted on-stage role has one because that row gates portal sign-in, and it
+ * records which role earned it so speaker-only surfaces can tell them apart.
+ */
 export const MEMBERSHIP_ROLES = [
   "owner",
   "program_lead",
   "ops",
   "reviewer",
   "speaker",
+  "co_speaker",
+  "moderator",
+  "chairperson",
 ] as const;
+
+/** The staff half: everything a person is seated as that is not on stage. */
+export const STAFF_MEMBERSHIP_ROLES = ["owner", "program_lead", "ops", "reviewer"] as const;
 export const MAGIC_LINK_PURPOSES = [
   "login",
   "draft_resume",

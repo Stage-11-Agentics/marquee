@@ -419,7 +419,7 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
         `SELECT membership.event_id
          FROM memberships membership
          JOIN people person ON person.id = membership.person_id AND person.org_id = membership.org_id
-         WHERE membership.person_id = ? AND membership.role IN ('speaker', 'reviewer') AND membership.event_id IS NOT NULL
+         WHERE membership.person_id = ? AND membership.role IN ('speaker', 'co_speaker', 'moderator', 'chairperson', 'reviewer') AND membership.event_id IS NOT NULL
          ORDER BY membership.event_id LIMIT 1`,
       ).bind(session.person_id).first<{ event_id: string }>();
       if (!membership) return uploadError(context, "forbidden", "a speaker or reviewer membership is required for a headshot upload");

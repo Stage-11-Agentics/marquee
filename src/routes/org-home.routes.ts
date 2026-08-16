@@ -385,7 +385,7 @@ export async function readStaleSeatAttention(db: D1Database, orgId: string, toda
        JOIN events event ON event.id = seat.event_id AND event.org_id = seat.org_id
       WHERE seat.org_id = ?
         AND seat.event_id IS NOT NULL
-        AND seat.role != 'speaker'
+        AND seat.role NOT IN ('speaker', 'co_speaker', 'moderator', 'chairperson')
         AND event.ends_on < ?
       ORDER BY event.ends_on ASC, seat.id ASC
       LIMIT ${ATTENTION_LIMIT}`,

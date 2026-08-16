@@ -850,14 +850,6 @@ export async function countFormForPerson(
   return Number(row?.total ?? 0);
 }
 
-export async function publicFormForSlug(db: D1Database, slug: string): Promise<{ form: FormRow; fields: FormFieldView[]; conference: { name: string; slug: string; timezone: string } } | null> {
-  const form = await findFormBySlug(db, slug);
-  if (!form || form.status === "draft") return null;
-  const event = await db.prepare("SELECT name, slug, timezone FROM events WHERE id = ?").bind(form.event_id).first<{ name: string; slug: string; timezone: string }>();
-  if (!event) return null;
-  return { form, fields: await listFormFields(db, form.id), conference: event };
-}
-
 export function rawAnswersFromBody(
   answers: Record<string, unknown>,
   email?: string,

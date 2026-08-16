@@ -187,7 +187,7 @@ const previewConferenceRemoval = defineApiRoute(
       .bind(eventId, personId)
       .first<{ total: number }>();
     const seat = await context.env.DB.prepare(
-      "SELECT 1 AS present FROM memberships WHERE org_id = ? AND person_id = ? AND role != 'speaker' LIMIT 1",
+      `SELECT 1 AS present FROM memberships WHERE org_id = ? AND person_id = ? AND role NOT IN ('speaker', 'co_speaker', 'moderator', 'chairperson') LIMIT 1`,
     )
       .bind(orgId, personId)
       .first<{ present: number }>();

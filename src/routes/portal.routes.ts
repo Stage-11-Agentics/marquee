@@ -307,7 +307,7 @@ async function findSpeakerEvent(
     .prepare(
       `SELECT e.id, e.name, e.slug, e.starts_on, e.ends_on, e.timezone, e.status
        FROM events e
-       JOIN memberships m ON m.event_id = e.id AND m.person_id = ? AND m.org_id = ? AND m.role = 'speaker'
+       JOIN memberships m ON m.event_id = e.id AND m.person_id = ? AND m.org_id = ? AND m.role IN ('speaker', 'co_speaker', 'moderator', 'chairperson')
        WHERE 1 = 1 ${predicate}
        ORDER BY e.starts_on ASC, e.id ASC
        LIMIT 1`,
@@ -1253,7 +1253,7 @@ async function editableTalk(
          EXISTS (SELECT 1 FROM participations submitter
            WHERE submitter.submission_id = submission.id AND submitter.person_id = ? AND submitter.role = 'submitter') AS is_submitter,
          EXISTS (SELECT 1 FROM memberships speaker_membership
-           WHERE speaker_membership.event_id = submission.event_id AND speaker_membership.person_id = ? AND speaker_membership.role = 'speaker') AS has_speaker_membership
+           WHERE speaker_membership.event_id = submission.event_id AND speaker_membership.person_id = ? AND speaker_membership.role IN ('speaker', 'co_speaker', 'moderator', 'chairperson')) AS has_speaker_membership
        FROM submissions submission
        JOIN events conference ON conference.id = submission.event_id AND conference.org_id = ?
        LEFT JOIN forms form ON form.id = submission.form_id AND form.event_id = submission.event_id
@@ -1267,7 +1267,7 @@ async function editableTalk(
                  AND speaker_participation_access.person_id = ?
                  AND speaker_participation_access.role IN ('speaker', 'co_speaker'))
              AND EXISTS (SELECT 1 FROM memberships speaker_access
-               WHERE speaker_access.event_id = submission.event_id AND speaker_access.person_id = ? AND speaker_access.role = 'speaker')
+               WHERE speaker_access.event_id = submission.event_id AND speaker_access.person_id = ? AND speaker_access.role IN ('speaker', 'co_speaker', 'moderator', 'chairperson'))
            )
          )`,
     )

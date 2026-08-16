@@ -261,8 +261,15 @@ function rosterFromBody(
   // the legacy answers, but one whose stored roster is empty has had its
   // participants deliberately removed, and falling back there would resurrect
   // them from answers that are still on the row and no longer rendered.
+  // `current.typed` first even when nothing is stored: for a legacy form it was
+  // already computed from the submission's OWN answers, while `answers` is the
+  // request's — and the same request wipes the stored ones. Falling back to the
+  // request only when the submission has nothing of its own cannot lose anyone.
+  const carried = current.typed.length > 0
+    ? current.typed
+    : readParticipantSlots(legacyParticipantsFromAnswers(answers));
   const typed = body.participants === undefined
-    ? (current.stored ? current.typed : readParticipantSlots(legacyParticipantsFromAnswers(answers)))
+    ? (current.stored ? current.typed : carried)
     : readParticipantSlots(body.participants);
   return {
     participants: readParticipantList(typed),
@@ -308,7 +315,11 @@ function requiredSubmissionIssues(
 ): Array<{ fieldKey: string; message: string }> {
   if (!formCollectsParticipants(fields)) return [];
   const primaryPresent = Boolean(answerText(answers, "speaker_name") || normalisePublicEmail(answers.speaker_email));
-  const participantCount = (primaryPresent ? 1 : 0) + roster.participants.length;
+  // Deduped by address, because that is what `insertParticipationRows` will do.
+  // Counting raw entries refused a submitter for a roster that was about to
+  // collapse under the ceiling anyway.
+  const distinctParticipants = new Set(roster.participants.map((entry) => entry.email.toLowerCase()));
+  const participantCount = (primaryPresent ? 1 : 0) + distinctParticipants.size;
   if (participantCount < Number(form.min_speakers)) {
     return [{ fieldKey: "speaker_name", message: "Add at least one participant before sending this abstract, then try again." }];
   }
@@ -962,6 +973,20 @@ async function editSubmittedSubmission(
     }),
   ]);
   await replaceProjectedAnswers(context.env.DB, base.submission.id, base.fields, projected.projected.answers, now);
+  // Write the roster through unchanged. This path takes no roster from the
+  // request and does not mean to, but `replaceProjectedAnswers` deletes every
+  // answer and re-inserts only the served set — which no longer includes the
+  // legacy `co_speaker_*` pair. On a form still carrying it, the first edit
+  // would destroy the only record of that person before anything had migrated
+  // them into `participants_json`: the page would then report no participants
+  // while the participation row still existed, and a form with
+  // `min_speakers >= 2` would refuse every later edit forever, on a screen with
+  // no participant control to satisfy it. Every other path migrates before it
+  // wipes; this makes that true here too.
+  await context.env.DB
+    .prepare("UPDATE submissions SET participants_json = ?, updated_at = ? WHERE id = ?")
+    .bind(writeParticipantRoster(base.roster), now, base.submission.id)
+    .run();
   return formResponse(context, slug, token, base.email ?? emailFromAnswers(projected.projected.answers) ?? undefined);
 }
 
@@ -1035,14 +1060,10 @@ async function handlePublicSubmission(
   // submitter while the confirmation went to the speaker. Both directions have
   // to follow the box, so both read the same address.
   //
-  // The draft's owner remains the fallback for the one case the address cannot
-  // answer: a person row that no longer exists behind an address nobody has
-  // used yet, where creating one below is the right answer and this returns
-  // null to let it.
-  const existingPerson = (email ? await findPersonByEmail(context.env.DB, event.org_id, email) : null)
-    ?? (existing && !roster.onBehalfOf && !speakerEmail
-      ? await context.env.DB.prepare("SELECT * FROM people WHERE id = ?").bind(existing.submitter_person_id).first<PersonRow>()
-      : null);
+  // `email` is always present by here — a missing speaker address pushed a
+  // domain issue above and the throw is unconditional — so there is no
+  // draft-owner fallback arm. One existed and could never run.
+  const existingPerson = await findPersonByEmail(context.env.DB, event.org_id, email!);
   if (!existing && base.form.per_submitter_limit > 0 && existingPerson && await countFormForPerson(context.env.DB, base.form.id, existingPerson.id) >= Number(base.form.per_submitter_limit)) {
     throw ApiError.conflict("Your abstract limit is full. Use a saved resume link to continue an existing draft.");
   }
