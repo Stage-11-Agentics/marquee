@@ -1,5 +1,16 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
+// One UID can accumulate an owner row per reschedule/resend over an event's
+// life, with no enforced ceiling — chunk the child-part read so a
+// long-lived submission never exceeds D1's 100-binding limit in one query.
+const MAX_D1_IN_PLACEHOLDERS = 80;
+
+function chunk<T>(values: readonly T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) chunks.push([...values.slice(index, index + size)]);
+  return chunks;
+}
+
 export interface CalendarIcsRevision {
   body: string;
   createdAt: number;
@@ -79,15 +90,19 @@ export async function resolveCalendarIcs(db: D1Database, uid: string): Promise<C
   if (owners.results.length === 0) return null;
 
   const ownerIds = owners.results.map((owner) => owner.id);
-  const placeholders = ownerIds.map(() => "?").join(", ");
-  const parts = await db.prepare(
-    `SELECT id, outbox_id, part_index, ics_uid, sequence, filename, ics_body, content_type
-     FROM outbox_calendar_parts
-     WHERE outbox_id IN (${placeholders})
-     ORDER BY outbox_id ASC, part_index ASC`,
-  ).bind(...ownerIds).all<ChildPart>();
+  const parts: ChildPart[] = [];
+  for (const group of chunk(ownerIds, MAX_D1_IN_PLACEHOLDERS)) {
+    const placeholders = group.map(() => "?").join(", ");
+    const result = await db.prepare(
+      `SELECT id, outbox_id, part_index, ics_uid, sequence, filename, ics_body, content_type
+       FROM outbox_calendar_parts
+       WHERE outbox_id IN (${placeholders})
+       ORDER BY outbox_id ASC, part_index ASC`,
+    ).bind(...group).all<ChildPart>();
+    parts.push(...result.results);
+  }
   const partsByOwner = new Map<string, ChildPart[]>();
-  for (const part of parts.results) {
+  for (const part of parts) {
     const existing = partsByOwner.get(part.outbox_id) ?? [];
     existing.push(part);
     partsByOwner.set(part.outbox_id, existing);

@@ -16,6 +16,11 @@ import {
 
 const BATCH_PART_CONTENT_TYPE = "text/calendar; charset=utf-8; method=REQUEST";
 const MAX_D1_BATCH_STATEMENTS = 80;
+// A debt-item/speaker/owner list here is bounded only by how much of the
+// event is currently stale, not by any request-time cap — chunk every IN
+// clause built from one so a large reconciliation never exceeds D1's
+// 100-binding limit in a single query.
+const MAX_D1_IN_PLACEHOLDERS = 80;
 
 export interface CalendarBatchPartResult {
   filename: string;
@@ -84,37 +89,55 @@ async function runStatements(db: D1Database, statements: readonly D1PreparedStat
 async function readLedgerFloors(db: D1Database, items: readonly CalendarDebtItem[]): Promise<Map<string, number>> {
   const uids = [...new Set(items.map((item) => item.uid))];
   if (uids.length === 0) return new Map();
-  const placeholders = uids.map(() => "?").join(", ");
-  const result = await db.prepare(
-    `SELECT uid, last_sequence FROM calendar_sequence_ledger WHERE uid IN (${placeholders})`,
-  ).bind(...uids).all<{ uid: string; last_sequence: number }>();
-  return new Map(result.results.map((row) => [row.uid, row.last_sequence]));
+  const floors = new Map<string, number>();
+  for (const group of chunk(uids, MAX_D1_IN_PLACEHOLDERS)) {
+    const placeholders = group.map(() => "?").join(", ");
+    const result = await db.prepare(
+      `SELECT uid, last_sequence FROM calendar_sequence_ledger WHERE uid IN (${placeholders})`,
+    ).bind(...group).all<{ uid: string; last_sequence: number }>();
+    for (const row of result.results) floors.set(row.uid, row.last_sequence);
+  }
+  return floors;
 }
 
 async function readExistingBatchOwners(db: D1Database, eventId: Id, speakers: readonly CalendarDebtSpeaker[]): Promise<Map<Id, ExistingBatchOwner[]>> {
   const personIds = [...new Set(speakers.map((speaker) => speaker.person_id))];
   if (personIds.length === 0) return new Map();
-  const personPlaceholders = personIds.map(() => "?").join(", ");
-  const owners = await db.prepare(
-    `SELECT id, person_id, status, created_at
-     FROM outbox
-     WHERE event_id = ? AND template_key = 'calendar_batch_request'
-       AND person_id IN (${personPlaceholders})
-       AND ics_uid IS NULL AND ics_body IS NULL
-     ORDER BY created_at DESC, id DESC`,
-  ).bind(eventId, ...personIds).all<{ created_at: number; id: Id; person_id: Id; status: string }>();
-  if (owners.results.length === 0) return new Map();
-  const ownerPlaceholders = owners.results.map(() => "?").join(", ");
-  const parts = await db.prepare(
-    `SELECT id, outbox_id, submission_id, part_index, ics_uid, sequence, filename, ics_body, content_type
-     FROM outbox_calendar_parts
-     WHERE outbox_id IN (${ownerPlaceholders})
-     ORDER BY outbox_id ASC, part_index ASC`,
-  ).bind(...owners.results.map((owner) => owner.id)).all<ExistingBatchPart>();
+  // `eventId` is a fixed extra binding ahead of every person-ID group, so the
+  // chunk size leaves headroom under D1's 100-binding cap on top of it.
+  const owners: { created_at: number; id: Id; person_id: Id; status: string }[] = [];
+  for (const group of chunk(personIds, MAX_D1_IN_PLACEHOLDERS)) {
+    const personPlaceholders = group.map(() => "?").join(", ");
+    const result = await db.prepare(
+      `SELECT id, person_id, status, created_at
+       FROM outbox
+       WHERE event_id = ? AND template_key = 'calendar_batch_request'
+         AND person_id IN (${personPlaceholders})
+         AND ics_uid IS NULL AND ics_body IS NULL
+       ORDER BY created_at DESC, id DESC`,
+    ).bind(eventId, ...group).all<{ created_at: number; id: Id; person_id: Id; status: string }>();
+    owners.push(...result.results);
+  }
+  if (owners.length === 0) return new Map();
+  // Re-impose the single-query ordering the chunked reads no longer carry:
+  // `exactExistingAdmission` resumes the first array match, so a person with
+  // more than one prior owner must still see its newest one first.
+  owners.sort((left, right) => right.created_at - left.created_at || (right.id < left.id ? -1 : right.id > left.id ? 1 : 0));
+  const parts: ExistingBatchPart[] = [];
+  for (const group of chunk(owners.map((owner) => owner.id), MAX_D1_IN_PLACEHOLDERS)) {
+    const ownerPlaceholders = group.map(() => "?").join(", ");
+    const result = await db.prepare(
+      `SELECT id, outbox_id, submission_id, part_index, ics_uid, sequence, filename, ics_body, content_type
+       FROM outbox_calendar_parts
+       WHERE outbox_id IN (${ownerPlaceholders})
+       ORDER BY outbox_id ASC, part_index ASC`,
+    ).bind(...group).all<ExistingBatchPart>();
+    parts.push(...result.results);
+  }
   const partsByOwner = new Map<Id, ExistingBatchPart[]>();
-  for (const part of parts.results) partsByOwner.set(part.outbox_id, [...(partsByOwner.get(part.outbox_id) ?? []), part]);
+  for (const part of parts) partsByOwner.set(part.outbox_id, [...(partsByOwner.get(part.outbox_id) ?? []), part]);
   const byPerson = new Map<Id, ExistingBatchOwner[]>();
-  for (const owner of owners.results) {
+  for (const owner of owners) {
     const entry = { ...owner, parts: partsByOwner.get(owner.id) ?? [] };
     byPerson.set(owner.person_id, [...(byPerson.get(owner.person_id) ?? []), entry]);
   }
