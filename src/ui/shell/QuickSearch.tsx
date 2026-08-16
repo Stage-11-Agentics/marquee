@@ -61,6 +61,13 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
     setState("idle");
     setErrorMessage("");
     setPaintedQuery("");
+    // Refresh the short-lived server snapshot at open time as well as shell
+    // mount time. The persistent component avoids a remount waterfall, while
+    // this refresh keeps a long dashboard render from aging out the snapshot.
+    void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=`, {
+      headers: { accept: "application/json", "x-search-session": searchSessionRef.current, "x-search-prefetch": "1" },
+      route: "/api/v1/events/{eventId}/search",
+    }).catch(() => undefined);
     inputRef.current?.focus();
   }, [open]);
 
