@@ -1,8 +1,9 @@
 import type { JSX } from "preact";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { COMMUNICATION_MERGE_FIELDS, mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../../lib/mail-merge-fields";
 import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { apiFetch, errorSummary } from "../shell/api-client";
+import { idempotencyKeyForCompose } from "../shell/compose-idempotency";
 import { useEventContext } from "../shell/event-context";
 import { DemoMailAllowlist } from "./DemoMailAllowlist";
 import "./comms.css";
@@ -153,6 +154,7 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
   const [reloadKey, setReloadKey] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [sendResult, setSendResult] = useState<SendResult | null>(null);
+  const composeIdempotencyRef = useRef<{ fingerprint: string; key: string } | null>(null);
   // Read from the conference the shell already resolved rather than fetched
   // here: this screen only mounts once that list has answered, so the allowlist
   // panel is present or absent on the first paint instead of appearing late and
@@ -295,12 +297,25 @@ export function CommsScreen({ eventId }: { eventId: string }): JSX.Element {
       const payload = mode === "template"
         ? { selector, template_key: selectedKey }
         : { selector, subject, body };
+      const headers = mode === "adhoc"
+        ? {
+          "Idempotency-Key": idempotencyKeyForCompose(
+            composeIdempotencyRef,
+            JSON.stringify({ eventId, mode, selectedKey, selector, subject, body }),
+          ),
+        }
+        : undefined;
       const result = await request<SendResult>(`/api/v1/events/${eventId}/comms/send`, "/api/v1/events/{eventId}/comms/send", {
         method: "POST",
+        ...(headers ? { headers } : {}),
         body: JSON.stringify(payload),
       });
       setSendResult(result);
       await refreshMessages();
+      // A completed send is a new compose boundary. If the operator presses
+      // the button again with identical copy, it should be a new nudge; a
+      // failed request keeps the ref above intact for the retry path.
+      composeIdempotencyRef.current = null;
       setError(null);
     } catch (reason) {
       setError(errorSummary(reason));

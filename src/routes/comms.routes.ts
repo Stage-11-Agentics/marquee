@@ -55,6 +55,10 @@ const NOT_ATTENDEE_MAIL = "template_key <> 'attendee_schedule_claim'";
 const eventParams = z.object({ eventId: z.string().min(1) });
 const templateParams = eventParams.extend({ templateId: z.string().min(1) });
 const personParams = eventParams.extend({ personId: z.string().min(1) });
+const idempotencyKeyHeaders = z.object({
+  "idempotency-key": z.string().trim().min(1).max(200).optional()
+    .describe("Durable key for retrying one ad-hoc compose; omit for a new nudge."),
+});
 
 const templateSchema = z.object({
   id: z.string(),
@@ -871,6 +875,7 @@ const sendComms = defineApiRoute(
     tags: ["Comms"],
     request: {
       params: eventParams,
+      headers: idempotencyKeyHeaders,
       body: { content: { "application/json": { schema: z.object({ selector: selectorSchema, template_key: z.string().optional(), subject: z.string().optional(), body: z.string().optional() }) } } },
     },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },

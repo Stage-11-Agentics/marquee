@@ -398,6 +398,7 @@ export const COMMAND_REGISTRY = [
       { name: "--template <key>", description: "Use a stored mail template." },
       { name: "--subject <text>", description: "Ad-hoc subject; pair with --body." },
       { name: "--body <text>", description: "Ad-hoc body; pair with --subject." },
+      { name: "--idempotency-key <key>", description: "Reuse this compose key when retrying the same ad-hoc reminder; omitted means a new compose." },
     ],
   },
   {
@@ -539,6 +540,7 @@ export const COMMAND_REGISTRY = [
       { name: "--filter <key=value>", description: "Required; person_ids or list_id." },
       { name: "--subject <text>", description: "Required; pair with --body." },
       { name: "--body <text>", description: "Required; merge tags such as {{speaker.first_name}} resolve per recipient." },
+      { name: "--idempotency-key <key>", description: "Reuse this compose key when retrying the same send; omitted means a new compose." },
     ],
   },
   {

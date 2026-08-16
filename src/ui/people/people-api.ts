@@ -271,11 +271,11 @@ export function fetchPersonActivity(personId: string, page: number, cursor?: str
   );
 }
 
-function write<Result>(path: string, route: string, body: unknown, method = "POST"): Promise<Result> {
+function write<Result>(path: string, route: string, body: unknown, method = "POST", extraHeaders: HeadersInit = {}): Promise<Result> {
   return apiFetch<Result>(path, {
     route,
     method,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...extraHeaders },
     body: JSON.stringify(body),
   });
 }
@@ -355,13 +355,13 @@ export function previewOrgMail(input: { person_ids: string[]; subject: string; b
   return write("/api/v1/org/comms/preview", "/api/v1/org/comms/preview", input);
 }
 
-export function sendOrgMail(input: { person_ids: string[]; subject: string; body: string }): Promise<{
+export function sendOrgMail(input: { person_ids: string[]; subject: string; body: string }, idempotencyKey: string): Promise<{
   selected: number;
   queued: number;
   duplicate: number;
   excluded_people: string[];
 }> {
-  return write("/api/v1/org/comms/send", "/api/v1/org/comms/send", input);
+  return write("/api/v1/org/comms/send", "/api/v1/org/comms/send", input, "POST", { "Idempotency-Key": idempotencyKey });
 }
 
 export function exportPeople(filters: PeopleFilters): Promise<string> {

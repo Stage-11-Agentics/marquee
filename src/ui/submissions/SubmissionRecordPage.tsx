@@ -5,6 +5,7 @@ import { formatFileSize, type FileAnswerView } from "../../lib/file-answers";
 import { eventTimeLabel, localDateTimeToInstant } from "../../lib/event-time";
 import { isVisibleToAudience } from "../../lib/participants";
 import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
+import { idempotencyKeyForCompose } from "../shell/compose-idempotency";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader, ReviewerName } from "../shell/components";
 import { disambiguatedNames } from "../../lib/duplicate-names";
 import { useEventContext } from "../shell/event-context";
@@ -505,6 +506,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [messageRecipientId, setMessageRecipientId] = useState("");
   const [messageSubject, setMessageSubject] = useState("");
   const [messageBody, setMessageBody] = useState("");
+  const messageComposeIdempotencyRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [messageError, setMessageError] = useState("");
   const [messageNotice, setMessageNotice] = useState("");
   const [resendNotice, setResendNotice] = useState("");
@@ -716,15 +718,26 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     if (!recipient) { setMessageError("Choose a participant before sending."); return; }
     if (!messageSubject.trim() || !messageBody.trim()) { setMessageError("Subject and message are required."); return; }
     setMessageError(""); setMessageNotice("");
-    await writeThenRefresh("message", async () => {
+    const sent = await writeThenRefresh("message", async () => {
       const body = await apiFetch<{ queued?: number }>(`/api/v1/events/${encodeURIComponent(eventId)}/comms/send`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "Idempotency-Key": idempotencyKeyForCompose(
+            messageComposeIdempotencyRef,
+            JSON.stringify({ eventId, submissionId, recipientId: recipient.person_id, role: recipient.role, subject: messageSubject.trim(), body: messageBody }),
+          ),
+        },
         body: JSON.stringify({ selector: { submission_ids: [submissionId], person_ids: [recipient.person_id], role: recipient.role }, subject: messageSubject.trim(), body: messageBody }),
         route: COMMS_SEND_ROUTE,
       });
       setMessageNotice(body.queued ? "Message queued in the conference outbox." : "That message was already queued for this participant.");
     }, (error) => setMessageError(errorSummary(error)));
+    if (sent) {
+      // A successful response ends this compose. If the request failed, the
+      // ref remains available for the operator's retry.
+      messageComposeIdempotencyRef.current = null;
+    }
   };
 
   const resendDecision = async () => {

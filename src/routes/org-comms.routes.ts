@@ -33,6 +33,10 @@ const audienceSchema = z.object({
   person_ids: z.array(z.string().min(1)).min(1).max(500).optional(),
   list_id: z.string().min(1).optional(),
 });
+const idempotencyKeyHeaders = z.object({
+  "idempotency-key": z.string().trim().min(1).max(200).optional()
+    .describe("Durable key for retrying one ad-hoc compose; omit for a new nudge."),
+});
 
 interface RecipientPerson {
   id: string;
@@ -165,6 +169,7 @@ const sendOrgMail = defineApiRoute(
       "Queues through the same outbox, suppression, and delivery log as every other message the product sends; every send is logged per recipient.",
     tags: ["People"],
     request: {
+      headers: idempotencyKeyHeaders,
       body: {
         content: {
           "application/json": {

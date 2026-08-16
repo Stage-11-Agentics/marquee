@@ -28,6 +28,7 @@ async function startApi() {
   let resetRead = 0;
   let seeded = false;
   let agendaVersion = 1;
+  const adHocComposeKeys = new Set();
   const server = createServer(async (request, response) => {
     const url = new URL(request.url, "http://127.0.0.1");
     const body = await readRequestBody(request);
@@ -67,7 +68,17 @@ async function startApi() {
       return jsonResponse(response, 200, { data: [{ person_id: "person_test", tasks: [] }], filter: url.searchParams.get("filter") });
     }
     if (request.method === "POST" && url.pathname === "/api/v1/events/evt_test/comms/send") {
-      return jsonResponse(response, 202, { selected: 1, queued: 1, duplicate: 0, outbox_ids: ["outbox_test"], outbox_rows: [], received: body });
+      const key = request.headers["idempotency-key"];
+      const duplicate = Boolean(body.subject && key && adHocComposeKeys.has(key));
+      if (body.subject && key) adHocComposeKeys.add(key);
+      return jsonResponse(response, 202, {
+        selected: 1,
+        queued: duplicate ? 0 : 1,
+        duplicate: duplicate ? 1 : 0,
+        outbox_ids: duplicate ? [] : ["outbox_test"],
+        outbox_rows: [],
+        received: body,
+      });
     }
     if (request.method === "GET" && url.pathname === "/api/v1/events/evt_test/agenda") {
       return jsonResponse(response, 200, {
@@ -168,6 +179,11 @@ test("AC-138 + AC-139 + AC-140 + AC-250 · every CLI workflow uses bearer auth, 
     runs.push(await runCli(scopedArgs(api.url, "tasks", "list", "evt_test", "--overdue"), api.url));
     runs.push(await runCli(scopedArgs(api.url, "remind", "evt_test", "--filter", "task_state=open", "--template", "task_overdue"), api.url));
     runs.push(await runCli(scopedArgs(api.url, "remind", "evt_test", "--filter", "task_state=open", "--subject", "A nudge", "--body", "Please finish the Task."), api.url));
+    const retryRuns = [
+      await runCli(scopedArgs(api.url, "remind", "evt_test", "--filter", "task_state=open", "--subject", "A retryable nudge", "--body", "Please finish the Task again.", "--idempotency-key", "cli-compose-1"), api.url),
+      await runCli(scopedArgs(api.url, "remind", "evt_test", "--filter", "task_state=open", "--subject", "A retryable nudge", "--body", "Please finish the Task again.", "--idempotency-key", "cli-compose-1"), api.url),
+    ];
+    runs.push(...retryRuns);
     runs.push(await runCli(scopedArgs(api.url, "agenda", "export", "evt_test"), api.url));
 
     for (const run of runs) {
@@ -186,6 +202,13 @@ test("AC-138 + AC-139 + AC-140 + AC-250 · every CLI workflow uses bearer auth, 
     assert.deepEqual(template.body, { selector: { task_state: "open" }, template_key: "task_overdue" });
     const adHoc = api.requests.find((request) => request.path.endsWith("/comms/send") && request.body?.subject);
     assert.deepEqual(adHoc.body, { selector: { task_state: "open" }, subject: "A nudge", body: "Please finish the Task." });
+    assert.match(adHoc.headers["idempotency-key"], /^[0-9a-f-]{36}$/);
+    assert.deepEqual(JSON.parse(retryRuns[0].stdout).queued, 1);
+    assert.deepEqual(JSON.parse(retryRuns[0].stdout).duplicate, 0);
+    assert.deepEqual(JSON.parse(retryRuns[1].stdout).queued, 0);
+    assert.deepEqual(JSON.parse(retryRuns[1].stdout).duplicate, 1);
+    const retryRequests = api.requests.filter((request) => request.body?.subject === "A retryable nudge");
+    assert.deepEqual(retryRequests.map((request) => request.headers["idempotency-key"]), ["cli-compose-1", "cli-compose-1"]);
 
     const secondApi = await startApi();
     try {
