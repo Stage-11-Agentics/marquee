@@ -67,9 +67,18 @@ for (const [index, [name, binary, arguments_]] of checks.entries()) {
     `\n[prepush] ${index + 1}/${checks.length} ${name}; positive operands=${operandCount}\n`
       + `[prepush] $ ${commandLine(binary, arguments_)}\n`,
   );
-  const exitCode = await run(binary, arguments_);
+  let exitCode = 1;
+  let invocationError;
+  try {
+    exitCode = await run(binary, arguments_);
+  } catch (error) {
+    invocationError = error;
+  }
   if (exitCode !== 0) {
-    process.stderr.write(`[prepush] FAILED: ${name} (exit ${exitCode})\n`);
+    const detail = invocationError === undefined
+      ? `exit ${exitCode}`
+      : `invocation error: ${invocationError instanceof Error ? `${invocationError.name}: ${invocationError.message}` : String(invocationError)}`;
+    process.stderr.write(`[prepush] FAILED: ${name} (${detail})\n`);
     process.exitCode = exitCode;
     break;
   }
