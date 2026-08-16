@@ -56,4 +56,8 @@ describe("MRQ-241 submission reference allocation", () => {
     expect(submissionReferenceSearchPatterns("SUB 41")).toEqual(["%sub 41%", "%sub41%"]);
     expect(submissionReferenceSearchSql()).toContain("reference_code");
   });
+
+  test("AC-344 · punctuation-only search never emits a match-everything pattern", () => {
+    expect(submissionReferenceSearchPatterns("!")).toEqual(["%!%", "%!%"]);
+  });
 });

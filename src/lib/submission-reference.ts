@@ -24,7 +24,7 @@ const REFERENCE_LEDGER_ADVANCE_SQL = `
 export function submissionReferenceSearchPatterns(value: string): [string, string] {
   const lower = value.toLocaleLowerCase();
   const compact = lower.replace(/[^a-z0-9]/g, "");
-  return [`%${lower}%`, `%${compact}%`];
+  return [`%${lower}%`, compact ? `%${compact}%` : `%${lower}%`];
 }
 
 export function submissionReferenceSearchSql(alias = "s"): string {

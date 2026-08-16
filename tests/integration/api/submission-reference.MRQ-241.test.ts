@@ -101,6 +101,18 @@ describe.sequential("MRQ-241 submission reference codes", () => {
     expect(boardBody.data.find((row) => row.id === "submission_mrq241_search")).toMatchObject({ reference_code: "SUB-41" });
   });
 
+  test("AC-344 · punctuation-only list and board searches stay filtered", async () => {
+    const list = await request(`/api/v1/events/${EVENT_ID}/submissions?q=!&per_page=50`);
+    expect(list.status).toBe(200);
+    const listBody = await list.json<{ data: Array<{ id: string }> }>();
+    expect(listBody.data).toHaveLength(0);
+
+    const board = await request(`/api/v1/events/${EVENT_ID}/board?q=!&per_page=50`);
+    expect(board.status).toBe(200);
+    const boardBody = await board.json<{ data: Array<{ id: string }> }>();
+    expect(boardBody.data).toHaveLength(0);
+  });
+
   test("AC-345 · Airtable reads the code from D1 outbound truth but never accepts it inbound", async () => {
     const record = await currentAirtableRecord(
       {
