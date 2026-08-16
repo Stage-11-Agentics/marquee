@@ -27,21 +27,23 @@ test("CONTRACT · MRQ-99 organizer copy removes the sidebar dead end", async () 
 test("CONTRACT · MRQ-99 decision copy states the actual speaker message", async () => {
   const record = await source("src/ui/submissions/SubmissionRecordPage.tsx");
   const bulk = await source("src/ui/submissions/SubmissionsPage.tsx");
+  const plan = await source("src/ui/submissions/DecisionPlanPanel.tsx");
 
-  assert.match(record, /speaker will see the same words in the decision email/);
-  assert.match(record, /A waitlist does not send a message/);
-  assert.match(record, /decisionRequest === "maybe" \? "Waitlist"/);
-  assert.match(record, /Feedback for the speaker \(optional\)/);
-  assert.match(bulk, /Each selected speaker will receive the feedback you add in the decision email/);
-  assert.match(bulk, /A waitlist does not send a message/);
+  assert.match(record, /DecisionPlanPanel/);
+  assert.match(plan, /Wave decision/);
+  assert.match(plan, /Every recipient gets their own render/);
+  assert.match(plan, /A waitlist saves the decision and sends no message/);
+  assert.match(plan, /Feedback for the speakers \(optional\)/);
+  assert.match(bulk, /DecisionPlanPanel/);
   assert.doesNotMatch(bulk, /normalized feedback|decision row|standard conference email/);
 });
 
 test("CONTRACT · MRQ-99 optional field labels use the parenthesized convention", async () => {
   const bulk = await source("src/ui/submissions/SubmissionsPage.tsx");
+  const plan = await source("src/ui/submissions/DecisionPlanPanel.tsx");
   const reviewer = await source("src/ui/review/ReviewerPage.tsx");
 
-  assert.match(bulk, /Feedback for the speakers \(optional\)/);
+  assert.match(plan, /Feedback for the speakers \(optional\)/);
   assert.match(reviewer, /Overall score \(optional\)/);
   assert.match(reviewer, /Committee note \(optional\)/);
   assert.doesNotMatch(reviewer, /Optional scorecard/);

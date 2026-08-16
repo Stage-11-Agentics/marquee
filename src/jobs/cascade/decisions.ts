@@ -200,7 +200,6 @@ function decisionTarget(action: DecisionAction): {
   return DECISION_TARGETS[action];
 }
 
-<<<<<<< HEAD
 /**
  * The one person a decision is addressed to, as SQL.
  *

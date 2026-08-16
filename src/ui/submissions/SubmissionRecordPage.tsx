@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 
+import type { DecisionPlanResponse } from "../../api/decision-plan";
 import { formatFileSize, type FileAnswerView } from "../../lib/file-answers";
 import { eventTimeLabel, localDateTimeToInstant } from "../../lib/event-time";
 import { isVisibleToAudience } from "../../lib/participants";
@@ -10,12 +11,15 @@ import { Button, Card, CardBody, CardHeader, Chip, PageHeader, ReviewerName } fr
 import { disambiguatedNames } from "../../lib/duplicate-names";
 import { useEventContext } from "../shell/event-context";
 import { AcceptanceReversalPanel } from "./AcceptanceReversalPanel";
+import { DecisionPlanPanel } from "./DecisionPlanPanel";
 import { ContentHistory } from "../history/ContentHistory";
 import { groupParticipants, type Participant } from "./participant-groups";
 import { decidedNote, headerChipTone, historyMoment, lastSendLine, moment, sendMoment, sendMomentFor, sendOutcome, statusLabel, type DecisionSend } from "./record-copy";
 import "./record.css";
+import "./submissions.css";
 
 const SUBMISSION_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}";
+const DECISION_PLAN_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/decision-plan";
 const DECISION_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/decision";
 const RESEND_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/decision/resend";
 const CALENDAR_INVITES_ROUTE = "/api/v1/events/{eventId}/submissions/{submissionId}/invites";
@@ -299,6 +303,15 @@ export function DecisionEmailRecovery({ speakerName, onOpen }: { speakerName: st
     <span>No usable email address is on file for {speakerName}. Add one before sending this decision.</span>
     <Button small onClick={onOpen}>Open speaker record</Button>
   </>;
+}
+
+type DecisionRecommendation = "approve" | "maybe" | "deny";
+
+function isDecisionPlanConflict(error: unknown): boolean {
+  if (!(error instanceof MarqueeApiError) || error.code !== "conflict") return false;
+  const details = error.details;
+  return Boolean(details && typeof details === "object" && "code" in details
+    && ((details as { code?: unknown }).code === "stale_plan" || (details as { code?: unknown }).code === "stale_queue_revision"));
 }
 
 /**
@@ -609,7 +622,15 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [selectedReviewers, setSelectedReviewers] = useState<Record<string, string>>({});
   const [schedule, setSchedule] = useState({ starts_at: "", duration_min: "30", room_id: "", track_id: "" });
   const [publicationRequest, setPublicationRequest] = useState<"publish" | "unpublish" | null>(null);
-  const [decisionRequest, setDecisionRequest] = useState<"approve" | "maybe" | "deny" | null>(null);
+  const [decisionRequest, setDecisionRequest] = useState<DecisionRecommendation | null>(null);
+  const [decisionPlan, setDecisionPlan] = useState<DecisionPlanResponse | null>(null);
+  const [decisionPlanLoading, setDecisionPlanLoading] = useState(false);
+  const [decisionPlanError, setDecisionPlanError] = useState("");
+  const [decisionPlanStale, setDecisionPlanStale] = useState(false);
+  const [decisionPlanBusy, setDecisionPlanBusy] = useState(false);
+  const [decisionConfirmPublished, setDecisionConfirmPublished] = useState(false);
+  const [decisionNotice, setDecisionNotice] = useState("");
+  const decisionPlanRefreshTimerRef = useRef<number | null>(null);
   const [feedbackDraft, setFeedbackDraft] = useState("");
   const [messageRecipientId, setMessageRecipientId] = useState("");
   const [messageSubject, setMessageSubject] = useState("");
@@ -652,6 +673,10 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null);
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyBusy, setHistoryBusy] = useState(false);
+
+  useEffect(() => () => {
+    if (decisionPlanRefreshTimerRef.current !== null) window.clearTimeout(decisionPlanRefreshTimerRef.current);
+  }, []);
 
   const loadMoreHistory = async (): Promise<void> => {
     if (historyBusy || !historyHasMore || !historyNextCursor) return;
@@ -861,18 +886,98 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     setPublicationRequest(null);
   };
 
-  const decide = async () => {
-    if (!decisionRequest) return;
-    const recommendation = decisionRequest;
-    // The feedback is the same words the speaker reads in the decision mail, so
-    // neither it nor the dialog holding it goes away until the decision is
-    // recorded. Keeping the text while closing the dialog was not enough: the
-    // words survived in state with nothing on screen to reach them, and the
-    // next action cleared them.
-    const decided = await act(recommendation, "/decision", { method: "POST", body: JSON.stringify({ recommendation, feedback_md: feedbackDraft.trim() || null }) }, DECISION_ROUTE);
-    if (!decided) return;
-    setDecisionRequest(null);
+  const loadDecisionPlan = async (
+    recommendation: DecisionRecommendation,
+    feedback: string,
+    confirmPublished = decisionConfirmPublished,
+  ): Promise<void> => {
+    setDecisionPlanLoading(true);
+    setDecisionPlanError("");
+    try {
+      const plan = await apiFetch<DecisionPlanResponse>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/decision-plan`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            recommendation,
+            ...(feedback.trim() ? { feedback_md: feedback.trim() } : {}),
+            ...(confirmPublished ? { confirm_published: true } : {}),
+          }),
+          route: DECISION_PLAN_ROUTE,
+        },
+      );
+      setDecisionPlan(plan);
+      setDecisionPlanStale(false);
+    } catch (error: unknown) {
+      setDecisionPlanError(errorSummary(error));
+    } finally {
+      setDecisionPlanLoading(false);
+    }
+  };
+
+  const openDecisionPlan = (recommendation: DecisionRecommendation): void => {
+    setDecisionRequest(recommendation);
     setFeedbackDraft("");
+    setDecisionConfirmPublished(false);
+    setDecisionPlan(null);
+    setDecisionPlanError("");
+    setDecisionPlanStale(false);
+    setDecisionNotice("");
+    void loadDecisionPlan(recommendation, "", false);
+  };
+
+  const onDecisionFeedbackChange = (value: string): void => {
+    setFeedbackDraft(value);
+    if (!decisionRequest || !decisionPlan) return;
+    if (decisionPlanRefreshTimerRef.current !== null) window.clearTimeout(decisionPlanRefreshTimerRef.current);
+    decisionPlanRefreshTimerRef.current = window.setTimeout(() => {
+      decisionPlanRefreshTimerRef.current = null;
+      void loadDecisionPlan(decisionRequest, value, decisionConfirmPublished);
+    }, 320);
+  };
+
+  const onDecisionConfirmPublishedChange = (value: boolean): void => {
+    setDecisionConfirmPublished(value);
+    if (decisionRequest) void loadDecisionPlan(decisionRequest, feedbackDraft, value);
+  };
+
+  const applyDecisionPlan = async (): Promise<void> => {
+    if (!decisionRequest || !decisionPlan) return;
+    setDecisionPlanBusy(true);
+    setDecisionPlanError("");
+    setDecisionNotice("");
+    try {
+      const result = await apiFetch<{ outbox_inserted?: boolean }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/decision`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", "if-match": decisionPlan.etag },
+          body: JSON.stringify({
+            recommendation: decisionRequest,
+            plan_fingerprint: decisionPlan.plan_fingerprint,
+            ...(feedbackDraft.trim() ? { feedback_md: feedbackDraft.trim() } : {}),
+            ...(decisionConfirmPublished ? { confirm_published: true } : {}),
+          }),
+          route: DECISION_ROUTE,
+        },
+      );
+      setDecisionRequest(null);
+      setDecisionPlan(null);
+      setFeedbackDraft("");
+      setDecisionConfirmPublished(false);
+      setDecisionNotice(result.outbox_inserted === false
+        ? "Decision recorded; no notification was queued."
+        : decisionRequest === "maybe"
+          ? "Submission waitlisted."
+          : `Submission ${decisionRequest === "approve" ? "accepted" : "rejected"} and notification queued.`);
+      reload();
+    } catch (error: unknown) {
+      if (isDecisionPlanConflict(error)) setDecisionPlanStale(true);
+      else setDecisionPlanError(errorSummary(error));
+    } finally {
+      setDecisionPlanBusy(false);
+    }
   };
 
   const sendMessage = async (event: Event) => {
@@ -1131,8 +1236,23 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           {/* Reserved height, so a failed save answers here without moving the
               button the operator is about to press again. */}
           <span class={`record-inline-message ${contentError ? "error" : ""}`} role={contentError ? "alert" : undefined}>{contentError || " "}</span></div></form></CardBody></Card>}
-        {record.actions.can_decide && <Card><CardHeader title="Record action"><span class={record.decisions.length > 0 ? "record-decision-cue" : "subtle"}>{decidedNote(record.decisions[0])}</span></CardHeader><CardBody><div class="record-action-row">{record.status !== "accepted" && <Button variant="primary" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("approve"); setFeedbackDraft(""); }}>Accept</Button>}{record.status !== "waitlisted" && <Button disabled={Boolean(busy)} onClick={() => { setDecisionRequest("maybe"); setFeedbackDraft(""); }}>Maybe</Button>}{record.status !== "rejected" && <Button variant="danger" disabled={Boolean(busy)} onClick={() => { setDecisionRequest("deny"); setFeedbackDraft(""); }}>Reject</Button>}<span class="subtle">Feedback (optional) is saved with the decision; accepted and rejected decisions also include it in the speaker email.</span></div></CardBody></Card>}
-        {decisionRequest && <div class="record-decision-dialog" role="group" aria-labelledby="record-decision-heading"><div class="record-decision-dialog-head"><div><span class="eyebrow">Confirm record action</span><h2 id="record-decision-heading">{decisionRequest === "approve" ? "Accept this submission?" : decisionRequest === "maybe" ? "Waitlist this submission?" : "Reject this submission?"}</h2></div><button type="button" aria-label="Close decision dialog" onClick={() => setDecisionRequest(null)}>×</button></div><p>{decisionRequest === "maybe" ? "A waitlist does not send a message. Any feedback you add is saved with the decision." : "Feedback is optional. If you add it, the speaker will see the same words in the decision email."}</p><label class="field"><span>Feedback for the speaker (optional)</span><textarea rows={6} value={feedbackDraft} onInput={(event) => setFeedbackDraft(event.currentTarget.value)} placeholder="Share context the speaker can act on." /></label><div class="record-action-row"><Button type="button" onClick={() => setDecisionRequest(null)}>Cancel</Button><Button type="button" variant={decisionRequest === "deny" ? "danger" : "primary"} disabled={Boolean(busy)} onClick={() => void decide()}>{busy ? "Saving…" : decisionRequest === "approve" ? "Accept and notify" : decisionRequest === "maybe" ? "Waitlist" : "Reject and notify"}</Button></div></div>}
+        {record.actions.can_decide && <Card><CardHeader title="Record action"><span class={record.decisions.length > 0 ? "record-decision-cue" : "subtle"}>{decidedNote(record.decisions[0])}</span></CardHeader><CardBody><div class="record-action-row">{record.status !== "accepted" && <Button variant="primary" disabled={Boolean(busy) || decisionPlanLoading} onClick={() => openDecisionPlan("approve")}>Accept</Button>}{record.status !== "waitlisted" && <Button disabled={Boolean(busy) || decisionPlanLoading} onClick={() => openDecisionPlan("maybe")}>Maybe</Button>}{record.status !== "rejected" && <Button variant="danger" disabled={Boolean(busy) || decisionPlanLoading} onClick={() => openDecisionPlan("deny")}>Reject</Button>}<span class="subtle">Review the server-built plan, recipient render, and live-record guard before applying this decision.</span></div></CardBody></Card>}
+        {decisionRequest && <DecisionPlanPanel
+          plan={decisionPlan}
+          loading={decisionPlanLoading}
+          error={decisionPlanError}
+          stale={decisionPlanStale}
+          busy={decisionPlanBusy}
+          feedback={feedbackDraft}
+          confirmPublished={decisionConfirmPublished}
+          publishedCount={isLivePublicly ? 1 : 0}
+          onFeedbackChange={onDecisionFeedbackChange}
+          onConfirmPublishedChange={onDecisionConfirmPublishedChange}
+          onConfirm={() => void applyDecisionPlan()}
+          onClose={() => { setDecisionRequest(null); setDecisionPlan(null); setDecisionPlanError(""); setDecisionPlanStale(false); }}
+          onRefresh={() => decisionRequest && void loadDecisionPlan(decisionRequest, feedbackDraft, decisionConfirmPublished)}
+        />}
+        {decisionNotice && <p class="record-inline-message notice" role="status">{decisionNotice}</p>}
         {record.decisions.length > 0 && <Card><CardHeader title="Decision history"><span class="tabular">{record.decisions.length}</span></CardHeader><CardBody><div class="record-decision-list">{record.decisions.map((decision) => <article class="record-decision" key={decision.id}><div class="record-decision-head"><strong>{decision.kind === "reversal" ? `Acceptance reversed · ${statusLabel(decision.resulting_status)}` : statusLabel(decision.resulting_status)}</strong><span>{decision.decided_by_name || "Conference team"} · {moment(decision.decided_at)}</span></div><p>{decision.note || decision.feedback_md || "No feedback recorded."}</p></article>)}</div></CardBody></Card>}
         {record.actions.can_view_notes && <Card class="record-notes-card"><CardHeader title="Internal notes"><span class="subtle">Staff only · never sent</span></CardHeader><CardBody><SubmissionNotesCardBody
           state={notesState}

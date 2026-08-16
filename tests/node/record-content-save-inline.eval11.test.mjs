@@ -128,13 +128,15 @@ test("CONTRACT · one record's unsaved text cannot follow you to another record"
 
 test("CONTRACT · a decision that did not land leaves its dialog and its words on screen", async () => {
   const page = await source("src/ui/submissions/SubmissionRecordPage.tsx");
-  const decide = fn(page, "const decide = async");
+  const decide = fn(page, "const applyDecisionPlan = async");
 
-  // Closing the dialog before the request meant the feedback survived in state
+  // Closing the plan before the request meant the feedback survived in state
   // with nothing on screen able to reach it, and the next action cleared it.
-  assert.doesNotMatch(decide.slice(0, decide.indexOf("await act")), /setDecisionRequest\(null\)/);
-  assert.match(decide, /if \(!decided\) return;/);
-  assert.match(decide, /setDecisionRequest\(null\);\s*setFeedbackDraft\(""\);/);
+  assert.match(decide, /if \(!decisionRequest \|\| !decisionPlan\) return;/);
+  assert.doesNotMatch(decide.slice(0, decide.indexOf("await apiFetch")), /setDecisionRequest\(null\)/);
+  assert.match(decide, /"if-match": decisionPlan\.etag/);
+  assert.match(decide, /plan_fingerprint: decisionPlan\.plan_fingerprint/);
+  assert.match(decide, /setDecisionRequest\(null\);\s*setDecisionPlan\(null\);\s*setFeedbackDraft\(""\);/);
 });
 
 test("CONTRACT · act keeps its own policy for writes that carry no typed work", async () => {
