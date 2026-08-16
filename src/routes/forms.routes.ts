@@ -5,16 +5,22 @@ import { ApiError } from "../api/errors";
 import { createListQuerySchema, createListResponseSchema } from "../api/list";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
-import type { FormFieldRow, FormFieldType, FormRow } from "../db/schema";
+import type { FieldLibraryRow, FormFieldRow, FormFieldType, FormRow } from "../db/schema";
 import { writeAudit } from "../lib/audit";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole, roleForEvent, tokenHasGrant } from "../lib/auth/scope-resolution";
 import { normalizeFieldConfig, resolveBoundOptions } from "../lib/bound-options";
 import { parseFormCondition } from "../lib/form-conditions";
 import {
+  conditionNote,
+  isParticipantMachineryKey,
+  materializeLibraryCondition,
+} from "../lib/form-field-library";
+import {
   FORM_SORTS,
   countFormResponses,
   findForm,
+  effectiveFormStatus,
   type FormFieldView,
   listFormAdmins,
   listFormFields,
@@ -27,6 +33,12 @@ const eventParams = z.object({ eventId: z.string().min(1) });
 const formParams = eventParams.extend({ formId: z.string().min(1) });
 const fieldParams = formParams.extend({ fieldId: z.string().min(1) });
 const adminParams = formParams.extend({ personId: z.string().min(1) });
+const libraryParams = eventParams.extend({ libraryFieldId: z.string().min(1) });
+const libraryQuerySchema = z.object({
+  search: z.string().trim().max(120).default(""),
+  form_id: z.string().min(1).optional(),
+});
+const copyLibraryParams = formParams;
 
 const conditionClauseSchema = z.object({
   fieldKey: z.string().min(1).max(120),
@@ -37,6 +49,17 @@ const conditionSchema = z
   .object({ all: z.array(conditionClauseSchema).max(40) })
   .nullable();
 const configSchema = z.record(z.string(), z.unknown()).default({});
+const formFieldTypeSchema = z.enum([
+  "short_text",
+  "long_text",
+  "single_select",
+  "multi_select",
+  "url",
+  "email",
+  "file",
+  "number",
+  "date",
+]);
 
 const formSummarySchema = z
   .object({
@@ -70,21 +93,13 @@ const formFieldSchema = z
     key: z.string(),
     label: z.string(),
     help_text: z.string().nullable(),
-    type: z.enum([
-      "short_text",
-      "long_text",
-      "single_select",
-      "multi_select",
-      "url",
-      "email",
-      "file",
-      "number",
-      "date",
-    ]),
+    type: formFieldTypeSchema,
     required: z.boolean(),
     position: z.number().int().nonnegative(),
     config: configSchema,
     condition: conditionSchema,
+    library_field_id: z.string().optional(),
+    library_field_version: z.number().int().positive().optional(),
     created_at: z.number().int(),
     updated_at: z.number().int(),
   })
@@ -168,9 +183,48 @@ const createFieldSchema = z.object({
   position: z.number().int().min(0).optional(),
   config: configSchema,
   condition: conditionSchema.default(null),
+  save_to_library: z.boolean().default(false),
 });
 
-const patchFieldSchema = createFieldSchema.partial().omit({ position: true });
+const patchFieldSchema = createFieldSchema.partial().omit({ position: true, save_to_library: true });
+const fieldLibraryBodySchema = z.object({
+  key: z.string().trim().min(1).max(120).regex(/^[a-z][a-z0-9_]*$/),
+  label: z.string().trim().min(1).max(240),
+  help_text: z.string().max(2_000).nullable().optional(),
+  type: formFieldTypeSchema,
+  required: z.boolean().default(false),
+  config: configSchema,
+  condition: conditionSchema.default(null),
+});
+const patchFieldLibrarySchema = fieldLibraryBodySchema.partial();
+const libraryFieldSchema = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  key: z.string(),
+  label: z.string(),
+  help_text: z.string().nullable(),
+  type: formFieldTypeSchema,
+  required: z.boolean(),
+  config: configSchema,
+  condition: conditionSchema,
+  condition_note: z.string().nullable(),
+  version: z.number().int().positive(),
+  used_on_forms: z.number().int().nonnegative(),
+  stale_copy_count: z.number().int().nonnegative(),
+  on_destination_form: z.boolean(),
+  created_at: z.number().int(),
+  updated_at: z.number().int(),
+});
+const libraryCopyBodySchema = z.object({
+  library_field_id: z.string().min(1),
+  position: z.number().int().min(0).optional(),
+});
+const missingConditionWarningSchema = z.object({
+  code: z.literal("missing_condition_trigger"),
+  missing_keys: z.array(z.string()),
+  message: z.string(),
+});
+const libraryCopyResponseSchema = formFieldSchema.extend({ warning: missingConditionWarningSchema.nullable() });
 const reorderFieldsSchema = z.object({ field_ids: z.array(z.string().min(1)).min(1).max(200) });
 const adminBodySchema = z.object({ person_id: z.string().min(1) });
 
@@ -266,6 +320,107 @@ function fieldConfigJson(value: unknown, type: FormFieldType): string {
 async function fieldResponse(db: D1Database, eventId: string, row: FormFieldRow): Promise<FormFieldView> {
   const [resolved] = await resolveBoundOptions(db, eventId, [normalizeField(row)]);
   return resolved;
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> {
+  if (typeof value !== "string") return (value as Record<string, unknown> | null) ?? {};
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+interface FieldLibraryView {
+  id: string;
+  event_id: string;
+  key: string;
+  label: string;
+  help_text: string | null;
+  type: FormFieldType;
+  required: boolean;
+  config: Record<string, unknown>;
+  condition: ReturnType<typeof parseFormCondition>;
+  condition_note: string | null;
+  version: number;
+  used_on_forms: number;
+  stale_copy_count: number;
+  on_destination_form: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+async function fieldLibraryResponse(
+  db: D1Database,
+  row: FieldLibraryRow,
+  destinationFormId?: string,
+): Promise<FieldLibraryView> {
+  const usage = await db.prepare(
+    `SELECT COUNT(DISTINCT ff.form_id) AS used_on_forms,
+            COALESCE(SUM(CASE WHEN ff.library_field_version < fl.version THEN 1 ELSE 0 END), 0) AS stale_copy_count
+       FROM field_library fl
+       LEFT JOIN form_fields ff ON ff.library_field_id = fl.id
+      WHERE fl.id = ?
+      GROUP BY fl.id`,
+  ).bind(row.id).first<{ used_on_forms: number; stale_copy_count: number }>();
+  const destination = destinationFormId
+    ? await db.prepare("SELECT 1 AS present FROM form_fields WHERE form_id = ? AND (library_field_id = ? OR key = ?) LIMIT 1")
+      .bind(destinationFormId, row.id, row.key)
+      .first<{ present: number }>()
+    : null;
+  const condition = parseFormCondition(row.condition);
+  return {
+    id: row.id,
+    event_id: row.event_id,
+    key: row.key,
+    label: row.label,
+    help_text: row.help_text,
+    type: row.type,
+    required: row.required === 1,
+    config: parseJsonObject(row.config),
+    condition,
+    condition_note: conditionNote(condition),
+    version: Number(row.version),
+    used_on_forms: Number(usage?.used_on_forms ?? 0),
+    stale_copy_count: Number(usage?.stale_copy_count ?? 0),
+    on_destination_form: destination?.present === 1,
+    created_at: Number(row.created_at),
+    updated_at: Number(row.updated_at),
+  };
+}
+
+async function getLibraryField(
+  context: Context<ApiEnv>,
+  eventId: string,
+  libraryFieldId: string,
+  write = false,
+): Promise<FieldLibraryRow> {
+  await requireFormAccess(context, eventId, undefined, write);
+  const field = await context.env.DB.prepare("SELECT * FROM field_library WHERE id = ? AND event_id = ?")
+    .bind(libraryFieldId, eventId)
+    .first<FieldLibraryRow>();
+  if (!field) throw ApiError.notFound("library question not found");
+  return field;
+}
+
+function rejectParticipantQuestion(key: string): void {
+  if (isParticipantMachineryKey(key)) {
+    throw ApiError.unprocessable(
+      "participant machinery such as speaker email, co-speakers, and moderator fields is structural and cannot be saved to the question library",
+      "key",
+    );
+  }
+}
+
+async function destinationFormForLibrary(
+  context: Context<ApiEnv>,
+  eventId: string,
+  formId: string,
+): Promise<FormRow> {
+  return getOwnedForm(context, eventId, formId, true);
 }
 
 async function normalizeFieldPositions(db: D1Database, formId: string): Promise<void> {
@@ -505,11 +660,11 @@ const duplicateEventForm = defineApiRoute(
         source.turnstile_required, now, now,
       ),
       ...fields.results.map((field) => context.env.DB.prepare(
-        `INSERT INTO form_fields (id, form_id, key, label, help_text, type, required, position, config, condition, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO form_fields (id, form_id, key, label, help_text, type, required, position, config, condition, library_field_id, library_field_version, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         crypto.randomUUID(), id, field.key, field.label, field.help_text, field.type, field.required,
-        field.position, field.config, field.condition, now, now,
+        field.position, field.config, field.condition, field.library_field_id, field.library_field_version, now, now,
       )),
       ...admins.results.map((admin) => context.env.DB.prepare(
         "INSERT INTO form_admins (id, form_id, person_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
@@ -626,6 +781,241 @@ const reopenEventForm = defineApiRoute(
   async (context) => context.json(await setFormLifecycle(context, context.req.valid("param").eventId, context.req.valid("param").formId, "open"), 200),
 );
 
+const listFieldLibraryRoute = defineApiRoute(
+  {
+    method: "get",
+    path: "/api/v1/events/{eventId}/field-library",
+    operationId: "listFieldLibrary",
+    summary: "List reusable form questions",
+    description: "Search event-scoped question definitions without exposing participant machinery.",
+    tags: ["Forms"],
+    request: { params: eventParams, query: libraryQuerySchema },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
+    responses: { 200: jsonResponse(z.object({ data: z.array(libraryFieldSchema) }), "Question library"), ...errorResponses([400, 401, 403, 404, 500]) },
+  },
+  async (context) => {
+    const { eventId } = context.req.valid("param");
+    const query = context.req.valid("query");
+    if (query.form_id) await getOwnedForm(context, eventId, query.form_id, false);
+    else await requireFormAccess(context, eventId, undefined, false);
+    const pattern = `%${query.search}%`;
+    const rows = await context.env.DB.prepare(
+      `SELECT * FROM field_library
+        WHERE event_id = ?
+          AND key NOT LIKE 'speaker_%'
+          AND key NOT LIKE 'co_speaker_%'
+          AND key NOT LIKE 'moderator_%'
+          AND key NOT LIKE 'chairperson_%'
+          AND key NOT LIKE 'submitter_%'
+          AND key NOT LIKE 'participant_%'
+          AND key NOT LIKE 'other_participant_%'
+          AND (? = '' OR key LIKE ? COLLATE NOCASE OR label LIKE ? COLLATE NOCASE)
+        ORDER BY label COLLATE NOCASE ASC, id ASC
+        LIMIT 100`,
+    ).bind(eventId, query.search, pattern, pattern).all<FieldLibraryRow>();
+    return context.json({
+      data: await Promise.all(rows.results.map((row) => fieldLibraryResponse(context.env.DB, row, query.form_id))),
+    }, 200);
+  },
+);
+
+const createFieldLibraryRoute = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/field-library",
+    operationId: "createFieldLibraryQuestion",
+    summary: "Save a reusable form question",
+    tags: ["Forms"],
+    request: { params: eventParams, body: { content: { "application/json": { schema: fieldLibraryBodySchema } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 201: jsonResponse(libraryFieldSchema, "Created library question"), ...errorResponses([400, 401, 403, 404, 409, 422, 500]) },
+  },
+  async (context) => {
+    const { eventId } = context.req.valid("param");
+    await requireFormAccess(context, eventId, undefined, true);
+    const body = context.req.valid("json");
+    rejectParticipantQuestion(body.key);
+    const id = crypto.randomUUID();
+    const now = Date.now();
+    try {
+      await context.env.DB.prepare(
+        `INSERT INTO field_library
+          (id, event_id, key, label, help_text, type, required, config, condition, version, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      ).bind(
+        id,
+        eventId,
+        body.key,
+        body.label,
+        body.help_text ?? null,
+        body.type,
+        body.required ? 1 : 0,
+        fieldConfigJson(body.config, body.type),
+        conditionJson(body.condition),
+        now,
+        now,
+      ).run();
+    } catch {
+      throw ApiError.conflict("a library question with that key already exists in this conference");
+    }
+    const row = await context.env.DB.prepare("SELECT * FROM field_library WHERE id = ? AND event_id = ?")
+      .bind(id, eventId)
+      .first<FieldLibraryRow>();
+    if (!row) throw new Error("created library question disappeared");
+    return context.json(await fieldLibraryResponse(context.env.DB, row), 201);
+  },
+);
+
+const updateFieldLibraryRoute = defineApiRoute(
+  {
+    method: "patch",
+    path: "/api/v1/events/{eventId}/field-library/{libraryFieldId}",
+    operationId: "updateFieldLibraryQuestion",
+    summary: "Edit a reusable form question",
+    tags: ["Forms"],
+    request: { params: libraryParams, body: { content: { "application/json": { schema: patchFieldLibrarySchema } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: jsonResponse(libraryFieldSchema, "Updated library question"), ...errorResponses([400, 401, 403, 404, 409, 422, 500]) },
+  },
+  async (context) => {
+    const { eventId, libraryFieldId } = context.req.valid("param");
+    const current = await getLibraryField(context, eventId, libraryFieldId, true);
+    const body = context.req.valid("json");
+    if (body.key !== undefined) rejectParticipantQuestion(body.key);
+    const updates: string[] = [];
+    const values: (string | number | null)[] = [];
+    const set = (column: string, value: string | number | null) => {
+      updates.push(`${column} = ?`);
+      values.push(value);
+    };
+    const nextType = body.type ?? current.type;
+    if (body.key !== undefined) set("key", body.key);
+    if (body.label !== undefined) set("label", body.label);
+    if (body.help_text !== undefined) set("help_text", body.help_text);
+    if (body.type !== undefined) set("type", body.type);
+    if (body.required !== undefined) set("required", body.required ? 1 : 0);
+    if (body.config !== undefined || body.type !== undefined) {
+      set("config", fieldConfigJson(body.config ?? parseJsonObject(current.config), nextType));
+    }
+    if (body.condition !== undefined) set("condition", conditionJson(body.condition));
+    if (updates.length > 0) {
+      updates.push("version = version + 1");
+      updates.push("updated_at = ?");
+      values.push(Math.max(Date.now(), Number(current.updated_at) + 1));
+      try {
+        await context.env.DB.prepare(`UPDATE field_library SET ${updates.join(", ")} WHERE id = ? AND event_id = ?`)
+          .bind(...values, libraryFieldId, eventId)
+          .run();
+      } catch {
+        throw ApiError.conflict("a library question with that key already exists in this conference");
+      }
+    }
+    const updated = await context.env.DB.prepare("SELECT * FROM field_library WHERE id = ? AND event_id = ?")
+      .bind(libraryFieldId, eventId)
+      .first<FieldLibraryRow>();
+    if (!updated) throw ApiError.notFound("library question not found");
+    return context.json(await fieldLibraryResponse(context.env.DB, updated), 200);
+  },
+);
+
+const deleteFieldLibraryRoute = defineApiRoute(
+  {
+    method: "delete",
+    path: "/api/v1/events/{eventId}/field-library/{libraryFieldId}",
+    operationId: "deleteFieldLibraryQuestion",
+    summary: "Delete an unused reusable form question",
+    tags: ["Forms"],
+    request: { params: libraryParams },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 200: jsonResponse(z.object({ deleted: z.boolean() }), "Deleted library question"), ...errorResponses([401, 403, 404, 409, 500]) },
+  },
+  async (context) => {
+    const { eventId, libraryFieldId } = context.req.valid("param");
+    await getLibraryField(context, eventId, libraryFieldId, true);
+    const references = await context.env.DB.prepare("SELECT COUNT(*) AS total FROM form_fields WHERE library_field_id = ?")
+      .bind(libraryFieldId)
+      .first<{ total: number }>();
+    if (Number(references?.total ?? 0) > 0) {
+      throw ApiError.conflict("this question has existing form copies; those copies are self-contained and must be removed first");
+    }
+    await context.env.DB.prepare("DELETE FROM field_library WHERE id = ? AND event_id = ?").bind(libraryFieldId, eventId).run();
+    return context.json({ deleted: true }, 200);
+  },
+);
+
+const copyFieldFromLibraryRoute = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/forms/{formId}/fields/from-library",
+    operationId: "copyFieldFromLibrary",
+    summary: "Materialize a library question on a draft form",
+    tags: ["Forms"],
+    request: { params: copyLibraryParams, body: { content: { "application/json": { schema: libraryCopyBodySchema } } } },
+    policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "write" }, concurrency: "none" },
+    responses: { 201: jsonResponse(libraryCopyResponseSchema, "Copied library question"), ...errorResponses([400, 401, 403, 404, 409, 422, 500]) },
+  },
+  async (context) => {
+    const { eventId, formId } = context.req.valid("param");
+    const form = await destinationFormForLibrary(context, eventId, formId);
+    if (effectiveFormStatus(form) !== "draft") {
+      throw ApiError.conflict("library questions can only be added to a draft form");
+    }
+    const body = context.req.valid("json");
+    const source = await context.env.DB.prepare("SELECT * FROM field_library WHERE id = ? AND event_id = ?")
+      .bind(body.library_field_id, eventId)
+      .first<FieldLibraryRow>();
+    if (!source) throw ApiError.notFound("library question not found in this conference");
+    rejectParticipantQuestion(source.key);
+    const fields = await context.env.DB.prepare(
+      "SELECT key, library_field_id FROM form_fields WHERE form_id = ? ORDER BY position ASC, id ASC",
+    ).bind(formId).all<{ key: string; library_field_id: string | null }>();
+    const destinationKeys = new Set(fields.results.map((field) => field.key));
+    if (fields.results.some((field) => field.library_field_id === source.id)) {
+      throw ApiError.conflict("this question is already On this form");
+    }
+    if (destinationKeys.has(source.key)) {
+      throw ApiError.conflict(`a field with the key ${source.key} already exists on this form`);
+    }
+    const position = Math.min(body.position ?? fields.results.length, fields.results.length);
+    const now = Date.now();
+    const { condition, warning } = materializeLibraryCondition(parseFormCondition(source.condition), destinationKeys);
+    const id = crypto.randomUUID();
+    try {
+      await context.env.DB.batch([
+        context.env.DB.prepare("UPDATE form_fields SET position = position + 1, updated_at = ? WHERE form_id = ? AND position >= ?")
+          .bind(now, formId, position),
+        context.env.DB.prepare(
+          `INSERT INTO form_fields
+            (id, form_id, key, label, help_text, type, required, position, config, condition, library_field_id, library_field_version, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).bind(
+          id,
+          formId,
+          source.key,
+          source.label,
+          source.help_text,
+          source.type,
+          source.required,
+          position,
+          source.config,
+          condition ? JSON.stringify(condition) : null,
+          source.id,
+          source.version,
+          now,
+          now,
+        ),
+      ]);
+    } catch {
+      throw ApiError.conflict("the library question could not be copied to this form");
+    }
+    const field = await context.env.DB.prepare("SELECT * FROM form_fields WHERE id = ? AND form_id = ?")
+      .bind(id, formId)
+      .first<FormFieldRow>();
+    if (!field) throw new Error("copied library question disappeared");
+    return context.json({ ...(await fieldResponse(context.env.DB, eventId, field)), warning }, 201);
+  },
+);
+
 const listFormFieldsRoute = defineApiRoute(
   {
     method: "get",
@@ -660,18 +1050,53 @@ const createFormField = defineApiRoute(
     await getOwnedForm(context, eventId, formId, true);
     const body = context.req.valid("json");
     const condition = conditionJson(body.condition);
+    if (body.save_to_library) rejectParticipantQuestion(body.key);
     const current = await context.env.DB.prepare("SELECT COUNT(*) AS count FROM form_fields WHERE form_id = ?").bind(formId).first<{ count: number }>();
     const count = Number(current?.count ?? 0);
     const position = Math.min(body.position ?? count, count);
     const now = Date.now();
     const id = crypto.randomUUID();
+    const libraryId = body.save_to_library ? crypto.randomUUID() : null;
     try {
       await context.env.DB.batch([
         context.env.DB.prepare("UPDATE form_fields SET position = position + 1, updated_at = ? WHERE form_id = ? AND position >= ?").bind(now, formId, position),
+        ...(libraryId ? [context.env.DB.prepare(
+          `INSERT INTO field_library
+            (id, event_id, key, label, help_text, type, required, config, condition, version, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        ).bind(
+          libraryId,
+          eventId,
+          body.key,
+          body.label,
+          body.help_text ?? null,
+          body.type,
+          body.required ? 1 : 0,
+          fieldConfigJson(body.config, body.type),
+          condition,
+          now,
+          now,
+        )] : []),
         context.env.DB.prepare(
-          `INSERT INTO form_fields (id, form_id, key, label, help_text, type, required, position, config, condition, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).bind(id, formId, body.key, body.label, body.help_text ?? null, body.type, body.required ? 1 : 0, position, fieldConfigJson(body.config, body.type), condition, now, now),
+          `INSERT INTO form_fields
+            (id, form_id, key, label, help_text, type, required, position, config, condition, library_field_id, library_field_version, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).bind(
+          id,
+          formId,
+          body.key,
+          body.label,
+          body.help_text ?? null,
+          body.type,
+          body.required ? 1 : 0,
+          position,
+          fieldConfigJson(body.config, body.type),
+          condition,
+          libraryId,
+          libraryId ? 1 : null,
+          now,
+          now,
+        ),
       ]);
     } catch (error) {
       if (error instanceof ApiError) throw error;
@@ -860,6 +1285,11 @@ export const apiRoutes = [
   publishEventForm,
   closeEventForm,
   reopenEventForm,
+  listFieldLibraryRoute,
+  createFieldLibraryRoute,
+  updateFieldLibraryRoute,
+  deleteFieldLibraryRoute,
+  copyFieldFromLibraryRoute,
   listFormFieldsRoute,
   createFormField,
   reorderFormFields,

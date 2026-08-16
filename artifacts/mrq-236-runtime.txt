@@ -1,0 +1,17 @@
+MRQ-236 local runtime evidence
+Captured: 2026-08-16
+Server: npx vite dev --host 127.0.0.1 --port 5173
+
+GET /health
+HTTP/1.1 200 OK
+{"service":"marquee","status":"ok","build":"d0140212c18a"}
+
+GET /api/v1/events/evt_mrq236/field-library (no cookie)
+HTTP/1.1 401 Unauthorized
+{"error":{"code":"unauthenticated","message":"missing or invalid credential"}}
+
+GET /api/openapi.json
+listFieldLibrary
+
+POST /api/v1/events/{eventId}/forms/{formId}/fields/from-library (OpenAPI operation)
+copyFieldFromLibrary

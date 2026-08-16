@@ -473,11 +473,25 @@ export interface FormFieldRow extends MutableRecord {
   config: JsonText;
   form_id: Id;
   help_text: string | null;
+  library_field_id: Id | null;
+  library_field_version: number | null;
   key: string;
   label: string;
   position: number;
   required: 0 | 1;
   type: FormFieldType;
+}
+
+export interface FieldLibraryRow extends MutableRecord {
+  condition: JsonText | null;
+  config: JsonText;
+  event_id: Id;
+  help_text: string | null;
+  key: string;
+  label: string;
+  required: 0 | 1;
+  type: FormFieldType;
+  version: number;
 }
 
 export interface FormAdminRow extends MutableRecord {
@@ -992,6 +1006,7 @@ export const CORE_TABLE_NAMES = [
   "api_tokens",
   "forms",
   "form_fields",
+  "field_library",
   "form_admins",
   "email_templates",
   "outbox",
@@ -1046,7 +1061,7 @@ export const CORE_TABLE_NAMES = [
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 66 as const;
+export const CORE_TABLE_COUNT = 67 as const;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -1064,7 +1079,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 66>>;
+type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 67>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",
@@ -1090,6 +1105,7 @@ export const CORE_TABLES = {
   events: "events",
   form_admins: "form_admins",
   form_fields: "form_fields",
+  field_library: "field_library",
   formats: "formats",
   forms: "forms",
   import_rows: "import_rows",
@@ -1159,6 +1175,7 @@ export interface CoreTableRows {
   events: EventRow;
   form_admins: FormAdminRow;
   form_fields: FormFieldRow;
+  field_library: FieldLibraryRow;
   formats: FormatRow;
   forms: FormRow;
   import_rows: ImportRowRow;
@@ -1230,6 +1247,7 @@ interface CoreDefaultColumns {
   events: "demo_mode" | "status";
   form_admins: never;
   form_fields: "config" | "required";
+  field_library: "config" | "required" | "version";
   formats: never;
   forms:
     | "admin_notify_person_ids"
@@ -1323,6 +1341,7 @@ export type MagicLinkInsert = CoreInsert<"magic_links">;
 export type ApiTokenInsert = CoreInsert<"api_tokens">;
 export type FormInsert = CoreInsert<"forms">;
 export type FormFieldInsert = CoreInsert<"form_fields">;
+export type FieldLibraryInsert = CoreInsert<"field_library">;
 export type FormAdminInsert = CoreInsert<"form_admins">;
 export type EmailTemplateInsert = CoreInsert<"email_templates">;
 export type OutboxInsert = CoreInsert<"outbox">;

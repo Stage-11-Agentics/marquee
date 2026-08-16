@@ -65,6 +65,8 @@ export interface FormFieldView {
   position: number;
   config: Record<string, unknown>;
   condition: ReturnType<typeof parseFormCondition>;
+  library_field_id?: string;
+  library_field_version?: number;
   created_at: number;
   updated_at: number;
 }
@@ -150,6 +152,10 @@ export function normalizeField(row: FormFieldRow): FormFieldView {
     position: Number(row.position),
     config: parseJson<Record<string, unknown>>(row.config, {}),
     condition: parseFormCondition(row.condition),
+    ...(row.library_field_id ? { library_field_id: row.library_field_id } : {}),
+    ...(row.library_field_version === null || row.library_field_version === undefined
+      ? {}
+      : { library_field_version: Number(row.library_field_version) }),
     created_at: Number(row.created_at),
     updated_at: Number(row.updated_at),
   };

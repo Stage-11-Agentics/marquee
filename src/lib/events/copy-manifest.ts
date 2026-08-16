@@ -154,6 +154,18 @@ export const COPY_TABLES: readonly CopyTable[] = [
     verbatim: ["name", "capacity", "position", "av_capabilities", "notes"],
   },
   {
+    table: "field_library",
+    set: "forms",
+    key: "id",
+    scope: { kind: "event" },
+    orderBy: "label, id",
+    remap: { event_id: "__event__" },
+    nulls: [],
+    constants: {},
+    stamps: ["created_at", "updated_at"],
+    verbatim: ["key", "label", "help_text", "type", "required", "config", "condition", "version"],
+  },
+  {
     table: "forms",
     set: "forms",
     key: "id",
@@ -192,14 +204,14 @@ export const COPY_TABLES: readonly CopyTable[] = [
     key: "id",
     scope: { kind: "subquery", column: "form_id", sql: FORMS_OF_EVENT },
     orderBy: "position, id",
-    remap: { form_id: "forms" },
+    remap: { form_id: "forms", library_field_id: "field_library" },
     nulls: [],
     constants: {},
     stamps: ["created_at", "updated_at"],
     // Neither JSON blob carries an id: `condition` keys on fieldKey
     // (src/lib/form-conditions.ts) and `config` carries source/minItems only.
     // Stated so nobody builds a remapper for them.
-    verbatim: ["key", "label", "help_text", "type", "required", "position", "config", "condition"],
+    verbatim: ["key", "label", "help_text", "type", "required", "position", "config", "condition", "library_field_version"],
   },
   {
     table: "form_admins",
