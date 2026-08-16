@@ -38,6 +38,30 @@ test.describe("MRQ-233 calendar attention and explicit record resend", () => {
     await expect(modal.locator('[data-calendar-blocked-row="true"]')).toContainText(/missing email|invalid email/i);
   });
 
+  test("dashboard keeps the calendar row in the signed three-column attention grid", async ({ page }) => {
+    await enterOrganizer(page);
+    await page.goto(`/dashboard?event=${encodeURIComponent(eventId!)}`);
+
+    const attention = page.locator(".dashboard-attention");
+    const items = attention.locator(".dashboard-attention-item");
+    await expect(attention).toBeVisible();
+    await expect(items.filter({ hasText: /unsent schedule updates/i })).toHaveCount(1);
+    expect(await items.count()).toBeGreaterThanOrEqual(3);
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const wideColumns = await attention.evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(" ").length);
+    expect(wideColumns).toBe(3);
+    const rows = await items.evaluateAll((nodes) => {
+      const tops = [...nodes].map((node) => Math.round(node.getBoundingClientRect().top));
+      return new Set(tops).size;
+    });
+    if (await items.count() >= 5) expect(rows).toBe(2);
+
+    await page.setViewportSize({ width: 640, height: 900 });
+    const narrowColumns = await attention.evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(" ").length);
+    expect(narrowColumns).toBe(1);
+  });
+
   test("scheduled submission record keeps the explicit per-session calendar resend action", async ({ page }) => {
     await enterOrganizer(page);
     await page.goto(`/submissions/${encodeURIComponent(submissionId!)}?event=${encodeURIComponent(eventId!)}`);

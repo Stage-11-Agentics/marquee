@@ -402,3 +402,33 @@ test("resolver fails closed for missing batch parts and corrupt standalone mater
   await env.DB.prepare("UPDATE outbox SET ics_body = NULL WHERE id = ?").bind(standaloneRow!.id).run();
   expect((await getIcs(standaloneRow!.ics_uid)).response.status).toBe(404);
 });
+
+test("resolver fails closed for same-owner grain mixing and template-method mismatch", async () => {
+  const standalone = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, submissionId: SUBMISSION_ONE, now: NOW });
+  const standaloneRow = await env.DB.prepare("SELECT id, ics_uid, ics_body FROM outbox WHERE id = ?")
+    .bind(standalone[0]!.outbox_id)
+    .first<{ ics_body: string; ics_uid: string; id: string }>();
+  await env.DB.prepare(`
+    INSERT INTO outbox_calendar_parts
+      (id, outbox_id, submission_id, part_index, ics_uid, sequence, filename, ics_body, content_type, created_at, updated_at)
+    VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    "mixed-standalone-calendar-part",
+    standaloneRow!.id,
+    SUBMISSION_TWO,
+    standaloneRow!.ics_uid,
+    standalone[0]!.sequence,
+    `${standaloneRow!.ics_uid}.ics`,
+    standaloneRow!.ics_body,
+    "text/calendar; charset=utf-8; method=REQUEST",
+    NOW,
+    NOW,
+  ).run();
+  expect((await getIcs(standaloneRow!.ics_uid)).response.status).toBe(404);
+
+  await env.DB.prepare("DELETE FROM outbox_calendar_parts WHERE id = ?").bind("mixed-standalone-calendar-part").run();
+  await env.DB.prepare("UPDATE outbox SET ics_body = REPLACE(ics_body, 'METHOD:REQUEST', 'METHOD:CANCEL') WHERE id = ?")
+    .bind(standaloneRow!.id)
+    .run();
+  expect((await getIcs(standaloneRow!.ics_uid)).response.status).toBe(404);
+});

@@ -126,6 +126,8 @@ function exactExistingAdmission(
   speaker: CalendarDebtSpeaker,
 ): ClaimedItem[] | null {
   if (owner.parts.length !== speaker.items.length) return null;
+  if (owner.parts.some((part, index) => part.part_index !== index)) return null;
+  if (new Set(owner.parts.map((part) => part.ics_uid)).size !== owner.parts.length) return null;
   const claimed: ClaimedItem[] = [];
   for (const item of speaker.items) {
     const part = owner.parts.find((candidate) => candidate.submission_id === item.submission_id && candidate.ics_uid === item.uid);
@@ -166,10 +168,12 @@ async function verifyBatchAdmission(db: D1Database, outboxId: Id, claimed: reado
   ).bind(outboxId).first<{ created_at: number; ics_body: string | null; ics_uid: string | null; template_key: string }>();
   if (!owner || owner.template_key !== "calendar_batch_request" || owner.ics_uid !== null || owner.ics_body !== null) return false;
   const rows = await db.prepare(
-    `SELECT submission_id, ics_uid, sequence, filename, ics_body, content_type
+    `SELECT submission_id, part_index, ics_uid, sequence, filename, ics_body, content_type
      FROM outbox_calendar_parts WHERE outbox_id = ? ORDER BY part_index ASC`,
   ).bind(outboxId).all<ExistingBatchPart>();
   if (rows.results.length !== claimed.length) return false;
+  if (rows.results.some((row, index) => row.part_index !== index)) return false;
+  if (new Set(rows.results.map((row) => row.ics_uid)).size !== rows.results.length) return false;
   return claimed.every(({ item, sequence }) => {
     const row = rows.results.find((candidate) => candidate.submission_id === item.submission_id);
     if (!row) return false;
