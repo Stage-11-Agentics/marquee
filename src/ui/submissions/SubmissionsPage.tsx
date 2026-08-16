@@ -287,6 +287,7 @@ function Cell({ item, column, navigate, onCascadeComplete }: { item: SubmissionL
   if (column === "updated") return <span class="tabular">{formatMoment(item.last_saved_at ?? item.updated_at)}</span>;
   if (column === "origin") return <span>{item.origin[0]!.toUpperCase() + item.origin.slice(1)}</span>;
   if (column === "missing") return item.missing_fields.length ? <span class="draft-warning">{item.missing_fields.join(" · ")}</span> : <span class="subtle">—</span>;
+  if (column === "close") return <span class={`draft-close-state${item.form_closed ? " closed" : item.form_actionable ? " actionable" : ""}`}>{item.close_label}</span>;
   return <span>—</span>;
 }
 

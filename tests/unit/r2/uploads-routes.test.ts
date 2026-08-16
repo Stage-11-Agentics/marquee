@@ -62,6 +62,8 @@ CREATE TABLE speaker_tasks (
 CREATE TABLE forms (
   id TEXT PRIMARY KEY, event_id TEXT NOT NULL, name TEXT NOT NULL, slug TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('abstract', 'session')),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('draft', 'open', 'closed')),
+  opens_at INTEGER, closes_at INTEGER,
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
 CREATE TABLE form_fields (
@@ -86,6 +88,13 @@ CREATE TABLE attachments (
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ready')),
   sha256 TEXT, r2_etag TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
   CHECK (size_bytes >= 0), CHECK (status <> 'ready' OR r2_etag IS NOT NULL)
+);
+CREATE TABLE magic_links (
+  id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, short_code_hash TEXT,
+  person_id TEXT, event_id TEXT, purpose TEXT NOT NULL, redirect_to TEXT NOT NULL,
+  expires_at INTEGER NOT NULL, used_at INTEGER,
+  invite_role TEXT, invite_event_id TEXT, invite_org_id TEXT,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
 CREATE TABLE auth_sessions (
   id TEXT PRIMARY KEY, person_id TEXT NOT NULL, role_hint TEXT, expires_at INTEGER NOT NULL,
@@ -130,8 +139,8 @@ async function seedOrgEventDraft(overrides: {
     // it names, so a draft is only presignable through a form that declares
     // that field. `deck` is what every case below uploads to.
     env.DB.prepare(
-      `INSERT OR IGNORE INTO forms (id, event_id, name, slug, kind, created_at, updated_at)
-       VALUES (?1, ?2, 'Call for speakers', 'cfp', 'abstract', ?3, ?3)`,
+      `INSERT OR IGNORE INTO forms (id, event_id, name, slug, kind, status, created_at, updated_at)
+       VALUES (?1, ?2, 'Call for speakers', 'cfp', 'abstract', 'open', ?3, ?3)`,
     ).bind(`form-${overrides.eventId}`, overrides.eventId, NOW),
     env.DB.prepare(
       `INSERT OR IGNORE INTO form_fields (id, form_id, key, label, type, required, position, config, created_at, updated_at)

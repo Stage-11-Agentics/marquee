@@ -107,6 +107,10 @@ export interface SubmissionListItem {
   last_saved_at: number | null;
   updated_at: number;
   origin: "public" | "admin" | "import";
+  closes_at: number | null;
+  close_label: string;
+  form_closed: boolean;
+  form_actionable: boolean;
   missing_fields: string[];
   submitter: SubmissionSubmitterListItem | null;
   slot: SubmissionSlotListItem | null;

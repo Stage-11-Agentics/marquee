@@ -328,7 +328,7 @@ const exchangeMagicLink = defineApiRoute(
     const token = context.req.query("token");
     if (!token) return rejectMagicLink(context, "Missing token");
     const now = Date.now();
-    const purposes = ["login", "draft_resume", "cospeaker_profile", "task_link", "portal_invite"] as const;
+    const purposes = ["login", "cospeaker_profile", "task_link", "portal_invite"] as const;
 
     // The browser may already hold a live session for a different seat. Read
     // the link first: refusing a credential after spending it strands the

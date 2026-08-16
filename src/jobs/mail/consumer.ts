@@ -5,7 +5,7 @@ import { writeAudit } from "../../lib/audit";
 import { demoMailAllowlistFor, normalizeAllowlistEmail } from "../../lib/demo-mail-allowlist";
 import { RESEND_MAIL_FROM } from "../../lib/mail/config";
 import { MAX_CALENDAR_CANCELLATION_ATTEMPTS } from "../calendar/limits";
-import { enqueueOverdueTaskReminderRows, enqueuePreCloseReminderRows } from "./triggers";
+import { enqueueDraftCloseReminderRows, enqueueOverdueTaskReminderRows, enqueuePreCloseReminderRows } from "./triggers";
 
 export const MAIL_MESSAGE_TYPE = "mail_outbox";
 const PROCESSING_SENTINEL = "__mail_processing__";
@@ -366,6 +366,7 @@ export async function enqueueMailMessage(queue: Queue<unknown>, outboxId: string
 export async function runMailSchedule(db: D1Database, queue?: Queue<unknown>, now = Date.now()): Promise<number> {
   const results = [
     ...(await enqueuePreCloseReminderRows(db, now)),
+    ...(await enqueueDraftCloseReminderRows(db, now)),
     ...(await enqueueOverdueTaskReminderRows(db, now)),
   ];
   const inserted = results.filter((row) => row.inserted);

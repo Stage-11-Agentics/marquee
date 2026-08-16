@@ -1,9 +1,11 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import type { Id } from "../../db/schema";
+import { mintMagicLink } from "../../lib/auth/magic-links";
+import { draftResumeRedirectTo } from "../../routes/public-form.shared";
 import { IDEMPOTENCY_REGISTRY, type EntityId } from "./idempotency";
-import { buildIdempotencyKey, enqueueOutbox, type EnqueuedOutbox } from "./outbox";
-import { selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "./schedule";
+import { buildIdempotencyKey, enqueueOutbox, findByIdempotencyKey, type EnqueuedOutbox } from "./outbox";
+import { selectDraftCloseReminderCandidates, selectOverdueTaskCandidates, selectPreCloseReminderCandidates } from "./schedule";
 import { findTemplate, TRIGGER_TEMPLATE_KEYS, type MailTemplateKey } from "./templates";
 import type { MergeData } from "./render";
 import { assertKnownMergeFields } from "../../lib/mail-merge-fields";
@@ -49,6 +51,9 @@ export async function enqueueBulkReminder(input: {
   now?: number;
 }): Promise<EnqueuedOutbox[]> {
   const templateKey = input.templateKey ?? "reminder_generic";
+  if (templateKey === "draft_close_reminder") {
+    throw new Error("draft_close_reminder requires a draft-bound scheduler context");
+  }
   const template = await findTemplate(input.db, input.eventId, templateKey);
   assertKnownMergeFields(input.subject ?? template.subject, input.body ?? template.body_md);
   const result: EnqueuedOutbox[] = [];
@@ -97,6 +102,47 @@ export async function enqueuePreCloseReminderRows(db: D1Database, now = Date.now
       now,
     });
     if (result) rows.push(result);
+  }
+  return rows;
+}
+
+/**
+ * Draft-close reminders need one extra step between template admission and
+ * outbox insertion: mint the submission-bound public capability. The stable
+ * key is derived once, selected before minting, and passed unchanged into the
+ * insert-and-catch path. A losing race may leave only its expiring orphan link.
+ */
+export async function enqueueDraftCloseReminderRows(db: D1Database, now = Date.now()): Promise<EnqueuedOutbox[]> {
+  const rows: EnqueuedOutbox[] = [];
+  for (const candidate of await selectDraftCloseReminderCandidates(db, now)) {
+    const entityId = IDEMPOTENCY_REGISTRY.draftCloseReminder(candidate.submissionId);
+    const idempotencyKey = await buildIdempotencyKey(candidate.templateKey, entityId, candidate.personId);
+    const existing = await findByIdempotencyKey(db, idempotencyKey);
+    if (existing) {
+      rows.push({ id: existing.id, inserted: false, idempotencyKey });
+      continue;
+    }
+    const template = await findTemplate(db, candidate.eventId, candidate.templateKey);
+    if (template.enabled !== 1) continue;
+    const link = await mintMagicLink(db, {
+      eventId: candidate.eventId,
+      personId: candidate.personId,
+      purpose: "draft_resume",
+      redirectTo: draftResumeRedirectTo(candidate.formSlug, candidate.submissionId),
+      now,
+    });
+    const resumeLink = `/f/${encodeURIComponent(candidate.formSlug)}?resume=${encodeURIComponent(link.token)}`;
+    rows.push(await enqueueOutbox({
+      db,
+      eventId: candidate.eventId,
+      templateKey: candidate.templateKey,
+      entityId,
+      personId: candidate.personId,
+      toEmail: candidate.toEmail,
+      data: { ...candidate.data, "draft.resume_link": resumeLink },
+      idempotencyKey,
+      now,
+    }));
   }
   return rows;
 }
