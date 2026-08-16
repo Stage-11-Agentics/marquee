@@ -236,10 +236,15 @@ US/AC identifier is introduced here.
 The evaluator input has two separate facts:
 
 - `eventFieldKeys`: the active question keys carried by at least one form in the
-  event, plus the reserved derived keys for Format, Track, Vendor content, and
-  Level.
+  event, plus the reserved derived keys for Format, Track, and Vendor content.
+  Level is not an always-available derived key: `audience_level` enters the
+  evaluator only when the arriving/current form has the explicit bound field
+  defined in the Level source contract below.
 - `formFieldKeys`: the active question keys on this arriving/current form, plus
-  the derived keys that are always available to the routing projection.
+  those same Format, Track, and Vendor derived keys. An active
+  `key: audience_level` field bound to `source: levels` is a normal form answer
+  key in this set; a form without that field does not acquire a synthetic Level
+  value.
 
 An answer map contains only non-empty projected answers. For a key in
 `formFieldKeys` but absent from that map, the answer is blank/missing. A key
@@ -556,13 +561,17 @@ while `rules_above` makes first-match ordering tangible as in v1.17. A zero-row
 sample reports `sample_size: 0` and an honest no-arrivals state.
 
 The server reconstructs the same evaluator input shape from stored projected
-answers, active form keys, and derived format/track/vendor/level values, then
-calls the shared evaluator for each rule. The live builder preview calls that
-same pure function with the current `projectApplicableAnswers` result; the
-historical endpoint does not invent a SQL matcher. Targeted parity tests feed
-identical fixture maps through the shared function and compare every aggregate
-and state. Rule edits invalidate/reload this bounded response; keystrokes remain
-local and zero-latency.
+answers and active form keys, then resolves the explicit `audience_level` field
+through the Level source mapping below before calling the shared evaluator for
+each rule. `submissions.level_id` is only the effective landing projection; it
+is never treated as the submitted Level answer because a `set-level` action or
+later manual edit may have changed it. The live builder preview calls the same
+pure mapping and evaluator with the current `projectApplicableAnswers` result;
+the historical endpoint uses the stored source-ID mapping and does not invent a
+SQL matcher. Targeted parity tests feed identical Level fixtures through both
+paths and compare every aggregate, state, and landing projection. Rule edits
+invalidate/reload this bounded response; keystrokes remain local and
+zero-latency.
 
 ### I. Admin-create non-routing positive control
 
@@ -651,5 +660,149 @@ rows are removed with no FK-aborted partial batch, and the source-order test
 keeps the scope delete ahead of the track delete. Reset/copy behavior remains
 as already specified; this amendment changes only the event-delete ordering
 contract.
+
+## Cycle 3 amendment 2026-08-16 — Level arrival and preview mapping
+
+This amendment is limited to the sole residual finding in canonical artifact
+`art_01M05BS2MQ2NXFK9R6FFC6V79G`: Level arrival and preview mapping was not
+bound even though signed prototype v1.17 exposes the Audience level field.
+Cycle 2's three repairs and every earlier contract remain binding. This is
+still plan-only: no feature code, migration number, stable US/AC ID, status
+transition into implementation, browser/live check, gate, reviewer, or
+publication is performed here.
+
+### 1. Canonical field key and source
+
+`BOUND_SOURCES` is extended from `formats | tracks` to
+`formats | tracks | levels`. `levels` is event-owned taxonomy data, not an
+organization/person tag source. Its bound-field compatibility is
+`single_select` only; custom `options` are rejected when `source: levels` is
+present. The one canonical signed-v1.17 form field is:
+
+```json
+{
+  "key": "audience_level",
+  "label": "Audience level",
+  "type": "single_select",
+  "required": false,
+  "config": {"source": "levels"}
+}
+```
+
+The source resolver returns active event `levels` rows in taxonomy
+`position, id` order and materializes their canonical display names for the
+admin/public option surfaces. It excludes `deleted_at` rows from new option
+lists, while the existing tombstone/applied-history contract remains in force:
+a current public draft with a now-deleted selection is refused rather than
+silently rewritten, and a stored submission retains its historical value.
+`audience_level` is the only accepted Level answer key for this source; a
+second active `source: levels` field in one form, a different key for that
+source, or a hand-authored options list is a validation error. The signed
+Audience-level selector therefore remains one-to-one with v1.17.
+
+The public option wire stays label-compatible with the existing Formats and
+Tracks bound-source UI, but the shared resolver always returns
+`{id, name, name_key, deleted_at}` internally. A scalar incoming value is
+tried as the current event Level ID first and otherwise as the normalized
+current display name (trim/collapse whitespace and Unicode case-fold, using
+the existing `normalizeTaxonomyName` seam). Unknown, cross-event, ambiguous,
+or deleted values produce the existing field-level validation issue and no
+submission write. Rules store the Level ID, while the builder displays its
+canonical name; `level_id` is never a substitute for the `audience_level` field
+key.
+
+### 2. Arrival and stored/history projection
+
+`resolveDomainReferences` becomes the one public-arrival resolver for
+`formatId`, ordered/deduplicated `trackIds`, and `levelId`. It discovers the
+active `audience_level` field by `key` plus `config.source`, reads its projected
+answer, and resolves it against the event-scoped active `levels` source. The
+resolved source ID is passed into the shared routing input as
+`audience_level: <levelId>`; the original canonical display label remains the
+record-facing answer. A form with no active bound Level field has no
+`audience_level` input: a rule that references it skips on that form, while the
+event rule is dangling only when no active form in the event carries that key.
+
+The public-submit batch uses that `levelId` as the default effective
+`submissions.level_id` projection when no rule matches `set-level`. A matched
+`set-level` action replaces it with that action's canonical Level ID. When
+there is no source answer and no matched action, the effective value is null;
+the manual full-payload seam remains the explicit way to clear an already
+stored level. The batch retains `applied_rule_id`, the answer row, and the
+source identity together; apply-once and the existing public-only routing
+boundary do not change. Manual routing edits still mutate only the effective
+projection and never re-run the evaluator.
+
+For the bound Level answer, the answer writer stores both the display label and
+the source identity: `value_text` is the canonical label and `value_json` is
+`{"bound_source":"levels","id":"<levelId>","label":"<name>"}`.
+The shared answer reader exposes the label to the form/record UI, while
+`resolveStoredRoutingAnswers` reads the stored ID for evaluation. Existing
+non-Level answer rows keep their current encoding. This makes historical
+mapping independent of a later Level rename and prevents an action-overridden
+`submissions.level_id` or manual edit from masquerading as the submitter's
+answer. If a legacy stored row has no source-ID metadata, history may use an
+unambiguous event-scoped name fallback; otherwise it returns an explicit
+`level_answer_unresolvable`/`dangling` state and never guesses.
+
+### 3. One mapping for live and historical preview
+
+The shared pure `resolveRoutingInputs` seam consumes either current projected
+answers or stored answer rows and produces the same normalized map:
+
+```text
+audience_level -> source level ID (when the active/current form binds it)
+format         -> event format ID
+tracks         -> ordered event track IDs
+vendor         -> normalized vendor value
+other fields   -> projectApplicableAnswers output unchanged
+```
+
+The signed builder's live preview passes the current form's
+`projectApplicableAnswers` through this resolver, then calls the same shared
+six-operator evaluator and ordered action projection used by public arrival.
+Its Level selector displays names but the preview fixture carries the resolved
+Level ID. The historical endpoint reads the same form-field binding and the
+stored Level source-ID metadata, allowing a tombstoned source row to explain a
+past record without re-admitting it to new forms; it never derives input from
+the mutable effective `submissions.level_id`. Both paths return the same rule
+state (`matchable`, `skipped`, `dangling`, or `invalid`), match count, and
+effective `landing.level_id`, including `set-level` overrides. The bounded
+last-100, public-origin, non-draft, event/tenant authorization and deliberate
+Sessionize exclusion remain unchanged.
+
+### 4. Exact implementation tests
+
+- `tests/unit/bound-options.MRQ-126.test.ts` adds `levels` as a valid
+  event-bound source, rejects it for non-single-select fields and custom
+  options, verifies active-only `position,id` ordering, verifies the exact
+  `audience_level` key/source contract, and proves deleted/cross-event values
+  are not offered or resolved.
+- `tests/integration/api/bound-form-options.MRQ-126.test.ts` seeds two events'
+  levels, reads the signed Audience-level field/options, submits a current
+  Level by ID and normalized name, and asserts the resulting
+  `submissions.level_id`, label-facing answer, and stored source-ID metadata.
+  It submits deleted, unknown, and other-event values and asserts 422 with no
+  submission/answer/projection mutation.
+- `tests/integration/api/category-routing.AC-135-137-234.test.ts` adds a rule
+  whose condition is `fieldKey: audience_level` with a Level ID, proving a
+  public arrival matches it, unmatched arrival defaults its source Level into
+  `submissions.level_id`, `set-level` overrides that default, and a form
+  without the field skips rather than false-matches. Existing apply-once,
+  reviewer-scope-from-`submission_tracks`, Sessionize-unrouted, audit, and
+  tenant-boundary cases remain required.
+- `tests/integration/api/routing-preview.MRQ-229.test.ts` uses one fixture
+  answer (`Audience level = Intermediate`) and the same rule/action in live
+  and historical modes. It asserts identical normalized Level ID, rule state,
+  would-have-matched count, rules-above count, and landing level for a default
+  route and a `set-level` override; it also covers the last-100 bound, a
+  tombstoned stored source row, missing-field skip, and legacy-without-ID
+  `level_answer_unresolvable` state. The endpoint test proves no answer values
+  escape the aggregate response and that cross-tenant callers are rejected.
+- Seed fixtures add event levels before the `audience_level` form field and
+  public submissions, with routing rules referring to fixture Level IDs only;
+  `scripts/seed/event.ts`, `scripts/seed/routing.ts`, copy/remap, and reset
+  tests must preserve that dependency order. These are disposable fixture IDs,
+  not stable US/AC IDs and not a migration allocation.
 
 ## Reset 2026-08-16 by agent:delegator-mrq-229
