@@ -16,6 +16,7 @@ import { auditStatement } from "../lib/audit";
 import { PUBLIC_DRAFT_RESUME_EMAIL_SUBJECT } from "../lib/auth/draft-resume-copy";
 import { mintMagicLink, mintMagicLink as issueParticipantMagicLink, promoteMagicLinkToResumeCapability } from "../lib/auth/magic-links";
 import { mintToken, sha256Hex } from "../lib/auth/random-token";
+import { noPersonReferencesPredicate } from "../lib/person-references";
 import { verifyTurnstile } from "../lib/r2/turnstile";
 import { submitterEditability } from "../lib/submission-editing";
 import { withSubmissionReferenceAllocation } from "../lib/submission-reference";
@@ -705,23 +706,8 @@ async function rollbackRoutingStage(db: D1Database, stage: RoutingStage): Promis
     await db.prepare(`
       DELETE FROM people
       WHERE id = ?
-        AND NOT EXISTS (SELECT 1 FROM submissions WHERE submitter_person_id = ? OR decided_by_person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM participations WHERE person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM memberships WHERE person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM auth_sessions WHERE person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM magic_links WHERE person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM form_admins WHERE person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM outbox WHERE person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM reviewer_track_scopes WHERE person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM committee_members WHERE person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM round_assignments WHERE reviewer_person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM evaluations WHERE reviewer_person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM comparisons WHERE reviewer_person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM saved_views WHERE person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM speaker_tasks WHERE person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM calendar_invites WHERE person_id = ?)
-        AND NOT EXISTS (SELECT 1 FROM audit_log WHERE actor_person_id = ?)
-    `).bind(...Array.from({ length: 18 }, () => stage.personId)).run();
+        AND ${noPersonReferencesPredicate()}
+    `).bind(stage.personId).run();
   }
 }
 
