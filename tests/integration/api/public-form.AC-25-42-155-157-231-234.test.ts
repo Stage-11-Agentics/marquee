@@ -383,7 +383,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(limited.status).toBe(429);
   });
 
-  test("MRQ-247 · reminder resolution promotes the same reusable link, preserves raw resume, and revocation kills only the promoted capability", async () => {
+  test("CONTRACT · MRQ-247 · reminder resolution promotes the same reusable link, preserves raw resume, and revocation kills only the promoted capability", async () => {
     const created = await request("/api/v1/public/forms/public-cfp/drafts", {
       method: "POST",
       body: JSON.stringify({ turnstileToken: nextTurnstileToken(), answers: { speaker_name: "Reminder Speaker", speaker_email: "reminder@example.com" } }),
@@ -452,7 +452,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(rawStillWorks).toMatchObject({ state: "submitted", submission: { id: draft.draft_id }, submissionOutcome: "accepted", resumeSource: "raw" });
   });
 
-  test("MRQ-247 · the direct reminder URL resolves beside an unrelated live session without changing it", async () => {
+  test("CONTRACT · MRQ-247 · the direct reminder URL resolves beside an unrelated live session without changing it", async () => {
     const created = await request("/api/v1/public/forms/public-cfp/drafts", {
       method: "POST",
       body: JSON.stringify({ turnstileToken: nextTurnstileToken(), answers: { speaker_name: "Cookie Speaker", speaker_email: "cookie-speaker@example.com" } }),

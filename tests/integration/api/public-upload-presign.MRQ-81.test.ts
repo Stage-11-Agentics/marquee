@@ -195,7 +195,7 @@ describe.sequential("MRQ-81 public upload presign", () => {
     expect(wrongResume.status).toBe(403);
   });
 
-  test("MRQ-247 · public upload accepts both raw and submission-bound reminder capabilities while open", async () => {
+  test("CONTRACT · MRQ-247 · public upload accepts both raw and submission-bound reminder capabilities while open", async () => {
     const draft = await createDraft();
     const submitter = await env.DB.prepare("SELECT submitter_person_id AS id FROM submissions WHERE id = ?").bind(draft.draftId).first<{ id: string }>();
     const reminder = await mintMagicLink(env.DB, {
@@ -208,7 +208,7 @@ describe.sequential("MRQ-81 public upload presign", () => {
     expect((await sign({ draftId: draft.draftId, resumeToken: reminder.token }, { fieldKey: "headshot", filename: "reminder.png", contentType: "image/png" })).status).toBe(200);
   });
 
-  test("MRQ-247 · closed-form uploads say the call is closed for raw and reminder capabilities", async () => {
+  test("CONTRACT · MRQ-247 · closed-form uploads say the call is closed for raw and reminder capabilities", async () => {
     const draft = await createDraft();
     const submitter = await env.DB.prepare("SELECT submitter_person_id AS id FROM submissions WHERE id = ?").bind(draft.draftId).first<{ id: string }>();
     const reminder = await mintMagicLink(env.DB, {
