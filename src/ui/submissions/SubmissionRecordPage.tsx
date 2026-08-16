@@ -776,6 +776,9 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const decisionPlanRefreshTimerRef = useRef<number | null>(null);
   const [feedbackDraft, setFeedbackDraft] = useState("");
   const [decisionInternalNoteDraft, setDecisionInternalNoteDraft] = useState("");
+  const [kindFeedbackBusy, setKindFeedbackBusy] = useState(false);
+  const [kindFeedbackDrafted, setKindFeedbackDrafted] = useState(false);
+  const [kindFeedbackNotice, setKindFeedbackNotice] = useState("");
   const [messageRecipientId, setMessageRecipientId] = useState("");
   const [messageSubject, setMessageSubject] = useState("");
   const [messageBody, setMessageBody] = useState("");
@@ -1064,6 +1067,9 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
     setDecisionRequest(recommendation);
     setFeedbackDraft("");
     setDecisionInternalNoteDraft("");
+    setKindFeedbackBusy(false);
+    setKindFeedbackDrafted(false);
+    setKindFeedbackNotice("");
     setDecisionConfirmPublished(false);
     setDecisionPlan(null);
     setDecisionPlanError("");
@@ -1085,6 +1091,38 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const onDecisionConfirmPublishedChange = (value: boolean): void => {
     setDecisionConfirmPublished(value);
     if (decisionRequest) void loadDecisionPlan(decisionRequest, feedbackDraft, value);
+  };
+
+  const draftKindFeedbackForRecord = async (): Promise<void> => {
+    if (!decisionRequest || !decisionPlan || decisionPlan.action !== "reject") return;
+    setKindFeedbackBusy(true);
+    setKindFeedbackNotice("");
+    try {
+      const result = await apiFetch<{ paragraph: string | null; notice: string | null }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/${encodeURIComponent(submissionId)}/decision-plan/kind-feedback`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            recommendation: decisionRequest,
+            ...(decisionInternalNoteDraft.trim() ? { internal_note: decisionInternalNoteDraft.trim() } : {}),
+            ...(decisionConfirmPublished ? { confirm_published: true } : {}),
+          }),
+          route: "/api/v1/events/{eventId}/submissions/{submissionId}/decision-plan/kind-feedback",
+        },
+      );
+      if (result.paragraph) {
+        setFeedbackDraft(result.paragraph);
+        setKindFeedbackDrafted(true);
+        setKindFeedbackNotice("");
+      } else {
+        setKindFeedbackNotice(result.notice || "Drafting unavailable — the template and your own words still work");
+      }
+    } catch (error: unknown) {
+      setKindFeedbackNotice(errorSummary(error));
+    } finally {
+      setKindFeedbackBusy(false);
+    }
   };
 
   const applyDecisionPlan = async (): Promise<void> => {
@@ -1112,6 +1150,8 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
       setDecisionPlan(null);
       setFeedbackDraft("");
       setDecisionInternalNoteDraft("");
+      setKindFeedbackDrafted(false);
+      setKindFeedbackNotice("");
       setDecisionConfirmPublished(false);
       setDecisionNotice(result.outbox_inserted === false
         ? "Decision recorded; no notification was queued."
@@ -1397,8 +1437,12 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           onFeedbackChange={onDecisionFeedbackChange}
           onInternalNoteChange={setDecisionInternalNoteDraft}
           onConfirmPublishedChange={onDecisionConfirmPublishedChange}
+          kindFeedbackBusy={kindFeedbackBusy}
+          kindFeedbackDrafted={kindFeedbackDrafted}
+          kindFeedbackNotice={kindFeedbackNotice}
+          onDraftKindFeedback={() => void draftKindFeedbackForRecord()}
           onConfirm={() => void applyDecisionPlan()}
-          onClose={() => { setDecisionRequest(null); setDecisionPlan(null); setDecisionPlanError(""); setDecisionPlanStale(false); setFeedbackDraft(""); setDecisionInternalNoteDraft(""); }}
+          onClose={() => { setDecisionRequest(null); setDecisionPlan(null); setDecisionPlanError(""); setDecisionPlanStale(false); setFeedbackDraft(""); setDecisionInternalNoteDraft(""); setKindFeedbackDrafted(false); setKindFeedbackNotice(""); }}
           onRefresh={() => decisionRequest && void loadDecisionPlan(decisionRequest, feedbackDraft, decisionConfirmPublished)}
         />}
         {decisionNotice && <p class="record-inline-message notice" role="status">{decisionNotice}</p>}

@@ -2,12 +2,21 @@ import { z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
 import { decisionPlanResponseSchema } from "../api/decision-plan";
+import { kindFeedbackResponseSchema } from "../api/kind-feedback";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { loadSubmission, resendSubmissionDecision, writeSubmissionDecision } from "../jobs/cascade/decisions";
 import { buildDecisionPlan, refuseZeroEffect, requireCurrentDecisionPlan } from "../jobs/cascade/decision-plan-service";
+import { canTransitionSubmissionStatus } from "../lib/submission-transitions";
+import {
+  draftKindFeedback,
+  KIND_FEEDBACK_PROVENANCE,
+  KIND_FEEDBACK_UNAVAILABLE,
+  kindFeedbackConfigured,
+  type KindFeedbackEnvironment,
+} from "../jobs/ai/kind-feedback";
 import { PUBLISHED_SESSION_REFUSAL } from "../lib/publication-guard";
 import { getAuth } from "../lib/auth/auth-middleware";
 
@@ -87,7 +96,72 @@ const planDecision = defineApiRoute(
       action,
       feedbackMd: body.feedback_md,
       confirmPublished: body.confirm_published === true,
+      kindFeedbackEnabled: kindFeedbackConfigured(context.env),
     }), 200);
+  },
+);
+
+const kindFeedbackBodySchema = z
+  .object({
+    recommendation: z.enum(["approve", "maybe", "deny"]),
+    internal_note: z.string().max(5_000).nullable().optional(),
+    confirm_published: z.boolean().optional(),
+  })
+  .strict();
+
+const draftKindFeedbackForSubmission = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/submissions/{submissionId}/decision-plan/kind-feedback",
+    operationId: "draftSubmissionKindFeedback",
+    summary: "Draft kind rejection feedback",
+    description: "Ask the configured model for only the editable speaker-facing feedback paragraph; the existing confirm action still sends the email.",
+    tags: ["Submissions"],
+    request: {
+      params: eventSubmissionParams,
+      body: { content: { "application/json": { schema: kindFeedbackBodySchema } } },
+    },
+    policy: {
+      auth: { kind: "grants", grants: ["program:write"] },
+      rateLimit: { bucket: "write" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(kindFeedbackResponseSchema, "The editable kind feedback paragraph or a non-blocking unavailable notice."),
+      ...errorResponses([400, 401, 403, 404, 409, 422, 429, 500]),
+    },
+  },
+  async (context) => {
+    const { eventId, submissionId } = context.req.valid("param");
+    const body = context.req.valid("json");
+    if (body.recommendation !== "deny") {
+      throw ApiError.badRequest("kind feedback is available for rejection decisions only", "recommendation");
+    }
+    const submission = await loadSubmission(context.env.DB, eventId, submissionId);
+    if (!submission) throw ApiError.notFound("submission not found");
+    const transitionError = canTransitionSubmissionStatus(submission.status, "rejected", "organizer");
+    if (transitionError) throw ApiError.conflict(transitionError);
+    if (submission.agenda_published === 1 && body.confirm_published !== true) {
+      throw ApiError.conflict(PUBLISHED_SESSION_REFUSAL);
+    }
+    const actor = await actorFor(context);
+    const result = await draftKindFeedback({
+      actorPersonId: actor.personId,
+      context: {
+        decision: "reject",
+        eventName: submission.event_name,
+        internalNote: body.internal_note ?? "",
+        title: submission.title,
+        track: submission.track_name,
+      },
+      environment: context.env as unknown as KindFeedbackEnvironment,
+      eventId,
+    });
+    return context.json({
+      paragraph: result.paragraph ?? null,
+      notice: result.ok ? null : KIND_FEEDBACK_UNAVAILABLE,
+      provenance: result.ok ? KIND_FEEDBACK_PROVENANCE : null,
+    }, 200);
   },
 );
 
@@ -232,4 +306,4 @@ const resendDecision = defineApiRoute(
   },
 );
 
-export const apiRoutes = [planDecision, decideSubmission, resendDecision];
+export const apiRoutes = [planDecision, draftKindFeedbackForSubmission, decideSubmission, resendDecision];

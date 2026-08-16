@@ -17,6 +17,7 @@ export const WIPE_ORDER = [
   "webhook_deliveries",
   "webhook_endpoints",
   "submission_notes",
+  "model_usage_events",
   "submission_decisions",
   "submission_answers",
   "submission_tracks",
@@ -190,6 +191,10 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   },
   submission_notes: {
     sql: `DELETE FROM submission_notes WHERE submission_id IN (SELECT id FROM submissions WHERE event_id IN (${ORG_EVENTS}))`,
+    bindings: ORG,
+  },
+  model_usage_events: {
+    sql: `DELETE FROM model_usage_events WHERE event_id IN (${ORG_EVENTS})`,
     bindings: ORG,
   },
   submission_answers: {

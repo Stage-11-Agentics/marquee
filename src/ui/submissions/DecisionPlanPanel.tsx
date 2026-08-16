@@ -37,6 +37,10 @@ interface DecisionPlanPanelProps {
   onFeedbackChange: (value: string) => void;
   onInternalNoteChange: (value: string) => void;
   onConfirmPublishedChange: (value: boolean) => void;
+  kindFeedbackBusy: boolean;
+  kindFeedbackDrafted: boolean;
+  kindFeedbackNotice: string;
+  onDraftKindFeedback: () => void;
   onConfirm: () => void;
   onClose: () => void;
   onRefresh: () => void;
@@ -100,6 +104,10 @@ export function DecisionPlanPanel({
   onFeedbackChange,
   onInternalNoteChange,
   onConfirmPublishedChange,
+  kindFeedbackBusy,
+  kindFeedbackDrafted,
+  kindFeedbackNotice,
+  onDraftKindFeedback,
   onConfirm,
   onClose,
   onRefresh,
@@ -152,6 +160,7 @@ export function DecisionPlanPanel({
       <div class="decision-plan-safety">Demo safety: {plan.demo_suppressed.toLocaleString()} of {rows[0].count.toLocaleString()} message{rows[0].count === 1 ? "" : "s"} will be suppressed to the outbox.</div>
       {plan.recipient_preview && <div class="decision-plan-preview"><strong>Preview · rendered for {plan.recipient_preview.to_email}</strong><span>Every recipient gets their own render.</span><div class="decision-plan-preview-meta">To {plan.recipient_preview.to_email} · {plan.recipient_preview.subject}</div><div class="decision-plan-preview-body" dangerouslySetInnerHTML={{ __html: plan.recipient_preview.html }} /><div class="decision-plan-feedback-echo">{plan.feedback_md ? `Feedback: ${plan.feedback_md}` : hasFeedback ? "Feedback appears here and in the portal." : "The stored decision feedback appears in this message."}</div></div>}
       {hasFeedback && <label class="decision-plan-feedback field"><span>Feedback for the speakers (optional)</span><textarea rows={4} value={feedback} onInput={(event) => onFeedbackChange(event.currentTarget.value)} placeholder="Rendered into each message and shown in each portal." /></label>}
+      {hasFeedback && plan.action === "reject" && plan.kind_feedback_enabled && <div class="decision-plan-kind-feedback"><Button type="button" small disabled={busy || loading || kindFeedbackBusy} onClick={onDraftKindFeedback}>{kindFeedbackBusy ? "Drafting…" : kindFeedbackDrafted ? "Redraft" : "Draft speaker-facing feedback"}</Button>{kindFeedbackDrafted && <small>{"Drafted from your note — edit freely"}</small>}{kindFeedbackNotice && <span class="decision-plan-banner warning" role="alert">{kindFeedbackNotice}</span>}</div>}
       {hasFeedback && <label class="decision-plan-feedback field"><span>Internal note (optional)</span><textarea rows={3} maxLength={5000} value={internalNote} onInput={(event) => onInternalNoteChange(event.currentTarget.value)} placeholder="Keep context for the conference team." /><small>Saved with the proposal. Never sent.</small></label>}
       {publishedCount !== null && publishedCount > 0 && plan.action !== "notify" && <label class="decision-plan-published"><input type="checkbox" checked={confirmPublished} onChange={(event) => onConfirmPublishedChange(event.currentTarget.checked)} /><span>{publishedCount.toLocaleString()} published record{publishedCount === 1 ? "" : "s"} stay unchanged unless you explicitly confirm the live write.</span></label>}
       {plan.zero_effect && <div class="decision-plan-zero-effect">Nothing would change: {plan.zero_effect.reason}</div>}

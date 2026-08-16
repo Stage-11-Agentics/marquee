@@ -48,6 +48,7 @@ export const decisionPlanResponseSchema = z.object({
   etag: z.string(),
   queue_revision: z.number().int().nonnegative(),
   selected: z.number().int().nonnegative(),
+  kind_feedback_enabled: z.boolean(),
   zero_effect: decisionPlanZeroEffectSchema,
 }).openapi("DecisionPlanResponse");
 
@@ -63,4 +64,5 @@ export type DecisionPlanResponse = DecisionPlan & {
   etag: string;
   queue_revision: number;
   selected: number;
+  kind_feedback_enabled: boolean;
 };

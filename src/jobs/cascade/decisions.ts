@@ -135,6 +135,7 @@ export interface SubmissionContext {
   wave_id: Id | null;
   title: string;
   event_name: string;
+  track_name: string | null;
   person_id: Id;
   person_name: string;
   person_email: string;
@@ -272,12 +273,14 @@ export async function loadSubmission(
                    AND live_agenda.is_published = 1
               ) AS agenda_published,
               event.name AS event_name,
+              track.name AS track_name,
               ${decisionRecipientSql("id")} AS person_id,
               ${decisionRecipientSql("name")} AS person_name,
               ${decisionRecipientSql("email")} AS person_email
        FROM submissions s
        JOIN events event ON event.id = s.event_id
        JOIN people submitter ON submitter.id = s.submitter_person_id
+       LEFT JOIN tracks track ON track.id = s.primary_track_id AND track.event_id = s.event_id
        WHERE s.event_id = ? AND s.id = ?`,
     )
     .bind(eventId, submissionId)
@@ -302,12 +305,14 @@ export async function loadSubmissions(
                    AND live_agenda.is_published = 1
               ) AS agenda_published,
               event.name AS event_name,
+              track.name AS track_name,
               ${decisionRecipientSql("id")} AS person_id,
               ${decisionRecipientSql("name")} AS person_name,
               ${decisionRecipientSql("email")} AS person_email
        FROM submissions s
        JOIN events event ON event.id = s.event_id
        JOIN people submitter ON submitter.id = s.submitter_person_id
+       LEFT JOIN tracks track ON track.id = s.primary_track_id AND track.event_id = s.event_id
        WHERE s.event_id = ?
          AND s.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
        ORDER BY s.id ASC`,

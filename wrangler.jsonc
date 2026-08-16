@@ -157,6 +157,11 @@
     // would eat the speaker communications this product exists to run. Flip it
     // next to a paid mail plan, not before (design §7, Constraints).
     "ATTENDEE_CLAIM_MAIL": "0",
+    // Model drafting is deliberately inert until an operator enables this and
+    // supplies the separate AI_MODEL_API_KEY secret.
+    "AI_RUNTIME_MODE": "disabled",
+    "AI_MODEL_ENDPOINT": "https://api.openai.com/v1/chat/completions",
+    "AI_MODEL_NAME": "gpt-4o-mini",
     // Upload bytes through the MEDIA binding instead of a presigned R2 PUT.
     // The local recipe overrides this with `--var LOCAL_UPLOAD_SHIM:1`, for the
     // same reason as the line above: a presigned PUT addresses the R2 account's

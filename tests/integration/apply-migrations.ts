@@ -44,6 +44,7 @@ import fieldLibraryMigrationSql from "../../migrations/0033_field_library.sql?ra
 import personAliasesMergesMigrationSql from "../../migrations/0035_person_aliases_merges.sql?raw";
 import routingTagsMigrationSql from "../../migrations/0036_routing_tags.sql?raw";
 import formLengthRulesMigrationSql from "../../migrations/0037_form_length_rules.sql?raw";
+import modelUsageEventsMigrationSql from "../../migrations/0038_model_usage_events.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -105,6 +106,9 @@ export async function applyMigrations(): Promise<void> {
     const personAliasesMergesApplied = await env.DB.prepare(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'person_aliases'",
     ).first();
+    const modelUsageEventsApplied = await env.DB.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'model_usage_events'",
+    ).first();
     // Disable mirror triggers before the wipe reaches people. WIPE_ORDER
     // removes pending rows before deleting those parents; clearing state first
     // prevents the delete itself from re-enqueuing a stale people tombstone.
@@ -130,6 +134,11 @@ export async function applyMigrations(): Promise<void> {
     }
     if (!personAliasesMergesApplied) {
       for (const statement of splitStatements(personAliasesMergesMigrationSql)) {
+        await env.DB.prepare(`${statement};`).run();
+      }
+    }
+    if (!modelUsageEventsApplied) {
+      for (const statement of splitStatements(modelUsageEventsMigrationSql)) {
         await env.DB.prepare(`${statement};`).run();
       }
     }
@@ -178,6 +187,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(personAliasesMergesMigrationSql),
     ...splitStatements(routingTagsMigrationSql),
     ...splitStatements(formLengthRulesMigrationSql),
+    ...splitStatements(modelUsageEventsMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }

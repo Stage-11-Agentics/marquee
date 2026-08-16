@@ -363,6 +363,9 @@ export function SubmissionsPage({
   const [bulkPlanLoading, setBulkPlanLoading] = useState(false);
   const [bulkPlanError, setBulkPlanError] = useState("");
   const [bulkPlanStale, setBulkPlanStale] = useState(false);
+  const [kindFeedbackBusy, setKindFeedbackBusy] = useState(false);
+  const [kindFeedbackDrafted, setKindFeedbackDrafted] = useState(false);
+  const [kindFeedbackNotice, setKindFeedbackNotice] = useState("");
   const [planResult, setPlanResult] = useState<{ plan: DecisionPlanResponse; result: DecisionPlanApplyResult; skips: DecisionPlanSkip[] } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
@@ -819,6 +822,9 @@ export function SubmissionsPage({
     setBulkPlan(null);
     setBulkPlanError("");
     setBulkPlanStale(false);
+    setKindFeedbackBusy(false);
+    setKindFeedbackDrafted(false);
+    setKindFeedbackNotice("");
     void loadBulkPlan(action, "", false);
   };
 
@@ -875,6 +881,8 @@ export function SubmissionsPage({
       setBulkPlan(null);
       setBulkFeedback("");
       setBulkInternalNote("");
+      setKindFeedbackDrafted(false);
+      setKindFeedbackNotice("");
       setSelectedIds(new Set());
       setAllMatching(false);
       setReloadKey((value) => value + 1);
@@ -972,6 +980,39 @@ export function SubmissionsPage({
   const onBulkConfirmPublishedChange = (value: boolean) => {
     setBulkConfirmPublished(value);
     if (bulkRequest) void loadBulkPlan(bulkRequest, bulkFeedback, value);
+  };
+
+  const draftKindFeedbackForBulk = async (): Promise<void> => {
+    if (bulkRequest !== "reject" || !bulkPlan) return;
+    setKindFeedbackBusy(true);
+    setKindFeedbackNotice("");
+    try {
+      const result = await apiFetch<{ paragraph: string | null; notice: string | null }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/submissions/decision-plan/kind-feedback`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            selector: bulkSelector(),
+            action: "reject",
+            ...(bulkInternalNote.trim() ? { internal_note: bulkInternalNote.trim() } : {}),
+            ...(bulkConfirmPublished ? { confirm_published: true } : {}),
+          }),
+          route: "/api/v1/events/{eventId}/submissions/decision-plan/kind-feedback",
+        },
+      );
+      if (result.paragraph) {
+        setBulkFeedback(result.paragraph);
+        setKindFeedbackDrafted(true);
+        setKindFeedbackNotice("");
+      } else {
+        setKindFeedbackNotice(result.notice || "Drafting unavailable — the template and your own words still work");
+      }
+    } catch (error: unknown) {
+      setKindFeedbackNotice(errorSummary(error));
+    } finally {
+      setKindFeedbackBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -1094,8 +1135,12 @@ export function SubmissionsPage({
         onFeedbackChange={onBulkFeedbackChange}
         onInternalNoteChange={setBulkInternalNote}
         onConfirmPublishedChange={onBulkConfirmPublishedChange}
+        kindFeedbackBusy={kindFeedbackBusy}
+        kindFeedbackDrafted={kindFeedbackDrafted}
+        kindFeedbackNotice={kindFeedbackNotice}
+        onDraftKindFeedback={() => void draftKindFeedbackForBulk()}
         onConfirm={() => void runBulk()}
-        onClose={() => { setBulkRequest(null); setBulkPlan(null); setBulkPlanError(""); setBulkFeedback(""); setBulkInternalNote(""); }}
+        onClose={() => { setBulkRequest(null); setBulkPlan(null); setBulkPlanError(""); setBulkFeedback(""); setBulkInternalNote(""); setKindFeedbackDrafted(false); setKindFeedbackNotice(""); }}
         onRefresh={() => bulkRequest && void loadBulkPlan(bulkRequest, bulkFeedback, bulkConfirmPublished)}
       />}
       {(notifyPlan || notifyPlanLoading || notifyPlanError || notifyPlanStale) && <DecisionPlanPanel
@@ -1111,6 +1156,10 @@ export function SubmissionsPage({
         onFeedbackChange={() => undefined}
         onInternalNoteChange={() => undefined}
         onConfirmPublishedChange={() => undefined}
+        kindFeedbackBusy={false}
+        kindFeedbackDrafted={false}
+        kindFeedbackNotice=""
+        onDraftKindFeedback={() => undefined}
         onConfirm={() => void notifySpeakers()}
         onClose={() => { setNotifyPlan(null); setNotifyPlanError(""); setNotifyPlanStale(false); }}
         onRefresh={() => void openNotifyPlan()}

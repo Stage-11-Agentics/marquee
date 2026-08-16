@@ -38,6 +38,11 @@ export interface Env {
   ASSETS: Fetcher;
   CACHE: KVNamespace;
   DB: D1Database;
+  /** AI stays inert until both this committed switch and AI_MODEL_API_KEY exist. */
+  AI_RUNTIME_MODE?: string;
+  AI_MODEL_API_KEY?: string;
+  AI_MODEL_ENDPOINT?: string;
+  AI_MODEL_NAME?: string;
   LOCAL_VALIDATION_TOKEN?: string;
   /** `debug | info | warn | error`; anything else falls back to `info`. */
   LOG_LEVEL?: string;

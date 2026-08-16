@@ -166,6 +166,7 @@ export async function buildDecisionPlan(input: {
   feedbackMd?: string | null;
   confirmPublished?: boolean;
   waveId?: string | null;
+  kindFeedbackEnabled?: boolean;
 }): Promise<DecisionPlanResponse> {
   const ids = [...new Set(input.ids)];
   if (ids.length > BULK_ID_LIMIT) {
@@ -241,6 +242,7 @@ export async function buildDecisionPlan(input: {
     etag: strongEtag(fingerprint, 0),
     queue_revision: Number(event.updated_at),
     selected: ids.length,
+    kind_feedback_enabled: input.kindFeedbackEnabled === true,
     zero_effect: plan.zero_effect,
   };
 }
@@ -354,6 +356,7 @@ export async function buildNotifyPlan(input: {
     etag: strongEtag(fingerprint, 0),
     queue_revision: Number(event.updated_at),
     selected: ids.length,
+    kind_feedback_enabled: false,
     zero_effect: null,
   };
 }
