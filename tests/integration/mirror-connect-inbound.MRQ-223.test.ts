@@ -4,6 +4,7 @@ import type { Queue } from "@cloudflare/workers-types";
 
 import { connectMirror, disconnectMirror, keepaliveMirror, mapMirror, readMirrorStatus } from "../../src/jobs/mirror/actions";
 import { runOnboardingCascade } from "../../src/jobs/cascade/decisions";
+import { listSubmissions } from "../../src/routes/submissions.queries";
 import { encryptMirrorSecret, readMirrorCredential, tokenFingerprint } from "../../src/jobs/mirror/credentials";
 import { FakeAirtableTransport } from "../../src/jobs/mirror/fake-transport";
 import { drainMirrorOutbox } from "../../src/jobs/mirror/consumer";
@@ -105,6 +106,26 @@ async function connectAndMap(fake: FakeAirtableTransport): Promise<void> {
   });
   expect(mapped.ok).toBe(true);
   if (!mapped.ok) throw new Error(mapped.message);
+}
+
+async function seedMirrorSubmission(status: string, title = "MRQ-239 session"): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO events
+        (id, org_id, name, slug, starts_on, ends_on, timezone, status, demo_mode, created_at, updated_at)
+       VALUES (?, ?, 'MRQ-239 Event', 'mrq239-event', '2026-10-01', '2026-10-02', 'UTC', 'live', 0, ?, ?)`,
+    ).bind(EVENT_ID, ORG_ID, NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO submissions
+        (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at)
+       VALUES (?, ?, 'session', ?, ?, 'admin', ?, ?, ?)`,
+    ).bind(SUBMISSION_ID, EVENT_ID, title, status, PERSON_ID, NOW - 1_000, NOW - 500),
+    env.DB.prepare(
+      `INSERT INTO participations
+        (id, submission_id, person_id, role, position, created_at, updated_at)
+       VALUES ('participation_mrq239', ?, ?, 'speaker', 0, ?, ?)`,
+    ).bind(SUBMISSION_ID, PERSON_ID, NOW, NOW),
+  ]);
 }
 
 function peoplePayload(title: string, company = "Airtable company"): AirtableWebhookPayload {
@@ -373,6 +394,125 @@ test("AC-226 · one signed inbound edit applies allowlisted fields and drops the
     last_write_source: "airtable",
   });
   expect(await count("SELECT COUNT(*) AS count FROM mirror_outbox WHERE drained_at IS NULL")).toBe(0);
+});
+
+test("AC-226 · an unrecognized inbound status is ignored, logged, counted, and repaired from current truth", async () => {
+  await seedMirrorSubmission("submitted", "Unrecognized status session");
+  const fake = new FakeAirtableTransport(() => NOW, { tables: TABLES });
+  await connectAndMap(fake);
+  fake.payloads.push(submissionPayload("published"));
+
+  const pulled = await pullMirrorPayloads(actionEnvironment(fake), { transport: fake, ...clockAt() });
+  expect(pulled).toMatchObject({ applied: 0, dropped: 2 });
+
+  const submission = await env.DB.prepare(
+    "SELECT status, last_write_source FROM submissions WHERE id = ?",
+  ).bind(SUBMISSION_ID).first<{ status: string; last_write_source: string }>();
+  expect(submission).toEqual({ status: "submitted", last_write_source: "marquee" });
+  const rejection = await env.DB.prepare(
+    "SELECT actor_kind, action, after_json FROM audit_log WHERE event_id = ? AND entity_id = ? AND action = 'mirror.inbound_rejected' ORDER BY created_at DESC LIMIT 1",
+  ).bind(EVENT_ID, SUBMISSION_ID).first<{ actor_kind: string; action: string; after_json: string }>();
+  expect(rejection).toMatchObject({ actor_kind: "airtable", action: "mirror.inbound_rejected" });
+  expect(JSON.parse(rejection?.after_json ?? "{}")).toMatchObject({
+    reason: "unrecognized_value",
+    field: "status",
+    requested: "published",
+    title: "Unrecognized status session",
+  });
+  expect(await count("SELECT COUNT(*) AS count FROM mirror_outbox WHERE row_id = ? AND drained_at IS NULL", SUBMISSION_ID)).toBe(1);
+
+  const status = await readMirrorStatus(env.DB, actionEnvironment(fake), ORG_ID);
+  expect(status).toMatchObject({ rejectedEdits: 1 });
+  expect(status.recentRejections).toEqual(expect.arrayContaining([
+    expect.objectContaining({ title: "Unrecognized status session", requested: "published" }),
+  ]));
+});
+
+test("AC-226 · an illegal inbound transition is rejected before a non-published row can change", async () => {
+  await seedMirrorSubmission("withdrawn", "Withdrawn transition session");
+  const fake = new FakeAirtableTransport(() => NOW, { tables: TABLES });
+  await connectAndMap(fake);
+  fake.payloads.push(submissionPayload("accepted"));
+
+  const pulled = await pullMirrorPayloads(actionEnvironment(fake), { transport: fake, ...clockAt() });
+  expect(pulled).toMatchObject({ applied: 0, dropped: 2 });
+  expect(await env.DB.prepare("SELECT status FROM submissions WHERE id = ?").bind(SUBMISSION_ID).first<{ status: string }>()).toEqual({ status: "withdrawn" });
+
+  const rejection = await env.DB.prepare(
+    "SELECT after_json FROM audit_log WHERE event_id = ? AND entity_id = ? AND action = 'mirror.inbound_rejected' ORDER BY created_at DESC LIMIT 1",
+  ).bind(EVENT_ID, SUBMISSION_ID).first<{ after_json: string }>();
+  expect(JSON.parse(rejection?.after_json ?? "{}")).toMatchObject({ reason: "illegal_transition", requested: "accepted" });
+  expect(await count("SELECT COUNT(*) AS count FROM mirror_outbox WHERE row_id = ? AND drained_at IS NULL", SUBMISSION_ID)).toBe(1);
+});
+
+test("AC-235 · a legal Airtable acceptance writes an unnotified decision without running derived work", async () => {
+  await seedMirrorSubmission("submitted", "Airtable acceptance session");
+  const fake = new FakeAirtableTransport(() => NOW, { tables: TABLES });
+  await connectAndMap(fake);
+  fake.payloads.push(submissionPayload("accepted"));
+
+  const pulled = await pullMirrorPayloads(actionEnvironment(fake), { transport: fake, ...clockAt() });
+  expect(pulled).toMatchObject({ applied: 1, dropped: 1 });
+  const updatedSubmission = await env.DB.prepare(
+    "SELECT status, last_write_source, decided_at, decided_by_person_id FROM submissions WHERE id = ?",
+  ).bind(SUBMISSION_ID).first<{ status: string; last_write_source: string; decided_at: number | null; decided_by_person_id: string | null }>();
+  expect(updatedSubmission).toMatchObject({
+    status: "accepted",
+    last_write_source: "airtable",
+    decided_by_person_id: null,
+  });
+  expect(updatedSubmission?.decided_at).toBeGreaterThanOrEqual(NOW);
+  const decision = await env.DB.prepare(
+    "SELECT decision, resulting_status, feedback_md, decided_by_person_id, outbox_id FROM submission_decisions WHERE submission_id = ? ORDER BY decided_at DESC LIMIT 1",
+  ).bind(SUBMISSION_ID).first();
+  expect(decision).toEqual({
+    decision: "approve",
+    resulting_status: "accepted",
+    feedback_md: null,
+    decided_by_person_id: null,
+    outbox_id: null,
+  });
+  const audit = await env.DB.prepare(
+    "SELECT actor_kind, action, after_json FROM audit_log WHERE event_id = ? AND entity_id = ? AND action = 'submission.approve' ORDER BY created_at DESC LIMIT 1",
+  ).bind(EVENT_ID, SUBMISSION_ID).first<{ actor_kind: string; action: string; after_json: string }>();
+  expect(audit?.actor_kind).toBe("airtable");
+  expect(JSON.parse(audit?.after_json ?? "{}")).toMatchObject({ status: "accepted", source: "airtable" });
+  expect(await count("SELECT COUNT(*) AS count FROM speaker_tasks WHERE submission_id = ?", SUBMISSION_ID)).toBe(0);
+  expect(await count("SELECT COUNT(*) AS count FROM outbox WHERE event_id = ?", EVENT_ID)).toBe(0);
+
+  const list = await listSubmissions(env.DB, { eventId: EVENT_ID, status: "not_notified", per_page: 20 });
+  expect(list.data).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      id: SUBMISSION_ID,
+      notified: expect.objectContaining({
+        state: "changed_in_airtable",
+        action: { label: "Run onboarding cascade", route: `/api/v1/events/${EVENT_ID}/submissions/${SUBMISSION_ID}/onboarding-cascade` },
+      }),
+    }),
+  ]));
+});
+
+test.each([
+  ["waitlisted", "maybe"],
+  ["rejected", "deny"],
+] as const)("AC-235 · Airtable %s writes the matching decision row without derived work", async (status, decision) => {
+  await seedMirrorSubmission("submitted", `Airtable ${status} session`);
+  const fake = new FakeAirtableTransport(() => NOW, { tables: TABLES });
+  await connectAndMap(fake);
+  fake.payloads.push(submissionPayload(status));
+
+  const pulled = await pullMirrorPayloads(actionEnvironment(fake), { transport: fake, ...clockAt() });
+  expect(pulled).toMatchObject({ applied: 1, dropped: 1 });
+  expect(await env.DB.prepare(
+    "SELECT decision, resulting_status, feedback_md, decided_by_person_id FROM submission_decisions WHERE submission_id = ? ORDER BY decided_at DESC LIMIT 1",
+  ).bind(SUBMISSION_ID).first()).toEqual({
+    decision,
+    resulting_status: status,
+    feedback_md: null,
+    decided_by_person_id: null,
+  });
+  expect(await count("SELECT COUNT(*) AS count FROM outbox WHERE event_id = ?", EVENT_ID)).toBe(0);
+  expect(await count("SELECT COUNT(*) AS count FROM speaker_tasks WHERE submission_id = ?", SUBMISSION_ID)).toBe(0);
 });
 
 test("AC-316 · a published inbound status edit is dropped, audited, counted, and repaired from current truth", async () => {

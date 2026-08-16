@@ -10,6 +10,7 @@ import { auditStatement } from "../../lib/audit";
 export const MIRROR_REJECTION_REASONS = [
   "forbidden_while_published",
   "illegal_transition",
+  "unrecognized_value",
 ] as const;
 
 export type MirrorRejectionReason = (typeof MIRROR_REJECTION_REASONS)[number];
@@ -22,6 +23,7 @@ export interface MirrorSubmissionRejection {
   reason: MirrorRejectionReason;
   before: unknown;
   requested: unknown;
+  title: string;
   now: number;
 }
 
@@ -47,6 +49,7 @@ export async function recordMirrorSubmissionRejection(
         reason: input.reason,
         field: input.field,
         requested: input.requested,
+        title: input.title,
       },
       now: input.now,
       requestId: null,

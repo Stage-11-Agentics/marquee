@@ -34,6 +34,7 @@ import sponsorsMigrationSql from "../../migrations/0023_sponsors.sql?raw";
 import airtableOutboundMigrationSql from "../../migrations/0024_airtable_outbound.sql?raw";
 import airtableConnectMigrationSql from "../../migrations/0025_airtable_connect.sql?raw";
 import calendarTruthMigrationSql from "../../migrations/0026_calendar_truth.sql?raw";
+import airtableDecisionActorMigrationSql from "../../migrations/0027_airtable_decision_actor.sql?raw";
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -134,6 +135,7 @@ export async function applyMigrations(): Promise<void> {
     ...splitStatements(airtableOutboundMigrationSql),
     ...splitStatements(airtableConnectMigrationSql),
     ...splitStatements(calendarTruthMigrationSql),
+    ...splitStatements(airtableDecisionActorMigrationSql),
   ]) {
     await env.DB.prepare(`${statement};`).run();
   }
