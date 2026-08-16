@@ -82,6 +82,7 @@ const REGISTER_CHROME: Partial<Record<ThemeId, RegisterChrome>> = {
       "event-site": "site",
       portal: "portal",
       embeds: "embeds",
+      announce: "announce",
       settings: "settings",
     },
     attention: "feed",
