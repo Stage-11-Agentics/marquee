@@ -7,6 +7,7 @@
  * with its own membership rules. Both read `speakers.queries.ts`.
  */
 import type { Context } from "hono";
+import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "../lib/participants";
 import { z } from "@hono/zod-openapi";
 
 import { ApiError } from "../api/errors";
@@ -23,7 +24,7 @@ import {
   resolvePersonProfile,
   type PersonProfileColumns,
 } from "../lib/person-profile";
-import { speakerMembershipStatement } from "../lib/speaker-membership";
+import { earnedSeatRole, speakerMembershipStatement } from "../lib/speaker-membership";
 import { listSpeakerFiles } from "./speaker-files.queries";
 import { getSpeaker, listSpeakers } from "./speakers.queries";
 
@@ -408,8 +409,13 @@ const patchSpeaker = defineApiRoute(
       const stored = body.confirmation_status === "invited" ? "pending" : body.confirmation_status;
       const invitedAt = body.confirmation_status === "pending" ? null : now;
       const confirmedAt = body.confirmation_status === "confirmed" ? now : null;
+      // The seat that exists, not the one this route used to assume. Writing
+      // `speaker` for someone the cascade seated as `co_speaker` mints a second
+      // phantom row rather than updating theirs, and the UPDATE below then
+      // confirms the phantom while the real seat stays pending.
+      const seatRole = await earnedSeatRole(context.env.DB, eventId, personId);
       statements.push(
-        speakerMembershipStatement(context.env.DB, { orgId: event.org_id, eventId, personId, now }),
+        speakerMembershipStatement(context.env.DB, { orgId: event.org_id, eventId, personId, role: seatRole, now }),
         context.env.DB
           .prepare(
             // Confirming a speaker invited in May must not restamp the
@@ -424,11 +430,11 @@ const patchSpeaker = defineApiRoute(
                    invited_at,
                    (SELECT MIN(part.invited_at) FROM participations part
                      WHERE part.person_id = ?
-                       AND part.role IN ('speaker', 'co_speaker')
+                       AND ${roleInSql("part", WORK_HOLDING_PARTICIPATION_ROLES)}
                        AND part.submission_id IN (SELECT id FROM submissions WHERE event_id = ?)),
                    ?
                  )`}, updated_at = ?
-             WHERE event_id = ? AND person_id = ? AND role = 'speaker'`,
+             WHERE event_id = ? AND person_id = ? AND role = ?`,
           )
           .bind(...[
             stored,
@@ -437,6 +443,7 @@ const patchSpeaker = defineApiRoute(
             now,
             eventId,
             personId,
+            seatRole,
           ]),
         context.env.DB
           .prepare(
@@ -449,7 +456,7 @@ const patchSpeaker = defineApiRoute(
              SET confirmation_status = ?, confirmed_at = ?,
                  invited_at = ${invitedAt === null ? "NULL" : "COALESCE(invited_at, ?)"}, updated_at = ?
              WHERE person_id = ?
-               AND role IN ('speaker', 'co_speaker')
+               AND ${roleInSql("participations", WORK_HOLDING_PARTICIPATION_ROLES)}
                AND submission_id IN (SELECT id FROM submissions WHERE event_id = ?)`,
           )
           .bind(...[stored, confirmedAt, ...(invitedAt === null ? [] : [invitedAt]), now, personId, eventId]),

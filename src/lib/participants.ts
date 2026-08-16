@@ -117,6 +117,21 @@ function roleList(roles: readonly string[]): string {
   return roles.map((role) => `'${role}'`).join(", ");
 }
 
+const WORK_HOLDING_ROLE_SET: ReadonlySet<string> = new Set(WORK_HOLDING_PARTICIPATION_ROLES);
+
+/**
+ * Is this role an on-stage one?
+ *
+ * The TypeScript counterpart to `roleInSql`, for the predicates that are not
+ * SQL. `memberships.role` is two vocabularies in one column, so "not a speaker"
+ * stopped meaning "staff" the moment the on-stage half widened — and the place
+ * that mattered most was an auth decision, where reading a moderator as an
+ * organizer silently withdrew a token's documented fallback grants.
+ */
+export function isOnStageRole(role: string): boolean {
+  return WORK_HOLDING_ROLE_SET.has(role);
+}
+
 /** `role IN (…)` over a named set. Never built from request input. */
 export function roleInSql(alias: string, roles: readonly string[]): string {
   return `${alias}.role IN (${roleList(roles)})`;

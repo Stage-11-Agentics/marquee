@@ -1,4 +1,5 @@
 import type { Context, Next } from "hono";
+import { isOnStageRole } from "../participants";
 import { getCookie } from "hono/cookie";
 
 import { SESSION_COOKIE_NAME } from "../cookies";
@@ -55,7 +56,14 @@ export async function resolveAuth(context: Context): Promise<AuthContext | null>
       effectivePersonId = actingPersonId;
     }
     const loadedMemberships = effectivePersonId === undefined ? [] : await loadMembershipsForOrg(db, effectivePersonId, token.org_id);
-    const issuerHasOrganizerSeat = loadedMemberships.some((membership) => membership.role !== "speaker");
+    // A seat on stage is not an organizer seat. This asked "is any membership
+    // not `speaker`", which meant "is any of them staff" only while `speaker`
+    // was the sole on-stage value; once `co_speaker`, `moderator` and
+    // `chairperson` became seat roles, an issuer who merely moderates a panel
+    // somewhere in the organization read as an organizer — and that SUPPRESSES
+    // the fallback below, so an offboarded issuer's integration token silently
+    // lost the stored grants this exception exists to preserve.
+    const issuerHasOrganizerSeat = loadedMemberships.some((membership) => !isOnStageRole(membership.role));
     const detachedIssuer = createdBy !== undefined && actingPersonId === null && !issuerHasOrganizerSeat;
     const memberships = detachedIssuer ? [] : loadedMemberships;
     await db

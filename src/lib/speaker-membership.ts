@@ -142,3 +142,35 @@ export async function acceptedSpeakerMembershipStatements(
     speakerMembershipStatement(db, { orgId: event.org_id, eventId, personId: row.person_id, role: row.role, now }),
   );
 }
+
+/**
+ * The on-stage role this person's seat at this event was earned in.
+ *
+ * Every organizer-facing write to a seat has to target the row that exists, not
+ * the one it assumes. `memberships` is unique on `(org, event, person, role)`,
+ * so writing `speaker` for someone the acceptance cascade seated as
+ * `co_speaker` does not update their row — it mints a SECOND, phantom seat, and
+ * every predicate keyed on the role then reads whichever one it happened to
+ * name. A confirmation lands on the phantom while the real seat stays pending,
+ * and nothing on any screen says which is which.
+ *
+ * `speaker` is the answer when there is no seat yet, because the only writer
+ * that reaches this without one is an organizer declaring a speaker.
+ */
+export async function earnedSeatRole(
+  db: D1Database,
+  eventId: string,
+  personId: string,
+): Promise<MembershipSeatRole> {
+  const row = await db
+    .prepare(
+      `SELECT role FROM memberships
+       WHERE event_id = ? AND person_id = ?
+         AND ${roleInSql("memberships", WORK_HOLDING_PARTICIPATION_ROLES)}
+       ORDER BY CASE role ${WORK_HOLDING_PARTICIPATION_ROLES.map((role, index) => `WHEN '${role}' THEN ${index}`).join(" ")} ELSE ${WORK_HOLDING_PARTICIPATION_ROLES.length} END
+       LIMIT 1`,
+    )
+    .bind(eventId, personId)
+    .first<{ role: MembershipSeatRole }>();
+  return row?.role ?? "speaker";
+}

@@ -10,6 +10,8 @@ import { beforeEach, expect, test } from "vitest";
 
 import { applyMigrations, env } from "./apply-migrations";
 import { reconcileTaskSet, writeSubmissionDecision } from "../../src/jobs/cascade/decisions";
+import { app } from "../../src/index";
+import { sha256Hex } from "../../src/lib/auth/random-token";
 import { WORK_HOLDING_PARTICIPATION_ROLES } from "../../src/lib/participants";
 import { COPY_TABLES } from "../../src/lib/events/copy-manifest";
 
@@ -225,4 +227,84 @@ test("AC-333 · a person who speaks on one session and moderates another is seat
     .bind(EVENT_ID, MODERATOR)
     .all<{ role: string }>();
   expect(seat.results.map((row) => row.role)).toEqual(["speaker"]);
+});
+
+test("AC-333 · confirming a co-speaker updates their own seat, and mints no phantom", async () => {
+  // `memberships` is unique on (org, event, person, role), so a write that
+  // assumes `speaker` for someone seated as `co_speaker` does not update their
+  // row — it inserts a SECOND one. The confirmation then lands on the phantom
+  // while the real seat stays pending, and no screen says which is which.
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO auth_sessions (id, person_id, role_hint, expires_at, user_agent_hash, revoked_at, created_at, updated_at)
+       VALUES ('sess_mrq224_seat', ?, 'owner', ?, 'fixture', NULL, ?, ?)`,
+    ).bind(SPEAKER, NOW + 86_400_000, NOW, NOW),
+    env.DB.prepare(
+      `INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at)
+       VALUES ('mem_mrq224_owner', ?, ?, ?, 'owner', ?, ?)`,
+    ).bind(ORG_ID, EVENT_ID, SPEAKER, NOW, NOW),
+  ]);
+  await reconcileTaskSet(env.DB, EVENT_ID, [SUBMISSION_ID], NOW);
+
+  const response = await app.request(
+    `https://marquee.stage11.dev/api/v1/events/${EVENT_ID}/speakers/${CO_SPEAKER}`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: "mq_session=sess_mrq224_seat" },
+      body: JSON.stringify({ confirmation_status: "confirmed" }),
+    },
+    env,
+  );
+  expect(response.status).toBe(200);
+
+  const seats = await env.DB
+    .prepare("SELECT role, confirmation_status FROM memberships WHERE event_id = ? AND person_id = ? ORDER BY role")
+    .bind(EVENT_ID, CO_SPEAKER)
+    .all<{ role: string; confirmation_status: string }>();
+  // Exactly one seat, the real one, and it is the row that moved.
+  expect(seats.results).toEqual([{ role: "co_speaker", confirmation_status: "confirmed" }]);
+});
+
+test("AC-333 · an offboarded issuer with only a moderator seat keeps their integration grants", async () => {
+  // The detached-issuer fallback exists so an organization can offboard a human
+  // and deliberately KEEP the integration token they minted: with no organizer
+  // seat behind them, the token acts on its own stored grants.
+  //
+  // `issuerHasOrganizerSeat` asked "is any membership not `speaker`", which
+  // meant "is any of them staff" only while `speaker` was the sole on-stage
+  // value. Once a moderator seat exists, an issuer who merely moderates a panel
+  // read as an organizer — which SUPPRESSES the fallback, so the token stopped
+  // acting on its stored grants and started acting on a moderator's, silently
+  // losing the integration access this exception was written to preserve.
+  await reconcileTaskSet(env.DB, EVENT_ID, [SUBMISSION_ID], NOW);
+  const seat = await env.DB
+    .prepare("SELECT role FROM memberships WHERE event_id = ? AND person_id = ?")
+    .bind(EVENT_ID, MODERATOR)
+    .first<{ role: string }>();
+  // The premise: on stage, and nothing else. No staff seat anywhere.
+  expect(seat?.role).toBe("moderator");
+  const staff = await env.DB
+    .prepare("SELECT COUNT(*) AS total FROM memberships WHERE person_id = ? AND role IN ('owner','program_lead','ops','reviewer')")
+    .bind(MODERATOR)
+    .first<{ total: number }>();
+  expect(Number(staff?.total)).toBe(0);
+
+  const secret = "mq_mrq224_kept_integration_secret";
+  await env.DB
+    .prepare(
+      `INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at)
+       VALUES ('tok_mrq224_kept', ?, NULL, 'kept integration', ?, ?, '{"permissions":["program:read"],"event_ids":[]}', ?, ?, ?)`,
+    )
+    .bind(ORG_ID, await sha256Hex(secret), secret.slice(0, 7), MODERATOR, NOW, NOW)
+    .run();
+
+  const response = await app.request(
+    `https://marquee.stage11.dev/api/v1/events/${EVENT_ID}/dashboard`,
+    { headers: { authorization: `Bearer ${secret}` } },
+    env,
+  );
+  // The token's own `program:read` is what it acts on. A moderator seat grants
+  // `speaker:write` and nothing else, so if the fallback were suppressed this
+  // would be refused.
+  expect(response.status).toBe(200);
 });
