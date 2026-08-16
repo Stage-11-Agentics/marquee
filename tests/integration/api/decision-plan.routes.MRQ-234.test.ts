@@ -63,7 +63,7 @@ function authHeaders(): HeadersInit {
 describe.sequential("MRQ-234 decision plan routes", () => {
   beforeAll(seedFixture, 20_000);
 
-  test("bulk plan returns four rows, a real rendered recipient, feedback echo, demo truth, and strong fingerprint", async () => {
+  test("CONTRACT · MRQ-234 · bulk plan returns four rows, a real rendered recipient, feedback echo, demo truth, and strong fingerprint", async () => {
     const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/decision-plan`, {
       method: "POST",
       headers: authHeaders(),
@@ -99,7 +99,7 @@ describe.sequential("MRQ-234 decision plan routes", () => {
     expect(plan.queue_revision).toBe(NOW);
   });
 
-  test("single-record plan uses the same contract and does not fabricate mail for waitlist", async () => {
+  test("CONTRACT · MRQ-234 · single-record plan uses the same contract and does not fabricate mail for waitlist", async () => {
     const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/sub-mrq234-plan-good/decision-plan`, {
       method: "POST",
       headers: authHeaders(),
@@ -112,7 +112,7 @@ describe.sequential("MRQ-234 decision plan routes", () => {
     expect(plan.rows[0]).toMatchObject({ disposition: "will_send", count: 1 });
   });
 
-  test("apply refuses a changed email with authored 409, then accepts a fresh positive plan", async () => {
+  test("CONTRACT · MRQ-234 · apply refuses a changed email with authored 409, then accepts a fresh positive plan", async () => {
     const body = { selector: { ids: ["sub-mrq234-plan-good"] }, action: "accept", feedback_md: "Fresh plan" };
     const planResponse = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/decision-plan`, {
       method: "POST",
@@ -151,7 +151,7 @@ describe.sequential("MRQ-234 decision plan routes", () => {
     expect(await applied.json()).toMatchObject({ selected: 1, succeeded: 1, failed: 0 });
   });
 
-  test("missing precondition is 400 and an all-skipped apply is a zero-effect 409", async () => {
+  test("CONTRACT · MRQ-234 · missing precondition is 400 and an all-skipped apply is a zero-effect 409", async () => {
     const planBody = { selector: { ids: ["sub-mrq234-plan-invalid"] }, action: "accept" };
     const planResponse = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/decision-plan`, {
       method: "POST",
@@ -175,7 +175,7 @@ describe.sequential("MRQ-234 decision plan routes", () => {
     expect(await zeroEffect.json()).toMatchObject({ error: { code: "conflict", details: { code: "zero_effect" } } });
   });
 
-  test("mixed apply preserves per-record post-send failures", async () => {
+  test("CONTRACT · MRQ-234 · mixed apply preserves per-record post-send failures", async () => {
     const body = {
       selector: { ids: ["sub-mrq234-plan-good", "sub-mrq234-plan-invalid"] },
       action: "reject",
@@ -195,7 +195,7 @@ describe.sequential("MRQ-234 decision plan routes", () => {
     expect(await applied.json()).toMatchObject({ selected: 2, succeeded: 1, failed: 1, state: "completed_with_failures" });
   });
 
-  test("Notify plan reuses the four rows with queued-copy truth and a rendered real recipient", async () => {
+  test("CONTRACT · MRQ-234 · Notify plan reuses the four rows with queued-copy truth and a rendered real recipient", async () => {
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO people (id, org_id, email, name, created_at, updated_at)

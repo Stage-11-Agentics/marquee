@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import { emailValiditySql, isValidEmail } from "../../../src/lib/email-validity";
 
 describe("MRQ-234 decision email validity SQL/TypeScript parity", () => {
-  test("the notification predicate agrees on divergence fixtures and valid controls", async () => {
+  test("CONTRACT · MRQ-234 · the notification predicate agrees on divergence fixtures and valid controls", async () => {
     const values = [
       "a b@c.d",
       "@x.",

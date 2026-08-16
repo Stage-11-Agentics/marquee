@@ -145,7 +145,7 @@ async function installDecisionPlanApi(page: Page): Promise<void> {
   });
 }
 
-test("MRQ-234 · the wave decision panel keeps its geometry, preview, feedback echo, and named skipped result", async ({ page }) => {
+test("CONTRACT · MRQ-234 · the wave decision panel keeps its geometry, preview, feedback echo, and named skipped result", async ({ page }) => {
   await installDecisionPlanApi(page);
   await page.goto("/submissions");
 
