@@ -58,3 +58,20 @@ demo reset; conference deletion uses the existing event lifecycle boundary.
 The stale review base, mailbox/surface, and owner gate language above are
 updated for the V2 handoff. No new plan-review cycle is required. The contract
 fold remains exactly US-97 / AC-343–AC-348 and migration 0030.
+
+## Proof receipt (2026-08-16)
+
+- Browser artifact `art_01M05PMWAFJH31HMM2D3T8FD03` records the rejected-trace
+  repair: the local command bar was searched with the exact rendered code
+  `SUB-46`; the selected result visibly carried `SUB-46 · Abstract`; its ULID
+  route rendered `SUB-46`; the header copy action showed `Copied`; and
+  `navigator.clipboard.readText()` returned exactly `SUB-46`.
+- Source inventory artifact `art_01M05PNHV3KR0XJT63VVRBAGDY` records the
+  multiline-aware sweep and its classification: 125 matches reduce to five
+  production `INSERT INTO submissions` roles, all five allocator-owned; one
+  allocator-owned public finalization `UPDATE`; deterministic seed/reset
+  ownership; migration/control-plane ownership; and explicitly excluded schema
+  verifier and test fixtures. No production creation path is unclassified.
+- Both proofs were captured against implementation head
+  `cabfbd5647c3cf48a411e8f71cf1d8f572bb6abd`; the receipt is committed as the
+  follow-up branch proof boundary before PR creation.
