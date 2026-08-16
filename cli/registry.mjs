@@ -293,6 +293,23 @@ export const COMMAND_REGISTRY = [
     options: [],
   },
   {
+    path: ["submissions", "notes"],
+    usage: "marquee submissions notes <submission-id>",
+    summary: "Read the submission's internal staff notes.",
+    operations: ["listSubmissionNotes"],
+    skill: "triage",
+    options: [],
+  },
+  {
+    path: ["submissions", "note"],
+    usage: "marquee submissions note <submission-id> --set body=<text>",
+    summary: "Append an internal staff note to a submission.",
+    operations: ["addSubmissionNote"],
+    skill: "triage",
+    set: ["body"],
+    options: [SET_OPTION],
+  },
+  {
     path: ["submissions", "accept"],
     usage: "marquee submissions accept <event-id> --filter <key=value>",
     summary: "Accept every submission selected by a server-side filter.",

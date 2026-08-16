@@ -61,6 +61,12 @@ async function startApi() {
     if (request.method === "GET" && url.pathname === "/api/v1/events/evt_test/submissions/sub_test") {
       return jsonResponse(response, 200, { id: "sub_test", kind: "session", title: "Test Session", status: "accepted" });
     }
+    if (request.method === "GET" && url.pathname === "/api/v1/submissions/sub_test/notes") {
+      return jsonResponse(response, 200, { notes: [{ id: "note_test", submission_id: "sub_test", body: "Internal context", author_person_id: "person_test", author_name: "Test Organizer", created_at: 1 }] });
+    }
+    if (request.method === "POST" && url.pathname === "/api/v1/submissions/sub_test/notes") {
+      return jsonResponse(response, 201, { note: { id: "note_new", submission_id: "sub_test", body: body.body, author_person_id: "person_test", author_name: "Test Organizer", created_at: 2 } });
+    }
     if (request.method === "POST" && url.pathname === "/api/v1/events/evt_test/submissions/bulk") {
       return jsonResponse(response, 200, { operation_id: "op_test", selected: 1, action: body.action, selector: body.selector });
     }
@@ -174,6 +180,8 @@ test("AC-138 + AC-139 + AC-140 + AC-250 · every CLI workflow uses bearer auth, 
     runs.push(await runCli(scopedArgs(api.url, "event", "show", "evt_test"), api.url));
     runs.push(await runCli(scopedArgs(api.url, "submissions", "list", "evt_test", "--filter", "status=accepted"), api.url));
     runs.push(await runCli(scopedArgs(api.url, "submissions", "show", "evt_test", "sub_test"), api.url));
+    runs.push(await runCli(scopedArgs(api.url, "submissions", "notes", "sub_test"), api.url));
+    runs.push(await runCli(scopedArgs(api.url, "submissions", "note", "sub_test", "--set", "body=Internal follow-up"), api.url));
     runs.push(await runCli(scopedArgs(api.url, "submissions", "accept", "evt_test", "--filter", "status=submitted"), api.url));
     runs.push(await runCli(scopedArgs(api.url, "submissions", "reject", "evt_test", "--filter", "status=in_review"), api.url));
     runs.push(await runCli(scopedArgs(api.url, "tasks", "list", "evt_test", "--overdue"), api.url));
@@ -196,6 +204,11 @@ test("AC-138 + AC-139 + AC-140 + AC-250 · every CLI workflow uses bearer auth, 
     assert.ok(api.requests.every((request) => !request.headers.cookie), "the CLI never sends a session cookie");
     const list = api.requests.find((request) => request.path.endsWith("/submissions") && request.method === "GET");
     assert.equal(list.query.status, "accepted");
+    const notesRead = api.requests.find((request) => request.path === "/api/v1/submissions/sub_test/notes" && request.method === "GET");
+    assert.ok(notesRead, "notes read uses the submission-scoped route");
+    const notesWrite = api.requests.find((request) => request.path === "/api/v1/submissions/sub_test/notes" && request.method === "POST");
+    assert.deepEqual(notesWrite.body, { body: "Internal follow-up" });
+    assert.equal(api.requests.filter((request) => request.path === "/api/v1/submissions/sub_test/notes").length, 2);
     const accept = api.requests.find((request) => request.path.endsWith("/submissions/bulk") && request.body?.action === "accept");
     assert.deepEqual(accept.body.selector, { filter: { status: "submitted" } });
     const template = api.requests.find((request) => request.path.endsWith("/comms/send") && request.body?.template_key);

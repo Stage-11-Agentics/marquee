@@ -443,6 +443,19 @@ async function execute(command, arguments_, options, flags, client) {
     return executeOrgCommand(command, verb, arguments_, options, client);
   }
 
+  // Submission notes are scoped to the submission's conference on the server,
+  // but deliberately take no event ID in the CLI. Resolving an event first
+  // would require a second read and would make a valid cross-event org token
+  // fail before it reached the notes route.
+  if (root === "submissions" && (verb === "notes" || verb === "note")) {
+    const submissionId = arguments_[0];
+    if (!submissionId) usageError(`${command.usage} requires a submission ID`);
+    const path = `/api/v1/submissions/${encodeURIComponent(submissionId)}/notes`;
+    return verb === "notes"
+      ? client.get(path)
+      : client.post(path, requireSetValues(command, options));
+  }
+
   const eventId = await resolveEventId(client, command, arguments_, options);
   if (root === "submissions" && verb === "list") {
     const filters = parseFilters(optionValues(options, "--filter"), LIST_FILTER_KEYS, "filter");
