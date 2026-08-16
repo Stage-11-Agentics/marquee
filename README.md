@@ -182,13 +182,14 @@ secret is configured.
 In a second terminal, while the Worker is running:
 
 ```sh
+event_id="${MARQUEE_EVENT_ID:?set MARQUEE_EVENT_ID to an event visible to the demo seat}"
 curl -fsS http://127.0.0.1:8787/health
 curl -fsS -c /tmp/marquee-local-cookies.txt \
   -H 'content-type: application/json' \
   --data '{"role":"organizer"}' \
   http://127.0.0.1:8787/api/v1/auth/demo
 curl -fsS -b /tmp/marquee-local-cookies.txt \
-  'http://127.0.0.1:8787/api/v1/events/evt_aie-ny-2026/submissions?per_page=1&page=1' \
+  "http://127.0.0.1:8787/api/v1/events/${event_id}/submissions?per_page=1&page=1" \
   | grep -Eq '"total"[[:space:]]*:[[:space:]]*[1-9][0-9]*'
 ```
 
@@ -239,12 +240,13 @@ for attempt in $(seq 1 60); do
   sleep 1
 done
 test "$ready" = 1
+event_id="${MARQUEE_EVENT_ID:?set MARQUEE_EVENT_ID to an event visible to the demo seat}"
 curl -fsS -c "$state_dir/cookies.txt" \
   -H 'content-type: application/json' \
   --data '{"role":"organizer"}' \
   http://127.0.0.1:8787/api/v1/auth/demo >/dev/null
 curl -fsS -b "$state_dir/cookies.txt" \
-  'http://127.0.0.1:8787/api/v1/events/evt_aie-ny-2026/submissions?per_page=1&page=1' \
+  "http://127.0.0.1:8787/api/v1/events/${event_id}/submissions?per_page=1&page=1" \
   | grep -Eq '"total"[[:space:]]*:[[:space:]]*[1-9][0-9]*'
 ```
 
