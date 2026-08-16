@@ -338,7 +338,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
       </main>
     </div>
     <OverlayHost state={overlay} onClose={closeOverlay} />
-    {eventId !== null && <QuickSearch key={searchOpen ? "open" : "closed"} eventId={eventId} open={searchOpen} onClose={closeSearch} navigate={navigate} />}
+    {eventId !== null && <QuickSearch eventId={eventId} open={searchOpen} onClose={closeSearch} navigate={navigate} />}
     <ToastHost message={toast} />
     {wall}
   </>;

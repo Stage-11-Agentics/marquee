@@ -9,6 +9,7 @@ import { useDialogLifecycle } from "./OverlayHosts";
 import "./quick-search.css";
 
 type SearchState = "idle" | "loading" | "ready" | "error";
+const SEARCH_DEBOUNCE_MS = 40;
 
 interface SearchResponse {
   data: SearchResult[];
@@ -43,22 +44,35 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
   const [errorMessage, setErrorMessage] = useState("");
   const [paintedQuery, setPaintedQuery] = useState("");
   const activeRequestRef = useRef<AbortController | null>(null);
+  const refreshOnFirstQueryRef = useRef(false);
   const searchSessionRef = useRef("");
 
   useEffect(() => {
-    if (!open) return;
     searchSessionRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=`, {
+      headers: { accept: "application/json", "x-search-session": searchSessionRef.current, "x-search-prefetch": "1" },
+      route: "/api/v1/events/{eventId}/search",
+    }).catch(() => undefined);
+    return () => activeRequestRef.current?.abort();
+  }, [eventId]);
+
+  useEffect(() => {
+    if (!open) return;
     setQuery("");
     setResults([]);
     setState("idle");
     setErrorMessage("");
     setPaintedQuery("");
+    // Refresh on open and on the first real query. The open request primes the
+    // normal path; the first-query marker keeps a long-lived shell snapshot
+    // fresh without making later typeahead requests repeat the scan.
     void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=`, {
-      headers: { accept: "application/json", "x-search-session": searchSessionRef.current, "x-search-prefetch": "1" },
+      headers: { accept: "application/json", "x-search-session": searchSessionRef.current, "x-search-prefetch": "1", "x-search-refresh": "1" },
       route: "/api/v1/events/{eventId}/search",
     }).catch(() => undefined);
+    refreshOnFirstQueryRef.current = true;
     inputRef.current?.focus();
-  }, [eventId, open]);
+  }, [open]);
 
   useEffect(() => {
     if (!open || query.trim().length === 0) {
@@ -73,33 +87,40 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
     const requestQuery = query;
     setState("loading");
     setErrorMessage("");
-    void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=${encodeURIComponent(requestQuery)}`, {
-      headers: { accept: "application/json", "x-search-session": searchSessionRef.current },
-      signal: controller.signal,
-      route: "/api/v1/events/{eventId}/search",
-    })
-      .then(readSearchResponse)
-      .then((body) => {
-        if (controller.signal.aborted) return;
-        setResults(body.data);
-        setState("ready");
-        setPaintedQuery(requestQuery);
+    const requestTimer = window.setTimeout(() => {
+      const refresh = refreshOnFirstQueryRef.current;
+      refreshOnFirstQueryRef.current = false;
+      void apiFetch<unknown>(`/api/v1/events/${encodeURIComponent(eventId)}/search?q=${encodeURIComponent(requestQuery)}`, {
+        headers: {
+          accept: "application/json",
+          "x-search-session": searchSessionRef.current,
+          ...(refresh ? { "x-search-refresh": "1" } : {}),
+        },
+        signal: controller.signal,
+        route: "/api/v1/events/{eventId}/search",
       })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        if (error instanceof Error && error.name === "AbortError") return;
-        setState("error");
-        setResults([]);
-        setErrorMessage(errorSummary(error));
-        setPaintedQuery(requestQuery);
-      });
+        .then(readSearchResponse)
+        .then((body) => {
+          if (controller.signal.aborted) return;
+          setResults(body.data);
+          setState("ready");
+          setPaintedQuery(requestQuery);
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) return;
+          if (error instanceof Error && error.name === "AbortError") return;
+          setState("error");
+          setResults([]);
+          setErrorMessage(errorSummary(error));
+          setPaintedQuery(requestQuery);
+        });
+    }, SEARCH_DEBOUNCE_MS);
     return () => {
+      window.clearTimeout(requestTimer);
       controller.abort();
       if (activeRequestRef.current === controller) activeRequestRef.current = null;
     };
   }, [eventId, open, query]);
-
-  if (!open) return null;
 
   const selectResult = (result: SearchResult) => {
     onClose();
@@ -122,6 +143,8 @@ export function QuickSearch({ eventId, open, onClose, navigate }: Props): JSX.El
     switchEvent(targetId);
     navigate("/dashboard");
   };
+
+  if (!open) return null;
 
   return <div class="quick-search-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
     <section ref={dialogRef} class="modal quick-search-dialog" role="dialog" aria-modal="true" aria-label="Search everything" tabIndex={-1}>

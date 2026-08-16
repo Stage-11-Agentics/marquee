@@ -51,4 +51,30 @@ describe("speed budget authority", () => {
     expect(classifySpeedMeasurements({}, { gate: false }).shouldFail).toBe(false);
     expect(classifySpeedMeasurements({}, { gate: true }).shouldFail).toBe(true);
   });
+
+  test("CONTRACT · the per-PR acceptance scope excludes warning-only objectives", () => {
+    const scoped = classifySpeedMeasurements({ ...passingMeasurements(), "submissions-filter-sort": 999 }, { gate: true, scope: "acceptance" });
+    expect(scoped.entries.every((entry) => entry.kind === "acceptance")).toBe(true);
+    expect(scoped.entries).toHaveLength(7);
+    expect(scoped.objectiveWarnings).toHaveLength(0);
+    expect(scoped.shouldFail).toBe(false);
+  });
+
+  test("CONTRACT · the per-PR acceptance scope still fails a missing AC measurement", () => {
+    const measurements = passingMeasurements();
+    delete measurements["global-search-painted"];
+    const scoped = classifySpeedMeasurements(measurements, { gate: true, scope: "acceptance" });
+    expect(scoped.missing.map((entry) => entry.id)).toEqual(["global-search-painted"]);
+    expect(scoped.shouldFail).toBe(true);
+  });
+
+  test("CONTRACT · hosted calibration is explicit and still fails above its calibrated ceiling", () => {
+    const hostedPass = classifySpeedMeasurements({ ...passingMeasurements(), "global-search-painted": 599 }, { gate: true, scope: "acceptance", runner: "github" });
+    const hostedEntry = hostedPass.entries.find((entry) => entry.id === "global-search-painted");
+    expect(hostedEntry).toMatchObject({ threshold: 200, effectiveThreshold: 600, calibration: "github", verdict: "pass" });
+
+    const hostedFailure = classifySpeedMeasurements({ ...passingMeasurements(), "global-search-painted": 601 }, { gate: true, scope: "acceptance", runner: "github" });
+    expect(hostedFailure.shouldFail).toBe(true);
+    expect(hostedFailure.acceptanceFailures[0]?.id).toBe("global-search-painted");
+  });
 });

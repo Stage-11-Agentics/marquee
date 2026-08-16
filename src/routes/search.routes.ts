@@ -9,7 +9,7 @@ import {
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { authHasRole } from "../lib/auth/scope-resolution";
 import { requireSubmissionRead } from "../lib/auth/program-access";
-import { rankSearchCandidates } from "../lib/quick-search";
+import { prepareSearchCandidates, rankSearchCandidates } from "../lib/quick-search";
 import { SPEAKER_ROSTER_PERSON_SOURCE } from "./speakers.queries";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
@@ -117,7 +117,7 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
   const people = new Map<string, SpeakerSearchRow>();
   for (const person of speakers.results) people.set(person.id, person);
 
-  return [
+  const candidates = [
     ...submissions.results.map((row) => {
       const type = resultTypeFor(row.kind);
       return {
@@ -153,13 +153,15 @@ async function querySearchCandidates(database: D1Database, eventId: string, scop
       searchText: [row.name, row.slug, row.id],
     } satisfies SearchCandidate)),
   ];
+  prepareSearchCandidates(candidates);
+  return candidates;
 }
 
 async function cachedSearchCandidates(
   database: D1Database,
   eventId: string,
   scopedPersonId: string | null,
-  allowStart: boolean,
+  refresh = false,
 ): Promise<SearchCandidate[]> {
   // Authorization runs before this helper. Never cache a form-admin snapshot:
   // form assignment changes must take effect immediately for scoped sessions.
@@ -169,9 +171,13 @@ async function cachedSearchCandidates(
   const key = JSON.stringify([eventId, scopedPersonId]);
   const now = Date.now();
   const existing = searchCandidateCache.get(key);
-  if (existing && (existing.candidates === undefined || existing.expiresAt > now)) return existing.promise;
+  if (existing && refresh && existing.candidates !== undefined) {
+    // A shell can stay mounted across dashboard work. When the dialog opens,
+    // replace a completed snapshot so records changed since mount are visible;
+    // an in-flight prewarm remains shared rather than launching a second scan.
+    searchCandidateCache.delete(key);
+  } else if (existing && (existing.candidates === undefined || existing.expiresAt > now)) return existing.promise;
   if (existing) searchCandidateCache.delete(key);
-  if (!allowStart) return querySearchCandidates(database, eventId, scopedPersonId);
   for (const [entryKey, entry] of searchCandidateCache) {
     if (entry.expiresAt <= now) searchCandidateCache.delete(entryKey);
   }
@@ -224,9 +230,10 @@ const searchEvent = defineApiRoute(
     const scopedPersonId = auth.kind === "session" && !authHasRole(auth, "ops", eventId) ? auth.personId : null;
     const searchSession = context.req.header("x-search-session")?.trim().slice(0, 128) ?? "";
     const prefetch = context.req.header("x-search-prefetch") === "1";
+    const refresh = context.req.header("x-search-refresh") === "1";
     if (!q && !prefetch) return context.json({ data: [] }, 200);
     const candidates = searchSession && (prefetch || q)
-      ? await cachedSearchCandidates(context.env.DB, eventId, scopedPersonId, prefetch)
+      ? await cachedSearchCandidates(context.env.DB, eventId, scopedPersonId, refresh)
       : await querySearchCandidates(context.env.DB, eventId, scopedPersonId);
     if (!q) return context.json({ data: [] }, 200);
     return context.json({ data: rankSearchCandidates(candidates, q, SEARCH_RESULT_LIMIT) }, 200);
