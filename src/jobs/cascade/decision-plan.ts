@@ -9,12 +9,13 @@ export const DECISION_PLAN_DISPOSITIONS = [
 ] as const;
 
 export type DecisionPlanDisposition = (typeof DECISION_PLAN_DISPOSITIONS)[number];
-export type DecisionPlanAction = "accept" | "reject" | "waitlist" | "withdraw";
+export type DecisionPlanAction = "accept" | "reject" | "waitlist" | "withdraw" | "notify";
 
 export interface DecisionPlanRecordSnapshot {
   id: string;
   title: string;
   email?: string | null;
+  template?: DecisionPlanTemplate;
   /** A transition error is resolved by the database-aware loader. */
   transitionError?: string | null;
   published?: boolean;
@@ -62,8 +63,16 @@ function reasonFor(
   snapshot: DecisionPlanRecordSnapshot,
   template: DecisionPlanTemplate,
 ): string {
-  if (disposition === "already_notified") return "A decision notification is already queued or settled for this record.";
-  if (disposition === "no_valid_address") return "The speaker has no valid email address.";
+  if (disposition === "already_notified") {
+    return action === "notify"
+      ? "A previous notification is still queued — sending again would deliver twice."
+      : "A decision notification is already queued or settled for this record.";
+  }
+  if (disposition === "no_valid_address") {
+    return action === "notify"
+      ? "The record needs a valid address first; it is excluded from this send."
+      : "The speaker has no valid email address.";
+  }
   if (disposition === "cannot_move") {
     return snapshot.transitionError
       ?? (snapshot.published ? PUBLISHED_SESSION_REFUSAL : "This record cannot move with the selected action.");
@@ -72,6 +81,7 @@ function reasonFor(
   if (action === "withdraw") return "Withdrawn decisions do not send an email.";
   if (!template.enabled) return "The decision template is disabled; this action will send nothing.";
   if (snapshot.demoSuppressed) return "Demo safety will keep this message in the outbox.";
+  if (action === "notify") return "The existing decision notification will be queued.";
   return action === "accept" ? "The acceptance email will be queued." : "The rejection email will be queued.";
 }
 
@@ -106,6 +116,7 @@ export function planBulkDecision(input: {
         : input.action !== "waitlist" && input.action !== "withdraw" && !isValidEmail(snapshot.email)
           ? "no_valid_address"
           : "will_send";
+    const template = snapshot.template ?? input.template;
     const demoSuppressedForRecord = disposition === "will_send" && snapshot.demoSuppressed === true;
     if (demoSuppressedForRecord) demoSuppressed += 1;
     const target = rowByDisposition.get(disposition);
@@ -113,7 +124,7 @@ export function planBulkDecision(input: {
     target.records.push({
       id: snapshot.id,
       title: snapshot.title,
-      reason: reasonFor(input.action, disposition, snapshot, input.template),
+      reason: reasonFor(input.action, disposition, snapshot, template),
       demo_suppressed: demoSuppressedForRecord,
     });
     target.count = target.records.length;
@@ -126,7 +137,7 @@ export function planBulkDecision(input: {
     template: input.template,
     demo_suppressed: demoSuppressed,
     rows,
-    zero_effect: input.selected.length > 0 && rowByDisposition.get("will_send")!.count === 0
+    zero_effect: input.action !== "notify" && input.selected.length > 0 && rowByDisposition.get("will_send")!.count === 0
       ? {
           code: "zero_effect",
           reason: rows

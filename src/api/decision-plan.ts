@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 
-export const decisionPlanActionSchema = z.enum(["accept", "reject", "waitlist", "withdraw"]);
+export const decisionPlanActionSchema = z.enum(["accept", "reject", "waitlist", "withdraw", "notify"]);
 
 export const decisionPlanRecordSchema = z.object({
   id: z.string().min(1),

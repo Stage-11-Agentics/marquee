@@ -15,7 +15,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { notifyExistingDecisions, writeBulkSubmissionDecisions } from "../jobs/cascade/decisions";
-import { buildDecisionPlan, refuseZeroEffect, requireCurrentDecisionPlan } from "../jobs/cascade/decision-plan-service";
+import { buildDecisionPlan, buildNotifyPlan, refuseZeroEffect, requireCurrentDecisionPlan } from "../jobs/cascade/decision-plan-service";
 import { decisionPlanResponseSchema } from "../api/decision-plan";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { PUBLISHED_SESSION_REFUSAL } from "../lib/publication-guard";
@@ -142,6 +142,40 @@ const planBulkDecision = defineApiRoute(
         confirmPublished: body.confirm_published === true,
         waveId: body.wave_id,
       }), 200);
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === "event not found") throw ApiError.notFound("event not found");
+      throw error;
+    }
+  },
+);
+
+const planNotifiedSubmissions = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/submissions/not-notified/plan",
+    operationId: "planDecidedSubmissionsNotification",
+    summary: "Preview notifications for decided submissions",
+    description: "Build the shared bounded decision plan for the Decided · not notified surface, including one rendered recipient and the current queue revision.",
+    tags: ["Submissions"],
+    request: { params: eventParams },
+    policy: {
+      auth: { kind: "grants", grants: ["program:read"] },
+      rateLimit: { bucket: "read" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(decisionPlanResponseSchema, "The current notification plan."),
+      ...errorResponses([401, 403, 404, 422, 429, 500]),
+    },
+  },
+  async (context) => {
+    const { eventId } = context.req.valid("param");
+    const ids = await selectSubmissionIds(context.env.DB, { eventId, status: "not_notified" });
+    if (ids.length > BULK_ID_LIMIT) {
+      throw ApiError.unprocessable(`notification plan is capped at ${BULK_ID_LIMIT} submissions; narrow the selection`, "selection");
+    }
+    try {
+      return context.json(await buildNotifyPlan({ db: context.env.DB, eventId, ids }), 200);
     } catch (error: unknown) {
       if (error instanceof Error && error.message === "event not found") throw ApiError.notFound("event not found");
       throw error;
@@ -322,4 +356,4 @@ const notifyNotifiedSubmissions = defineApiRoute(
   },
 );
 
-export const apiRoutes = [planBulkDecision, bulkDecideSubmissions, getNotifiedSummary, notifyNotifiedSubmissions];
+export const apiRoutes = [planBulkDecision, planNotifiedSubmissions, bulkDecideSubmissions, getNotifiedSummary, notifyNotifiedSubmissions];

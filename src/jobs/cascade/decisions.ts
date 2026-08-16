@@ -28,8 +28,8 @@ import { enqueueTrigger } from "../mail/triggers";
 import { isValidEmail } from "../../lib/email-validity";
 import type { DecisionPlanAction } from "./decision-plan";
 
-export type DecisionAction = Exclude<DecisionPlanAction, "withdraw">;
-export type BulkAction = DecisionPlanAction;
+export type DecisionAction = Exclude<DecisionPlanAction, "withdraw" | "notify">;
+export type BulkAction = Exclude<DecisionPlanAction, "notify">;
 
 export interface DecisionActor {
   kind: "user" | "api_token";

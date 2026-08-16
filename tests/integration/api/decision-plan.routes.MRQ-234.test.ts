@@ -194,4 +194,53 @@ describe.sequential("MRQ-234 decision plan routes", () => {
     expect(applied.status).toBe(200);
     expect(await applied.json()).toMatchObject({ selected: 2, succeeded: 1, failed: 1, state: "completed_with_failures" });
   });
+
+  test("Notify plan reuses the four rows with queued-copy truth and a rendered real recipient", async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO people (id, org_id, email, name, created_at, updated_at)
+         VALUES ('person-mrq234-plan-notify', 'org-mrq234-plan', 'notify@mrq234.test', 'Notify Speaker', ?, ?)`,
+      ).bind(NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO submissions
+          (id, event_id, kind, title, status, origin, submitter_person_id, last_write_source, submitted_at, created_at, updated_at)
+         VALUES ('sub-mrq234-plan-notify', ?, 'abstract', 'Notify me', 'accepted', 'public', 'person-mrq234-plan-notify', 'marquee', ?, ?, ?)`,
+      ).bind(EVENT_ID, NOW, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at)
+         VALUES ('par-mrq234-plan-notify', 'sub-mrq234-plan-notify', 'person-mrq234-plan-notify', 'speaker', 0, ?, ?)`,
+      ).bind(NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO submission_decisions
+          (id, event_id, submission_id, decision, resulting_status, feedback_md, decided_by_person_id, decided_at, outbox_id, created_at, updated_at)
+         VALUES ('decision-mrq234-plan-notify', ?, 'sub-mrq234-plan-notify', 'approve', 'accepted', 'Bring your practical examples.', 'person-mrq234-plan-actor', ?, NULL, ?, ?)`,
+      ).bind(EVENT_ID, NOW, NOW, NOW),
+      env.DB.prepare(
+        `INSERT INTO submission_decisions
+          (id, event_id, submission_id, decision, resulting_status, feedback_md, decided_by_person_id, decided_at, outbox_id, created_at, updated_at)
+         VALUES ('decision-mrq234-plan-invalid-notify', ?, 'sub-mrq234-plan-invalid', 'deny', 'rejected', NULL, 'person-mrq234-plan-actor', ?, NULL, ?, ?)`,
+      ).bind(EVENT_ID, NOW, NOW, NOW),
+    ]);
+    const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/submissions/not-notified/plan`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    expect(response.status).toBe(200);
+    const plan = await response.json<{
+      action: string;
+      rows: Array<{ disposition: string; count: number; records: Array<{ id: string; reason: string }> }>;
+      recipient_preview: { to_email: string; text: string } | null;
+      queue_revision: number;
+      zero_effect: unknown;
+    }>();
+    expect(plan.action).toBe("notify");
+    expect(plan.rows.map((row) => row.disposition)).toEqual(["will_send", "already_notified", "no_valid_address", "cannot_move"]);
+    expect(plan.rows[0]?.records.some((record) => record.id === "sub-mrq234-plan-notify")).toBe(true);
+    expect(plan.rows[1]?.records.some((record) => record.reason.includes("sending again would deliver twice"))).toBe(true);
+    expect(plan.rows[2]?.records.some((record) => record.id === "sub-mrq234-plan-invalid")).toBe(true);
+    expect(plan.recipient_preview).toMatchObject({ to_email: "notify@mrq234.test" });
+    expect(plan.recipient_preview?.text).toContain("Bring your practical examples.");
+    expect(plan.queue_revision).toBe(NOW);
+    expect(plan.zero_effect).toBeNull();
+  });
 });

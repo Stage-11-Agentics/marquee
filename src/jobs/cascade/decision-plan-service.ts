@@ -22,7 +22,9 @@ import { planBulkDecision, type DecisionPlanRecordSnapshot } from "./decision-pl
 
 interface NotificationStateRow {
   submission_id: string;
+  decision: string;
   resulting_status: string;
+  feedback_md: string | null;
   outbox_status: string | null;
 }
 
@@ -114,7 +116,8 @@ async function notificationStates(
 ): Promise<Map<string, NotificationStateRow>> {
   if (ids.length === 0) return new Map();
   const result = await db.prepare(`
-    SELECT latest.submission_id, latest.resulting_status, settled.status AS outbox_status
+    SELECT latest.submission_id, latest.decision, latest.resulting_status, latest.feedback_md,
+           settled.status AS outbox_status
     FROM submission_decisions latest
     LEFT JOIN outbox settled ON settled.id = (
       SELECT candidate.id
@@ -140,9 +143,8 @@ async function notificationStates(
   return new Map(result.results.map((row) => [row.submission_id, row]));
 }
 
-function previewData(submission: SubmissionContext, action: BulkAction, feedbackMd: string | null) {
-  const resultingStatus = action === "accept" ? "accepted" : "rejected";
-  const recommendation = action === "accept" ? "approve" : "deny";
+function previewData(submission: SubmissionContext, resultingStatus: "accepted" | "rejected", feedbackMd: string | null) {
+  const recommendation = resultingStatus === "accepted" ? "approve" : "deny";
   return {
     "speaker.first_name": firstName(submission.person_name),
     "speaker.name": submission.person_name,
@@ -206,7 +208,7 @@ export async function buildDecisionPlan(input: {
   const previewSubmission = firstPreviewId ? byId.get(firstPreviewId) : undefined;
   const recipientPreview = input.action === "waitlist" || input.action === "withdraw" || !previewSubmission
     ? null
-    : { ...renderMail(template, previewData(previewSubmission, input.action, plan.feedback_md)), to_email: previewSubmission.person_email.trim() };
+    : { ...renderMail(template, previewData(previewSubmission, input.action === "accept" ? "accepted" : "rejected", plan.feedback_md)), to_email: previewSubmission.person_email.trim() };
   const fingerprintPayload = {
     action: input.action,
     wave_id: input.waveId ?? null,
@@ -239,5 +241,118 @@ export async function buildDecisionPlan(input: {
     queue_revision: Number(event.updated_at),
     selected: ids.length,
     zero_effect: plan.zero_effect,
+  };
+}
+
+function notifyTemplateKey(resultingStatus: string): "acceptance" | "rejection" {
+  return resultingStatus === "accepted" ? "acceptance" : "rejection";
+}
+
+/** Build the same four-row contract for the derived Decided · not notified surface. */
+export async function buildNotifyPlan(input: {
+  db: D1Database;
+  eventId: string;
+  ids: readonly string[];
+}): Promise<DecisionPlanResponse> {
+  const ids = [...new Set(input.ids)];
+  if (ids.length > BULK_ID_LIMIT) {
+    throw new Error(`decision plan is capped at ${BULK_ID_LIMIT} submissions`);
+  }
+  const [event, submissions, notifications, acceptanceTemplate, rejectionTemplate] = await Promise.all([
+    input.db.prepare("SELECT demo_mode, updated_at FROM events WHERE id = ?").bind(input.eventId).first<{ demo_mode: number; updated_at: number }>(),
+    loadSubmissions(input.db, input.eventId, ids),
+    notificationStates(input.db, input.eventId, ids),
+    findTemplate(input.db, input.eventId, "acceptance"),
+    findTemplate(input.db, input.eventId, "rejection"),
+  ]);
+  if (!event) throw new Error("event not found");
+  const allowlist = Number(event.demo_mode) === 1
+    ? new Set((await demoMailAllowlistFor(input.db, input.eventId)).map(normalizeAllowlistEmail))
+    : new Set<string>();
+  const byId = new Map(submissions.map((submission) => [submission.id, submission]));
+  const templateByKey = { acceptance: acceptanceTemplate, rejection: rejectionTemplate };
+  const snapshots: DecisionPlanRecordSnapshot[] = ids.map((id) => {
+    const submission = byId.get(id);
+    const notification = notifications.get(id);
+    const status = notification?.resulting_status;
+    const template = status === "accepted" || status === "rejected"
+      ? templateByKey[notifyTemplateKey(status)]
+      : acceptanceTemplate;
+    const validDecision = status === "accepted" || status === "rejected";
+    const email = submission?.person_email?.trim() ?? "";
+    const alreadyQueuedOrSettled = ["queued", "sent", "suppressed"].includes(notification?.outbox_status ?? "");
+    return {
+      id,
+      title: submission?.title ?? "Unknown submission",
+      email,
+      template: {
+        key: template.key,
+        subject: template.subject,
+        body_md: template.body_md,
+        enabled: template.enabled === 1,
+      },
+      transitionError: !validDecision ? "No accepted or rejected decision exists to notify." : null,
+      alreadyNotified: alreadyQueuedOrSettled,
+      demoSuppressed: validDecision
+        && template.enabled === 1
+        && Number(event.demo_mode) === 1
+        && isValidEmail(email)
+        && !allowlist.has(normalizeAllowlistEmail(email)),
+    };
+  });
+  const firstTemplate = snapshots.find((snapshot) => snapshot.template?.key === "rejection")?.template
+    ?? snapshots.find((snapshot) => snapshot.template)?.template
+    ?? {
+      key: acceptanceTemplate.key,
+      subject: acceptanceTemplate.subject,
+      body_md: acceptanceTemplate.body_md,
+      enabled: acceptanceTemplate.enabled === 1,
+    };
+  const plan = planBulkDecision({
+    action: "notify",
+    selected: snapshots,
+    template: firstTemplate,
+    feedbackMd: null,
+  });
+  const sendableId = plan.rows[0]?.records[0]?.id;
+  const sendableSubmission = sendableId ? byId.get(sendableId) : undefined;
+  const sendableState = sendableId ? notifications.get(sendableId) : undefined;
+  const sendableStatus = sendableState?.resulting_status === "accepted" || sendableState?.resulting_status === "rejected"
+    ? sendableState.resulting_status
+    : null;
+  const previewTemplate = sendableStatus ? templateByKey[notifyTemplateKey(sendableStatus)] : null;
+  const recipientPreview = sendableSubmission && sendableState && sendableStatus && previewTemplate
+    ? {
+        ...renderMail(previewTemplate, previewData(sendableSubmission, sendableStatus, normalizeDecisionFeedback(sendableState.feedback_md))),
+        to_email: sendableSubmission.person_email.trim(),
+      }
+    : null;
+  const fingerprint = await sha256Hex(JSON.stringify({
+    action: "notify",
+    queue_revision: Number(event.updated_at),
+    records: snapshots.map((snapshot, index) => ({
+      id: snapshot.id,
+      email: snapshot.email?.trim() ?? "",
+      decision_id: notifications.get(snapshot.id)?.decision ?? null,
+      resulting_status: notifications.get(snapshot.id)?.resulting_status ?? null,
+      outbox_status: notifications.get(snapshot.id)?.outbox_status ?? null,
+      disposition: plan.rows.find((row) => row.records.some((record) => record.id === snapshot.id))?.disposition ?? "cannot_move",
+      reason: plan.rows.flatMap((row) => row.records).find((record) => record.id === snapshot.id)?.reason ?? "submission not found",
+      position: index,
+    })),
+  }));
+  return {
+    action: plan.action,
+    feedback_md: null,
+    mail_mode: "rendered",
+    template: plan.template,
+    demo_suppressed: plan.demo_suppressed,
+    rows: plan.rows,
+    recipient_preview: recipientPreview,
+    plan_fingerprint: fingerprint,
+    etag: strongEtag(fingerprint, 0),
+    queue_revision: Number(event.updated_at),
+    selected: ids.length,
+    zero_effect: null,
   };
 }
