@@ -13,5 +13,10 @@ comes only from `scripts/measure-latency.mjs`. Measurements are labeled with the
 local environment and never presented as deployed performance.
 
 The low-stakes robots decision is deliberate: `robots.txt` remains Cloudflare
-zone-managed. Marquee does not add a Worker shadow route for it. Any future change to
-that ownership decision belongs in an explicit operator-approved ticket.
+zone-managed, including its `ai-train=no` and crawler `Disallow` directives. Marquee
+does not add a Worker shadow route for it. Any future change to that ownership decision
+belongs in an explicit operator-approved ticket.
+
+Content negotiation (`Accept: text/markdown`) and `rel="alternate"` links on public HTML
+remain deferred. The stable markdown doors are sufficient for the current agent path;
+changing the public HTML renderer is a separate, explicitly approved seam.

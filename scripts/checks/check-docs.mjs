@@ -43,7 +43,13 @@ const allowedSources = new Set([
   "DESIGN.md",
   "DEPLOY.md",
 ]);
+const manifestUrls = new Set();
+const manifestSources = new Set();
 for (const entry of manifest) {
+  if (manifestUrls.has(entry.url)) findings.push({ code: "manifest-duplicate-url", entry });
+  if (manifestSources.has(entry.source)) findings.push({ code: "manifest-duplicate-source", entry });
+  manifestUrls.add(entry.url);
+  manifestSources.add(entry.source);
   if (!allowedSources.has(entry.source)) findings.push({ code: "manifest-source-not-allowed", entry });
   if (!entry.url.endsWith(".md")) findings.push({ code: "manifest-url-not-markdown", entry });
 }
@@ -52,6 +58,15 @@ if (manifest.some((entry) => ["SPEC.md", "EVALUATION.md"].includes(entry.source)
 }
 if (!result.llmsText.startsWith(GENERATED_BANNER) || !result.fullText.startsWith(GENERATED_BANNER)) {
   findings.push({ code: "generated-banner-missing" });
+}
+const bundledDocumentUrls = [...result.fullText.matchAll(/<!-- Begin (\/[^ ]+) · canonical source /g)].map((match) => match[1]);
+const expectedBundleUrls = [...manifest.map((entry) => entry.url), "/SKILL.md"];
+if (JSON.stringify(bundledDocumentUrls) !== JSON.stringify(expectedBundleUrls)) {
+  findings.push({
+    code: "manifest-served-set-mismatch",
+    expected: expectedBundleUrls,
+    bundle: bundledDocumentUrls,
+  });
 }
 
 const workerConfig = await readFile(`${REPOSITORY_ROOT}/wrangler.jsonc`, "utf8");
