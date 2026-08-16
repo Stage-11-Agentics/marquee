@@ -119,7 +119,7 @@ export interface AcceptanceReversalResult {
   error?: string;
 }
 
-interface SubmissionContext {
+export interface SubmissionContext {
   id: Id;
   event_id: Id;
   status: string;
@@ -198,6 +198,7 @@ function decisionTarget(action: DecisionAction): {
   return DECISION_TARGETS[action];
 }
 
+<<<<<<< HEAD
 /**
  * The one person a decision is addressed to, as SQL.
  *
@@ -224,7 +225,7 @@ function decisionRecipientSql(column: "id" | "name" | "email"): string {
   });
 }
 
-async function loadSubmission(
+export async function loadSubmission(
   db: D1Database,
   eventId: Id,
   submissionId: Id,
@@ -250,7 +251,7 @@ async function loadSubmission(
     .first<SubmissionContext>();
 }
 
-async function loadSubmissions(
+export async function loadSubmissions(
   db: D1Database,
   eventId: Id,
   ids: readonly Id[],

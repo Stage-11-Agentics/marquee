@@ -15,6 +15,8 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
 import { notifyExistingDecisions, writeBulkSubmissionDecisions } from "../jobs/cascade/decisions";
+import { buildDecisionPlan } from "../jobs/cascade/decision-plan-service";
+import { decisionPlanResponseSchema } from "../api/decision-plan";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { PUBLISHED_SESSION_REFUSAL } from "../lib/publication-guard";
 import { selectSubmissionIds, submissionFilterSchema, summarizeNotNotifiedSubmissions } from "./submissions.queries";
@@ -22,6 +24,17 @@ import { selectSubmissionIds, submissionFilterSchema, summarizeNotNotifiedSubmis
 const eventParams = z.object({ eventId: z.string().min(1) });
 const submissionIdSchema = z.string().min(1).max(200);
 const bulkBodySchema = z
+  .object({
+    selector: bulkSelectorWireSchema(submissionFilterSchema, submissionIdSchema),
+    action: z.enum(["accept", "reject", "waitlist", "withdraw"]),
+    feedback_md: z.string().max(50_000).nullable().optional(),
+    wave_id: z.string().min(1).max(200).nullable().optional(),
+    confirm_published: z.boolean().optional(),
+    plan_fingerprint: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+  })
+  .strict();
+
+const bulkPlanBodySchema = z
   .object({
     selector: bulkSelectorWireSchema(submissionFilterSchema, submissionIdSchema),
     action: z.enum(["accept", "reject", "waitlist", "withdraw"]),
@@ -60,6 +73,76 @@ async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
   }
   return { kind: "api_token", personId: token.created_by, requestId };
 }
+
+async function resolveBulkIds(
+  database: ApiEnv["Bindings"]["DB"],
+  eventId: string,
+  rawSelector: z.infer<typeof bulkPlanBodySchema>["selector"],
+): Promise<string[]> {
+  const selector = normalizeBulkSelector(rawSelector, (id) => submissionIdSchema.safeParse(id).success);
+  if (selector.kind === "ids") return [...new Set(selector.ids)];
+  const ids = await selectSubmissionIds(database, {
+    eventId,
+    ...(selector.filter as z.infer<typeof submissionFilterSchema>),
+  });
+  if (ids.length > BULK_ID_LIMIT) {
+    throw ApiError.unprocessable(`selector resolves to more than ${BULK_ID_LIMIT} submissions; narrow the selection`, "selector");
+  }
+  return ids;
+}
+
+async function assertWaveBelongsToEvent(database: ApiEnv["Bindings"]["DB"], eventId: string, waveId: string | null | undefined): Promise<void> {
+  if (!waveId) return;
+  const wave = await database
+    .prepare("SELECT 1 AS present FROM waves WHERE id = ? AND event_id = ?")
+    .bind(waveId, eventId)
+    .first<{ present: number }>();
+  if (!wave) throw ApiError.badRequest("wave_id does not belong to this conference", "wave_id");
+}
+
+const planBulkDecision = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/submissions/decision-plan",
+    operationId: "planBulkSubmissionDecision",
+    summary: "Preview a selected submission decision",
+    description: "Build a bounded read-only decision plan with disposition rows, one rendered recipient preview, and a fingerprint for apply.",
+    tags: ["Submissions"],
+    request: {
+      params: eventParams,
+      body: { content: { "application/json": { schema: bulkPlanBodySchema } } },
+    },
+    policy: {
+      auth: { kind: "grants", grants: ["program:read"] },
+      rateLimit: { bucket: "read" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(decisionPlanResponseSchema, "The current bounded decision plan."),
+      ...errorResponses([400, 401, 403, 404, 422, 429, 500]),
+    },
+  },
+  async (context) => {
+    const { eventId } = context.req.valid("param");
+    const body = context.req.valid("json");
+    const ids = await resolveBulkIds(context.env.DB, eventId, body.selector);
+    await assertWaveBelongsToEvent(context.env.DB, eventId, body.wave_id);
+    try {
+      return context.json(await buildDecisionPlan({
+        db: context.env.DB,
+        eventId,
+        ids,
+        action: body.action,
+        feedbackMd: body.feedback_md,
+        confirmPublished: body.confirm_published === true,
+        waveId: body.wave_id,
+      }), 200);
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === "event not found") throw ApiError.notFound("event not found");
+      throw error;
+    }
+  },
+);
 
 const bulkDecideSubmissions = defineApiRoute(
   {
@@ -100,13 +183,7 @@ const bulkDecideSubmissions = defineApiRoute(
         throw ApiError.unprocessable(`selector resolves to more than ${BULK_ID_LIMIT} submissions; narrow the selection`, "selector");
       }
     }
-    if (body.wave_id) {
-      const wave = await context.env.DB
-        .prepare("SELECT 1 AS present FROM waves WHERE id = ? AND event_id = ?")
-        .bind(body.wave_id, eventId)
-        .first<{ present: number }>();
-      if (!wave) throw ApiError.badRequest("wave_id does not belong to this conference", "wave_id");
-    }
+    await assertWaveBelongsToEvent(context.env.DB, eventId, body.wave_id);
 
     const actor = await actorFor(context);
     const operationId = newUlid();
@@ -216,4 +293,4 @@ const notifyNotifiedSubmissions = defineApiRoute(
   },
 );
 
-export const apiRoutes = [bulkDecideSubmissions, getNotifiedSummary, notifyNotifiedSubmissions];
+export const apiRoutes = [planBulkDecision, bulkDecideSubmissions, getNotifiedSummary, notifyNotifiedSubmissions];

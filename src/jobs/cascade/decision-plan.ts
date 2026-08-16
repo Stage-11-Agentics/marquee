@@ -85,6 +85,7 @@ export function planBulkDecision(input: {
   selected: readonly DecisionPlanRecordSnapshot[];
   feedbackMd?: string | null;
   template: DecisionPlanTemplate;
+  confirmPublished?: boolean;
 }): DecisionPlan {
   const rows = DECISION_PLAN_DISPOSITIONS.map(row) as [
     DecisionPlanRow,
@@ -98,7 +99,7 @@ export function planBulkDecision(input: {
 
   for (const snapshot of input.selected) {
     const disposition: DecisionPlanDisposition = snapshot.transitionError
-      || (snapshot.published ? "cannot_move" : null)
+      || (snapshot.published && input.confirmPublished !== true ? "cannot_move" : null)
       ? "cannot_move"
       : input.action !== "waitlist" && input.action !== "withdraw" && snapshot.alreadyNotified
         ? "already_notified"

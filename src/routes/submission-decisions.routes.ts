@@ -1,11 +1,13 @@
 import { z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
+import { decisionPlanResponseSchema } from "../api/decision-plan";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
 import type { DecisionActor } from "../jobs/cascade/decisions";
-import { resendSubmissionDecision, writeSubmissionDecision } from "../jobs/cascade/decisions";
+import { loadSubmission, resendSubmissionDecision, writeSubmissionDecision } from "../jobs/cascade/decisions";
+import { buildDecisionPlan } from "../jobs/cascade/decision-plan-service";
 import { PUBLISHED_SESSION_REFUSAL } from "../lib/publication-guard";
 import { getAuth } from "../lib/auth/auth-middleware";
 
@@ -19,6 +21,7 @@ const decisionBodySchema = z
     recommendation: z.enum(["approve", "maybe", "deny"]),
     feedback_md: z.string().max(50_000).nullable().optional(),
     confirm_published: z.boolean().optional(),
+    plan_fingerprint: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   })
   .strict();
 
@@ -43,6 +46,49 @@ const resendDecisionResponseSchema = z
     outbox_inserted: z.boolean(),
   })
   .openapi("SubmissionDecisionResendResult");
+
+const planDecision = defineApiRoute(
+  {
+    method: "post",
+    path: "/api/v1/events/{eventId}/submissions/{submissionId}/decision-plan",
+    operationId: "planSubmissionDecision",
+    summary: "Preview one submission decision",
+    description: "Build the same bounded decision plan contract for one record before applying its recommendation.",
+    tags: ["Submissions"],
+    request: {
+      params: eventSubmissionParams,
+      body: { content: { "application/json": { schema: decisionBodySchema.omit({ plan_fingerprint: true }) } } },
+    },
+    policy: {
+      auth: { kind: "grants", grants: ["program:read"] },
+      rateLimit: { bucket: "read" },
+      concurrency: "none",
+    },
+    responses: {
+      200: jsonResponse(decisionPlanResponseSchema, "The current one-record decision plan."),
+      ...errorResponses([400, 401, 403, 404, 422, 429, 500]),
+    },
+  },
+  async (context) => {
+    const { eventId, submissionId } = context.req.valid("param");
+    const body = context.req.valid("json");
+    const submission = await loadSubmission(context.env.DB, eventId, submissionId);
+    if (!submission) throw ApiError.notFound("submission not found");
+    const action = body.recommendation === "approve"
+      ? "accept"
+      : body.recommendation === "deny"
+        ? "reject"
+        : "waitlist";
+    return context.json(await buildDecisionPlan({
+      db: context.env.DB,
+      eventId,
+      ids: [submissionId],
+      action,
+      feedbackMd: body.feedback_md,
+      confirmPublished: body.confirm_published === true,
+    }), 200);
+  },
+);
 
 async function actorFor(context: Context<ApiEnv>): Promise<DecisionActor> {
   const auth = getAuth(context);
@@ -167,4 +213,4 @@ const resendDecision = defineApiRoute(
   },
 );
 
-export const apiRoutes = [decideSubmission, resendDecision];
+export const apiRoutes = [planDecision, decideSubmission, resendDecision];
