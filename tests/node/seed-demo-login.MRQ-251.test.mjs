@@ -10,7 +10,7 @@ import {
 const rows = await buildSeedRows();
 const table = (name) => rows.filter((entry) => entry.table === name).map((entry) => entry.row);
 
-test("MRQ-251 · the demo-login speaker fixture resolves against generated seed rows", () => {
+test("CONTRACT · MRQ-251 · the demo-login speaker fixture resolves against generated seed rows", () => {
   const person = table("people").find((row) => row.id === SHIPPED_DEMO_SPEAKER_PERSON_ID);
   assert.ok(
     person,
