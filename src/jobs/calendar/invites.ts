@@ -744,10 +744,10 @@ export async function drainCalendarCancellations(input: {
   if (input.idempotencyKeys?.length === 0) return [];
   const keyFilter = input.idempotencyKeys === undefined
     ? ""
-    : ` AND idempotency_key IN (${input.idempotencyKeys.map(() => "?").join(", ")})`;
+    : " AND idempotency_key IN (SELECT CAST(value AS TEXT) FROM json_each(?))";
   const bindings: (string | number)[] = [
     MAX_CALENDAR_CANCELLATION_ATTEMPTS,
-    ...(input.idempotencyKeys ?? []),
+    ...(input.idempotencyKeys === undefined ? [] : [JSON.stringify(input.idempotencyKeys)]),
     input.limit ?? 100,
   ];
   const rows = await input.db
