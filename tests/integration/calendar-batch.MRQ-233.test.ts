@@ -255,7 +255,7 @@ test("batch debt ignores non-slot snapshot changes, then a real agenda move crea
   expect(nonSlotOnly.no_op).toBe(true);
   expect(nonSlotOnly.current_count).toBe(2);
 
-  await env.DB.prepare("UPDATE agenda_items SET starts_at = ?, updated_at = ? WHERE id = ?").bind(FIRST_START + 30 * 60_000, NOW + 3_000, "agenda_calendar_batch_one").run();
+  await env.DB.prepare("UPDATE agenda_items SET starts_at = ?, updated_at = ? WHERE id = ?").bind(Date.now() + 2 * 86_400_000, Date.now(), "agenda_calendar_batch_one").run();
   const moved = await sendCalendarBatch({ db: env.DB, eventId: EVENT_ID, queue: NOOP_QUEUE, now: NOW + 3_000 });
   expect(moved.deliveries).toHaveLength(1);
   expect(moved.first_invite_count).toBe(0);
@@ -344,7 +344,7 @@ test("a failed duplicate batch admission leaves the previously stamped snapshot 
   ).bind(SUBMISSION_ONE, SPEAKER_ID).first<{ request_snapshot: string; sequence: number }>();
   const firstParts = await childRows(first.deliveries[0]!.outbox_id);
 
-  await env.DB.prepare("UPDATE agenda_items SET starts_at = ?, updated_at = ? WHERE id = ?").bind(FIRST_START + 30 * 60_000, NOW + 1_000, "agenda_calendar_batch_one").run();
+  await env.DB.prepare("UPDATE agenda_items SET starts_at = ?, updated_at = ? WHERE id = ?").bind(Date.now() + 2 * 86_400_000, Date.now(), "agenda_calendar_batch_one").run();
   const movedPart = first.deliveries[0]!.parts.find((part) => part.submission_id === SUBMISSION_ONE)!;
   const nextRevisions = [{ sequence: movedPart.sequence + 1, uid: movedPart.uid }];
   const entityId = IDEMPOTENCY_REGISTRY.calendarBatch(SPEAKER_ID, nextRevisions);
