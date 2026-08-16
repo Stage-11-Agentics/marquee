@@ -73,6 +73,22 @@ export function unknownMergeFieldsForCommunication(...sources: Array<string | nu
   return mergeFieldsIn(...sources).filter((field) => !COMMUNICATION_MERGE_FIELD_SET.has(field));
 }
 
+/**
+ * The draft-close editor is a keyed automated context, not the general
+ * composer. Its private resume capability may be authored only while editing
+ * that one trigger; the palette and every other communication key retain the
+ * ordinary credential-free validator.
+ */
+export function unknownMergeFieldsForCommunicationTemplate(
+  templateKey: string | undefined,
+  ...sources: Array<string | null | undefined>
+): string[] {
+  const unknown = unknownMergeFieldsForCommunication(...sources);
+  return templateKey === "draft_close_reminder"
+    ? unknown.filter((field) => field !== "draft.resume_link")
+    : unknown;
+}
+
 export function mergeFieldErrorMessage(fields: readonly string[]): string {
   const tokens = fields.map((field) => `{{${field}}}`);
   return `${tokens.join(", ")} ${tokens.length === 1 ? "is not a merge field" : "are not merge fields"}. Available fields are listed under MERGE FIELDS.`;

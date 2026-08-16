@@ -19,7 +19,7 @@ import {
 } from "../jobs/mail/templates";
 import { renderAdHocMail, renderMail, type MergeData } from "../jobs/mail/render";
 import { mergeDataForRecipient, firstName } from "../jobs/mail/merge-data";
-import { mergeFieldErrorMessage, unknownMergeFieldsForCommunication } from "../lib/mail-merge-fields";
+import { mergeFieldErrorMessage, unknownMergeFieldsForCommunicationTemplate } from "../lib/mail-merge-fields";
 import {
   DEMO_MAIL_ALLOWLIST_LIMIT,
   demoMailAllowlistForOrgEvent,
@@ -226,9 +226,7 @@ function rejectUnknownMergeFields(subject: string, body: string): void {
  * a custom or generic compose cannot turn a credential token into mail.
  */
 function rejectUnknownMergeFieldsForTemplate(templateKey: string, subject: string, body: string): void {
-  const unknown = unknownMergeFieldsForCommunication(subject, body);
-  const allowed = templateKey === "draft_close_reminder" ? new Set(["draft.resume_link"]) : new Set<string>();
-  const rejected = unknown.filter((field) => !allowed.has(field));
+  const rejected = unknownMergeFieldsForCommunicationTemplate(templateKey, subject, body);
   if (rejected.length > 0) throw ApiError.badRequest(mergeFieldErrorMessage(rejected), "template");
 }
 
@@ -882,7 +880,9 @@ const previewComms = defineApiRoute(
           "draft.missing_fields": DRAFT_MISSING_FIELDS_PREVIEW_PLACEHOLDER,
         };
       }
-      const rendered = renderMail(template, data);
+      const rendered = body.subject !== undefined && body.body !== undefined
+        ? renderAdHocMail(body.subject, body.body, data)
+        : renderMail(template, data);
       return context.json({ ...rendered, to_email: recipient.email }, 200);
     }
     if (body.subject === undefined || body.body === undefined) throw ApiError.badRequest("preview requires template_key or subject and body");
