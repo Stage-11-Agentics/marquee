@@ -32,8 +32,8 @@ describe("MRQ-130 · every brief is paste-ready", () => {
   it("CONTRACT · every brief asks for a report back and names an undo handle", () => {
     each((surface) => {
       const copy = agentBrief(surface, CONTEXT);
-      expect(copy.brief, surface).toMatch(/When you're done, tell me|When you're done, give me/);
-      expect(copy.brief, surface).toMatch(/form_id|outbox_ids|agenda item ids/);
+      expect(copy.brief, surface).toMatch(/When you're done, tell me|When you're done, give me|When you're done, report/);
+      expect(copy.brief, surface).toMatch(/form_id|outbox_ids|outbox_id|decision_id|agenda item ids/);
     });
   });
 
@@ -177,7 +177,7 @@ describe("MRQ-130 · every surface keeps the controls it had", () => {
     each((surface) => {
       expect(agentBrief(surface, CONTEXT).endpoint, surface).not.toMatch(/\/people|\/imports/);
     });
-    expect([...AGENT_BRIEF_SURFACES]).toEqual(["cfp", "chase", "agenda", "portal"]);
+    expect([...AGENT_BRIEF_SURFACES]).toEqual(["cfp", "chase", "agenda", "portal", "decision"]);
     // The panel is exported on its own so MRQ-131 can consume it in place,
     // inside the import modal it already owns, rather than inlining a second
     // component in the same shape.

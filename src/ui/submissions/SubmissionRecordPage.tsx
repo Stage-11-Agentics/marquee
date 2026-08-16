@@ -7,6 +7,7 @@ import { eventTimeLabel, localDateTimeToInstant } from "../../lib/event-time";
 import { isVisibleToAudience } from "../../lib/participants";
 import { apiFetch, errorSummary, MarqueeApiError } from "../shell/api-client";
 import { idempotencyKeyForCompose } from "../shell/compose-idempotency";
+import { AgentBriefLauncher } from "../shell/AgentBrief";
 import { Button, Card, CardBody, CardHeader, Chip, PageHeader, ReviewerName } from "../shell/components";
 import { disambiguatedNames } from "../../lib/duplicate-names";
 import { useEventContext } from "../shell/event-context";
@@ -632,6 +633,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const [decisionNotice, setDecisionNotice] = useState("");
   const decisionPlanRefreshTimerRef = useRef<number | null>(null);
   const [feedbackDraft, setFeedbackDraft] = useState("");
+  const [decisionInternalNoteDraft, setDecisionInternalNoteDraft] = useState("");
   const [messageRecipientId, setMessageRecipientId] = useState("");
   const [messageSubject, setMessageSubject] = useState("");
   const [messageBody, setMessageBody] = useState("");
@@ -919,6 +921,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   const openDecisionPlan = (recommendation: DecisionRecommendation): void => {
     setDecisionRequest(recommendation);
     setFeedbackDraft("");
+    setDecisionInternalNoteDraft("");
     setDecisionConfirmPublished(false);
     setDecisionPlan(null);
     setDecisionPlanError("");
@@ -957,6 +960,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
             recommendation: decisionRequest,
             plan_fingerprint: decisionPlan.plan_fingerprint,
             ...(feedbackDraft.trim() ? { feedback_md: feedbackDraft.trim() } : {}),
+            ...(decisionInternalNoteDraft.trim() ? { internal_note: decisionInternalNoteDraft.trim() } : {}),
             ...(decisionConfirmPublished ? { confirm_published: true } : {}),
           }),
           route: DECISION_ROUTE,
@@ -965,6 +969,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
       setDecisionRequest(null);
       setDecisionPlan(null);
       setFeedbackDraft("");
+      setDecisionInternalNoteDraft("");
       setDecisionConfirmPublished(false);
       setDecisionNotice(result.outbox_inserted === false
         ? "Decision recorded; no notification was queued."
@@ -1214,7 +1219,7 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
   // can change who is on stage.
   const canEditParticipants = record.actions.can_edit_participants;
   return <div class="submission-record-page">
-    <PageHeader title="Submission record" copy={`${record.reference_code ?? record.id} · ${record.kind === "session" ? "Session" : "Abstract"} · ${record.origin} origin`} actions={<><button class="chip submission-reference-copy" type="button" disabled={!record.reference_code} title={record.id} aria-label={record.reference_code ? `Copy submission reference ${record.reference_code}` : "Submission reference unavailable"} onClick={() => void copyReferenceCode()}>{referenceCopied ? "Copied" : record.reference_code ?? "No reference"}</button><Chip tone={headerChipTone(record)}>{record.stage_label}</Chip></>} />
+    <PageHeader title="Submission record" copy={`${record.reference_code ?? record.id} · ${record.kind === "session" ? "Session" : "Abstract"} · ${record.origin} origin`} actions={<><AgentBriefLauncher surface="decision" eventId={eventId} small /><button class="chip submission-reference-copy" type="button" disabled={!record.reference_code} title={record.id} aria-label={record.reference_code ? `Copy submission reference ${record.reference_code}` : "Submission reference unavailable"} onClick={() => void copyReferenceCode()}>{referenceCopied ? "Copied" : record.reference_code ?? "No reference"}</button><Chip tone={headerChipTone(record)}>{record.stage_label}</Chip></>} />
     {/* An assignment refusal answers inside the evaluation panel; every other
         declined action answers here, where the record is still on screen. */}
     {actionError && !actionError.action.startsWith("assign-") && !actionError.action.startsWith("remove-")
@@ -1244,12 +1249,14 @@ export function SubmissionRecordPage({ eventId, submissionId, navigate }: Props)
           stale={decisionPlanStale}
           busy={decisionPlanBusy}
           feedback={feedbackDraft}
+          internalNote={decisionInternalNoteDraft}
           confirmPublished={decisionConfirmPublished}
           publishedCount={isLivePublicly ? 1 : 0}
           onFeedbackChange={onDecisionFeedbackChange}
+          onInternalNoteChange={setDecisionInternalNoteDraft}
           onConfirmPublishedChange={onDecisionConfirmPublishedChange}
           onConfirm={() => void applyDecisionPlan()}
-          onClose={() => { setDecisionRequest(null); setDecisionPlan(null); setDecisionPlanError(""); setDecisionPlanStale(false); }}
+          onClose={() => { setDecisionRequest(null); setDecisionPlan(null); setDecisionPlanError(""); setDecisionPlanStale(false); setFeedbackDraft(""); setDecisionInternalNoteDraft(""); }}
           onRefresh={() => decisionRequest && void loadDecisionPlan(decisionRequest, feedbackDraft, decisionConfirmPublished)}
         />}
         {decisionNotice && <p class="record-inline-message notice" role="status">{decisionNotice}</p>}

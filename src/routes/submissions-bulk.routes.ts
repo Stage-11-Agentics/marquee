@@ -28,6 +28,7 @@ const bulkBodySchema = z
     selector: bulkSelectorWireSchema(submissionFilterSchema, submissionIdSchema),
     action: z.enum(["accept", "reject", "waitlist", "withdraw"]),
     feedback_md: z.string().max(50_000).nullable().optional(),
+    internal_note: z.string().max(5_000).nullable().optional(),
     wave_id: z.string().min(1).max(200).nullable().optional(),
     confirm_published: z.boolean().optional(),
     plan_fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
@@ -251,10 +252,12 @@ const bulkDecideSubmissions = defineApiRoute(
       actor,
       action: body.action,
       feedbackMd: body.feedback_md,
+      internalNote: body.internal_note,
       confirmPublished: body.confirm_published === true,
       cache: context.env.CACHE,
       waveId: body.wave_id,
       operationId,
+      origin: new URL(context.req.url).origin,
     });
     const failures = result.results
       .filter((item) => item.outcome === "failed")
@@ -343,6 +346,7 @@ const notifyNotifiedSubmissions = defineApiRoute(
       submissionIds: ids,
       queueRevision,
       cursor,
+      origin: new URL(context.req.url).origin,
     });
     return context.json({
       selected: result.selected,

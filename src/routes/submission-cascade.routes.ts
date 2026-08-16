@@ -61,6 +61,7 @@ const runSubmissionOnboardingCascade = defineApiRoute(
       eventId,
       submissionId,
       actor: await actorFor(context),
+      origin: new URL(context.req.url).origin,
     });
     if (result.outcome === "failed") {
       throw ApiError.unprocessable(result.error ?? "the onboarding cascade could not run");

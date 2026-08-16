@@ -10,6 +10,7 @@ export const MERGE_FIELDS = [
   "speaker.first_name",
   "speaker.name",
   "speaker.email",
+  "event.name",
   "reviewer.first_name",
   "submission.title",
   "session.title",
@@ -26,6 +27,7 @@ export const MERGE_FIELDS = [
   "task.due_date",
   "form.closes_at",
   "auth.link",
+  "portal.link",
   "draft.resume_link",
   "draft.missing_fields",
   "decision.feedback",
@@ -37,13 +39,30 @@ export const MERGE_FIELDS = [
 export type MergeField = (typeof MERGE_FIELDS)[number];
 
 /**
- * Organizer-authored communications have no credential context. Auth links
- * are minted by the private auth flows, not by the generic composer, so keep
- * that internal-only field out of both its palette and its send validator.
+ * Organizer-authored communications have no decision or credential context.
+ * Auth and portal links are minted by private flows, while decision facts are
+ * supplied only by the decision writer, so keep those fields out of both the
+ * generic palette and its send validator.
  */
 export const COMMUNICATION_MERGE_FIELDS = MERGE_FIELDS.filter(
-  (field): field is Exclude<MergeField, "auth.link" | "draft.resume_link"> =>
-    field !== "auth.link" && field !== "draft.resume_link",
+  (field): field is Exclude<
+    MergeField,
+    | "auth.link"
+    | "portal.link"
+    | "draft.resume_link"
+    | "decision.feedback"
+    | "decision.resulting_status"
+    | "decision.recommendation"
+    | "event.name"
+  > => ![
+    "auth.link",
+    "portal.link",
+    "draft.resume_link",
+    "decision.feedback",
+    "decision.resulting_status",
+    "decision.recommendation",
+    "event.name",
+  ].includes(field),
 );
 
 /** The one token grammar used by both extraction and rendering. */
@@ -84,9 +103,19 @@ export function unknownMergeFieldsForCommunicationTemplate(
   ...sources: Array<string | null | undefined>
 ): string[] {
   const unknown = unknownMergeFieldsForCommunication(...sources);
-  return templateKey === "draft_close_reminder"
-    ? unknown.filter((field) => field !== "draft.resume_link")
-    : unknown;
+  if (templateKey === "draft_close_reminder") {
+    return unknown.filter((field) => field !== "draft.resume_link");
+  }
+  if (templateKey === "acceptance" || templateKey === "rejection") {
+    return unknown.filter((field) => ![
+      "portal.link",
+      "decision.feedback",
+      "decision.resulting_status",
+      "decision.recommendation",
+      "event.name",
+    ].includes(field));
+  }
+  return unknown;
 }
 
 export function mergeFieldErrorMessage(fields: readonly string[]): string {

@@ -24,7 +24,10 @@ import {
 import { canTransitionSubmissionStatus } from "../../lib/submission-transitions";
 import { enqueueMailMessage } from "../mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../mail/idempotency";
-import { enqueueTrigger } from "../mail/triggers";
+import { enqueueOutbox, findByIdempotencyKey, buildIdempotencyKey } from "../mail/outbox";
+import { findTemplate } from "../mail/templates";
+import { renderDecisionMail, type MergeData } from "../mail/render";
+import { mintPortalMagicLink } from "../../lib/auth/magic-links";
 import { isValidEmail } from "../../lib/email-validity";
 import type { DecisionPlanAction } from "./decision-plan";
 
@@ -51,11 +54,13 @@ export interface SubmissionDecisionInput {
   actor: DecisionActor;
   recommendation: Decision;
   feedbackMd?: string | null;
+  internalNote?: string | null;
   confirmPublished?: boolean;
   cache?: PublicEmbedCache;
   waveId?: Id | null;
   operationId?: Id;
   now?: number;
+  origin?: string;
 }
 
 export interface SubmissionDecisionResult {
@@ -77,11 +82,13 @@ export interface BulkDecisionInput {
   actor: DecisionActor;
   action: BulkAction;
   feedbackMd?: string | null;
+  internalNote?: string | null;
   confirmPublished?: boolean;
   cache?: PublicEmbedCache;
   waveId?: Id | null;
   operationId: Id;
   now?: number;
+  origin?: string;
 }
 
 export interface BulkDecisionResult {
@@ -127,6 +134,7 @@ export interface SubmissionContext {
   status: string;
   wave_id: Id | null;
   title: string;
+  event_name: string;
   person_id: Id;
   person_name: string;
   person_email: string;
@@ -193,6 +201,28 @@ export function normalizeDecisionFeedback(value: string | null | undefined): str
   return normalized.length > 0 ? normalized : null;
 }
 
+export function normalizeDecisionInternalNote(value: string | null | undefined): string | null {
+  const normalized = value?.replace(/\r\n?/g, "\n").trim() ?? "";
+  return normalized.length > 0 ? normalized : null;
+}
+
+async function appendDecisionInternalNote(
+  db: D1Database,
+  submissionId: Id,
+  actor: DecisionActor,
+  body: string | null,
+  now: number,
+): Promise<void> {
+  if (!body) return;
+  await db
+    .prepare(
+      `INSERT INTO submission_notes (id, submission_id, author_person_id, body_md, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .bind(newUlid(now), submissionId, actor.personId, body, now)
+    .run();
+}
+
 function decisionTarget(action: DecisionAction): {
   decision: Decision;
   status: "accepted" | "waitlisted" | "rejected";
@@ -241,10 +271,12 @@ export async function loadSubmission(
                    AND live_agenda.kind = 'session'
                    AND live_agenda.is_published = 1
               ) AS agenda_published,
+              event.name AS event_name,
               ${decisionRecipientSql("id")} AS person_id,
               ${decisionRecipientSql("name")} AS person_name,
               ${decisionRecipientSql("email")} AS person_email
        FROM submissions s
+       JOIN events event ON event.id = s.event_id
        JOIN people submitter ON submitter.id = s.submitter_person_id
        WHERE s.event_id = ? AND s.id = ?`,
     )
@@ -269,10 +301,12 @@ export async function loadSubmissions(
                    AND live_agenda.kind = 'session'
                    AND live_agenda.is_published = 1
               ) AS agenda_published,
+              event.name AS event_name,
               ${decisionRecipientSql("id")} AS person_id,
               ${decisionRecipientSql("name")} AS person_name,
               ${decisionRecipientSql("email")} AS person_email
        FROM submissions s
+       JOIN events event ON event.id = s.event_id
        JOIN people submitter ON submitter.id = s.submitter_person_id
        WHERE s.event_id = ?
          AND s.id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
@@ -445,33 +479,54 @@ async function enqueueDecisionMail(
     now: number;
     entityId?: Id;
     idempotencyKey?: string;
+    origin?: string;
   },
 ): Promise<{ id: Id | null; inserted: boolean }> {
   if (!isValidEmail(input.submission.person_email)) return { id: null, inserted: false };
   const templateKey = input.status === "accepted" ? "acceptance" : "rejection";
-  const result = await enqueueTrigger({
+  const template = await findTemplate(input.db, input.eventId, templateKey);
+  if (template.enabled !== 1) return { id: null, inserted: false };
+  const entityId = IDEMPOTENCY_REGISTRY.trigger(
+    input.entityId === undefined
+      ? IDEMPOTENCY_REGISTRY.decision(input.submission.id)
+      : IDEMPOTENCY_REGISTRY.decisionRetry(input.entityId),
+  );
+  const idempotencyKey = input.idempotencyKey ?? await buildIdempotencyKey(templateKey, entityId, input.submission.person_id);
+  const existing = await findByIdempotencyKey(input.db, idempotencyKey);
+  if (existing) return { id: existing.id, inserted: false };
+  const portalInvite = await mintPortalMagicLink(input.db, {
+    eventId: input.eventId,
+    personId: input.submission.person_id,
+    purpose: "portal_invite",
+    redirectTo: "/portal",
+    now: input.now,
+  });
+  const origin = (input.origin?.trim() || "https://marquee.stage11.dev").replace(/\/+$/, "");
+  const portalLink = `${origin}/api/v1/auth/exchange?token=${encodeURIComponent(portalInvite.token)}`;
+  const data: MergeData = {
+    "speaker.first_name": input.submission.person_name.trim().split(/\s+/)[0] ?? input.submission.person_name,
+    "speaker.name": input.submission.person_name,
+    "speaker.email": input.submission.person_email,
+    "event.name": input.submission.event_name,
+    "submission.title": input.submission.title,
+    "portal.link": portalLink,
+    "decision.feedback": input.feedbackMd ?? "",
+    "decision.resulting_status": input.status,
+    "decision.recommendation": input.decision,
+  };
+  const result = await enqueueOutbox({
     db: input.db,
     eventId: input.eventId,
     templateKey,
-    entityId: input.entityId === undefined
-      ? IDEMPOTENCY_REGISTRY.decision(input.submission.id)
-      : IDEMPOTENCY_REGISTRY.decisionRetry(input.entityId),
+    entityId,
     personId: input.submission.person_id,
     toEmail: input.submission.person_email.trim(),
-    data: {
-      "speaker.first_name": input.submission.person_name.trim().split(/\s+/)[0] ?? input.submission.person_name,
-      "speaker.name": input.submission.person_name,
-      "speaker.email": input.submission.person_email,
-      "submission.title": input.submission.title,
-      "decision.feedback": input.feedbackMd ?? "",
-      "decision.resulting_status": input.status,
-      "decision.recommendation": input.decision,
-    },
+    rendered: renderDecisionMail(template, data, portalLink),
     now: input.now,
-    idempotencyKey: input.idempotencyKey,
+    idempotencyKey,
   });
-  if (result?.inserted) await enqueueMailMessage(input.queue, result.id);
-  return { id: result?.id ?? null, inserted: result?.inserted ?? false };
+  if (result.inserted) await enqueueMailMessage(input.queue, result.id);
+  return { id: result.id, inserted: result.inserted };
 }
 
 /**
@@ -489,6 +544,7 @@ async function enqueueDecisionRetry(input: {
   resultingStatus: "accepted" | "rejected";
   feedbackMd: string | null;
   now: number;
+  origin?: string;
 }): Promise<{ id: Id | null; inserted: boolean }> {
   const templateKey = input.resultingStatus === "accepted" ? "acceptance" : "rejection";
   const retryKey = await sha256Hex(`${templateKey}:${input.decisionId}:${newUlid(input.now)}`);
@@ -503,6 +559,7 @@ async function enqueueDecisionRetry(input: {
     entityId: input.decisionId,
     idempotencyKey: retryKey,
     now: input.now,
+    origin: input.origin,
   });
 }
 
@@ -580,6 +637,7 @@ export interface ResendDecisionInput {
   submissionId: Id;
   actor: DecisionActor;
   now?: number;
+  origin?: string;
 }
 
 export interface ResendDecisionResult {
@@ -643,6 +701,7 @@ export async function resendSubmissionDecision(input: ResendDecisionInput): Prom
     resultingStatus: decision.resulting_status,
     feedbackMd: decision.feedback_md,
     now,
+    origin: input.origin,
   });
   if (!outbox.id) return failed("the decision email template is disabled");
 
@@ -689,6 +748,7 @@ export async function notifyExistingDecisions(input: {
   queueRevision?: number;
   cursor?: string | null;
   now?: number;
+  origin?: string;
 }): Promise<NotifyNotifiedResult> {
   const ids = [...new Set(input.submissionIds)];
   const now = input.now ?? Date.now();
@@ -794,6 +854,7 @@ export async function notifyExistingDecisions(input: {
       entityId: candidate.decision_id,
       idempotencyKey: retryKey,
       now,
+      origin: input.origin,
     });
     if (result.id) outboxIds.push(result.id);
     if (result.inserted) queued += 1;
@@ -823,6 +884,7 @@ export async function runOnboardingCascade(input: {
   submissionId: Id;
   actor: DecisionActor;
   now?: number;
+  origin?: string;
 }): Promise<OnboardingCascadeResult> {
   const submission = await loadSubmission(input.db, input.eventId, input.submissionId);
   if (!submission) {
@@ -855,6 +917,7 @@ export async function runOnboardingCascade(input: {
     eventId: input.eventId,
     submissionIds: [submission.id],
     now,
+    origin: input.origin,
   });
   await writeAudit(input.db, {
     eventId: input.eventId,
@@ -1216,6 +1279,7 @@ export async function writeSubmissionDecision(
 ): Promise<SubmissionDecisionResult> {
   const now = input.now ?? Date.now();
   const feedbackMd = normalizeDecisionFeedback(input.feedbackMd);
+  const internalNote = normalizeDecisionInternalNote(input.internalNote);
   const target = decisionTarget(input.recommendation === "approve" ? "accept" : input.recommendation === "maybe" ? "waitlist" : "reject");
   const submission = await loadSubmission(input.db, input.eventId, input.submissionId);
   if (!submission) return failureResult(input.submissionId, "submission not found");
@@ -1267,6 +1331,7 @@ export async function writeSubmissionDecision(
       decision: target.decision,
       feedbackMd,
       now,
+      origin: input.origin,
     });
   const taskCounts = target.status === "accepted"
     ? await reconcileTaskSet(input.db, input.eventId, [submission.id], now, input.actor)
@@ -1282,6 +1347,7 @@ export async function writeSubmissionDecision(
     decidedAt: now,
     outboxId: mail.id,
   }]);
+  await appendDecisionInternalNote(input.db, submission.id, input.actor, internalNote, now);
   await writeAudit(input.db, {
     eventId: input.eventId,
     actor: input.actor,
@@ -1324,6 +1390,7 @@ export async function writeBulkSubmissionDecisions(
 ): Promise<BulkDecisionResult> {
   const now = input.now ?? Date.now();
   const feedbackMd = normalizeDecisionFeedback(input.feedbackMd);
+  const internalNote = normalizeDecisionInternalNote(input.internalNote);
   const ids = [...new Set(input.ids)];
   const submissions = await loadSubmissions(input.db, input.eventId, ids);
   const byId = new Map(submissions.map((submission) => [submission.id, submission]));
@@ -1438,6 +1505,7 @@ export async function writeBulkSubmissionDecisions(
         decision: target.decision,
         feedbackMd,
         now,
+        origin: input.origin,
       });
     mailById.set(submission.id, mail);
     if (mail.inserted) outboxEnqueued += 1;
@@ -1455,6 +1523,9 @@ export async function writeBulkSubmissionDecisions(
   }
 
   await insertDecisions(input.db, input.eventId, transitions);
+  for (const submission of eligible) {
+    await appendDecisionInternalNote(input.db, submission.id, input.actor, internalNote, now);
+  }
   const taskCounts = await reconcileTaskSet(input.db, input.eventId, acceptedIds, now, input.actor);
   for (const submission of eligible) {
     const transition = transitions.find((item) => item.submissionId === submission.id);

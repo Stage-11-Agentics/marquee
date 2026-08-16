@@ -48,11 +48,11 @@ describe("outbox idempotency registry", () => {
     expect(IDEMPOTENCY_REGISTRY.draftCloseReminder("submission-1")).toBe("submission-1");
   });
 
-  test("CONTRACT · MRQ-226 · Bug B custom-send seeds separate composes without changing the row entity", () => {
-    expect(IDEMPOTENCY_REGISTRY.customSend("compose-1", "submission-1")).toBe("custom:compose-1:submission-1");
-    expect(IDEMPOTENCY_REGISTRY.customSend("compose-2", "submission-1")).not.toBe(
-      IDEMPOTENCY_REGISTRY.customSend("compose-1", "submission-1"),
-    );
+  test("CONTRACT · MRQ-226 + MRQ-249 · custom-send seeds preserve row grain and distinguish copy revisions", () => {
+    const first = IDEMPOTENCY_REGISTRY.customSend("compose-1", "submission-1", "Subject", "First copy");
+    expect(IDEMPOTENCY_REGISTRY.customSend("compose-1", "submission-1", "Subject", "First copy")).toBe(first);
+    expect(IDEMPOTENCY_REGISTRY.customSend("compose-1", "submission-1", "Subject", "Edited copy")).not.toBe(first);
+    expect(IDEMPOTENCY_REGISTRY.customSend("compose-2", "submission-1", "Subject", "First copy")).not.toBe(first);
     expect(IDEMPOTENCY_REGISTRY.customRecipient("submission-1")).toBe("submission-1");
   });
 
