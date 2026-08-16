@@ -223,7 +223,7 @@ describe.sequential("MRQ-164 Sessionize import merge", () => {
     expect(speakerRow?.reason).not.toContain("matched");
   });
 
-test("SPEC §7 · Sessionize merge and undo preserve a live session's workflow status and publication", async () => {
+test("CONTRACT · SPEC §7 · Sessionize merge and undo preserve a live session's workflow status and publication", async () => {
     const now = Date.parse("2026-08-14T12:00:00.000Z");
     await env.DB.batch([
       env.DB.prepare("INSERT INTO buildings (id, event_id, name, address, position, created_at, updated_at) VALUES ('building_mrq164_live', ?, 'Live Hall', '1 Live Way', 0, ?, ?)").bind(EVENT_ID, now, now),
