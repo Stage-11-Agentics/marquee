@@ -1,0 +1,24 @@
+{
+  "ticket": "MRQ-228",
+  "owns": [
+    "AC-319",
+    "AC-320",
+    "AC-321",
+    "AC-322",
+    "AC-323",
+    "AC-324",
+    "AC-325",
+    "AC-326",
+    "AC-327",
+    "AC-328"
+  ],
+  "exercises": [
+    "AC-95",
+    "AC-96",
+    "AC-97",
+    "AC-124",
+    "AC-252",
+    "AC-262"
+  ],
+  "notes": "MRQ-228 owns the post-deadline calendar-truth band in EVALUATION §2.11: immutable REQUEST snapshots, durable and request-scoped cancellation intent, per-invite fail-closed handling, bounded retries, the seeded UID floor, identity guards, interrupted-write recovery, and participation-removal reconciliation. Existing calendar criteria remain owned by their original tickets; this manifest widens their exercise set only. Conference deletion and import undo intentionally emit no CANCEL. Residuals recorded for handoff: migration 0026 reconstructs legacy snapshots from current rows; attempts count both delivery attempts and re-admissions, so a lagging queue can park a row at the cap; a fail-closed invite remains active while reversal reports zero successful cancellations."
+}

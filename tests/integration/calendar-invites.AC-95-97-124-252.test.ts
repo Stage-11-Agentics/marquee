@@ -30,7 +30,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO agenda_items (id, event_id, submission_id, kind, starts_at, duration_min, room_id, is_published, created_at, updated_at) VALUES (?, ?, ?, 'session', ?, 30, ?, 0, ?, ?)").bind("agenda_calendar", EVENT_ID, SUBMISSION_ID, Date.parse("2026-09-09T19:00:00.000Z"), "room_calendar", NOW, NOW),
   ]);
 });
-test("AC-95, AC-96, AC-97, AC-124, AC-252, AC-262 · request update cancel keeps one UID sequence, escaped address, and GEO", async () => {
+test("AC-95, AC-96, AC-97, AC-124, AC-252, AC-262, AC-319 · request update cancel keeps one UID sequence, escaped address, and GEO", async () => {
   const first = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW });
   const second = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW + 1_000 });
   const cancelled = await cancelCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW + 2_000 });
@@ -59,7 +59,7 @@ test("AC-95, AC-96, AC-97, AC-124, AC-252, AC-262 · request update cancel keeps
   expect(await publicResponse.text()).toBe(outbox.results[2]?.ics_body);
 });
 
-test("CONTRACT · MRQ-228 · an invite remains cancellable after its agenda row is unscheduled", async () => {
+test("AC-320 · an invite remains cancellable after its agenda row is unscheduled", async () => {
   await sendCalendarInvites({
     db: env.DB,
     eventId: EVENT_ID,
@@ -86,7 +86,7 @@ test("CONTRACT · MRQ-228 · an invite remains cancellable after its agenda row 
   expect(outbox.results.at(-1)?.ics_body).toContain("METHOD:CANCEL");
 });
 
-test("CONTRACT · MRQ-228 · a missing snapshot fails one invite closed without aborting its batch", async () => {
+test("AC-321 · a missing snapshot fails one invite closed without aborting its batch", async () => {
   await env.DB.batch([
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 'marquee', ?, ?)").bind("person_calendar_legacy", "org_calendar", "legacy@example.com", "Legacy Invitee", NOW, NOW),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 1, ?, ?)").bind("participation_calendar_legacy", SUBMISSION_ID, "person_calendar_legacy", NOW, NOW),
@@ -108,7 +108,7 @@ test("CONTRACT · MRQ-228 · a missing snapshot fails one invite closed without 
   expect((await env.DB.prepare("SELECT status FROM calendar_invites WHERE uid = ?").bind(legacy.uid).first<{ status: string }>())?.status).toBe("cancelled");
 });
 
-test("CONTRACT · MRQ-228 · a reversal drain returns only the cancellation intents it created", async () => {
+test("AC-322 · a reversal drain returns only the cancellation intents it created", async () => {
   await env.DB.batch([
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 'marquee', ?, ?)").bind("person_calendar_other", "org_calendar", "other@example.com", "Other Invitee", NOW, NOW),
     env.DB.prepare("INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES (?, ?, 'session', ?, 'accepted', 'admin', ?, ?, ?)").bind("submission_calendar_other", EVENT_ID, "Other session", PERSON_ID, NOW, NOW),
@@ -123,7 +123,7 @@ test("CONTRACT · MRQ-228 · a reversal drain returns only the cancellation inte
   expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM calendar_cancellations WHERE uid = ?").bind(other[0]!.uid).first<{ count: number }>())?.count).toBe(0);
 });
 
-test("CONTRACT · MRQ-228 · fail-closed cancellation rows abandon at the cap and cannot starve healthy rows", async () => {
+test("AC-323 · fail-closed cancellation rows abandon at the cap and cannot starve healthy rows", async () => {
   const first = await sendCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW });
   await cancelCalendarInvites({ db: env.DB, eventId: EVENT_ID, queue: env.MAIL_QUEUE, submissionId: SUBMISSION_ID, now: NOW + 1_000 });
   const poisoned = await env.DB.prepare("SELECT idempotency_key FROM calendar_cancellations WHERE uid = ?").bind(first[0]!.uid).first<{ idempotency_key: string }>();
@@ -147,7 +147,7 @@ test("CONTRACT · MRQ-228 · fail-closed cancellation rows abandon at the cap an
   expect(healthyDelivery).toMatchObject([{ method: "CANCEL", uid: healthy[0]!.uid }]);
 });
 
-test("CONTRACT · MRQ-228 · cancellation material stays on the delivered snapshot after live rows change", async () => {
+test("AC-319 · cancellation material stays on the delivered snapshot after live rows change", async () => {
   const first = await sendCalendarInvites({
     db: env.DB,
     eventId: EVENT_ID,
@@ -193,7 +193,7 @@ test("CONTRACT · MRQ-228 · cancellation material stays on the delivered snapsh
   expect(intent).toMatchObject({ to_email: "ada@example.com", sequence: 1, status: "queued", attempts: 1, cancelled_at: NOW + 1_000 });
 });
 
-test("CONTRACT · MRQ-228 · a failed CANCEL reopens at the same idempotency key and DTSTAMP", async () => {
+test("AC-324 · a failed CANCEL reopens at the same idempotency key and DTSTAMP", async () => {
   const first = await sendCalendarInvites({
     db: env.DB,
     eventId: EVENT_ID,
@@ -243,7 +243,7 @@ test("CONTRACT · MRQ-228 · a failed CANCEL reopens at the same idempotency key
   expect((await env.DB.prepare("SELECT status FROM calendar_cancellations WHERE uid = ?").bind(first[0]!.uid).first<{ status: string }>())?.status).toBe("sent");
 });
 
-test("CONTRACT · MRQ-228 · the UID floor survives invite deletion", async () => {
+test("AC-325 · the UID floor survives invite deletion", async () => {
   const first = await sendCalendarInvites({
     db: env.DB,
     eventId: EVENT_ID,
@@ -269,7 +269,7 @@ test("CONTRACT · MRQ-228 · the UID floor survives invite deletion", async () =
   expect((await env.DB.prepare("SELECT last_sequence FROM calendar_sequence_ledger WHERE uid = ?").bind(first[0]!.uid).first<{ last_sequence: number }>())?.last_sequence).toBe(1);
 });
 
-test("CONTRACT · MRQ-228 · cancellation recipient and organizer mismatches fail closed", async () => {
+test("AC-326 · cancellation recipient and organizer mismatches fail closed", async () => {
   const first = await sendCalendarInvites({
     db: env.DB,
     eventId: EVENT_ID,
@@ -290,7 +290,7 @@ test("CONTRACT · MRQ-228 · cancellation recipient and organizer mismatches fai
   expect(intent).toMatchObject({ status: "failed", last_error: "calendar attendee does not match the outbox recipient" });
 });
 
-test("CONTRACT · MRQ-228 · a resumed REQUEST requeues an admitted outbox row", async () => {
+test("AC-327 · a resumed REQUEST requeues an admitted outbox row", async () => {
   const messages: unknown[] = [];
   const queue = { send: async (message: unknown) => { messages.push(message); } } as unknown as Queue<unknown>;
   const first = await sendCalendarInvites({
@@ -319,7 +319,11 @@ test("CONTRACT · MRQ-228 · a resumed REQUEST requeues an admitted outbox row",
   expect(messages).toEqual([{ type: "mail_outbox", outbox_id: first[0]!.outbox_id }]);
 });
 
-test("CONTRACT · MRQ-228 · removing the invited speaker commits cancellation intent with participation removal", async () => {
+test("AC-328 · removing the invited participant commits cancellation intent with participation removal", async () => {
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 'marquee', ?, ?)").bind("person_calendar_submitter", "org_calendar", "submitter@example.com", "Calendar Submitter", NOW, NOW),
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'submitter', 1, ?, ?)").bind("participation_calendar_submitter", SUBMISSION_ID, "person_calendar_submitter", NOW, NOW),
+  ]);
   const first = await sendCalendarInvites({
     db: env.DB,
     eventId: EVENT_ID,
@@ -327,21 +331,22 @@ test("CONTRACT · MRQ-228 · removing the invited speaker commits cancellation i
     submissionId: SUBMISSION_ID,
     now: NOW,
   });
+  const submitterInvite = first.find((invite) => invite.person_id === "person_calendar_submitter")!;
   const batch = await prepareCalendarCancellationBatch({
     db: env.DB,
     eventId: EVENT_ID,
-    personId: PERSON_ID,
+    personId: "person_calendar_submitter",
     submissionId: SUBMISSION_ID,
     now: NOW + 1_000,
   });
   await env.DB.batch([
     ...batch.statements,
-    env.DB.prepare("DELETE FROM participations WHERE submission_id = ? AND person_id = ?").bind(SUBMISSION_ID, PERSON_ID),
+    env.DB.prepare("DELETE FROM participations WHERE submission_id = ? AND person_id = ? AND role = 'submitter'").bind(SUBMISSION_ID, "person_calendar_submitter"),
   ]);
-  const deliveries = await drainCalendarCancellations({ db: env.DB, queue: env.MAIL_QUEUE, now: NOW + 1_000 });
-  expect(deliveries).toMatchObject([{ method: "CANCEL", sequence: 1, uid: first[0]!.uid }]);
-  expect((await env.DB.prepare("SELECT COUNT(*) AS total FROM participations WHERE submission_id = ? AND person_id = ?").bind(SUBMISSION_ID, PERSON_ID).first<{ total: number }>())?.total).toBe(0);
-  expect((await env.DB.prepare("SELECT status FROM calendar_cancellations WHERE uid = ?").bind(first[0]!.uid).first<{ status: string }>())?.status).toBe("queued");
+  const deliveries = await drainCalendarCancellations({ db: env.DB, queue: env.MAIL_QUEUE, now: NOW + 1_000, idempotencyKeys: batch.idempotencyKeys });
+  expect(deliveries).toMatchObject([{ method: "CANCEL", sequence: 1, uid: submitterInvite.uid }]);
+  expect((await env.DB.prepare("SELECT COUNT(*) AS total FROM participations WHERE submission_id = ? AND person_id = ? AND role = 'submitter'").bind(SUBMISSION_ID, "person_calendar_submitter").first<{ total: number }>())?.total).toBe(0);
+  expect((await env.DB.prepare("SELECT status FROM calendar_cancellations WHERE uid = ?").bind(submitterInvite.uid).first<{ status: string }>())?.status).toBe("queued");
 });
 
 test("CONTRACT · MRQ-238 · only the explicit smoke harness opts calendar mail into always-live delivery", async () => {

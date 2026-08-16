@@ -724,6 +724,29 @@ published-session guard and one extensible mirror-rejection seam.
 
 ---
 
+### 2.11 Post-deadline calendar-truth band — AC-319 – AC-328 *(Amendment 28, 2026-08-16)*
+
+**Outside the Wednesday terminal gate, on the same terms as §2.4–§2.10.** Not
+folded into the 210 live in-scope count or tier arithmetic. Story: US-94
+(`sequence/USER_STORIES.md` Amendment 28). The migration, invite writer,
+cancellation ledger, request-owned drain, cron drain, and participation
+reconciliation form one calendar truth seam.
+
+| AC | Tier | Tag | How verified |
+|---|---|---|---|
+| AC-319 | PD | `auto` | `test:` send two REQUEST revisions and a CANCEL; assert one UID, monotonic sequence, immutable snapshot material across live-row edits, correct timezone/location/GEO, and the public ICS matching the stored cancellation body. Explicit re-POSTs intentionally bump sequence; no materiality comparison is asserted. |
+| AC-320 | PD | `auto` | `test:` send an invite, remove its agenda row, and cancel; assert one durable cancellation intent and one delivery. The reversal route's same-batch agenda deletion and cancellation path are covered alongside the existing cascade test. |
+| AC-321 | PD | `auto` | `test:` clear one REQUEST snapshot in a mixed batch; assert a durable per-invite failed row with attempts, the invite remains active, the valid recipient still cancels, and the operation does not throw. Migration 0026's live-row reconstruction and the deliberately unbackfillable legacy case are both represented by the migration/fixture proof. |
+| AC-322 | PD | `auto` | `test:` queue work for two submissions and cancel one; assert the returned delivery count and cancellation rows contain only that caller's keys, while the global drain can still discover an unscoped healthy row. |
+| AC-323 | PD | `auto` | `test:` repeatedly drain a fail-closed row and assert attempts stop at `MAX_CALENDAR_CANCELLATION_ATTEMPTS` in terminal `abandoned`; add a healthy row and assert it is admitted despite the poisoned row. |
+| AC-324 | PD | `auto` | `test:` fail a provider delivery, drain it again, and assert the same outbox id, idempotency key, ICS bytes, sequence, and `cancelled_at`/DTSTAMP before the eventual sent state. |
+| AC-325 | PD | `auto` | `test:` delete an invite and recreate the scheduled session; assert the existing UID resumes at the ledger floor. The migration seeds that floor from pre-existing invite rows and reset retains it. |
+| AC-326 | PD | `auto` | `test:` corrupt the cancellation recipient and assert no delivery plus a durable failed reason; the organizer mismatch guard is exercised by the same fail-closed cancellation seam. |
+| AC-327 | PD | `auto` | `test:` simulate a REQUEST whose idempotent outbox row exists but invite/ledger and queue admission do not; assert the resumed request requeues that row with no second revision. |
+| AC-328 | PD | `auto` | `test:` remove an invited participant through the same batch fence used by person removal, including the `submitter` recipient role, and assert its cancellation commits with participation deletion. Conference delete and import undo remain explicit no-CANCEL paths. |
+
+---
+
 ## 3. Felt checkpoints
 
 Four in-scope ACs are judgements no assertion settles. Each is a scheduled human-use session with an explicit trigger, an explicit method, and a recorded verdict. A checkpoint that has not run is not a pass.

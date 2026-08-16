@@ -320,8 +320,11 @@ audit mapper cannot currently parse it into a submission/person timeline row;
 that known limitation is deferred to the calendar-truth work rather than hidden
 in a second entity-id format.
 
-**`calendar_invites`** (AC-95–AC-97, AC-124) — `submission_id`, `person_id`, `uid` (`{submission_id}.{person_id}@marquee.stage11.dev`), `sequence` INTEGER, `last_method` ∈ `REQUEST\|CANCEL`, `last_sent_at`, `status`.
-Writer: schedule/reschedule/un-accept. Reader: ICS builder — same `UID`, `SEQUENCE+1` on every material change; `METHOD:CANCEL` + `STATUS:CANCELLED` on reversal.
+**`calendar_invites`** (AC-95–AC-97, AC-124, AC-319–AC-328) — `submission_id`, `person_id`, `uid` (`{submission_id}.{person_id}@marquee.stage11.dev`), `sequence` INTEGER, `last_method` ∈ `REQUEST\|CANCEL`, `last_sent_at`, `status` ∈ `active\|cancelled`, `request_snapshot` TEXT, and immutable `organizer_email` TEXT. The snapshot is the ordered JSON material required to rebuild the delivered ICS: title, description, start, duration, timezone, location, optional geography, attendee, organizer, and URL. It is written with the REQUEST revision and never replaced by a live session read during cancellation. Writer: schedule/reschedule/un-accept. Reader: ICS builder — same `UID`, `SEQUENCE+1` on every explicit REQUEST revision and `METHOD:CANCEL` + `STATUS:CANCELLED` on reversal, with DTSTART/DTEND/SUMMARY/LOCATION and identity taken from the stamped snapshot.
+
+**`calendar_sequence_ledger`** (AC-325) — `uid` PRIMARY KEY, `last_sequence`, `updated_at`. Migration 0026 seeds it from the maximum sequence already present in `calendar_invites`; demo reset deletes invite and cancellation rows but deliberately retains this high-water table.
+
+**`calendar_cancellations`** (AC-320–AC-328) — `idempotency_key` (`uid:sequence`) UNIQUE, `event_id`, nullable `person_id`, `uid`, `sequence`, `to_email`, `organizer_email`, self-contained `snapshot_json`, `cancelled_at` (the stable cancellation DTSTAMP), `status` ∈ `queued\|sent\|suppressed\|failed\|abandoned`, `attempts`, nullable `outbox_id`, `last_error`, `created_at`, `updated_at`. It has deliberately no foreign keys: conference deletion and import undo are contract-sanctioned no-CANCEL paths, while an intent already admitted before a mutable row disappears remains inspectable. Request paths pass their admitted keys to the drain; the cron is the only unscoped drain. Failure attempts are capped and terminally abandoned so poisoned rows cannot starve healthy work.
 
 ### 3.9 Airtable mirror *(US-72, AC-225 – AC-229)*
 
@@ -1065,3 +1068,19 @@ bulk-send criterion is strengthened with the full registry byte-identity proof;
 AC-314 adds the manual-nudge resend contract and records the corrected
 draft-resume finding. This is a post-deadline band and does not change the live
 in-scope count or tier arithmetic.
+
+## Amendment 28 — the calendar never lies *(2026-08-16, plumbing fold)*
+
+Folds `sequence/USER_STORIES.md` Amendment 28 and `EVALUATION.md` §2.11. The
+calendar row additions in §3.8 are the durable seam for the schedule-update
+ticket that depends on this work. A REQUEST snapshot is the honest record of
+what a calendar client received; a CANCEL is a correction over that snapshot,
+not a reconstruction from rows that may have been edited or removed.
+
+The request-owned paths pass only the cancellation keys admitted by their own
+transaction to the drain, which is why a reversal's count is not a database-
+global count. The cron is the only global drain. A malformed or legacy row
+fails closed per invite, remains active, and is visible as a bounded failure;
+valid recipients in the same batch continue. `abandoned` is the terminal
+retry state. Conference deletion and import undo remain the deliberate
+no-CANCEL paths named in the MRQ-228 contract.
