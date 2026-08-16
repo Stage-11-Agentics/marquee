@@ -58,7 +58,7 @@ test("AC-95, AC-96, AC-97, AC-124, AC-252, AC-262 · request update cancel keeps
   expect(await publicResponse.text()).toBe(outbox.results[2]?.ics_body);
 });
 
-test("MRQ-228 regression · an invite remains cancellable after its agenda row is unscheduled", async () => {
+test("CONTRACT · MRQ-228 · an invite remains cancellable after its agenda row is unscheduled", async () => {
   await sendCalendarInvites({
     db: env.DB,
     eventId: EVENT_ID,
@@ -85,7 +85,7 @@ test("MRQ-228 regression · an invite remains cancellable after its agenda row i
   expect(outbox.results.at(-1)?.ics_body).toContain("METHOD:CANCEL");
 });
 
-test("MRQ-228 · cancellation material stays on the delivered snapshot after live rows change", async () => {
+test("CONTRACT · MRQ-228 · cancellation material stays on the delivered snapshot after live rows change", async () => {
   const first = await sendCalendarInvites({
     db: env.DB,
     eventId: EVENT_ID,
@@ -131,7 +131,7 @@ test("MRQ-228 · cancellation material stays on the delivered snapshot after liv
   expect(intent).toMatchObject({ to_email: "ada@example.com", sequence: 1, status: "queued", attempts: 1, cancelled_at: NOW + 1_000 });
 });
 
-test("MRQ-228 · a failed CANCEL reopens at the same idempotency key and DTSTAMP", async () => {
+test("CONTRACT · MRQ-228 · a failed CANCEL reopens at the same idempotency key and DTSTAMP", async () => {
   const first = await sendCalendarInvites({
     db: env.DB,
     eventId: EVENT_ID,
@@ -181,7 +181,7 @@ test("MRQ-228 · a failed CANCEL reopens at the same idempotency key and DTSTAMP
   expect((await env.DB.prepare("SELECT status FROM calendar_cancellations WHERE uid = ?").bind(first[0]!.uid).first<{ status: string }>())?.status).toBe("sent");
 });
 
-test("MRQ-228 · the UID floor survives invite deletion", async () => {
+test("CONTRACT · MRQ-228 · the UID floor survives invite deletion", async () => {
   const first = await sendCalendarInvites({
     db: env.DB,
     eventId: EVENT_ID,
@@ -207,7 +207,7 @@ test("MRQ-228 · the UID floor survives invite deletion", async () => {
   expect((await env.DB.prepare("SELECT last_sequence FROM calendar_sequence_ledger WHERE uid = ?").bind(first[0]!.uid).first<{ last_sequence: number }>())?.last_sequence).toBe(1);
 });
 
-test("MRQ-228 · cancellation recipient and organizer mismatches fail closed", async () => {
+test("CONTRACT · MRQ-228 · cancellation recipient and organizer mismatches fail closed", async () => {
   const first = await sendCalendarInvites({
     db: env.DB,
     eventId: EVENT_ID,
@@ -228,7 +228,7 @@ test("MRQ-228 · cancellation recipient and organizer mismatches fail closed", a
   expect(intent).toMatchObject({ status: "failed", last_error: "calendar attendee does not match the outbox recipient" });
 });
 
-test("MRQ-228 · a resumed REQUEST requeues an admitted outbox row", async () => {
+test("CONTRACT · MRQ-228 · a resumed REQUEST requeues an admitted outbox row", async () => {
   const messages: unknown[] = [];
   const queue = { send: async (message: unknown) => { messages.push(message); } } as unknown as Queue<unknown>;
   const first = await sendCalendarInvites({
@@ -257,7 +257,7 @@ test("MRQ-228 · a resumed REQUEST requeues an admitted outbox row", async () =>
   expect(messages).toEqual([{ type: "mail_outbox", outbox_id: first[0]!.outbox_id }]);
 });
 
-test("MRQ-228 · removing the invited speaker commits cancellation intent with participation removal", async () => {
+test("CONTRACT · MRQ-228 · removing the invited speaker commits cancellation intent with participation removal", async () => {
   const first = await sendCalendarInvites({
     db: env.DB,
     eventId: EVENT_ID,
