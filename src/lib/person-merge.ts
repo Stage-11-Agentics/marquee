@@ -552,6 +552,7 @@ async function processAuditSubjects(
 async function processMirrorRows(
   db: D1Database,
   retiredId: string,
+  survivorId: string,
   movements: MovementReceipt[],
   operations: Operation[],
 ): Promise<void> {
@@ -804,7 +805,7 @@ async function buildPlan(
   await processForms(db, orgId, retired.id, survivorId, movements, operations);
   await processImportRows(db, orgId, retired.id, survivorId, movements, operations);
   await processAuditSubjects(db, orgId, retired.id, survivorId, movements, operations);
-  await processMirrorRows(db, retired.id, movements, operations);
+  await processMirrorRows(db, retired.id, survivorId, movements, operations);
   const headshots = await processHeadshots(db, retired, survivorAfter, movements, operations);
   const headshotDecision = fields.find((field) => field.field === "headshot_attachment_id");
   if (headshotDecision) {

@@ -65,7 +65,7 @@ export async function resolvePersonForSignin(
     return { kind: "found", person: people.values().next().value as PersonRow };
   }
 
-  const candidates = await db.prepare(
+  const candidates = (await db.prepare(
     `SELECT person.*, 'primary' AS candidate_source, NULL AS alias_created_at, NULL AS alias_id
        FROM people person
       WHERE lower(person.email) = ?
@@ -75,7 +75,7 @@ export async function resolvePersonForSignin(
        JOIN people person ON person.id = alias.person_id AND person.org_id = alias.org_id
       WHERE lower(alias.email) = ?
       ORDER BY candidate_source ASC, person.created_at ASC, person.id ASC, alias_created_at ASC, alias_id ASC, person.org_id ASC`,
-  ).bind(email, email).all<SigninCandidate>();
+  ).bind(email, email).all<SigninCandidate>()).results;
   const targets = new Map(candidates.map((candidate) => [candidate.org_id + ":" + candidate.id, candidate]));
   const orgs = new Set(candidates.map((candidate) => candidate.org_id));
   if (targets.size === 0) return { kind: "missing" };

@@ -100,6 +100,39 @@ BEGIN
   SELECT RAISE(ABORT, 'person_alias_active_email_collision');
 END;
 
+-- 0025 made set_by_person_id mandatory.  A credential survives removal of the
+-- person who configured it; NULL means the historical setter is no longer in
+-- the organization, not that another person configured it.
+CREATE TABLE mirror_credentials_0035_new (
+  id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL REFERENCES organizations(id),
+  token_ciphertext TEXT NOT NULL,
+  webhook_secret_ciphertext TEXT,
+  token_fingerprint TEXT NOT NULL,
+  base_id TEXT NOT NULL,
+  set_at INTEGER NOT NULL,
+  set_by_person_id TEXT REFERENCES people(id),
+  last_verified_at INTEGER,
+  last_error TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+INSERT INTO mirror_credentials_0035_new (
+  id, org_id, token_ciphertext, webhook_secret_ciphertext, token_fingerprint,
+  base_id, set_at, set_by_person_id, last_verified_at, last_error, created_at,
+  updated_at
+)
+SELECT id, org_id, token_ciphertext, webhook_secret_ciphertext, token_fingerprint,
+       base_id, set_at, set_by_person_id, last_verified_at, last_error, created_at,
+       updated_at
+  FROM mirror_credentials;
+
+DROP TABLE mirror_credentials;
+ALTER TABLE mirror_credentials_0035_new RENAME TO mirror_credentials;
+CREATE UNIQUE INDEX uq_mirror_credentials_org ON mirror_credentials(org_id);
+CREATE INDEX idx_mirror_credentials_org ON mirror_credentials(org_id);
+
 -- This is the last line of defence for every lifecycle that removes a person.
 -- Keep the SQL in lock-step with src/lib/person-references.ts and the five
 -- explicit polymorphic families below.  Calendar cancellations are omitted on
@@ -165,36 +198,3 @@ WHEN
 BEGIN
   SELECT RAISE(ABORT, 'person_references_remaining');
 END;
-
--- 0025 made set_by_person_id mandatory.  A credential survives removal of the
--- person who configured it; NULL means the historical setter is no longer in
--- the organization, not that another person configured it.
-CREATE TABLE mirror_credentials_0035_new (
-  id TEXT PRIMARY KEY,
-  org_id TEXT NOT NULL REFERENCES organizations(id),
-  token_ciphertext TEXT NOT NULL,
-  webhook_secret_ciphertext TEXT,
-  token_fingerprint TEXT NOT NULL,
-  base_id TEXT NOT NULL,
-  set_at INTEGER NOT NULL,
-  set_by_person_id TEXT REFERENCES people(id),
-  last_verified_at INTEGER,
-  last_error TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-INSERT INTO mirror_credentials_0035_new (
-  id, org_id, token_ciphertext, webhook_secret_ciphertext, token_fingerprint,
-  base_id, set_at, set_by_person_id, last_verified_at, last_error, created_at,
-  updated_at
-)
-SELECT id, org_id, token_ciphertext, webhook_secret_ciphertext, token_fingerprint,
-       base_id, set_at, set_by_person_id, last_verified_at, last_error, created_at,
-       updated_at
-  FROM mirror_credentials;
-
-DROP TABLE mirror_credentials;
-ALTER TABLE mirror_credentials_0035_new RENAME TO mirror_credentials;
-CREATE UNIQUE INDEX uq_mirror_credentials_org ON mirror_credentials(org_id);
-CREATE INDEX idx_mirror_credentials_org ON mirror_credentials(org_id);
