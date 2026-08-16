@@ -452,13 +452,25 @@ export function PublicForm({ initial }: PublicFormProps) {
     } finally { setBusy(false); }
   }
 
-  function writeParticipants(next: ParticipantSlot[]) {
+  /**
+   * Every participant edit is a function of the LATEST slots, not of the ones
+   * this render closed over.
+   *
+   * Two inputs edited before a re-render — a paste into one field and a keypress
+   * in the next, or an autofill filling a row at once — both start from the same
+   * stale array under a plain value update, and the second silently discards the
+   * first. The ref is the same instrument `answersRef` already is here, and for
+   * the same reason: an update has to see what is true now.
+   */
+  function writeParticipants(update: (current: ParticipantSlot[]) => ParticipantSlot[]) {
+    const next = update(participantsRef.current);
     participantsRef.current = next;
     setParticipants(next);
     setDirty(true);
   }
 
-  function writeOnBehalfOf(next: OnBehalfOfSlot | null) {
+  function writeOnBehalfOf(update: (current: OnBehalfOfSlot | null) => OnBehalfOfSlot | null) {
+    const next = update(onBehalfOfRef.current);
     onBehalfOfRef.current = next;
     setOnBehalfOf(next);
     setDirty(true);
@@ -766,14 +778,14 @@ export function PublicForm({ initial }: PublicFormProps) {
             type="checkbox"
             checked={onBehalfOf !== null}
             disabled={closed}
-            onChange={(event) => writeOnBehalfOf((event.currentTarget as HTMLInputElement).checked ? { name: "", email: "" } : null)}
+            onChange={(event) => { const on = (event.currentTarget as HTMLInputElement).checked; writeOnBehalfOf(() => on ? { name: "", email: "" } : null); }}
           />
           <span>I'm submitting on behalf of someone else</span>
         </label>
         <div class="public-behalf-fields" aria-hidden={onBehalfOf === null}>
           {onBehalfOf && <>
-            <label class="public-participant-field"><span>Your name</span><input type="text" value={onBehalfOf.name} disabled={closed} onInput={(event) => writeOnBehalfOf({ ...onBehalfOf, name: (event.currentTarget as HTMLInputElement).value })} /></label>
-            <label class="public-participant-field"><span>Your contact address</span><input type="email" value={onBehalfOf.email} disabled={closed} onInput={(event) => writeOnBehalfOf({ ...onBehalfOf, email: (event.currentTarget as HTMLInputElement).value })} /></label>
+            <label class="public-participant-field"><span>Your name</span><input type="text" value={onBehalfOf.name} disabled={closed} onInput={(event) => { const value = (event.currentTarget as HTMLInputElement).value; writeOnBehalfOf((current) => ({ name: value, email: current?.email ?? "" })); }} /></label>
+            <label class="public-participant-field"><span>Your contact address</span><input type="email" value={onBehalfOf.email} disabled={closed} onInput={(event) => { const value = (event.currentTarget as HTMLInputElement).value; writeOnBehalfOf((current) => ({ name: current?.name ?? "", email: value })); }} /></label>
             <p class="public-participant-note">Confirmation and the decision come to you. The speaker's own tasks, profile request and calendar invite go to them.</p>
           </>}
         </div>
@@ -787,20 +799,19 @@ export function PublicForm({ initial }: PublicFormProps) {
             <select
               value={slot.role}
               disabled={closed}
-              onChange={(event) => writeParticipants(participants.map((entry, position) =>
-                position === index ? { ...entry, role: (event.currentTarget as HTMLSelectElement).value as ParticipantSlot["role"] } : entry))}
+              onChange={(event) => { const role = (event.currentTarget as HTMLSelectElement).value as ParticipantSlot["role"]; writeParticipants((current) => current.map((entry, position) => position === index ? { ...entry, role } : entry)); }}
             >
               {PUBLIC_PARTICIPANT_ROLES.map((role) => <option value={role}>{PARTICIPANT_ROLE_LABELS[role]}</option>)}
             </select>
           </label>
-          <label class="public-participant-field"><span>Name</span><input type="text" value={slot.name} disabled={closed} onInput={(event) => writeParticipants(participants.map((entry, position) => position === index ? { ...entry, name: (event.currentTarget as HTMLInputElement).value } : entry))} /></label>
-          <label class="public-participant-field"><span>Contact address</span><input type="email" value={slot.email} disabled={closed} onInput={(event) => writeParticipants(participants.map((entry, position) => position === index ? { ...entry, email: (event.currentTarget as HTMLInputElement).value } : entry))} /></label>
-          <button class="public-participant-remove" type="button" disabled={closed} onClick={() => writeParticipants(participants.filter((_, position) => position !== index))}>Remove</button>
+          <label class="public-participant-field"><span>Name</span><input type="text" value={slot.name} disabled={closed} onInput={(event) => { const value = (event.currentTarget as HTMLInputElement).value; writeParticipants((current) => current.map((entry, position) => position === index ? { ...entry, name: value } : entry)); }} /></label>
+          <label class="public-participant-field"><span>Contact address</span><input type="email" value={slot.email} disabled={closed} onInput={(event) => { const value = (event.currentTarget as HTMLInputElement).value; writeParticipants((current) => current.map((entry, position) => position === index ? { ...entry, email: value } : entry)); }} /></label>
+          <button class="public-participant-remove" type="button" disabled={closed} onClick={() => writeParticipants((current) => current.filter((_, position) => position !== index))}>Remove</button>
         </div>)}
         {/* AC-29: the limit sentence sits above the first add control, not below it. */}
         <p class="public-participant-limit">Include at least {minimumParticipants}; this form has {coSpeakerSlots}.</p>
         <div class="public-participant-actions">
-          <button class="public-participant-add" type="button" disabled={closed || !canAddParticipant} onClick={() => writeParticipants([...participants, emptySlot()])}>+ Add a person</button>
+          <button class="public-participant-add" type="button" disabled={closed || !canAddParticipant} onClick={() => writeParticipants((current) => [...current, emptySlot()])}>+ Add a person</button>
           <span class="public-participant-full" aria-hidden={canAddParticipant}>{canAddParticipant ? " " : "This form is full."}</span>
         </div>
         <div class={`public-field-error${errors.participants || errors.on_behalf_of ? " has-message" : ""}`} role={errors.participants || errors.on_behalf_of ? "alert" : undefined} aria-hidden={!(errors.participants || errors.on_behalf_of)}>{errors.participants ?? errors.on_behalf_of ?? " "}</div>
