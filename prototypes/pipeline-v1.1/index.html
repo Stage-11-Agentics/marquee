@@ -3,8 +3,34 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Marquee — Pipeline v1.16 prototype</title>
-  <!-- v1.16 (2026-08-15): the Agents page (DRAFT — prototype only, build
+  <title>Marquee — Pipeline v1.17 prototype</title>
+  <!-- v1.17 (2026-08-15, DRAFT — design round in progress with Atin): the
+       adoption-batch surfaces, all seven. (1) Decision-send plan (MRQ-234):
+       bulk accept/reject and Notify grow a server-built plan — four
+       disposition rows over a fixed-height swap region, rendered recipient
+       preview, demo-safety truth, disabled-template warning wired to the real
+       Comms flags, amber stale-plan refusal, zero-effect refusal, clean sends
+       toast while skips get a named result. (2) Announce (MRQ-225): admin
+       /announce kit + portal "Announce your talk" panel + unfurl mock.
+       (3) Routing rules widen (MRQ-229): builder step 4 becomes a real rule
+       list — conditions on any answer, actions filing into track/tag/level,
+       first-match order, soft-disable with Fix-rule, live would-have-matched
+       preview, skip-not-evaluate for absent questions. (4) Question library
+       (MRQ-236): From-library add mode, picker with on-form disabling,
+       materialized copy with provenance, dangling-condition surfaced at
+       insert, Library tile beside the forms list. (5) Calendar strip
+       (MRQ-233): agenda publication area gauges invites — current · unsent
+       updates · never invited — dragging a published session raises the
+       count live; one batched send per speaker, was→now preview, SEQUENCE
+       claims; dashboard attention strip gains the debt row. (6) Publication
+       truth (MRQ-237): Not-yet-public and Live gauges on Program home,
+       review-before-publish naming every withheld row, zero-effect refusal,
+       and the board's "Withdrawn after publish" chip. People merge (MRQ-235)
+       lives in prototypes/crm/ (same date): selection-bar + drawer entry,
+       survivor compare with back-fill highlights, movement receipt, alias
+       continuity, undoable with receipt id.
+
+       v1.16 (2026-08-15): the Agents page (DRAFT — prototype only, build
        unchanged until Atin's love pass). The agent-native surface stops
        hiding in the sidebar foot: an ⌘ Agents row joins the Organization
        group — org-level, like the tokens agents authenticate with. Kept
@@ -466,6 +492,12 @@
     .eyebrow { color: var(--muted); font-size: 9px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
     .divider { height: 1px; background: var(--line); margin: 16px 0; }
     .grid-2 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+    /* Announce (v1.17): the inner .stack's implicit grid column sizes to its
+       widest child's min-content, escaping the outer minmax(0,1fr) — cap it,
+       let textareas track the column, and stack to one column when narrow. */
+    .announce-grid .stack { grid-template-columns: minmax(0,1fr); }
+    .announce-grid textarea { width: 100%; min-width: 0; }
+    @media (max-width: 1100px) { .announce-grid { grid-template-columns: 1fr; } }
     .grid-3 { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
     .stack { display: grid; gap: 14px; }
     .field { display: grid; gap: 6px; }
@@ -718,6 +750,29 @@
     .dashboard-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 14px; align-items: start; }
     .wave-list { display: grid; }
     .wave-row { display: grid; grid-template-columns: 1fr 80px 62px; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); padding: 12px 0; }
+
+    /* ── Decision-send plan panel (v1.17 · MRQ-234) ─────────────────────────
+       Four disposition rows, always all four rendered; a fixed-height detail
+       region that swaps content on row click — the confirm button never moves
+       under the cursor. */
+    .modal.wide { width: min(680px,100%); }
+    .plan-strip { border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; margin-bottom: 10px; }
+    .plan-row { display: grid; grid-template-columns: 46px 1fr 64px; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--panel); border: none; border-bottom: 1px solid var(--line); border-left: 3px solid transparent; padding: 8px 12px 8px 9px; cursor: pointer; }
+    .plan-row:last-of-type { border-bottom: none; }
+    .plan-row.zero { color: var(--muted); cursor: default; }
+    .plan-row.active { border-left-color: var(--accent); background: var(--sunk); }
+    .plan-count { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 15px; text-align: right; font-family: var(--display); }
+    .plan-row.zero .plan-count { font-weight: 400; }
+    .plan-label { font-size: 12.5px; line-height: 1.35; }
+    .plan-show { font-size: 11px; color: var(--muted); text-align: right; }
+    .plan-detail { height: 108px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--sunk); padding: 6px 12px; font-size: 12px; margin-bottom: 10px; }
+    .plan-detail-row { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+    .plan-detail-row:last-child { border-bottom: none; }
+    .plan-detail-row .why { color: var(--muted); text-align: right; flex-shrink: 0; max-width: 55%; }
+    .plan-banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 1px solid var(--danger); background: var(--danger-soft); border-radius: var(--radius); padding: 9px 12px; font-size: 12px; margin-bottom: 10px; }
+    .plan-banner.warn { border-color: var(--warning); background: var(--warning-soft); }
+    .plan-note { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
+    .plan-sim { display: block; margin-top: 8px; font-size: 11px; color: var(--muted); background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline dotted; text-align: right; width: 100%; }
     .wave-row:last-child { border-bottom: 0; }
     .wave-date { color: var(--muted); font-size: 10.5px; margin-top: 3px; font-variant-numeric: tabular-nums; }
     .wave-bar { height: 8px; background: var(--sunk); border: 1px solid var(--line-strong); border-radius: 0; overflow: hidden; position: relative; }
@@ -1546,6 +1601,27 @@
         ],
         activeCommsTemplate: "acceptance",
         commsTriggers: {confirmation:true,closing:true,added:true,acceptance:true,rejection:true,assigned:true,overdue:true},
+        demoSafe: true,
+        announcePeek: false,
+        // Question library (v1.17 · MRQ-236): materialized copy — "From
+        // library" copies a definition onto this form with provenance.
+        fieldLibrary: [
+          {id:"lib-1",label:"Dietary requirements",kind:"Single select",usedOn:3},
+          {id:"lib-2",label:"Company approval to speak",kind:"Toggle",usedOn:2},
+          {id:"lib-3",label:"A/V and stage needs",kind:"Long text",usedOn:2},
+          {id:"lib-4",label:"Accessibility needs",kind:"Short text",usedOn:3,cond:"Attending in person"},
+          {id:"lib-5",label:"Previous speaking video",kind:"URL",usedOn:1}
+        ],
+        // Routing rules (v1.17 · MRQ-229): conditions on any answer, actions
+        // that file into tracks/tags/level. r4 is the soft-disable case.
+        routingRules: [
+          {id:"r1",enabled:true,when:[{field:"Format",op:"is",value:"Workshop"}],then:{track:"Infra",tags:"Hands-on",pool:"Workshop review"}},
+          {id:"r2",enabled:true,when:[{field:"Audience level",op:"is",value:"Executive"}],then:{level:"Executive",pool:"AIE 2026 program review · Initial screen"}},
+          {id:"r3",enabled:true,when:[{field:"Vendor content",op:"is answered",value:""}],then:{tags:"Vendor",pool:"Workshop review"}},
+          {id:"r4",enabled:false,disabledBy:"references “Budget range”, deleted from this form on Aug 2",when:[{field:"Budget range",op:"contains",value:"sponsor"}],then:{tags:"Sponsor-led",pool:"Workshop review"}}
+        ],
+        ruleEditing:null,
+        calendarLedgerInit:false,
         outbox: [
           {id:"MSG-01842",recipient:"amara.vandermeer@example.com",template:"Acceptance",subject:"You’re speaking at AIE NYC 2026",outcome:"Delivered",time:"Today · 10:04 AM"},
           {id:"MSG-01841",recipient:"joao.garcia@example.com",template:"Task overdue",subject:"AIE NYC: Bio + headshot is overdue",outcome:"Bounced",time:"Today · 9:42 AM"},
@@ -1679,7 +1755,7 @@
             capacity: entity === "Session" ? [null, 120, 420, null, 210][i % 5] : null,
             submitted: `2026-0${6 + (i % 2)}-${String(2 + (i * 7) % 27).padStart(2,"0")}`,
             updated: i>=1000&&i<1020 ? `${2+(i%11)}h ago` : `${1+(i%29)}d ago`,
-            email: notifyGap === "no-recipient" ? "" : `${speaker.toLowerCase().replace(/[^a-z0-9]+/g,".").replace(/^\.|\.$/g,"")}@example.org`,
+            email: (notifyGap === "no-recipient" || (!accepted && i % 89 === 21)) ? "" : `${speaker.toLowerCase().replace(/[^a-z0-9]+/g,".").replace(/^\.|\.$/g,"")}@example.org`,
             missingFields: i>=1000&&i<1020 ? [["Abstract","Headshot"],["Tracks"],["Biography","Supporting file"],["Format","Biography"]][i%4] : [],
             source: entity === "Session" ? "Admin created" : "Public CFP"
           });
@@ -1776,7 +1852,7 @@
         landing: "Demo", settings: "Conference settings", dashboard: "Program pipeline", board: "Program board", forms: "Form builder",
         cfp: "Public CFP form", portal: "Speaker portal", evaluation: "Evaluation plan", reviewer: "Reviewer queue",
         submissions: "Abstracts & sessions", submissionDetail:"Submission record", submissionNew:"Create submission", eventNew:"Create conference",
-        onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Conference site", comms:"Communications",
+        onboarding: "Speaker onboarding", agenda: "Agenda builder", publicAgenda: "Conference site", comms:"Communications", announce:"Announce",
         venues:"Venues", taskTemplates:"Task templates", importer:"Sessionize importer", airtable:"Airtable mirror", webhooks:"Webhooks",
         orgGeneral:"Organization settings", orgHome:"Organization home", orgOrganizers:"Organizers", orgServer:"Server", orgTokens:"API tokens", orgActivity:"Activity",
         apiDocs:"API documentation", agents:"Agents", aiAssist:"AI assist", publicSession:"Session", publicSpeaker:"Speaker",
@@ -2185,6 +2261,7 @@
             </nav>
             <div class="nav-label">Public links</div>
             <nav class="nav" aria-label="Public links">
+              ${navItem("announce","","Announce")}
               ${navItem("publicAgenda","↗","Conference site")}
               ${navItem("portal","↗","Speaker portal")}
               <a href="#publicAgenda" data-route="publicAgenda" data-open-embed="1"><span class="nav-icon">↗</span><span>Embeds</span></a>
@@ -2609,6 +2686,7 @@
             <button class="attention-item" data-unreviewed-track="Agents"><strong>${unreviewedTrackCount("Agents")} unreviewed in Agents</strong><span>${state.submissions.filter(s=>s.status==="In Review"&&(s.tracks||[s.track]).includes("Agents")).length} in review · ${state.submissions.filter(s=>s.status==="Submitted"&&(s.tracks||[s.track]).includes("Agents")).length} waiting for assignment</span></button>
             <button class="attention-item" data-route="onboarding"><strong>${onboardingCounts().overdue} speakers overdue</strong><span>Headshots, agreements, and travel · open chase board</span></button>
             <button class="attention-item" data-not-notified><strong>${notNotifiedCount()} decided · not notified</strong><span>${notNotifiedCount()?"They have an outcome and have not heard it · open the list":"Every decision has reached its speaker"}</span></button>
+            <button class="attention-item" data-route="agenda"><strong>${calendarCounts().stale.length + calendarCounts().never.length} unsent schedule update${calendarCounts().stale.length + calendarCounts().never.length===1?"":"s"}</strong><span>${calendarCounts().stale.length + calendarCounts().never.length?"Speakers’ calendars trail the agenda · open the builder":"Every speaker’s calendar matches the agenda"}</span></button>
             <a class="attention-item" style="display:block" href="../crm/index.html?v=15#outreach"><strong>3 outreach follow-ups overdue</strong><span>Org-level courting going quiet · open the Outreach board</span></a>
           </div>
           <div class="dashboard-grid">
@@ -2631,7 +2709,9 @@
                   <button class="metric-box" style="border:0;text-align:left" data-attention-filter="In Review"><span class="eyebrow">Reviews done</span><div class="metric">1,842</div><span class="subtle">of 2,130</span></button>
                   <button class="metric-box" style="border:0;text-align:left" data-route="onboarding"><span class="eyebrow">Tasks overdue</span><div class="metric">${onboardingCounts().overdueTasks}</div><span class="subtle">across ${onboardingCounts().overdue} speakers</span></button>
                   <button class="metric-box" style="border:0;text-align:left" data-route="agenda"><span class="eyebrow">Unscheduled</span><div class="metric">${counts.AcceptedTotal - counts.Scheduled}</div><span class="subtle">accepted Sessions not yet placed</span></button>
+                  <button class="metric-box" style="border:0;text-align:left" data-attention-filter="Scheduled"><span class="eyebrow">Not yet public</span><div class="metric">${publicationCounts().notYet.length}</div><span class="subtle">scheduled, unpublished · holds at zero</span></button>
                   <button class="metric-box" style="border:0;text-align:left" data-route="agenda"><span class="eyebrow">Conflicts</span><div class="metric" style="color:var(--danger)">${getAgendaConflicts().length}</div><span class="subtle">${agendaConflictIds().size} affected Sessions · live</span></button>
+                  <button class="metric-box" style="border:0;text-align:left" data-attention-filter="Published"><span class="eyebrow">Live on site</span><div class="metric">${publicationCounts().live}</div><span class="subtle">${publicationCounts().revoked.length?`${publicationCounts().revoked.length} no longer accepted — flagged`:"all still accepted"}</span></button>
                 </div>
                 <div class="divider"></div>
                 <div class="eyebrow" style="margin-bottom:9px">Review pressure by track</div>
@@ -2675,7 +2755,11 @@
       }
 
       function boardCard(submission) {
-        const actualStatus = submission.status!==boardStageFor(submission) ? `<span class="chip">${submission.status==="Waitlisted"?"Maybe":esc(submission.status)}</span>` : "";
+        // A published card whose acceptance was later reversed keeps its
+        // column and says so — a vanishing row would hide a real anomaly.
+        const stage = boardStageFor(submission);
+        const revokedLive = stage==="Published" && ["Withdrawn","Rejected"].includes(submission.status);
+        const actualStatus = revokedLive ? `<span class="chip overdue">${esc(submission.status)} after publish</span>` : submission.status!==stage ? `<span class="chip">${submission.status==="Waitlisted"?"Maybe":esc(submission.status)}</span>` : "";
         return `<article class="board-card" role="link" tabindex="0" data-board-card="${submission.id}" data-board-record="${submission.id}" aria-label="Open ${esc(submission.id)}: ${esc(submission.title)}" style="--track-color:${trackColor(submission.track)}"><div style="display:flex;align-items:center;justify-content:space-between;gap:6px"><span class="chip ${submission.entity==="Session"?"session":""}">${submission.entity}</span>${actualStatus}</div><h3>${esc(submission.title)}</h3><p>${esc(submission.speakers.join(" · "))}</p>${trackChips(submission,true)}${scheduleMeta(submission,true,false)}<div class="board-card-foot"><span>${esc(submission.format)} · ${submission.wave?`Wave ${submission.wave}`:"Unwaved"}</span><strong>${formatTimeInStage(submission.timeInStageHours)}</strong></div></article>`;
       }
 
@@ -2849,11 +2933,211 @@
         </div>`);
       }
 
+      // ── Routing rules widen (v1.17 · MRQ-229) ───────────────────────────
+      // Conditions read any form answer through the one shared evaluator;
+      // actions file into tracks, tags, and level as well as review pools.
+      // Rules run once, at arrival — later manual edits are never re-fought.
+      const RULE_OPS = ["is","is not","contains","does not contain","is answered","is not answered"];
+      const RULE_LEVELS = ["Beginner","Practitioner","Advanced","Executive"];
+      const RULE_POOLS = ["AIE 2026 program review · Initial screen","Workshop review"];
+      function ruleConditionFields() {
+        return ["Format","Track","Audience level","Vendor content",...state.builderFields.filter(f=>!f.element&&f.kind!=="Divider").map(f=>f.label)];
+      }
+      function condSummary(c){ return `${c.field} ${c.op}${["is answered","is not answered"].includes(c.op)?"":` “${c.value}”`}`; }
+      function ruleActionsSummary(t){
+        return [t.track?`set track ${t.track}`:"",t.tags?`add tag ${t.tags}`:"",t.level?`set level ${t.level}`:"",t.pool?`send to ${t.pool.split(" · ")[0]}`:""].filter(Boolean).join(" · ")||"no action chosen yet";
+      }
+      function ruleMatchValue(c,s,i){
+        if(c.field==="Format")return s.format;
+        if(c.field==="Track")return s.track;
+        if(c.field==="Audience level")return ["Practitioner","Executive","Researcher","Student"][i%4];
+        if(c.field==="Vendor content")return s.entity==="Session"?"Yes":"";
+        return i%7===2?"answered sample":"";
+      }
+      function ruleCondMatches(c,s,i){
+        const v=ruleMatchValue(c,s,i), q=(c.value||"").toLowerCase();
+        if(c.op==="is")return v===c.value;
+        if(c.op==="is not")return v!==""&&v!==c.value;
+        if(c.op==="contains")return v!==""&&v.toLowerCase().includes(q);
+        if(c.op==="does not contain")return v!==""&&!v.toLowerCase().includes(q);
+        if(c.op==="is answered")return v!=="";
+        if(c.op==="is not answered")return v==="";
+        return false;
+      }
+      function ruleMatchCount(r){
+        const known=ruleConditionFields();
+        if(r.when.some(c=>!known.includes(c.field)))return null; // dangling → the rule is skipped, never evaluated
+        let n=0; state.submissions.slice(0,100).forEach((s,i)=>{ if(r.when.every(c=>ruleCondMatches(c,s,i)))n++; });
+        return n;
+      }
+      function routingPanelHTML(){
+        const rules=state.routingRules;
+        const editing=rules.find(r=>r.id===state.ruleEditing);
+        const rows=rules.map((r,i)=>{
+          const dangling=!!r.disabledBy;
+          return `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);${dangling?"background:var(--warning-soft);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:var(--radius);":""}">
+            <span class="chip ${r.enabled?"published":""}" style="width:34px;justify-content:center;flex-shrink:0">${i+1}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px">When <strong>${r.when.map(condSummary).map(esc).join(" and ")}</strong> → ${esc(ruleActionsSummary(r.then))}</div>
+              ${dangling?`<div style="font-size:11px;color:var(--warning);margin-top:4px"><strong>Off — ${esc(r.disabledBy)}.</strong> It was disabled for you, not deleted; fix the condition to re-enable.</div>`:""}
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0">
+              <button class="button small" data-rule-move="up" data-id="${r.id}" ${i===0?"disabled":""} style="width:28px">↑</button>
+              <button class="button small" data-rule-move="down" data-id="${r.id}" ${i===rules.length-1?"disabled":""} style="width:28px">↓</button>
+              <button class="button small" data-rule-edit="${r.id}" style="width:64px">${dangling?"Fix rule":"Edit"}</button>
+              <button class="button small ${r.enabled?"":"primary"}" data-rule-toggle="${r.id}" style="width:58px">${r.enabled?"On":"Off"}</button>
+            </div>
+          </div>`;}).join("");
+        let editor="";
+        if(editing){
+          const fields=ruleConditionFields();
+          const count=ruleMatchCount(editing);
+          const above=rules.findIndex(r=>r.id===editing.id);
+          editor=`<div class="divider"></div><div class="eyebrow" style="margin-bottom:8px">Editing rule ${above+1}</div>
+            ${editing.when.map((c,ci)=>{
+              const missing=!fields.includes(c.field);
+              return `<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center${missing?";outline:1px solid var(--warning);outline-offset:3px;border-radius:var(--radius)":""}">
+                <select data-rule-cond="${ci}" data-prop="field" style="flex:1.2">${missing?`<option selected>${esc(c.field)} · deleted</option>`:""}${fields.map(f=>`<option ${c.field===f?"selected":""}>${esc(f)}</option>`).join("")}</select>
+                <select data-rule-cond="${ci}" data-prop="op" style="flex:1">${RULE_OPS.map(o=>`<option ${c.op===o?"selected":""}>${o}</option>`).join("")}</select>
+                <input data-rule-cond="${ci}" data-prop="value" value="${esc(c.value||"")}" placeholder="value" style="flex:1" ${["is answered","is not answered"].includes(c.op)?"disabled":""}>
+                <button class="button small" data-rule-cond-remove="${ci}" ${editing.when.length===1?"disabled":""} style="width:28px">×</button>
+              </div>`;}).join("")}
+            <button class="button small" id="rule-cond-add" ${editing.when.length>=5?"disabled":""} style="width:150px">＋ Add condition · ${editing.when.length}/5</button>
+            <div class="grid-2" style="margin-top:10px;gap:8px">
+              <div class="field"><label>Set track</label><select data-rule-then="track"><option value="">—</option>${tracks.map(t=>`<option ${editing.then.track===t.name?"selected":""}>${esc(t.name)}</option>`).join("")}</select></div>
+              <div class="field"><label>Add tag</label><input data-rule-then="tags" value="${esc(editing.then.tags||"")}" placeholder="e.g. Hands-on"></div>
+              <div class="field"><label>Set level</label><select data-rule-then="level"><option value="">—</option>${RULE_LEVELS.map(l=>`<option ${editing.then.level===l?"selected":""}>${l}</option>`).join("")}</select></div>
+              <div class="field"><label>Send to review</label><select data-rule-then="pool"><option value="">—</option>${RULE_POOLS.map(p=>`<option ${editing.then.pool===p?"selected":""}>${esc(p)}</option>`).join("")}</select></div>
+            </div>
+            <div class="message-preview" style="margin-top:10px">${count===null
+              ?`<strong>This rule is skipped for arrivals from this form.</strong><br><span class="subtle">It names a question the form does not ask — an absent answer is indistinguishable from a blank one, so the rule never evaluates rather than matching everything.</span>`
+              :`<strong>Of the last 100 arrivals, ${count} would have matched.</strong><br><span class="subtle">First match wins — ${above===0?"no rules run before this one":`${above} rule${above===1?"":"s"} above run first`}. A matching arrival lands in: ${esc(ruleActionsSummary(editing.then))}.</span>`}</div>
+            <div style="display:flex;gap:8px;margin-top:10px"><button class="button primary small" id="rule-done" style="width:110px">Done editing</button></div>`;
+        }
+        return `<div style="font-size:11px" class="subtle">Ordered, first match wins · rules run <strong>once, at arrival</strong> — later manual edits are never fought by re-routing.</div>
+          <div>${rows}</div>
+          <button class="button small" id="rule-new" style="width:110px">＋ New rule</button>${editor}`;
+      }
+
+      // ── Question library (v1.17 · MRQ-236) ──────────────────────────────
+      function showLibraryModal(mode){
+        const onForm=new Set(state.builderFields.map(f=>f.label));
+        const paint=()=>{
+          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>${mode==="pick"?"Add from the question library":"Question library"}</h2><p>${mode==="pick"?"Copies the question onto this form — the form stays self-contained; edits here never touch the library.":"Reusable questions, copied into forms with provenance. Library edits never reach forms already carrying a copy — drift is reported, not propagated."}</p></div><div class="modal-body">
+            <div class="field"><label>Search</label><input id="lib-search" placeholder="Search questions…"></div>
+            <div id="lib-rows">${state.fieldLibrary.map(l=>{
+              const taken=onForm.has(l.label);
+              return `<div class="lib-row" data-lib-label="${esc(l.label.toLowerCase())}" style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)">
+                <div style="flex:1"><strong style="font-size:12px">${esc(l.label)}</strong><span class="subtle" style="display:block;font-size:10.5px">${esc(l.kind)} · used on ${l.usedOn} form${l.usedOn===1?"":"s"}${l.cond?` · shown when “${esc(l.cond)}” is answered`:""}</span></div>
+                ${mode==="pick"
+                  ?`<button class="button small ${taken?"":"primary"}" data-lib-add="${l.id}" ${taken?"disabled":""} style="width:96px">${taken?"On this form":"Add a copy"}</button>`
+                  :`<span class="chip" style="width:auto">${l.usedOn} form${l.usedOn===1?"":"s"}</span>`}
+              </div>`;}).join("")}</div>
+            <p class="subtle" style="font-size:10.5px;margin:6px 0 0">Participant machinery — speaker email, co-speakers, moderator — is structural and never appears here: a second speaker-email placement is a trap the submit path cannot survive.</p>
+          </div><div class="modal-actions"><button class="button" id="lib-close">Close</button>${mode==="manage"?`<button class="button primary" id="lib-new">＋ New library question</button>`:""}</div></section></div>`;
+          document.getElementById("lib-close").onclick=()=>modalRoot.innerHTML="";
+          document.getElementById("lib-new")?.addEventListener("click",()=>toast("New library question — same editor as a form question, saved to the library (Prototype — simulated)"));
+          document.getElementById("lib-search").addEventListener("input",e=>{
+            const q=e.target.value.toLowerCase();
+            modalRoot.querySelectorAll(".lib-row").forEach(row=>{ row.style.display=row.dataset.libLabel.includes(q)?"":"none"; });
+          });
+          modalRoot.querySelectorAll("[data-lib-add]").forEach(b=>b.addEventListener("click",()=>{
+            const lib=state.fieldLibrary.find(l=>l.id===b.dataset.libAdd);
+            const id=Math.max(...state.builderFields.map(f=>f.id))+1;
+            state.builderFields.push({id,label:lib.label,kind:lib.kind,required:false,fromLibrary:lib.id});
+            lib.usedOn++;
+            const triggerMissing=lib.cond&&!state.builderFields.some(f=>f.label===lib.cond);
+            modalRoot.innerHTML="";
+            toast(triggerMissing
+              ?`${lib.label} added — its condition names “${lib.cond}”, which this form does not ask. The condition was surfaced, not left dangling: the question shows unconditionally until you re-point it.`
+              :`${lib.label} added from the library — a copy on this form; edits here don’t touch the library`);
+            render();
+          }));
+        };
+        paint();
+      }
+
+      // ── Publication truth + calendar debt (v1.17 · MRQ-237 + MRQ-233) ───
+      function ensureAdoptionMocks(){
+        if(state.calendarLedgerInit)return;
+        state.calendarLedgerInit=true;
+        // Published sessions have a delivered invite snapshot; scheduled-but-
+        // unpublished sessions have never been invited.
+        state.scheduled.forEach(s=>{ if(s.status==="Published"&&!s.kind) s.calendarSnapshot={day:s.day,time:s.time,room:s.room}; });
+        // One real-shaped anomaly: a published session whose acceptance was
+        // later reversed — the board must not say "live" without saying this.
+        const victim=state.scheduled.filter(s=>s.status==="Published"&&!s.kind)[2];
+        if(victim){ const base=state.submissions.find(x=>x.id===victim.id); if(base){ base.status="Withdrawn"; base.accepted=false; } }
+      }
+      function publicationCounts(){
+        ensureAdoptionMocks();
+        const sched=state.scheduled.filter(s=>!s.kind&&s.entity!=="Break");
+        const live=sched.filter(s=>s.status==="Published");
+        const notYet=sched.filter(s=>s.status!=="Published");
+        const revoked=live.filter(s=>{const b=state.submissions.find(x=>x.id===s.id);return b&&["Withdrawn","Rejected"].includes(b.status);});
+        return {live:live.length,notYet,revoked};
+      }
+      function calendarCounts(){
+        ensureAdoptionMocks();
+        const sched=state.scheduled.filter(s=>!s.kind&&s.entity!=="Break"&&(s.speakers||[]).length);
+        const invited=sched.filter(s=>s.calendarSnapshot);
+        const stale=invited.filter(s=>s.calendarSnapshot.day!==s.day||s.calendarSnapshot.time!==s.time||s.calendarSnapshot.room!==s.room);
+        const never=sched.filter(s=>!s.calendarSnapshot);
+        return {current:invited.length-stale.length,stale,never};
+      }
+      function showCalendarSendModal(){
+        const cal=calendarCounts();
+        const batch=[...cal.stale.map(s=>({s,kind:"update"})),...cal.never.map(s=>({s,kind:"first"}))];
+        if(!batch.length){ toast("Every speaker’s calendar already matches the agenda — nothing to send"); return; }
+        const bySpeaker=new Map();
+        batch.forEach(r=>{const n=(r.s.speakers||[r.s.speaker])[0];if(!n)return;(bySpeaker.get(n)||bySpeaker.set(n,[]).get(n)).push(r);});
+        const blocked=[...bySpeaker.entries()].filter(([n,rows])=>{const b=state.submissions.find(x=>x.id===rows[0].s.id);return b&&!b.email;});
+        const sendable=[...bySpeaker.entries()].filter(([n])=>!blocked.some(([bn])=>bn===n));
+        const sample=cal.stale[0]||cal.never[0];
+        const was=sample.calendarSnapshot;
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal wide" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Calendar · one batch</div><h2>Make every speaker’s calendar match the agenda?</h2><p>${cal.stale.length} update${cal.stale.length===1?"":"s"} and ${cal.never.length} first invite${cal.never.length===1?"":"s"}, folded to one email per speaker — a speaker moved three times hears once.</p></div><div class="modal-body">
+          <div class="plan-detail" style="height:auto;max-height:150px">${sendable.slice(0,10).map(([n,rows])=>`<div class="plan-detail-row"><span><strong>${esc(n)}</strong></span><span class="why">${rows.filter(r=>r.kind==="update").length?`${rows.filter(r=>r.kind==="update").length} update · same UID, SEQUENCE+1`:""}${rows.filter(r=>r.kind==="first").length?` ${rows.filter(r=>r.kind==="first").length} first invite · SEQUENCE 0`:""}</span></div>`).join("")}${sendable.length>10?`<div class="plan-detail-row"><span class="subtle">+ ${sendable.length-10} more speakers</span></div>`:""}</div>
+          <p class="plan-note">${blocked.length?`${blocked.length} speaker${blocked.length===1?"":"s"} need an address first — named, excluded from the count, and waiting in Decided · not notified.`:"0 speakers blocked — everyone in this batch has a valid address."}</p>
+          ${sample?`<div class="message-preview"><strong>Preview · ${esc((sample.speakers||[sample.speaker])[0])}</strong> <span class="subtle">— brand voice, event timezone</span><div class="divider"></div>The schedule for your session at ${esc(state.event.name)} has been updated.<br><br><strong>Session</strong> — ${esc(sample.title)}<br><strong>When</strong> — ${was&&(was.day!==sample.day||was.time!==sample.time)?`<s>${esc(was.day)} · ${esc(was.time)}</s> → `:""}${esc(sample.day)} · ${esc(sample.time)} (America/New_York)<br><strong>Where</strong> — ${was&&was.room!==sample.room?`<s>${esc(was.room)}</s> → `:""}${esc(sample.room)}<br><br>The attached invite updates your existing calendar entry in place.</div>`:""}
+        </div><div class="modal-actions"><button class="button" id="cancel-modal">Cancel</button><button class="button primary" id="calendar-send-confirm">Send to ${sendable.length} speaker${sendable.length===1?"":"s"}</button></div></section></div>`;
+        document.getElementById("cancel-modal").onclick=()=>modalRoot.innerHTML="";
+        document.getElementById("calendar-send-confirm").onclick=()=>{
+          batch.forEach(r=>{ r.s.calendarSnapshot={day:r.s.day,time:r.s.time,room:r.s.room}; });
+          modalRoot.innerHTML="";
+          toast(`${sendable.length} speakers mailed once each · ${cal.stale.length} updates at SEQUENCE+1 · ${cal.never.length} first invites`);
+          render();
+        };
+      }
+      function showPublishReviewModal(){
+        const pub=publicationCounts();
+        const willGo=pub.notYet.filter(s=>{const b=state.submissions.find(x=>x.id===s.id);return !b||b.accepted;});
+        const withheld=pub.notYet.filter(s=>{const b=state.submissions.find(x=>x.id===s.id);return b&&!b.accepted;});
+        if(!pub.notYet.length){
+          modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Publication</div><h2>Nothing to publish</h2><p>All ${pub.live} scheduled sessions are already live — publishing again would change nothing, so nothing was done.</p></div><div class="modal-actions"><button class="button" id="cancel-modal">Close</button></div></section></div>`;
+          document.getElementById("cancel-modal").onclick=()=>modalRoot.innerHTML="";
+          return;
+        }
+        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal wide" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">Publication · review before it moves</div><h2>${willGo.length} will go live · ${withheld.length} withheld</h2><p>All-or-nothing over the sendable set — and everything held back is named, with its reason, before anything happens.</p></div><div class="modal-body">
+          <div class="eyebrow" style="margin-bottom:4px">${willGo.length} will go live</div>
+          <div class="plan-detail" style="height:auto;max-height:120px">${willGo.slice(0,20).map(s=>`<div class="plan-detail-row"><span><strong>${esc(s.title)}</strong></span><span class="why">${esc(s.day)} · ${esc(s.time)} · ${esc(roomLabel(s.room))}</span></div>`).join("")||`<div class="plan-detail-row"><span class="subtle">Nothing is ready to go live.</span></div>`}</div>
+          <div class="eyebrow" style="margin:8px 0 4px">${withheld.length} withheld — reasons named</div>
+          <div class="plan-detail" style="height:auto;max-height:96px">${withheld.map(s=>`<div class="plan-detail-row"><span><strong>${esc(s.title)}</strong></span><span class="why">no longer accepted — the decision was reversed after scheduling</span></div>`).join("")||`<div class="plan-detail-row"><span class="subtle">Nothing is being held back.</span></div>`}</div>
+          ${pub.revoked.length?`<div class="plan-banner warn" style="margin-top:8px"><span><strong>${pub.revoked.length} session is live but no longer accepted.</strong> Publishing more will not touch it — visibility changes take a deliberate action on its record.</span></div>`:""}
+        </div><div class="modal-actions"><button class="button" id="cancel-modal">Cancel</button><button class="button primary" id="publish-confirm" ${willGo.length?"":"disabled"}>Publish ${willGo.length} together</button></div></section></div>`;
+        document.getElementById("cancel-modal").onclick=()=>modalRoot.innerHTML="";
+        document.getElementById("publish-confirm").onclick=()=>{
+          willGo.forEach(s=>{ s.status="Published"; const b=state.submissions.find(x=>x.id===s.id); if(b){ b.status="Published"; b.boardStage="Published"; } });
+          modalRoot.innerHTML="";
+          toast(`${willGo.length} published together · embeds update within 60 seconds · ${withheld.length} withheld with reasons`);
+          render();
+        };
+      }
+
       function formsView() {
         const activeForm=state.forms.find(form=>form.id===state.activeFormId)||state.forms[0];
         return shell(`<div class="page">
           ${pageHead("Forms", `${state.forms.length} conference ${state.forms.length===1?"form":"forms"} · each has its own audience, fields, rules, response state, and public or private link.`, `<button class="button" id="duplicate-form">Duplicate</button><button class="button" id="new-form">+ New form</button><button class="button primary" id="publish-form">Publish changes</button>`)}
-          <section class="form-catalog" aria-label="Conference forms">${state.forms.map(form=>`<button class="form-catalog-card ${form.id===state.activeFormId?"active":""}" data-form-id="${form.id}"><span class="chip ${form.status==="Open"?"published":""}">${form.status}</span><strong>${esc(form.name)}</strong><small>${esc(form.detail)}<br>${form.responses.toLocaleString()} ${form.responses===1?"response":"responses"} · collects ${form.target}s</small></button>`).join("")}</section>
+          <section class="form-catalog" aria-label="Conference forms">${state.forms.map(form=>`<button class="form-catalog-card ${form.id===state.activeFormId?"active":""}" data-form-id="${form.id}"><span class="chip ${form.status==="Open"?"published":""}">${form.status}</span><strong>${esc(form.name)}</strong><small>${esc(form.detail)}<br>${form.responses.toLocaleString()} ${form.responses===1?"response":"responses"} · collects ${form.target}s</small></button>`).join("")}<button class="form-catalog-card" id="open-library"><span class="chip">Library</span><strong>Question library</strong><small>${state.fieldLibrary.length} reusable questions · copied into forms, never linked<br>Forms stay self-contained by construction</small></button></section>
           <div class="message-preview" style="margin-bottom:14px"><strong>Editing · ${esc(activeForm.name)}</strong><br><span class="subtle">${esc(activeForm.detail)} · changes and publication are isolated to this form.</span></div>
           <div class="builder">
             <section class="card builder-steps">
@@ -2876,13 +3160,13 @@
           if(f.kind==="Divider")return `<div class="form-divider-row" draggable="true" data-field-drag="${f.id}" data-field-id="${f.id}"><span class="drag-handle">⋮⋮</span><i></i><span class="section-kind">Divider</span><i></i>${controls}</div>`;
           if(f.element)return `<div class="form-section-row" draggable="true" data-field-drag="${f.id}" data-field-id="${f.id}"><span class="drag-handle">⋮⋮</span><span class="section-kind">Section</span><strong>${esc(f.label)}</strong><span style="flex:1"></span>${controls}</div>`;
           return `<div class="form-field-row ${state.builderActive === f.id ? "active" : ""}" draggable="true" data-field-drag="${f.id}" data-field-id="${f.id}"><span class="drag-handle">⋮⋮</span><div><strong style="font-size:11px">${esc(f.label)}${f.required ? " *" : ""}</strong><div class="field-kind">${esc(f.kind)} · ${f.required ? "Required" : "Optional"}</div></div>${controls}</div>`;
-        }).join("")}<div style="display:flex;gap:8px"><button class="add-field" id="add-field" style="flex:1">＋ Add a field</button><button class="add-field" id="add-section-element" style="flex:1">＋ Add section element</button></div></div></section>`;
+        }).join("")}<div style="display:flex;gap:8px"><button class="add-field" id="add-field" style="flex:1">＋ New question</button><button class="add-field" id="add-from-library" style="flex:1">From library · ${state.fieldLibrary.length}</button><button class="add-field" id="add-section-element" style="flex:1">＋ Add section element</button></div></div></section>`;
         const panels=[
           ["Type & basics",`<div class="field"><label>Internal form name</label><input value="Call for speakers · 2026 main CFP"><span class="field-note">How your team tells twenty forms apart. Never shown publicly.</span></div><div class="field"><label>External form title</label><input value="Call for speakers"><span class="field-note">The public page title submitters see.</span></div><div class="field"><label>Public slug</label><input value="aie-nyc-2026"></div>`],
           ["Welcome",`<div class="field"><label>Headline</label><input value="Share your work with AIE NYC."></div><div class="field"><label>Welcome copy</label>${mdToolbar("builder-welcome-copy")}<textarea id="builder-welcome-copy">We welcome **practical, specific** sessions for people building and operating AI systems.</textarea><span class="field-note">Rendered above the first field of the public form.</span></div>`],
           ["Form fields",""],
           ["Participants",`<div class="grid-2"><div class="field"><label>Minimum speakers</label><input type="number" value="1" min="1"></div><div class="field"><label>Maximum speakers</label><input type="number" value="4" min="1"></div></div><span class="field-note">One speaker minimum is the default on every new form.</span>`],
-          ["Rules & routing",`<div class="field"><label>Rule</label><select><option>Track is AI in Financial Services</option></select></div><div class="field"><label>Route to</label><select><option>AIE 2026 program review · Initial screen</option></select></div><label class="toggle-line"><span>Vendor content flag routes to workshop review</span><input type="checkbox" checked></label>`],
+          ["Rules & routing",routingPanelHTML()],
           ["Messages",`<div class="field"><label>Thank-you message</label>${mdToolbar("builder-thankyou")}<textarea id="builder-thankyou">Your abstract is in. We sent a confirmation and private edit link.</textarea><span class="field-note">Shown on the success page and rendered into the confirmation email.</span></div><label class="toggle-line"><span><strong>Auto-redirect to the speaker portal</strong><small class="subtle" style="display:block;margin-top:3px">10 seconds after submit. Off shows a Continue button only.</small></span><input type="checkbox" checked></label><div class="field"><label>Pre-close reminder</label><select><option>3 days before close</option><option>7 days before close</option></select></div>`],
           ["Publish",`<div class="message-preview"><strong>Open · 350 submitted · 20 drafts</strong><br><span class="subtle">Public URL: marquee.stage11.dev/f/aie-nyc-2026 · closes Sep 12 at 11:59 PM America/New_York</span></div><div class="field"><label>Preview a real form state</label><div class="segment"><button data-cfp-preview="open">Open</button><button data-cfp-preview="resumed">Resumed draft</button><button data-cfp-preview="limit">At limit</button><button data-cfp-preview="closed">Closed</button></div></div><button class="button" data-route="cfp" style="margin-top:14px">Open public form ↗</button>`]
         ];const panel=panels[state.builderStep];return `<section class="card"><div class="card-head"><div><h2>${panel[0]}</h2><span class="subtle">Changes update the public form preview immediately</span></div><span class="chip ${state.formTarget === "Session" ? "session" : ""}">${state.formTarget}</span></div><div class="card-body stack">${panel[1]}<button class="button primary" id="save-builder-step">Save ${panel[0].toLowerCase()}</button></div></section>`;
@@ -2933,6 +3217,7 @@
           ${portalSubmissionCard()}
           ${portalDecisionFeedback()}
           ${portalLocationCard()}
+          ${portalAnnounceCard()}
           <div class="portal-grid">
             <section class="card"><div class="card-head"><div><h2>Your tasks</h2><span class="subtle">${overdue?"Complete the overdue item first":live.length?"Nothing overdue right now":"Nothing outstanding"}</span></div><span class="chip ${overdue?"overdue":""}">${overdue} overdue</span></div><div class="card-body" id="task-list">${live.length?live.map(taskRow).join(""):`<p class="subtle" style="margin:0">You have no outstanding tasks.</p>`}${cancelled.length?`<div class="cancelled-block"><span class="eyebrow">Cancelled · ${cancelled.length}</span><p class="cancelled-reason">${esc(state.taskCancellation?.reason||"These are no longer needed.")} You do not need to do anything with them, and anything you already finished stays finished.</p>${cancelled.map(taskRow).join("")}</div>`:""}</div></section>
             <div class="stack">
@@ -2988,6 +3273,79 @@
         modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">${esc(task.kind)} · ${esc(task.due)}</div><h2>${esc(task.title)}</h2><p>Saving this task updates the organizer’s onboarding dashboard immediately.</p></div><div class="modal-body stack">${body}<div class="field-error" id="portal-task-error"></div></div><div class="modal-actions"><button class="button" id="cancel-portal-task">Cancel</button><button class="button primary" id="save-portal-task">${task.done?"Save update":"Complete task"}</button></div></section></div>`;
         document.getElementById("cancel-portal-task").onclick=()=>modalRoot.innerHTML="";
         document.getElementById("save-portal-task").onclick=()=>{const ack=document.getElementById("portal-task-ack"),file=document.getElementById("portal-task-file"),required=document.getElementById("portal-task-required");if((ack&&!ack.checked)||(file&&!task.done&&!file.files.length)||(required&&!required.value)){document.getElementById("portal-task-error").textContent=ack?"Accept the agreement to complete this task.":file?"Choose a file before completing this request.":"Complete the required fields.";return;}task.done=true;task.overdue=false;modalRoot.innerHTML="";toast(`${task.title} completed · organizer dashboard updated`);render();};
+      }
+
+      // ── Announce (v1.17 · MRQ-225) ──────────────────────────────────────
+      // The moment the schedule goes public, the amplification kit is already
+      // assembled: the post, the links, the embed, and every speaker's share
+      // link. Publishing is the gate — announcing an unpublished program
+      // announces nothing.
+      function announceView() {
+        const published = state.scheduled.filter(s => s.status === "Published");
+        const live = !state.announcePeek && published.length > 0;
+        const peek = `<button class="plan-sim" id="announce-peek" style="text-align:left">Prototype · preview the ${live ? "pre-publish empty" : "live"} state</button>`;
+        if (!live) return shell(`<div class="page narrow">
+          ${pageHead("Announce", "Everything you need to amplify the program, assembled the moment it goes public.")}
+          <div class="empty-state" style="min-height:320px"><div><div class="empty-mark">◇</div><h2>Nothing is public yet</h2><p>Announcing an unpublished program announces nothing. Publish sessions from the agenda builder and this screen assembles the kit — the post, the public links, the embed code, and a share link for every published speaker.</p><button class="button primary" data-route="agenda">Open the agenda builder</button></div></div>${peek}</div>`);
+
+        const bySpeaker = new Map();
+        published.forEach(s => (s.speakers || [s.speaker]).forEach(n => { if (n && !bySpeaker.has(n)) bySpeaker.set(n, s); }));
+        const shareRows = [...bySpeaker.entries()];
+        const slug = n => n.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const tracksN = new Set(published.flatMap(s => s.tracks || [s.track])).size;
+        const base = "https://marquee.stage11.dev/aie-nyc-2026";
+        const post = `AIE NYC 2026 is live: ${published.length} sessions across ${tracksN} tracks, Oct 12–14 at the Sheraton New York Times Square — ${bySpeaker.size} speakers, from trading-floor agents to open-model serving.\n\nThe full agenda: ${base}/agenda`;
+        const snippet = `<iframe src="${base}/agenda/embed" title="AIE NYC 2026 agenda" loading="lazy" width="100%" height="720" style="width:100%;height:720px;border:0"></iframe>`;
+        const linkRow = (label, url, note = "") => `<div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)"><span style="width:150px;flex-shrink:0;font-size:12px"><strong>${label}</strong>${note ? `<span class="subtle" style="display:block;font-size:10.5px">${note}</span>` : ""}</span><span class="subtle" style="flex:1;font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(url)}</span><button class="button small" data-announce-copy="${esc(url)}" data-announce-msg="${esc(label)} link copied" style="width:64px">Copy</button></div>`;
+        const [firstName, firstSession] = shareRows[0] || ["Speaker", published[0]];
+        return shell(`<div class="page">
+          ${pageHead("Announce", `${published.length} sessions are live. The kit below is assembled from what is actually public — copy it, hand it off, or mail every speaker their link.`, `<a class="button" href="#publicAgenda">View conference site ↗</a>`)}
+          <div class="grid-2 announce-grid" style="align-items:start">
+            <div class="stack">
+              <section class="card"><div class="card-head"><div><h2>The announcement</h2><span class="subtle">Suggested copy — edit freely, it is yours</span></div><button class="button primary small" data-announce-copy="${esc(post)}" data-announce-msg="Announcement copied" style="width:150px">Copy announcement</button></div><div class="card-body"><textarea id="announce-post" style="min-height:120px;font-size:12.5px;line-height:1.55">${esc(post)}</textarea><span class="field-note">Counts update with what is public — this text was assembled from ${published.length} published sessions, not a template guess.</span></div></section>
+              <section class="card"><div class="card-head"><div><h2>Public links</h2><span class="subtle">Everything outward-facing, one copy each</span></div></div><div class="card-body">
+                ${linkRow("Conference site", `${base}/agenda`)}
+                ${linkRow("Speakers directory", `${base}/speakers`)}
+                ${linkRow("Call for speakers", `${base}/cfp`, state.cfpMode === "closed" ? "closed — links to the closed state" : "open until Sep 12")}
+              </div></section>
+            </div>
+            <div class="stack">
+              <section class="card"><div class="card-head"><div><h2>Embed</h2><span class="subtle">For the conference website — stays live, no republishing</span></div><button class="button small" id="announce-embed-config" style="width:130px">Configure formats</button></div><div class="card-body"><textarea readonly style="font-family:var(--mono);font-size:11px;min-height:74px">${esc(snippet)}</textarea><div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="button small" data-announce-copy="${esc(snippet)}" data-announce-msg="Embed code copied" style="width:64px">Copy</button></div></div></section>
+              <section class="card"><div class="card-head"><div><h2>How a pasted link renders</h2><span class="subtle">Speaker and session pages unfurl — the graphics are handled</span></div></div><div class="card-body">
+                <div style="max-width:420px;border:1px solid var(--line-strong);border-radius:6px;overflow:hidden">
+                  <div style="height:110px;background:var(--canvas);color:var(--canvas-ink);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px"><span class="brand-mark">M</span><strong style="letter-spacing:.06em">AIE NYC 2026</strong><span style="font-size:10px;color:var(--canvas-ink-soft);font-family:var(--mono)">OCT 12–14 · NEW YORK</span></div>
+                  <div style="padding:10px 12px"><div class="subtle" style="font-size:10px;font-family:var(--mono)">marquee.stage11.dev</div><strong style="font-size:12px;display:block;margin:3px 0 2px">${esc(firstName)} — speaking at AIE NYC 2026</strong><span class="subtle" style="font-size:11px">${esc(firstSession?.title || "")} · ${esc(firstSession?.day || "")} · ${esc(roomLabel(firstSession?.room) || "")}</span></div>
+                </div>
+                <span class="field-note" style="display:block;margin-top:8px">The share image is the event-branded card. Per-speaker rasterized cards are a future direction, deliberately not promised here.</span>
+              </div></section>
+            </div>
+          </div>
+          <section class="card" style="margin-top:14px"><div class="card-head"><div><h2>Speaker share links</h2><span class="subtle">${bySpeaker.size} published speakers · each link is their contractual public page — unpublish and it honestly 404s</span></div><button class="button small" data-announce-mail="all ${bySpeaker.size} speakers" style="width:150px">Mail all their links</button></div><div class="card-body">
+            ${shareRows.slice(0, 8).map(([n, s]) => `<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><span style="width:210px;flex-shrink:0"><strong style="font-size:12px">${esc(n)}</strong><span class="subtle" style="display:block;font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.title)}</span></span><span class="subtle" style="flex:1;font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">https://marquee.stage11.dev/p/${slug(n)}</span><button class="button small" data-announce-copy="https://marquee.stage11.dev/p/${slug(n)}" data-announce-msg="Share link copied for ${esc(n)}" style="width:64px">Copy</button><button class="button small" data-announce-mail="${esc(n)}" style="width:64px">Mail it</button></div>`).join("")}
+            ${shareRows.length > 8 ? `<div class="subtle" style="padding:8px 0;font-size:11px">+ ${shareRows.length - 8} more — every published speaker has a row; export carries them all.</div>` : ""}
+          </div></section>
+          ${peek}
+        </div>`);
+      }
+
+      // The seeded task tells every accepted speaker "graphics and copy are in
+      // the portal" — this panel is what makes that sentence true. It always
+      // renders once accepted; publishing flips the link live in place.
+      function portalAnnounceCard() {
+        const slot = sessionSlot(state.portalRecordId);
+        const publishedNow = !!slot && slot.status === "Published";
+        const url = "https://marquee.stage11.dev/p/amara-van-der-meer";
+        const post = `I’m speaking at AIE NYC 2026 — ${state.portalSessionTitle}${slot ? `, ${slot.day} in ${slot.room}` : ""}. Come say hello: ${url}`;
+        return `<section class="card" style="margin-bottom:16px"><div class="card-head"><div><h2>Announce your talk</h2><span class="subtle">${publishedNow ? "Your public page is live — the copy below is yours to post anywhere" : "Ready the moment the schedule is published"}</span></div><span class="chip ${publishedNow ? "published" : ""}">${publishedNow ? "Link live" : "Awaiting publish"}</span></div>
+          <div class="card-body">
+            <div class="message-preview">${esc(post)}</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+              <span class="subtle" style="flex:1;font-family:var(--mono);font-size:11px">${publishedNow ? esc(url) : "Your link goes live when the organizer publishes the schedule — the copy is already written."}</span>
+              <button class="button small" data-announce-copy="${esc(post)}" data-announce-msg="Post copied — paste it anywhere" ${publishedNow ? "" : "disabled"} style="width:110px">Copy the post</button>
+              <a class="button small" href="#p/${encodeURIComponent("Amara van der Meer")}" style="width:100px;${publishedNow ? "" : "visibility:hidden"}">View page ↗</a>
+            </div>
+            <span class="field-note" style="display:block;margin-top:8px">Pasted anywhere, the link unfurls into the event share card with your name and talk — the graphics are handled for you.</span>
+          </div></section>`;
       }
 
       function evaluationView() {
@@ -3694,6 +4052,17 @@
         return shell(`<div class="page">
           ${pageHead("Agenda builder", "Drag accepted Sessions into track, day, time, and room. Format defaults set duration; live conflicts warn without blocking.", `<button class="button danger" id="open-conflicts">⚠ ${conflicts.length} conflicts</button><button class="button primary" data-route="publicAgenda">View public agenda ↗</button>`)}
           <div class="toolbar card" style="margin-bottom:14px"><div class="segment agenda-view-toggle" id="agenda-tabs">${["list","day","week","track","room"].map(v=>`<button data-agenda-view="${v}" class="${state.agendaView===v?"active":""}">${v[0].toUpperCase()+v.slice(1)}</button>`).join("")}</div><select id="agenda-builder-day"><option ${state.agendaBuilderDay==="All days"?"selected":""}>All days</option><option ${state.agendaBuilderDay==="Mon · Oct 12"?"selected":""}>Mon · Oct 12</option><option ${state.agendaBuilderDay==="Tue · Oct 13"?"selected":""}>Tue · Oct 13</option><option ${state.agendaBuilderDay==="Wed · Oct 14"?"selected":""}>Wed · Oct 14</option></select><select id="agenda-track"><option>All tracks</option>${tracks.map(t=>`<option ${state.agendaTrack===t.name?"selected":""}>${t.name}</option>`).join("")}</select><select id="agenda-snap"><option>15 minute snap</option><option>5 minute snap</option><option>30 minute snap</option><option>60 minute snap</option></select><span class="toolbar-spacer"></span><button class="button small" id="add-break">+ Add break</button></div>
+          ${(()=>{ const pub=publicationCounts(), cal=calendarCounts(), calDebt=cal.stale.length+cal.never.length; return `
+          <div class="card" style="margin-bottom:14px"><div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:0;padding:0">
+            <div style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-right:1px solid var(--line)">
+              <div style="flex:1;min-width:0"><span class="eyebrow">Publication</span><div style="font-family:var(--mono);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;margin:3px 0 2px">${pub.live} live · ${pub.notYet.length} not yet public</div><span class="subtle" style="font-size:10.5px">${pub.revoked.length?`${pub.revoked.length} live session is no longer accepted — its card says so on the board`:"Everything live is still accepted"}</span></div>
+              <button class="button primary small" id="publish-review-open" style="width:150px">Review and publish</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:11px 16px">
+              <div style="flex:1;min-width:0"><span class="eyebrow">Calendar invites</span><div style="font-family:var(--mono);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;margin:3px 0 2px">${cal.current} current · ${cal.stale.length} unsent updates · ${cal.never.length} never invited</div><span class="subtle" style="font-size:10.5px">Move a published session and the update count rises — one batch, one email per speaker</span></div>
+              <button class="button primary small" id="calendar-send-open" style="width:190px" ${calDebt?"":"disabled"}>Send ${calDebt} calendar update${calDebt===1?"":"s"}</button>
+            </div>
+          </div></div>`; })()}
           <div class="agenda-layout">
             <aside class="card" id="agenda-pool-drop"><div class="card-head"><div><h2>Unscheduled</h2><span class="subtle">${pool.length} accepted Sessions ready to place</span></div><span class="chip">Drag back here to unplace</span></div><div class="toolbar" style="min-height:46px;padding:7px"><input id="agenda-pool-search" value="${esc(state.agendaPoolSearch)}" placeholder="Filter Sessions" style="min-width:0;width:100%"></div><div class="unscheduled">${pool.slice(0,40).map(s=>`<div class="unscheduled-item" draggable="true" data-drag-id="${s.id}" style="--track-color:${trackColor(s.track)}"><strong>${esc(s.title)}</strong><span>${esc(s.format)} · ${formatDurations[s.format]}m · ${esc(s.speaker)}</span>${trackChips(s,true)}</div>`).join("") || `<div style="padding:30px;text-align:center" class="subtle">Everything matching is scheduled.</div>`}</div><div class="pagination" style="min-height:38px"><span>Showing ${Math.min(40,pool.length)} of ${pool.length}</span><span>Drag →</span></div></aside>
             <section class="card agenda-board" id="agenda-board">${agendaBoard()}</section>
@@ -3898,26 +4267,166 @@
         return `<div class="public-shell"><header class="public-top"><a class="public-event" href="#publicAgenda"><span class="brand-mark">M</span>${esc(state.event.name)}</a><a class="button small" href="#publicAgenda">← Agenda</a></header><main class="public-body"><section class="public-card"><div class="profile-block"><div class="avatar">${esc(name.split(" ").map(n=>n[0]).slice(0,2).join(""))}</div><div><div class="eyebrow">Speaker</div><h1 style="margin:5px 0">${esc(name)}</h1><span class="subtle">${esc(person?.title||"Speaker")} · ${esc(person?.company||sessions[0]?.company||"")}</span></div></div><p>${esc(person?.bio||"Builds and operates production AI systems with an emphasis on evidence, recovery, and human judgment.")}</p><div class="divider"></div><h2 style="font-size:14px">Sessions</h2>${sessions.map(s=>`<a class="list-button" href="#s/${s.id}"><span><strong>${esc(s.title)}</strong><small style="display:block;margin-top:4px">${s.day} · ${s.time} · ${esc(roomLabel(s.room))}</small></span><span>→</span></a>`).join("")||`<p class="subtle">No published sessions yet.</p>`}</section></main></div>`;
       }
 
-      function showBulkModal() {
-        const all = filteredSubmissions();
-        const selected = state.selectAllMatching ? all : state.submissions.filter(s=>state.selected.has(s.id));
-        const eligible = selected.filter(s=>!s.accepted && !["Rejected","Withdrawn"].includes(s.status));
-        modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Accept ${eligible.length.toLocaleString()} abstracts into Wave 2?</h2><p>Status change is the notification. Review every downstream effect before the wave moves.</p></div><div class="modal-body"><div class="wave-row"><strong>Portal status updates</strong><span></span><strong class="tabular">${eligible.length}</strong></div><div class="wave-row"><strong>Acceptance emails queued</strong><span></span><strong class="tabular">${eligible.length}</strong></div><div class="wave-row"><strong>Speaker task sets assigned</strong><span></span><strong class="tabular">${Math.max(0,eligible.length-2)}</strong></div><div class="wave-row"><strong>Calendar invites offered</strong><span></span><strong class="tabular">After scheduling</strong></div><p class="subtle">The CFP remains open. Two records without valid speaker emails will remain unchanged and appear in the result summary.</p></div><div class="modal-actions"><button class="button" id="cancel-modal">Cancel</button><button class="button primary" id="confirm-accept">Accept ${eligible.length.toLocaleString()} abstracts</button></div></section></div>`;
+      // ── Decision-send plan (v1.17 · MRQ-234) ───────────────────────────────
+      // The confirm step is a server-built, read-only plan: who moves, who
+      // hears about it, who is skipped and why — named before the write, not
+      // discovered after it. One panel, not a wizard. Warnings are advisory;
+      // the only hard block is a stale plan.
+      function buildDecisionPlan(records, verb) {
+        const plan = { willSend:[], alreadyNotified:[], noAddress:[], cannotMove:[] };
+        records.forEach(s => {
+          if (verb === "Accept") {
+            if (s.accepted && s.notifiedAt) return plan.alreadyNotified.push({ s, why:"accepted and notified · an identical send is deduped by key" });
+            if (s.accepted) return plan.cannotMove.push({ s, why:"already accepted · never notified — see Decided · not notified" });
+            if (["Rejected","Withdrawn"].includes(s.status)) return plan.cannotMove.push({ s, why:`${s.status.toLowerCase()} · reverse the decision on the record first` });
+          } else if (verb === "Reject") {
+            if (s.status === "Rejected" && s.notifiedAt) return plan.alreadyNotified.push({ s, why:"rejected and notified · an identical send is deduped by key" });
+            if (s.status === "Rejected") return plan.cannotMove.push({ s, why:"already rejected · never notified" });
+            if (s.status === "Withdrawn") return plan.cannotMove.push({ s, why:"withdrawn by the speaker" });
+            if (s.accepted) return plan.cannotMove.push({ s, why:"accepted · reverse the acceptance from the record, where the cascade is shown" });
+          } else if (verb === "Notify") {
+            if (s.notifyGap === "no-recipient" || !s.email) return plan.noAddress.push({ s, why:"needs an address first · excluded from this send" });
+          }
+          if (!s.email) return plan.noAddress.push({ s, why:"no address on record · the decision still applies; the record lands in Decided · not notified" });
+          plan.willSend.push({ s, why: s.email });
+        });
+        return plan;
+      }
+
+      function renderPlanTemplate(t, s) {
+        const first = (s?.speaker || "Speaker").split(" ")[0];
+        const fill = str => str.replaceAll("{{conference.name}}", state.event.name).replaceAll("{{session.title}}", s?.title || "your session").replaceAll("{{speaker.first_name}}", first);
+        return { subject: fill(t.subject), body: fill(t.body) };
+      }
+
+      const planUI = { bucket: "send", stale: false };
+
+      function showDecisionPlanModal(cfg) { planUI.bucket = "send"; planUI.stale = false; renderDecisionPlanModal(cfg); }
+
+      function renderDecisionPlanModal(cfg) {
+        const plan = buildDecisionPlan(cfg.records, cfg.verb);
+        const template = state.commsTemplates.find(t => t.id === cfg.templateId) || state.commsTemplates[0];
+        const enabled = state.commsTriggers[cfg.templateId] !== false;
+        const movable = plan.willSend.length + plan.noAddress.length - (cfg.verb === "Notify" ? plan.noAddress.length : 0);
+        const nSend = enabled ? plan.willSend.length : 0;
+
+        // Zero-effect refusal: a plan that would change nothing says why, never a cheerful confirm.
+        if (movable === 0) {
+          const reasons = [
+            plan.alreadyNotified.length && `${plan.alreadyNotified.length} already notified`,
+            plan.cannotMove.length && `${plan.cannotMove.length} cannot move`,
+            plan.noAddress.length && `${plan.noAddress.length} need an address`
+          ].filter(Boolean).join(" · ");
+          modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">${esc(cfg.eyebrow)}</div><h2>Nothing would change</h2><p>${cfg.records.length ? `All ${cfg.records.length.toLocaleString()} selected records are out of reach for this action: ${reasons}.` : "The selection resolved to no records — the filter may have changed underneath it."}</p></div><div class="modal-body">${["alreadyNotified","cannotMove","noAddress"].filter(k=>plan[k].length).map(k=>`<div class="plan-detail" style="height:auto;max-height:108px">${plan[k].slice(0,60).map(r=>`<div class="plan-detail-row"><span><strong>${esc(r.s.title)}</strong> <span class="subtle">${esc(r.s.id)}</span></span><span class="why">${esc(r.why)}</span></div>`).join("")}</div>`).join("")}</div><div class="modal-actions"><button class="button" id="cancel-modal">Close</button></div></section></div>`;
+          document.getElementById("cancel-modal").onclick = () => modalRoot.innerHTML = "";
+          return;
+        }
+
+        const rows = [
+          { key:"send",  n:plan.willSend.length,       label: cfg.verb==="Notify" ? "Will be notified now" : "Will be notified" },
+          { key:"dup",   n:plan.alreadyNotified.length, label: cfg.dupLabel },
+          { key:"addr",  n:plan.noAddress.length,       label: cfg.verb==="Notify" ? "Need an address first — excluded from this send" : "No valid address — the decision applies; lands in Decided · not notified" },
+          { key:"stuck", n:plan.cannotMove.length,      label:"Cannot move" }
+        ];
+        const bucketRecords = { send:plan.willSend, dup:plan.alreadyNotified, addr:plan.noAddress, stuck:plan.cannotMove }[planUI.bucket] || [];
+        const previewRec = plan.willSend[0]?.s || cfg.records[0];
+        const rendered = renderPlanTemplate(template, previewRec);
+        const allowN = state.demoSafe ? Math.min(2, nSend) : 0;
+        const verbLabel = cfg.verb === "Notify"
+          ? `Notify ${nSend} speaker${nSend===1?"":"s"}`
+          : !enabled
+            ? `${cfg.verb} ${movable.toLocaleString()} · sends nothing`
+            : nSend === movable
+              ? `${cfg.verb} and notify ${nSend.toLocaleString()}`
+              : `${cfg.verb} ${movable.toLocaleString()} · notify ${nSend.toLocaleString()}`;
+
+        modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal wide" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">${esc(cfg.eyebrow)}</div><h2>${esc(cfg.heading)}</h2><p>${esc(cfg.consequence)}</p></div><div class="modal-body">
+          ${planUI.stale ? `<div class="plan-banner warn"><span><strong>The selection or the email changed after you previewed it.</strong> Review the refreshed plan before sending.</span><button class="button small" id="plan-refresh" style="width:150px">Review refreshed plan</button></div>` : ""}
+          <div class="plan-strip">${rows.map(r => `<button class="plan-row ${r.n===0?"zero":""} ${planUI.bucket===r.key?"active":""}" data-plan-bucket="${r.key}" ${r.n===0?"disabled":""}><span class="plan-count">${r.n.toLocaleString()}</span><span class="plan-label">${esc(r.label)}</span><span class="plan-show">${r.n===0?"—":planUI.bucket===r.key?"shown below":"show"}</span></button>`).join("")}</div>
+          <div class="plan-detail">${bucketRecords.length ? bucketRecords.slice(0,200).map(r=>`<div class="plan-detail-row"><span><strong>${esc(r.s.title)}</strong> <span class="subtle">${esc(r.s.id)}</span></span><span class="why">${esc(r.why)}</span></div>`).join("") + (bucketRecords.length>200?`<div class="plan-detail-row"><span class="subtle">+ ${(bucketRecords.length-200).toLocaleString()} more — export lists every record</span></div>`:"") : `<div class="plan-detail-row"><span class="subtle">No records in this group.</span></div>`}</div>
+          ${!enabled ? `<div class="plan-banner warn"><span><strong>The ${esc(template.name)} template is disabled in Comms.</strong> The ${movable.toLocaleString()} decision${movable===1?"":"s"} would commit and nothing would send — every record lands in Decided · not notified.</span><a class="button small" href="#comms" style="width:110px">Open Comms</a></div>` : ""}
+          ${state.demoSafe && nSend > 0 ? `<p class="plan-note" title="Prototype — allowlist simulated">Demo safety is on: ${(nSend-allowN).toLocaleString()} of ${nSend.toLocaleString()} deliver to the outbox only · ${allowN} allowlisted address${allowN===1?"":"es"} send for real.</p>` : ""}
+          ${enabled && previewRec ? `<div class="message-preview"><strong>Preview · rendered for ${esc(previewRec.speaker)}</strong> <span class="subtle">— every recipient gets their own render</span><div class="divider"></div><span class="subtle">To ${esc(previewRec.email||"—")} · ${esc(rendered.subject)}</span><br><br>${rendered.body.split("\n").map(esc).join("<br>")}${cfg.feedback?`<br><br><em class="subtle" id="plan-feedback-echo">Feedback appears here and in the portal.</em>`:""}</div>` : ""}
+          ${cfg.feedback ? `<div class="field" style="margin-top:10px"><label for="plan-feedback">Feedback for speakers · optional</label><textarea id="plan-feedback" placeholder="Rendered into each message and shown in each portal."></textarea></div>` : ""}
+          <button class="plan-sim" id="plan-simulate-stale">Prototype · simulate the plan going stale</button>
+        </div><div class="modal-actions"><button class="button" id="cancel-modal">Cancel</button><button class="button ${cfg.danger?"danger":"primary"}" id="plan-confirm" ${planUI.stale?"disabled":""}>${esc(verbLabel)}</button></div></section></div>`;
+
         document.getElementById("cancel-modal").onclick = () => modalRoot.innerHTML = "";
-        document.getElementById("confirm-accept").onclick = () => {
-          eligible.forEach(s => { s.status = "Accepted"; s.accepted = true; s.wave = 2; s.waveDate = waveDates[1]; s.boardStage="Accepted"; s.timeInStageHours=1; ensureOnboardingSpeaker(s); });
-          modalRoot.innerHTML = ""; state.selected.clear(); state.selectAllMatching = false;
-          toast(`${eligible.length.toLocaleString()} accepted · emails queued · portals updated`); render();
+        modalRoot.querySelectorAll("[data-plan-bucket]").forEach(b => b.onclick = () => { planUI.bucket = b.dataset.planBucket; renderDecisionPlanModal(cfg); });
+        document.getElementById("plan-simulate-stale").onclick = () => { planUI.stale = true; renderDecisionPlanModal(cfg); };
+        document.getElementById("plan-refresh")?.addEventListener("click", () => { planUI.stale = false; renderDecisionPlanModal(cfg); });
+        const feedbackEl = document.getElementById("plan-feedback");
+        feedbackEl?.addEventListener("input", () => { const echo = document.getElementById("plan-feedback-echo"); if (echo) echo.textContent = feedbackEl.value.trim() || "Feedback appears here and in the portal."; });
+        document.getElementById("plan-confirm").onclick = () => {
+          if (planUI.stale) return;
+          cfg.apply(plan, enabled, feedbackEl?.value.trim() || "");
+          const skips = plan.alreadyNotified.length + plan.noAddress.length + plan.cannotMove.length + (enabled ? 0 : plan.willSend.length);
+          if (skips === 0) {
+            // Clean send: nothing surprising to report — a toast, not a second modal.
+            modalRoot.innerHTML = "";
+            toast(`${plan.willSend.length.toLocaleString()} ${cfg.verb === "Notify" ? "notified" : `${cfg.pastTense} and notified`} · every message queued individually`);
+            render(); return;
+          }
+          render();
+          showPlanResult(cfg, plan, enabled);
         };
       }
 
+      // Post-send: the result names every skip — failures render per record,
+      // never "0 accepted." as a success notice.
+      function showPlanResult(cfg, plan, enabled) {
+        const sent = enabled ? plan.willSend.length : 0;
+        const parts = [
+          { n: sent, label: cfg.verb === "Notify" ? "notified" : `${cfg.pastTense} and notified` },
+          { n: enabled ? 0 : plan.willSend.length, label: `${cfg.pastTense} · nothing sent — template disabled`, list: enabled ? [] : plan.willSend },
+          { n: plan.alreadyNotified.length, label: "skipped — already notified", list: plan.alreadyNotified },
+          { n: plan.noAddress.length, label: cfg.verb === "Notify" ? "excluded — no address" : `${cfg.pastTense} · needs an address — see Decided · not notified`, list: plan.noAddress },
+          { n: plan.cannotMove.length, label: "could not move", list: plan.cannotMove }
+        ].filter(p => p.n > 0);
+        modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal wide" role="dialog" aria-modal="true"><div class="modal-head"><div class="eyebrow">${esc(cfg.eyebrow)} · result</div><h2>${parts.map(p=>`${p.n.toLocaleString()} ${p.label}`).join(" · ")}</h2><p>Every skip is named below. The outbox holds each queued message individually.</p></div><div class="modal-body">${parts.filter(p=>p.list&&p.list.length).map(p=>`<div class="eyebrow" style="margin:8px 0 4px">${p.n.toLocaleString()} ${esc(p.label)}</div><div class="plan-detail" style="height:auto;max-height:96px">${p.list.slice(0,60).map(r=>`<div class="plan-detail-row"><span><strong>${esc(r.s.title)}</strong> <span class="subtle">${esc(r.s.id)}</span></span><span class="why">${esc(r.why)}</span></div>`).join("")}</div>`).join("") || `<p class="subtle">Every selected record was ${esc(cfg.pastTense)} and notified.</p>`}</div><div class="modal-actions"><button class="button primary" id="plan-done">Done</button></div></section></div>`;
+        document.getElementById("plan-done").onclick = () => { modalRoot.innerHTML = ""; render(); };
+      }
+
+      function showBulkModal() {
+        const all = filteredSubmissions();
+        const selected = state.selectAllMatching ? all : state.submissions.filter(s => state.selected.has(s.id));
+        showDecisionPlanModal({
+          verb: "Accept", pastTense: "accepted", templateId: "acceptance", danger: false, feedback: true,
+          eyebrow: "Wave decision", heading: `Accept ${selected.length.toLocaleString()} abstracts into Wave 2?`,
+          consequence: "Status change is the notification. The plan below is what will actually happen — review it before the wave moves.",
+          dupLabel: "Already notified — will not be sent twice",
+          records: selected,
+          apply(plan, enabled) {
+            [...plan.willSend, ...plan.noAddress].forEach(({ s }) => {
+              s.status = "Accepted"; s.accepted = true; s.wave = 2; s.waveDate = waveDates[1]; s.boardStage = "Accepted"; s.timeInStageHours = 1; ensureOnboardingSpeaker(s);
+              if (!s.email) { s.notifyGap = "no-recipient"; }
+              else if (!enabled) { s.notifyGap = "undelivered"; }
+              else { s.notifiedAt = "Just now"; s.notifyGap = null; state.outbox.unshift({ id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`, recipient:s.email, template:"Acceptance", subject:`You’re speaking at ${state.event.name}`, outcome:"Queued", time:"Just now" }); }
+            });
+            state.selected.clear(); state.selectAllMatching = false;
+          }
+        });
+      }
+
       function showRejectModal() {
-        const all=filteredSubmissions();
-        const chosen=state.selectAllMatching?all:state.submissions.filter(s=>state.selected.has(s.id));
-        const first=chosen[0];
-        modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Reject ${chosen.length.toLocaleString()} ${chosen.length===1?"abstract":"abstracts"}?</h2><p>Review one real merged message before the batch is queued.</p></div><div class="modal-body"><div class="message-preview">Hi ${esc(first?.speaker.split(" ")[0]||"speaker")},<br><br>Thank you for sharing <strong>${esc(first?.title||"your abstract")}</strong>. We aren’t able to include it in this year’s program, but we appreciate the care behind it.</div><p class="subtle">Repeated confirmation is idempotent: already-notified submissions are skipped.</p></div><div class="modal-actions"><button class="button" id="cancel-modal">Cancel</button><button class="button danger" id="confirm-reject">Reject and queue ${chosen.length.toLocaleString()}</button></div></section></div>`;
-        document.getElementById("cancel-modal").onclick=()=>modalRoot.innerHTML="";
-        document.getElementById("confirm-reject").onclick=()=>{chosen.forEach(s=>{s.status="Rejected";s.accepted=false;s.boardStage="Waved";s.timeInStageHours=1;});state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:"filtered recipients",template:"Rejection",subject:`${chosen.length} rendered rejection messages`,outcome:"Queued",time:"Just now"});state.selected.clear();state.selectAllMatching=false;modalRoot.innerHTML="";toast(`${chosen.length} rejections queued with rendered per-recipient messages`);render();};
+        const all = filteredSubmissions();
+        const chosen = state.selectAllMatching ? all : state.submissions.filter(s => state.selected.has(s.id));
+        showDecisionPlanModal({
+          verb: "Reject", pastTense: "rejected", templateId: "rejection", danger: true, feedback: true,
+          eyebrow: "Wave decision", heading: `Reject ${chosen.length.toLocaleString()} ${chosen.length===1?"abstract":"abstracts"}?`,
+          consequence: "Each speaker receives their own rendered message. The plan below is what will actually happen.",
+          dupLabel: "Already notified — will not be sent twice",
+          records: chosen,
+          apply(plan, enabled) {
+            [...plan.willSend, ...plan.noAddress].forEach(({ s }) => {
+              s.status = "Rejected"; s.accepted = false; s.boardStage = "Waved"; s.timeInStageHours = 1;
+              if (!s.email) { s.notifyGap = "no-recipient"; }
+              else if (!enabled) { s.notifyGap = "undelivered"; }
+              else { s.notifiedAt = "Just now"; s.notifyGap = null; state.outbox.unshift({ id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`, recipient:s.email, template:"Rejection", subject:`An update on ${s.title}`, outcome:"Queued", time:"Just now" }); }
+            });
+            state.selected.clear(); state.selectAllMatching = false;
+          }
+        });
       }
 
       function stampRecord(id, title, detail) {
@@ -4019,6 +4528,58 @@
 
       function bindCommon() {
         document.querySelectorAll("[data-route]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); if(el.hasAttribute("data-create-session"))state.formTarget="Session"; if(el.hasAttribute("data-open-embed"))state.openEmbedOnBind=true; navigate(el.dataset.route); }));
+        // Announce kit (v1.17 · MRQ-225): copy/mail affordances serve both the
+        // admin screen and the portal panel, so they bind globally.
+        document.getElementById("announce-peek")?.addEventListener("click",()=>{ state.announcePeek=!state.announcePeek; render(); });
+        document.getElementById("announce-embed-config")?.addEventListener("click",showEmbedModal);
+        document.querySelectorAll("[data-announce-copy]").forEach(el=>el.addEventListener("click",()=>copyText(el.dataset.announceCopy, el.dataset.announceMsg||"Copied")));
+        document.querySelectorAll("[data-announce-mail]").forEach(el=>el.addEventListener("click",()=>toast(`Compose opened for ${el.dataset.announceMail} — share link pre-filled, queued through the outbox and logged (Prototype — simulated)`)));
+        // Publication truth + calendar debt (v1.17 · MRQ-237 + MRQ-233)
+        document.getElementById("publish-review-open")?.addEventListener("click",showPublishReviewModal);
+        document.getElementById("calendar-send-open")?.addEventListener("click",showCalendarSendModal);
+        // Question library (v1.17 · MRQ-236)
+        document.getElementById("add-from-library")?.addEventListener("click",()=>showLibraryModal("pick"));
+        document.getElementById("open-library")?.addEventListener("click",()=>showLibraryModal("manage"));
+        // Routing rules (v1.17 · MRQ-229)
+        document.querySelectorAll("[data-rule-toggle]").forEach(el=>el.addEventListener("click",()=>{
+          const r=state.routingRules.find(x=>x.id===el.dataset.ruleToggle);
+          if(r.disabledBy){ toast("Fix the rule first — it references a question that was deleted; re-enabling a rule that can never match would be a lie"); return; }
+          r.enabled=!r.enabled; toast(r.enabled?"Rule on — applies to the next arrival, never retroactively":"Rule off — existing routings are untouched"); render();
+        }));
+        document.querySelectorAll("[data-rule-edit]").forEach(el=>el.addEventListener("click",()=>{ state.ruleEditing=el.dataset.ruleEdit; render(); }));
+        document.querySelectorAll("[data-rule-move]").forEach(el=>el.addEventListener("click",()=>{
+          const i=state.routingRules.findIndex(x=>x.id===el.dataset.id), j=el.dataset.ruleMove==="up"?i-1:i+1;
+          if(j<0||j>=state.routingRules.length)return;
+          [state.routingRules[i],state.routingRules[j]]=[state.routingRules[j],state.routingRules[i]];
+          toast("Order changed — first match wins, so order is meaning"); render();
+        }));
+        document.getElementById("rule-new")?.addEventListener("click",()=>{
+          const id="r"+Date.now();
+          state.routingRules.push({id,enabled:true,when:[{field:"Format",op:"is",value:"Workshop"}],then:{pool:"AIE 2026 program review · Initial screen"}});
+          state.ruleEditing=id; render();
+        });
+        document.getElementById("rule-done")?.addEventListener("click",()=>{
+          const r=state.routingRules.find(x=>x.id===state.ruleEditing);
+          if(r&&r.disabledBy&&!r.when.some(c=>!ruleConditionFields().includes(c.field))){ delete r.disabledBy; r.enabled=true; toast("Rule repaired and re-enabled — it applies to the next arrival"); }
+          else toast("Rule saved · applied once at arrival, never re-run");
+          state.ruleEditing=null; render();
+        });
+        document.getElementById("rule-cond-add")?.addEventListener("click",()=>{
+          const r=state.routingRules.find(x=>x.id===state.ruleEditing);
+          if(r&&r.when.length<5){ r.when.push({field:"Track",op:"is",value:tracks[0].name}); render(); }
+        });
+        document.querySelectorAll("[data-rule-cond-remove]").forEach(el=>el.addEventListener("click",()=>{
+          const r=state.routingRules.find(x=>x.id===state.ruleEditing);
+          if(r&&r.when.length>1){ r.when.splice(+el.dataset.ruleCondRemove,1); render(); }
+        }));
+        document.querySelectorAll("[data-rule-cond]").forEach(el=>el.addEventListener("change",()=>{
+          const r=state.routingRules.find(x=>x.id===state.ruleEditing); if(!r)return;
+          r.when[+el.dataset.ruleCond][el.dataset.prop]=el.value; render();
+        }));
+        document.querySelectorAll("[data-rule-then]").forEach(el=>el.addEventListener("change",()=>{
+          const r=state.routingRules.find(x=>x.id===state.ruleEditing); if(!r)return;
+          r.then[el.dataset.ruleThen]=el.value; render();
+        }));
         document.getElementById("nav-add-session")?.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); state.formTarget="Session"; navigate("submissions/new"); });
         document.querySelectorAll("[data-nav-filter]").forEach(el => el.addEventListener("click", e => { e.preventDefault(); const route=el.dataset.navRoute; navigate(route,route==="submissions"?{submissionFilter:el.dataset.navFilter,submissionTrack:"All",submissionPage:1}:{ }); }));
         bindStageFlyout();
@@ -4409,14 +4970,21 @@
         // exists. The decision itself is never rewritten — the speaker is told
         // what was decided, not told a new thing.
         document.getElementById("notify-all")?.addEventListener("click",()=>{
-          const targets=state.submissions.filter(s=>s.notifyGap&&s.notifyGap!=="no-recipient");
-          targets.forEach(s=>{
-            state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:s.email,template:`Decision · ${s.accepted?"Approve":"Deny"}`,subject:`An update on ${s.title}`,outcome:"Queued",time:"Just now"});
-            stampRecord(s.id,"Decision notified",`Re-sent from Decided · not notified · the original decision row is unchanged`);
-            s.notifiedAt="Just now"; s.notifyGap=null;
+          const gapRecords = state.submissions.filter(s=>s.notifyGap);
+          showDecisionPlanModal({
+            verb: "Notify", pastTense: "notified", templateId: "acceptance", danger: false, feedback: false,
+            eyebrow: "Decided · not notified", heading: `Notify ${sendableGap()} speaker${sendableGap()===1?"":"s"} of their decision?`,
+            consequence: "Each record's own decision template renders per recipient. Records still queued from an earlier send are held — sending again would deliver twice.",
+            dupLabel: "Still queued from a previous send — sending again would deliver twice",
+            records: gapRecords,
+            apply(plan) {
+              plan.willSend.forEach(({ s }) => {
+                state.outbox.unshift({id:`MSG-${String(1843+state.outbox.length).padStart(5,"0")}`,recipient:s.email,template:`Decision · ${s.accepted?"Approve":"Deny"}`,subject:`An update on ${s.title}`,outcome:"Queued",time:"Just now"});
+                stampRecord(s.id,"Decision notified",`Re-sent from Decided · not notified · the original decision row is unchanged`);
+                s.notifiedAt="Just now"; s.notifyGap=null;
+              });
+            }
           });
-          toast(`${targets.length} speaker${targets.length===1?"":"s"} notified · ${notNotifiedCount()} still need an address`);
-          render();
         });
         document.getElementById("save-current-view")?.addEventListener("click",openSaveViewModal);
         document.getElementById("manage-current-view")?.addEventListener("click",openManageViewModal);
@@ -4811,7 +5379,7 @@
 
       function render() {
         state.route = currentRoute();
-        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,venues:venuesView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,orgGeneral:orgGeneralView,orgHome:orgHomeView,orgOrganizers:orgOrganizersView,orgServer:orgServerView,orgTokens:orgTokensView,orgActivity:orgActivityView,webhooks:webhooksView,apiDocs:apiDocsView,agents:agentsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView,setupAgent:agentSetupView,claim:claimView,handoff:handoffView };
+        const views = { landing:landingView, settings:settingsView, dashboard:dashboardView, board:boardView, forms:formsView, cfp:cfpView, portal:portalView, announce:announceView, evaluation:evaluationView, reviewer:reviewerView, submissions:submissionsView,submissionDetail:submissionDetailView,submissionNew:submissionNewView,eventNew:eventNewView,onboarding:onboardingView,agenda:agendaView,publicAgenda:publicAgendaView,comms:commsView,venues:venuesView,taskTemplates:taskTemplatesView,importer:importerView,airtable:airtableView,orgGeneral:orgGeneralView,orgHome:orgHomeView,orgOrganizers:orgOrganizersView,orgServer:orgServerView,orgTokens:orgTokensView,orgActivity:orgActivityView,webhooks:webhooksView,apiDocs:apiDocsView,agents:agentsView,aiAssist:aiAssistView,publicSession:publicSessionView,publicSpeaker:publicSpeakerView,setupAgent:agentSetupView,claim:claimView,handoff:handoffView };
         // During the fresh-install walk the dashboard is the setup checklist, the
         // landing is the unclaimed-instance page, and screens with genuinely no
         // data render their empty state; everything else renders for real. While

@@ -372,6 +372,35 @@
   .toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:1100;
     background:var(--ink); color:#dff2f3; border:1px solid var(--accent); border-radius:var(--radius);
     padding:9px 14px; font:400 12px/1 var(--mono); letter-spacing:-.01em; }
+  .toast .toast-act { background:none; border:none; color:#8fdce2; text-decoration:underline;
+    font:inherit; cursor:pointer; margin-left:12px; padding:0; }
+
+  /* ── People merge (adoption round · MRQ-235) ─────────────────────────── */
+  .merge-pair { display:grid; grid-template-columns:1fr 1fr; gap:var(--s3); }
+  .merge-card { border:1px solid var(--rule); border-radius:var(--radius); padding:var(--s3);
+    text-align:left; background:var(--surface); cursor:pointer; display:grid; gap:3px; font:inherit; color:inherit; }
+  .merge-card .microlabel { color:var(--muted); }
+  .merge-card.chosen { border-color:var(--accent-ink); background:var(--surface-sunk); }
+  .merge-card.chosen .microlabel { color:var(--accent-ink); }
+  .merge-kv { border:1px solid var(--rule); border-radius:var(--radius); overflow:hidden; }
+  .merge-kv-row { display:grid; grid-template-columns:96px 1fr 1fr; gap:var(--s3); padding:7px 12px;
+    border-bottom:1px solid var(--rule); font-size:12px; align-items:baseline; }
+  .merge-kv-row:last-child { border-bottom:none; }
+  .merge-kv-row .k { color:var(--muted); font:400 10.5px/1.4 var(--mono); text-transform:uppercase; letter-spacing:.04em; }
+  .merge-kv-row .keep { font-weight:600; }
+  .merge-kv-row .lose { color:var(--muted); }
+  .merge-kv-row .fills { color:var(--accent-ink); font-weight:600; }
+  .merge-moves { border:1px solid var(--rule); border-radius:var(--radius); overflow:hidden; }
+  .merge-move-row { display:grid; grid-template-columns:34px 1fr; gap:var(--s2); padding:7px 12px;
+    border-bottom:1px solid var(--rule); font-size:12px; align-items:baseline; }
+  .merge-move-row:last-child { border-bottom:none; }
+  .merge-move-row .n { font-variant-numeric:tabular-nums; font-weight:600; text-align:right; }
+  .merge-pick-list { display:grid; gap:0; border:1px solid var(--rule); border-radius:var(--radius);
+    overflow:hidden; max-height:280px; overflow-y:auto; }
+  .merge-pick-row { display:flex; justify-content:space-between; gap:var(--s3); padding:8px 12px;
+    border-bottom:1px solid var(--rule); background:var(--surface); border-left:none; border-right:none;
+    border-top:none; font:inherit; color:inherit; text-align:left; cursor:pointer; align-items:baseline; }
+  .merge-pick-row:hover { background:var(--surface-sunk); }
 
   /* ── Scope overlay ───────────────────────────────────────────────────── */
   .legend { display:none; position:fixed; left:12px; bottom:12px; z-index:1100; background:var(--surface);
@@ -545,7 +574,10 @@ const CONTACTS = [
   { id:"per_11", name:"Fatima Al-Rashid", email:"fatima.alrashid@gulfdigital.example", title:"Director of AI Platform", company:"Gulf Digital", tags:["AI","CTO"], events:1, last:"2026-12-01", bio:"Leads the AI platform group. First-time DevFlow submitter for 2027.", role:"Submitter" },
   { id:"per_12", name:"Bartholomew Fitzgerald-Montgomery III", email:"b.fitzgerald.montgomery@heritagefintech.example", title:"Distinguished Engineer", company:"Heritage Financial Technologies", tags:["Platform"], events:5, last:"2027-01-20", bio:"Five consecutive years on the DevFlow program. The reliable yes when a slot opens late.", role:"Speaker" },
   { id:"per_13", name:"Nguyễn Thị Minh Anh", email:"minhanh.nguyen@saigonneural.example", title:"Staff ML Engineer", company:"Saigon Neural", tags:["AI","Research"], events:1, last:"2026-11-12", bio:"Works on multilingual evaluation sets. Recommended by Yuki Tanaka.", role:"Speaker" },
-  { id:"per_14", name:"Kwame Asante", email:"kwame.asante@accradevworks.example", title:"Engineering Manager", company:"Accra Devworks", tags:["Platform"], events:2, last:"2026-12-22", bio:"Manages the platform team; speaks on distributed teams and on-call design.", role:"Moderator" }
+  { id:"per_14", name:"Kwame Asante", email:"kwame.asante@accradevworks.example", title:"Engineering Manager", company:"Accra Devworks", tags:["Platform"], events:2, last:"2026-12-22", bio:"Manages the platform team; speaks on distributed teams and on-call design.", role:"Moderator" },
+  // The duplicate pair (merge demo): the 2027 CFP arrived under Priya's
+  // personal address, so she exists twice — the classic duplicate shape.
+  { id:"per_15", name:"Priya Raman", email:"priya.raman.dev@gmail.example", title:"", company:"", tags:["2027 CFP"], events:1, last:"2027-01-24", bio:"", role:"Submitter" }
 ];
 const TOTAL_ROWS = 1147;
 
@@ -560,7 +592,8 @@ const SEED_CONN = {
   per_4:[{ t:"Regulated ML: what the auditors actually ask", e:"DevFlow Conf 2026 · Keynote · Delivered" },
          { t:"Clinical data platforms at Meridian", e:"DevFlow Conf 2025 · AI & Agents · Delivered" },
          { t:"Panel: ML in healthcare", e:"DevFlow Conf 2024 · Panel · Delivered" },
-         { t:"Untitled keynote", e:"DevFlow Conf 2027 · Keynote · Invited" }]
+         { t:"Untitled keynote", e:"DevFlow Conf 2027 · Keynote · Invited" }],
+  per_15:[{ t:"Caching the un-cacheable: build graphs at monorepo scale", e:"DevFlow Conf 2027 · Platform & Infra · Submitted" }]
 };
 const SEED_FEED = {
   per_1:[{ t:"Bulk email sent — “Speak at DevFlow Conf 2027?”", w:"2027-01-09 11:02 · Jordan Alvarez", a:true },
@@ -569,7 +602,9 @@ const SEED_FEED = {
          { t:"Session “Why your CI is slow…” accepted", w:"2026-08-30 10:07 · System" }],
   per_4:[{ t:"Note added", w:"2027-01-22 09:14 · Jordan Alvarez", a:true },
          { t:"Invited to DevFlow Conf 2027", w:"2027-01-20 08:55 · Jordan Alvarez", a:true },
-         { t:"Portal profile updated — bio, headshot", w:"2026-09-02 19:31 · Ana Sofía Ruiz-Hernández" }]
+         { t:"Portal profile updated — bio, headshot", w:"2026-09-02 19:31 · Ana Sofía Ruiz-Hernández" }],
+  per_15:[{ t:"Submitted “Caching the un-cacheable” via the public CFP", w:"2027-01-24 08:12 · Public form", a:true },
+          { t:"Created from a CFP submission — personal address", w:"2027-01-24 08:12 · System" }]
 };
 
 const STAGES = [
@@ -638,10 +673,10 @@ function visible(){
 }
 const filtered = () => S.query.trim()!=="" || S.filters.company.length || S.filters.title.length || S.filters.tag.length;
 
-function toast(msg){
+function toast(msg, action){
   const el=document.getElementById("toast");
-  el.innerHTML=`<div class="toast">${esc(msg)}</div>`;
-  clearTimeout(toast._t); toast._t=setTimeout(()=>el.innerHTML="",2600);
+  el.innerHTML=`<div class="toast">${esc(msg)}${action?`<button class="toast-act" data-act="${esc(action.act)}">${esc(action.label)}</button>`:""}</div>`;
+  clearTimeout(toast._t); toast._t=setTimeout(()=>el.innerHTML="", action?9000:2600);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -715,6 +750,7 @@ function viewDirectory(){
       <button class="button small" data-act="communicate" data-scope="free" data-item="CRM-11">Communicate</button>
       <button class="button small" data-act="addtoevent" data-scope="dep" data-item="CRM-10">+ Add to conference</button>
       <button class="button small" data-act="enroll" data-scope="new" data-item="CRM-07">Enroll in pipeline</button>
+      <button class="button small" data-act="mergesel" ${S.selected.size===2?"":"disabled"} title="${S.selected.size===2?"Merge the two selected people":"Select exactly two people to merge"}" style="min-width:76px">Merge…</button>
       <button class="chip" data-act="clearsel"><span class="x">×</span> Clear</button>
     ` : `
       ${Object.entries(S.filters).flatMap(([k,vs])=>vs.map(v=>
@@ -731,22 +767,26 @@ function viewDirectory(){
         <th>Name</th><th>Email</th><th>Company</th><th>Job title</th><th>Tags</th><th>Confs</th><th>Last contact</th>
       </tr></thead>
       <tbody>
-        ${rows.length ? rows.map(c=>`
+        ${(()=>{ const seen={}; return rows.length ? rows.map(c=>{
+          seen[c.name]=(seen[c.name]||0)+1;
+          const dupTotal = rows.filter(r=>r.name===c.name).length;
+          const ord = dupTotal>1 ? ` <span class="hint" title="Another person shares this name — select both and Merge… if they are the same person">(${seen[c.name]})</span>` : "";
+          return `
         <tr class="${S.selected.has(c.id)?"sel":""}">
           <td class="c-check"><input type="checkbox" data-sel="${c.id}" ${S.selected.has(c.id)?"checked":""} aria-label="Select ${esc(c.name)}"></td>
-          <td><button class="rowlink" data-act="open" data-id="${c.id}"><span class="cell-name">${esc(c.name)}</span></button></td>
+          <td><button class="rowlink" data-act="open" data-id="${c.id}"><span class="cell-name">${esc(c.name)}</span>${ord}</button></td>
           <td><span class="cell-mail cell-trunc">${esc(c.email)}</span></td>
           <td><span class="cell-trunc">${esc(c.company)}</span></td>
           <td><span class="cell-trunc">${esc(c.title)}</span></td>
           <td><span class="tagset">${S.tags[c.id].map(t=>`<span class="tag accent">${esc(t)}</span>`).join("")||'<span class="tag">—</span>'}</span></td>
           <td class="num">${c.events}</td>
           <td class="num" style="color:var(--muted)">${c.last}</td>
-        </tr>`).join("") : `
+        </tr>`; }).join("") : `
         <tr><td colspan="8"><div class="empty">
           <h3>Nobody matches these filters</h3>
           <p>Clear a filter to bring everyone back into view.</p>
           <button class="button" data-act="clearall">Clear filters</button>
-        </div></td></tr>`}
+        </div></td></tr>`; })()}
       </tbody>
     </table>
     <div class="tablefoot">
@@ -854,6 +894,7 @@ function drawerContact(id){
         <h3>Profile</h3>
         <dl class="kv">
           <dt>Email</dt><dd style="font-family:var(--mono);font-size:11.5px">${esc(c.email)}</dd>
+          ${(c.aliases||[]).length?`<dt>Also signs in as</dt><dd style="font-family:var(--mono);font-size:11.5px">${c.aliases.map(esc).join(", ")}<span class="hint" style="font-family:var(--sans)"> · from a merge — old links land here</span></dd>`:""}
           <dt>Company</dt><dd>${esc(c.company)}</dd>
           <dt>Job title</dt><dd>${esc(c.title)}</dd>
           <dt>Conferences</dt><dd class="num">${c.events}</dd>
@@ -896,7 +937,7 @@ function drawerContact(id){
       <div class="sec" data-scope="free" data-item="CRM-03">
         <h3>Activity</h3>
         <div class="feed">
-          ${feed.length ? feed.map(f=>`<div class="feed-row"><span class="feed-dot ${f.a?"accent":""}"></span><div><div class="t">${esc(f.t)}</div><div class="w">${esc(f.w)}</div></div></div>`).join("")
+          ${feed.length ? feed.map(f=>`<div class="feed-row"><span class="feed-dot ${f.a?"accent":""}"></span><div><div class="t">${esc(f.t)}${S.mergeReceipt && f.t.includes(S.mergeReceipt.id)?` <button class="linklike" data-act="undomerge">Undo merge</button>`:""}</div><div class="w">${esc(f.w)}</div></div></div>`).join("")
                         : '<p class="hint">No recorded activity.</p>'}
         </div>
       </div>
@@ -904,6 +945,7 @@ function drawerContact(id){
     <div class="drawer-foot">
       <button class="button small" data-act="communicate-one" data-id="${id}" style="min-width:104px">Send email</button>
       <button class="button small" data-act="addtoevent" data-scope="dep" data-item="CRM-10" style="min-width:132px">+ Add to conference</button>
+      <button class="button small" data-act="mergepick" data-id="${id}" style="min-width:150px">Merge into another person…</button>
     </div>
   </aside>`;
 }
@@ -1103,6 +1145,139 @@ function modalEnroll(){
   </div>`;
 }
 
+/* ── People merge (adoption round · MRQ-235) ──────────────────────────────
+   Merge is an act ON people, met where people are: the two-selected path in
+   the directory, or the drawer. The dialog is a compare, then a receipt-
+   shaped preview; the action is undoable and says so before it runs. */
+function pickDefaultSurvivor(ids){
+  const [a,b]=ids.map(byId);
+  return (b.events>a.events) ? b.id : a.id;
+}
+
+function modalMergePick(){
+  const from=byId(S.mergeFrom);
+  const q=(S.mergeQuery||"").toLowerCase();
+  const hits=CONTACTS.filter(c=>c.id!==from.id && (!q || (c.name+" "+c.email+" "+c.company).toLowerCase().includes(q)));
+  return `
+  <div class="scrim" data-act="closeoverlay"></div>
+  <div class="modal" role="dialog" aria-label="Pick the other person">
+    <div class="modal-head"><h2>Merge ${esc(from.name)} with…</h2><p>Pick the other record. You choose which one survives on the next step.</p></div>
+    <div class="modal-body">
+      <div class="field"><label>Find the duplicate</label><input id="mergeq" placeholder="Search by name, email, company…" value="${esc(S.mergeQuery||"")}"></div>
+      <div class="merge-pick-list">
+        ${hits.length?hits.slice(0,8).map(c=>`<button class="merge-pick-row" data-act="mergepick2" data-id="${c.id}"><span><strong>${esc(c.name)}</strong> <span class="hint">${esc(c.title||c.role)}${c.company?` · ${esc(c.company)}`:""}</span></span><span class="hint" style="font-family:var(--mono)">${esc(c.email)}</span></button>`).join(""):`<div class="merge-pick-row" style="cursor:default"><span class="hint">Nobody matches. Merge joins two existing people — it never creates one.</span></div>`}
+      </div>
+    </div>
+    <div class="modal-foot"><button class="button" data-act="closeoverlay">Cancel</button></div>
+  </div>`;
+}
+
+function modalMerge(){
+  const ids=S.mergeCtx.ids;
+  const survivor=byId(S.mergeCtx.survivor);
+  const retired=byId(ids.find(x=>x!==survivor.id));
+  const conn=(SEED_CONN[retired.id]||[]).length, notes=(S.notes[retired.id]||[]).length,
+        feed=(SEED_FEED[retired.id]||[]).length, card=S.cards.some(k=>k.person===retired.id)?1:0;
+  const fills=["title","company","bio"].filter(k=>!survivor[k] && retired[k]);
+  const tagUnion=[...new Set([...S.tags[survivor.id],...S.tags[retired.id]])];
+  const kv=(k,label)=>{
+    const sv=survivor[k], rv=retired[k];
+    if(!sv && rv) return `<div class="merge-kv-row"><span class="k">${label}</span><span class="fills">${esc(rv)} · fills the blank</span><span class="lose">—</span></div>`;
+    return `<div class="merge-kv-row"><span class="k">${label}</span><span class="keep">${esc(sv||"—")}</span><span class="lose">${esc(rv||"—")}</span></div>`;
+  };
+  const cardRow=(c,chosen)=>`<button class="merge-card ${chosen?"chosen":""}" data-act="choosesurvivor" data-id="${c.id}">
+    <span class="microlabel">${chosen?"✓ Survives":"Click to keep this one"}</span>
+    <strong>${esc(c.name)}</strong>
+    <span class="hint" style="font-family:var(--mono)">${esc(c.email)}</span>
+    <span class="hint">${esc(c.title||c.role)}${c.company?` · ${esc(c.company)}`:""}</span>
+    <span class="hint num">${c.events} conference${c.events===1?"":"s"} · last contact ${c.last}</span>
+  </button>`;
+  return `
+  <div class="scrim" data-act="closeoverlay"></div>
+  <div class="modal" role="dialog" aria-label="Merge duplicate people">
+    <div class="modal-head"><h2>Merge duplicate people</h2><p>Everything the retired record owns moves to the survivor. Nothing is deleted silently, and the whole move can be undone.</p></div>
+    <div class="modal-body">
+      <div class="merge-pair">${cardRow(survivor,true)}${cardRow(retired,false)}</div>
+      <div class="field"><label>Identity — survivor keeps the left column</label>
+        <div class="merge-kv">
+          <div class="merge-kv-row"><span class="k">Email</span><span class="keep">${esc(survivor.email)}</span><span class="lose">${esc(retired.email)} → becomes an alias</span></div>
+          ${kv("title","Job title")}${kv("company","Company")}${kv("bio","Bio")}
+          <div class="merge-kv-row"><span class="k">Tags</span><span class="keep">${tagUnion.map(esc).join(" · ")||"—"}</span><span class="lose">union — nothing dropped</span></div>
+        </div>
+      </div>
+      <div class="field"><label>What moves from ${esc(retired.name)}</label>
+        <div class="merge-moves">
+          <div class="merge-move-row"><span class="n">${conn}</span><span>conference &amp; session connection${conn===1?"":"s"}${conn?` — ${esc((SEED_CONN[retired.id]||[])[0].t)}`:""}</span></div>
+          <div class="merge-move-row"><span class="n">${notes}</span><span>internal note${notes===1?"":"s"}</span></div>
+          <div class="merge-move-row"><span class="n">${feed}</span><span>activity row${feed===1?"":"s"} — the timeline merges; tags and stage are re-asserted after the move so old history cannot flip today's state</span></div>
+          <div class="merge-move-row"><span class="n">${card}</span><span>outreach card${card===1?"":"s"}</span></div>
+          <div class="merge-move-row"><span class="n">✓</span><span>sign-in continuity — <strong>${esc(retired.email)}</strong> keeps signing in, as ${esc(first(survivor.name))}; every emailed link they ever received still lands</span></div>
+        </div>
+      </div>
+      <p class="hint">No collisions for these two — none of the uniqueness rules (evaluations, session roles, calendar invites, list rows) hold a row on both sides. When they do, the conflict is listed here before anything moves.</p>
+      <p class="hint" style="border-left:2px solid var(--accent-ink);padding-left:10px">${survivor.name===retired.name?`The <strong>${esc(retired.email)}</strong> record’s sign-in links and portal access will continue as <strong>${esc(survivor.email)}</strong>`:`${esc(retired.name)}’s sign-in links and portal access will continue as ${esc(survivor.name)}`}. This can be undone.</p>
+    </div>
+    <div class="modal-foot">
+      <button class="button" data-act="closeoverlay">Cancel</button>
+      <button class="button primary" data-act="domerge">Merge into ${esc(survivor.name)}</button>
+    </div>
+  </div>`;
+}
+
+function doMerge(){
+  const survivor=byId(S.mergeCtx.survivor);
+  const retired=byId(S.mergeCtx.ids.find(x=>x!==survivor.id));
+  const receiptId="mrg_"+(Date.now()%46656).toString(36)+"k";
+  S.mergeReceipt={
+    id:receiptId, survivorId:survivor.id,
+    retiredSnapshot:JSON.parse(JSON.stringify(retired)),
+    retiredTags:[...S.tags[retired.id]],
+    retiredNotes:[...(S.notes[retired.id]||[])],
+    retiredConn:[...(SEED_CONN[retired.id]||[])],
+    retiredFeed:[...(SEED_FEED[retired.id]||[])],
+    cardMoved:S.cards.some(k=>k.person===retired.id),
+    prev:{
+      fields:{title:survivor.title,company:survivor.company,bio:survivor.bio,events:survivor.events,last:survivor.last},
+      aliases:[...(survivor.aliases||[])], tags:[...S.tags[survivor.id]],
+      conn:[...(SEED_CONN[survivor.id]||[])], feed:[...(SEED_FEED[survivor.id]||[])], notes:[...(S.notes[survivor.id]||[])]
+    }
+  };
+  ["title","company","bio"].forEach(k=>{ if(!survivor[k] && retired[k]) survivor[k]=retired[k]; });
+  survivor.events += retired.events;
+  if(retired.last > survivor.last) survivor.last = retired.last;
+  survivor.aliases = [...(survivor.aliases||[]), retired.email];
+  S.tags[survivor.id] = [...new Set([...S.tags[survivor.id], ...S.tags[retired.id]])];
+  SEED_CONN[survivor.id] = [...(SEED_CONN[survivor.id]||[]), ...(SEED_CONN[retired.id]||[])];
+  S.notes[survivor.id] = [...(S.notes[survivor.id]||[]), ...(S.notes[retired.id]||[])];
+  SEED_FEED[survivor.id] = [
+    { t:`Merged from ${retired.name} — ${retired.email} · receipt ${receiptId}`, w:`${stamp()} · Jordan Alvarez`, a:true },
+    ...(SEED_FEED[survivor.id]||[]), ...(SEED_FEED[retired.id]||[])
+  ];
+  const card=S.cards.find(k=>k.person===retired.id); if(card) card.person=survivor.id;
+  CONTACTS.splice(CONTACTS.indexOf(retired),1);
+  delete S.tags[retired.id]; delete S.notes[retired.id]; delete SEED_CONN[retired.id]; delete SEED_FEED[retired.id];
+  S.selected.clear(); S.modal=null; S.mergeCtx=null; S.drawer=survivor.id;
+  toast(`Merged ${retired.name} into ${survivor.name} · receipt ${receiptId}`, {act:"undomerge", label:"Undo merge"});
+}
+
+function undoMerge(){
+  const r=S.mergeReceipt; if(!r){ toast("Nothing to undo — the receipt was already closed"); return; }
+  const survivor=byId(r.survivorId);
+  Object.assign(survivor, r.prev.fields);
+  survivor.aliases=[...r.prev.aliases];
+  S.tags[survivor.id]=[...r.prev.tags];
+  SEED_CONN[survivor.id]=[...r.prev.conn]; SEED_FEED[survivor.id]=[...r.prev.feed]; S.notes[survivor.id]=[...r.prev.notes];
+  const back=r.retiredSnapshot;
+  CONTACTS.push(back);
+  S.tags[back.id]=[...r.retiredTags];
+  S.notes[back.id]=[...r.retiredNotes];
+  SEED_CONN[back.id]=[...r.retiredConn];
+  SEED_FEED[back.id]=[...r.retiredFeed];
+  if(r.cardMoved){ const card=S.cards.find(k=>k.person===r.survivorId); if(card) card.person=back.id; }
+  S.mergeReceipt=null; S.drawer=null;
+  toast(`Merge undone — both people restored. Anything edited after the merge would be skipped, with the reason named.`);
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    Render + events
    ══════════════════════════════════════════════════════════════════════════ */
@@ -1126,6 +1301,8 @@ function render(){
   else if (S.modal==="segment") ov = modalSegment();
   else if (S.modal==="addtoevent") ov = modalAddToEvent();
   else if (S.modal==="enroll") ov = modalEnroll();
+  else if (S.modal==="merge") ov = modalMerge();
+  else if (S.modal==="mergepick") ov = modalMergePick();
   document.getElementById("overlays").innerHTML = ov;
 
   const q=document.getElementById("dirq");
@@ -1207,6 +1384,13 @@ document.addEventListener("click", e=>{
     if(!S.cards.some(c=>c.person===id)) S.cards.push({ id:"c"+Date.now(), person:id, stage:st, score:sc });
     S.modal=null; S.selected.clear(); S.view="pipeline"; toast("Prospect enrolled");
   }
+  else if(a==="mergesel"){ if(S.selected.size!==2) return;
+    S.mergeCtx={ ids:[...S.selected], survivor:pickDefaultSurvivor([...S.selected]) }; S.modal="merge"; }
+  else if(a==="mergepick"){ S.mergeFrom=id; S.mergeQuery=""; S.drawer=null; S.modal="mergepick"; }
+  else if(a==="mergepick2"){ S.mergeCtx={ ids:[S.mergeFrom,id], survivor:pickDefaultSurvivor([S.mergeFrom,id]) }; S.modal="merge"; }
+  else if(a==="choosesurvivor"){ S.mergeCtx.survivor=id; }
+  else if(a==="domerge"){ doMerge(); }
+  else if(a==="undomerge"){ undoMerge(); }
   render();
 });
 
@@ -1227,6 +1411,8 @@ document.addEventListener("change", e=>{
 
 document.addEventListener("input", e=>{
   if(e.target.id==="dirq"){ S.query=e.target.value; S.focusQ=true; render(); }
+  if(e.target.id==="mergeq"){ S.mergeQuery=e.target.value; const pos=e.target.selectionStart; render();
+    const el=document.getElementById("mergeq"); if(el){ el.focus(); el.setSelectionRange(pos,pos); } }
 });
 
 document.addEventListener("keydown", e=>{
