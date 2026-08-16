@@ -6,8 +6,9 @@ const migrationModules = import.meta.glob("../../migrations/*.sql", {
   query: "?raw",
 }) as Record<string, string>;
 
-// The glob is sorted explicitly because two migrations may share a numeric
-// prefix (0020 does), and the later file can depend on the earlier one.
+// The glob is sorted explicitly to match Wrangler's lexical migration order.
+// Duplicate numeric prefixes (0020 does) are therefore deterministic even when
+// their names are added by separate branches.
 const migrationEntries = Object.entries(migrationModules)
   .sort(([left], [right]) => left.localeCompare(right));
 const migrationSql = migrationEntries.map(([, sql]) => sql);

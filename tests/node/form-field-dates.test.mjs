@@ -46,6 +46,17 @@ test("CONTRACT · MRQ-95 derives migration registration from the sorted director
     .filter((file) => file.endsWith(".sql"))
     .sort();
   assert.ok(migrationFiles.indexOf("0008_form_field_dates.sql") > migrationFiles.indexOf("0007_embed_widget_kinds.sql"));
+  assert.deepEqual(
+    migrationFiles.filter((file) => file.startsWith("0009_") || file.startsWith("0010_")),
+    [
+      "0009_criterion_kinds.sql",
+      "0009_file_comments.sql",
+      "0009_person_custom_fields.sql",
+      "0010_bound_form_options.sql",
+      "0010_evaluation_round_committees.sql",
+      "0010_saved_embeds.sql",
+    ],
+  );
 });
 
 test("CONTRACT · MRQ-95 exposes Date through the organizer, API, seed, and native controls", () => {
