@@ -80,7 +80,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   sponsorships: 2,
   sponsor_tiers: 3,
   form_admins: 0,
-  form_fields: 33,
+  form_fields: 34, // MRQ-229 adds the signed audience_level source:levels field.
   field_library: 2,
   form_length_rules: 0,
   forms: 7,
