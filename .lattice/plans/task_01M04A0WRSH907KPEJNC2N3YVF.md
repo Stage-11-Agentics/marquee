@@ -150,3 +150,76 @@ After surface:513 explicitly releases the serialized plan-review slot:
 The minimum shippable change is the approved, security-safe draft_resume seam plus the specific hourly selector/template/idempotency path, generic pre-close exclusivity, and creation-time close-date copy. The Drafts queue close cell is part of the requested completion, not a substitute for the mail path.
 
 This plan does not authorize implementation while the reviewer slot is held. Keep MRQ-247 in backlog, do not launch a reviewer, and wait for an explicit release from surface:513. At release, the next durable receipts are: accepted plan-review decision, plan commit pushed from this worktree, focused test evidence, serialized full-gate receipt, and only then any status transition required by the orchestrator.
+
+## Plan-Review Cycle 1 Resolutions (AUTHORITATIVE)
+
+Source review: art_01M04TDSS6QSCDCM2GH76K92GQ, reviewed at plan-only head a942f5e7d6af15bbc46f1de7af0b4100f5e94aa9, verdict FAIL (plan-level). These resolutions are binding for implementation and supersede earlier plan text wherever they conflict. This is a plan amendment only; it does not authorize feature code or a Lattice status transition.
+
+### A. Security-safe draft resume binding
+
+The earlier proposal to add a target-submission column to magic_links, rebuild a CHECK-constrained table, or otherwise change the magic_links schema is withdrawn. Use the existing server-minted magic_links.redirect_to precedent; no new column, table, or migration/rebuild is needed for the binding.
+
+At reminder creation, mint a draft_resume magic link whose server-owned redirect_to encodes the canonical public-form target and the target submission ID. The public email URL carries the returned token as the resume capability. The redirect target is never accepted from the caller and is never used as an authorization decision until the token has been read and authenticated.
+
+The public-form resolver must call readMagicLink without consuming the row and require all of the following:
+
+- purpose is exactly draft_resume;
+- the magic-link row is unexpired and otherwise live;
+- the server-minted redirect_to parses as the expected canonical public-form route and yields one submission ID;
+- the target submission still exists, belongs to the target form/event, has status draft, and has submitter_person_id equal to the magic-link person_id;
+- the form/event identity agrees with the magic-link event_id, the requested public-form slug agrees with the encoded target, and the form is open/actionable at the time of the request.
+
+Only the public-form draft routes may use this resolver for load, autosave, upload, and submit. The token must not enter a portal/session path. Remove draft_resume from the session-producing purpose tuple in src/routes/auth.routes.ts and add a direct test proving a draft_resume token cannot exchange into a session. Keep the original submissions.resume_token_hash capability valid and independent.
+
+No linkless fallback is permitted. The reusable behavior is implemented by read-only resolution through readMagicLink; do not consume the row on GET, autosave, upload, or submit. The existing long TTL is only a TTL; reusability is a new resolver behavior, not an existing draft_resume property.
+
+### B. Recipient and idempotency grain
+
+The specific selector joins the draft submission directly to exactly submissions.submitter_person_id and that person's email/name. It must not join participations to determine recipients. The original resume capability and the reminder credential belong to the submitter who created the draft.
+
+Add a regression fixture with one draft and a second speaker participation. The scan must produce exactly one draft-close outbox row addressed to submissions.submitter_person_id. The idempotency registry remains submission-grain, and no participation fan-out is allowed.
+
+The exact qualifying rule is: submission status draft; form status open; form closes_at non-null; form reminder_offset_hours non-null; current time inside the existing offset-to-close window and before close. Missing-field count does not gate the mail. It is rendered as condition-aware metadata, including an empty list when no applicable fields are missing; the Drafts queue may continue to filter its own attention rows to missing_fields.length > 0.
+
+For each candidate, check the final outbox idempotency key with SELECT before minting a credential. If no row exists, mint the bound redirect_to draft_resume token, then insert the fully rendered outbox row through the existing insert-and-catch uniqueness path. Do not add a claim placeholder, outbox UPDATE completion step, or mid-flight queue state. If two scans race, accept only the expiring, never-mailed orphan magic link from the losing insert as the bounded consequence; the outbox still has exactly one durable mail row.
+
+A disabled template is checked before minting. A disabled trigger therefore creates neither an outbox row nor a magic link.
+
+### C. Editable trigger merge field and shared trigger authority
+
+The editable trigger template uses draft.resume_link, not auth.link. Add draft.resume_link to both MERGE_FIELDS and COMMUNICATION_MERGE_FIELDS, with a test that proves it is a known editable field and that the generated value is populated only for draft_close_reminder. It must contain only the server-minted, submission-bound public-form URL for that candidate; it must never expose the original raw token through unrelated communication data.
+
+Non-trigger communication contexts must retain safe unpopulated behavior for this known field and must not synthesize a link for another recipient or template. Add the communication-template save/edit/preview round-trip assertion so an organizer can keep the link-bearing token in the editable trigger without receiving a 400 or being pushed toward a linkless body.
+
+Update src/ui/comms/CommsScreen.tsx so trigger classification, automated-section placement, and the enabled denominator use the shared TRIGGER_TEMPLATE_KEYS authority. Prefer importing the shared authority. If module layering prevents a direct import from the mail job module, move the key list to one neutral shared module consumed by both sides; do not create a second literal trigger-key list. The new key must be classified as the eighth automated trigger.
+
+### D. Prospective exclusivity
+
+Exclusivity is evaluated prospectively at each scan. When a person currently has both a submitted participation and a live draft on the same form, the generic selector excludes that person and the specific selector produces only the draft-close reminder. A generic message already sent is never retractable.
+
+Document and test both ordering transitions:
+
+- generic sent at an earlier scan, then a draft is created: the later scan may send the specific reminder; the earlier generic row remains;
+- specific sent at an earlier scan, then the draft is submitted or withdrawn: a later scan may send the generic reminder if its own current candidate predicate and idempotency permit it; the earlier specific row remains.
+
+These are intentional prospective semantics, not a failure of “one mail per draft.” The transition tests must state the observed outbox rows and template keys rather than asserting historical retraction.
+
+### E. Absolute-date conflict and existing assertions
+
+The ticket description's organizer-queue phrase “Closes in N days” conflicts with the standing absolute-date ruling. The standing ruling wins for both mail and the organizer Drafts queue. Record this as an explicit resolved conflict in the implementation and render absolute conference-timezone-aware labels, including explicit no-date and closed states. No relative day-count copy is permitted.
+
+Name the existing assertions that change when the trigger is added: update the mail template-manifest count from 9 to 10, update the automated-trigger assertion from seven to eight, and add the CommsScreen classification/count coverage. Keep the deferred SPEC trigger enumeration named as known contract drift for consolidation; do not edit SPEC.md in this ticket.
+
+### F. Concrete implementation and validation surface
+
+The implementation plan's file surface now explicitly includes:
+
+- src/jobs/mail/schedule.ts, src/jobs/mail/triggers.ts, src/jobs/mail/consumer.ts, src/jobs/mail/outbox.ts, src/jobs/mail/idempotency.ts, and src/jobs/mail/templates.ts;
+- src/lib/mail-merge-fields.ts and the shared trigger-key authority used by src/ui/comms/CommsScreen.tsx;
+- src/routes/public-form.shared.ts and src/routes/auth.routes.ts;
+- the existing public-form creation/copy module and Drafts queue query/API/UI modules;
+- focused mail, public-form/auth, communication-editor, and Drafts queue tests.
+
+No magic_links schema/type migration is part of the binding design. The direct non-session auth test, submitter-only recipient test, second-speaker one-row test, known editable draft.resume_link round-trip, SELECT/mint/insert race behavior, prospective exclusivity transitions, absolute-date conflict, and 9-to-10/7-to-8 assertion updates are required before implementation can claim the plan's corresponding invariants.
+
+MRQ-247 remains a plan-only hold after this amendment: keep Lattice backlog, do not write feature code, do not launch or auto-fire Cycle 2 review from this turn, and wait for the queued sole-slot review to consume this pushed amendment.
