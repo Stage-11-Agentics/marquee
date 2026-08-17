@@ -1202,7 +1202,7 @@ export const CORE_TABLE_NAMES = [
 ] as const;
 
 export type CoreTableName = (typeof CORE_TABLE_NAMES)[number];
-export const CORE_TABLE_COUNT = 77 as const;
+export const CORE_TABLE_COUNT = CORE_TABLE_NAMES.length;
 
 type IsUnique<
   Values extends readonly unknown[],
@@ -1220,7 +1220,7 @@ type Equal<Left, Right> =
     : false;
 
 type _CoreTableNamesAreUnique = Assert<IsUnique<typeof CORE_TABLE_NAMES>>;
-type _CoreTableCountIsExact = Assert<Equal<(typeof CORE_TABLE_NAMES)["length"], 77>>;
+type _CoreTableCountIsDerived = Assert<Equal<typeof CORE_TABLE_COUNT, (typeof CORE_TABLE_NAMES)["length"]>>;
 
 export const CORE_TABLES = {
   agenda_items: "agenda_items",

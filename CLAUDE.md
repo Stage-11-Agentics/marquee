@@ -17,7 +17,7 @@ Open-source speaker/session-management platform for conference organizers, built
 ## Working in the code
 
 - **Stack:** Hono + Preact + Zod on Cloudflare Workers; Vite builds it, TypeScript throughout. Node ≥ 22.18. App code lives in `src/` (`api/`, `routes/`, `ui/`, `db/`, `jobs/`), schema in `migrations/`, tests in `tests/`.
-- **Dev server:** `npx vite dev` — the Cloudflare plugin runs the real Worker locally.
+- **Dev server:** `npm run dev` — builds the generated front door, then the Cloudflare plugin runs the real Worker locally.
 - **Tests:** `npm test` (Vitest, workers pool). `npm run e2e` for Playwright.
 - **Before every push:** run `npm run prepush` for the mandatory type, docs, clock, no-op, AC-trace, schema, and registry battery.
 - **PR gate:** `npm run pr-gate` before opening a PR.

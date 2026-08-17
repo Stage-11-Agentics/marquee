@@ -23,7 +23,6 @@ if (args.ticket !== undefined && !/^MRQ-\d+$/.test(String(args.ticket))) {
   throw new Error(`pr-gate: --ticket must look like MRQ-N (got "${args.ticket}"); omit it entirely to gate unticketed work`);
 }
 const tsc = resolve(REPOSITORY_ROOT, "node_modules/.bin/tsc");
-const vite = resolve(REPOSITORY_ROOT, "node_modules/.bin/vite");
 const playwright = resolve(REPOSITORY_ROOT, "node_modules/.bin/playwright");
 
 const checks = [
@@ -34,7 +33,7 @@ const checks = [
   ["test types", tsc, ["-p", "tsconfig.test.json", "--noEmit"]],
   ["source-text test guard", "npm", ["run", "check:no-op-tests"]],
   ["mirror import boundary", "npm", ["run", "check:mirror-imports"]],
-  ["production build", vite, ["build"]],
+  ["production build", "npm", ["run", "build"]],
   ["shell truth", "npm", ["run", "check:shell-truth"]],
   ["design contract", "npm", ["run", "check:design"]],
   ["API contract", "npm", ["run", "check:api"]],

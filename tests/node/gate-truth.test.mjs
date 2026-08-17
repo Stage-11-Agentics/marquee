@@ -67,6 +67,7 @@ test("CONTRACT · every step CI runs is a step the local gate runs", async () =>
     if (step === "npm test") return gate.includes('"npm", ["test"]');
     const tsconfig = step.match(/tsc -p (\S+)/);
     if (tsconfig) return gate.includes(`"${tsconfig[1]}"`);
+    if (step === "npm run build") return gate.includes('"npm", ["run", "build"]');
     if (step.includes("vite build")) return gate.includes('vite, ["build"]');
     if (step === "npx playwright install chromium") return gate.includes('playwright, ["install", "chromium"]');
     return false;

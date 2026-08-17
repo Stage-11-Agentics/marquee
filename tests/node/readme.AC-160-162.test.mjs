@@ -10,7 +10,7 @@ test("AC-160 · the README exposes a numbered clean-checkout deploy path", () =>
   assert.match(readme, /### 3\. Start the local Worker for development/);
   assert.match(readme, /### 4\. Verify health and seeded data/);
   assert.match(readme, /npm ci/);
-  assert.match(readme, /npx vite build/);
+  assert.match(readme, /npm run build/);
   assert.match(readme, /wrangler d1 migrations apply DB --local/);
   assert.match(readme, /npm run seed -- --persist-to/);
   assert.match(readme, /wrangler dev/);

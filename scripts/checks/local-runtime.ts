@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { REPOSITORY_ROOT } from "./lib/command.mjs";
 
 const NODE = process.execPath;
-const VITE = resolve(REPOSITORY_ROOT, "node_modules/.bin/vite");
+const BUILD = resolve(REPOSITORY_ROOT, "scripts/build.mjs");
 const WRANGLER = resolve(REPOSITORY_ROOT, "node_modules/.bin/wrangler");
 const GENERATED_WRANGLER_CONFIG = resolve(REPOSITORY_ROOT, "dist/marquee/wrangler.json");
 const TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
@@ -123,7 +123,7 @@ export async function withLocalRuntime<T>(callback: (runtime: LocalRuntime) => P
   const persistPath = await mkdtemp(join(tmpdir(), "marquee-mrq-23-"));
   let worker: Child | null = null;
   try {
-    await requireCommand(VITE, ["build"], "production asset build");
+    await requireCommand(NODE, [BUILD], "production asset build");
     await requireCommand(WRANGLER, ["d1", "migrations", "apply", "DB", "--local", "--persist-to", persistPath], "local D1 migrations");
     await requireCommand(NODE, ["scripts/seed/index.ts", "--persist-to", persistPath], "real seed");
     const config = await readFile(GENERATED_WRANGLER_CONFIG, "utf8").catch(() => "");

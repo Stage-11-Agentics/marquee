@@ -6,11 +6,12 @@ bundle. The document routes are selected by `src/agent-front-door/manifest.json`
 the manifest intentionally excludes `SPEC.md` and `EVALUATION.md`, which remain
 repository-only contract artifacts.
 
-The generated files are facts, not a second source of truth. `check:docs` builds the
-Worker and derives the OpenAPI operation count and digest from the in-process served
-response. It derives CLI counts from `cli/registry.mjs`, and local latency evidence
-comes only from `scripts/measure-latency.mjs`. Measurements are labeled with their
-local environment and never presented as deployed performance.
+The generated files are facts, not a second source of truth. `npm run build` creates
+the ignored front-door inputs, then builds the final Worker. `check:docs` derives the
+OpenAPI operation count and digest from the in-process served response and compares
+the resulting bytes. It derives CLI counts from `cli/registry.mjs`, and local latency
+evidence comes only from `scripts/measure-latency.mjs`. Measurements are labeled with
+their local environment and never presented as deployed performance.
 
 The low-stakes robots decision is deliberate: `robots.txt` remains Cloudflare
 zone-managed, including its `ai-train=no` and crawler `Disallow` directives. Marquee

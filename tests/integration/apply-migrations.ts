@@ -1,51 +1,20 @@
 import { env as rawEnv } from "cloudflare:test";
 
-import migrationSql from "../../migrations/0001_init.sql?raw";
-import venueGeographyMigrationSql from "../../migrations/0002_venue_geography.sql?raw";
-import venueAccessNoteMigrationSql from "../../migrations/0003_building_access_note.sql?raw";
-import calendarReversalMigrationSql from "../../migrations/0004_calendar_reversal.sql?raw";
-import taskCancellationWebhooksMigrationSql from "../../migrations/0005_task_cancellation_webhooks.sql?raw";
-import auditRequestIdMigrationSql from "../../migrations/0006_audit_log_request_id.sql?raw";
-import embedWidgetKindsMigrationSql from "../../migrations/0007_embed_widget_kinds.sql?raw";
-import formFieldDatesMigrationSql from "../../migrations/0008_form_field_dates.sql?raw";
-import personCustomFieldsMigrationSql from "../../migrations/0009_person_custom_fields.sql?raw";
-import fileCommentsMigrationSql from "../../migrations/0009_file_comments.sql?raw";
-import criterionKindsMigrationSql from "../../migrations/0009_criterion_kinds.sql?raw";
-import boundFormOptionsMigrationSql from "../../migrations/0010_bound_form_options.sql?raw";
-import savedEmbedsMigrationSql from "../../migrations/0010_saved_embeds.sql?raw";
-import evaluationRoundCommitteesMigrationSql from "../../migrations/0010_evaluation_round_committees.sql?raw";
-import coldStartMigrationSql from "../../migrations/0011_cold_start.sql?raw";
-import publicSchedulesMigrationSql from "../../migrations/0011_public_schedules.sql?raw";
-import peopleAnnotationsMigrationSql from "../../migrations/0012_people_annotations.sql?raw";
-import agentEvaluatorSeatsMigrationSql from "../../migrations/0013_agent_evaluator_seats.sql?raw";
-import inboundDeliveryStateMigrationSql from "../../migrations/0014_inbound_delivery_state.sql?raw";
-import evaluationOverridesMigrationSql from "../../migrations/0015_evaluation_overrides.sql?raw";
-import peopleImportUndoReceiptsMigrationSql from "../../migrations/0016_people_import_undo_receipts.sql?raw";
-import orgSettingsMigrationSql from "../../migrations/0017_org_settings.sql?raw";
-import eventDeletionMigrationSql from "../../migrations/0018_event_deletion.sql?raw";
-import outreachTargetingMigrationSql from "../../migrations/0019_outreach_targeting.sql?raw";
-// Both 0020 migrations are present after the rebase. Keep their lexical order:
-// the portal rebuild carries forward the invite-seat columns added first.
-import orgInviteSeatsMigrationSql from "../../migrations/0020_org_invite_seats.sql?raw";
-import portalInvitesMigrationSql from "../../migrations/0020_portal_invites.sql?raw";
-import auditOrgScopeMigrationSql from "../../migrations/0021_audit_log_org_scope.sql?raw";
-import attendeeSchedulesMigrationSql from "../../migrations/0022_attendee_schedules.sql?raw";
-import sponsorsMigrationSql from "../../migrations/0023_sponsors.sql?raw";
-import airtableOutboundMigrationSql from "../../migrations/0024_airtable_outbound.sql?raw";
-import airtableConnectMigrationSql from "../../migrations/0025_airtable_connect.sql?raw";
-import calendarTruthMigrationSql from "../../migrations/0026_calendar_truth.sql?raw";
-import airtableDecisionActorMigrationSql from "../../migrations/0027_airtable_decision_actor.sql?raw";
-import participantFanoutMigrationSql from "../../migrations/0028_participant_fanout.sql?raw";
-import submissionNotesMigrationSql from "../../migrations/0029_submission_notes.sql?raw";
-import submissionReferenceCodesMigrationSql from "../../migrations/0030_submission_reference_codes.sql?raw";
-import submissionCapacityMigrationSql from "../../migrations/0031_submission_capacity.sql?raw";
-import calendarBatchPartsMigrationSql from "../../migrations/0032_calendar_batch_parts.sql?raw";
-import fieldLibraryMigrationSql from "../../migrations/0033_field_library.sql?raw";
-import requestOperationsMigrationSql from "../../migrations/0034_request_operations.sql?raw";
-import personAliasesMergesMigrationSql from "../../migrations/0035_person_aliases_merges.sql?raw";
-import routingTagsMigrationSql from "../../migrations/0036_routing_tags.sql?raw";
-import formLengthRulesMigrationSql from "../../migrations/0037_form_length_rules.sql?raw";
-import modelUsageEventsMigrationSql from "../../migrations/0038_model_usage_events.sql?raw";
+const migrationModules = import.meta.glob("../../migrations/*.sql", {
+  eager: true,
+  import: "default",
+  query: "?raw",
+}) as Record<string, string>;
+
+// The glob is sorted explicitly to match Wrangler's lexical migration order.
+// Duplicate numeric prefixes (0020 does) are therefore deterministic even when
+// their names are added by separate branches.
+const migrationEntries = Object.entries(migrationModules)
+  .sort(([left], [right]) => left.localeCompare(right));
+const migrationSql = migrationEntries.map(([, sql]) => sql);
+const migrationByName = new Map(
+  migrationEntries.map(([path, sql]) => [path.split("/").at(-1), sql]),
+);
 import type { Env } from "../../src/index";
 import { WIPE_ORDER } from "../../src/lib/reset-demo/reseed-demo";
 
@@ -84,6 +53,14 @@ function splitStatements(sql: string): string[] {
   }
   if (pending !== null) statements.push(pending);
   return statements;
+}
+
+async function applyMigration(name: string): Promise<void> {
+  const sql = migrationByName.get(name);
+  if (sql === undefined) throw new Error(`Missing migration source for ${name}`);
+  for (const statement of splitStatements(sql)) {
+    await env.DB.prepare(`${statement};`).run();
+  }
 }
 
 /**
@@ -135,83 +112,26 @@ export async function applyMigrations(): Promise<void> {
       // Production reset deliberately preserves the ledger through its null
       // DELETE_PLANS entry; this helper is intentionally a different path.
     } else {
-      for (const statement of splitStatements(calendarTruthMigrationSql)) {
-        await env.DB.prepare(`${statement};`).run();
-      }
+      await applyMigration("0026_calendar_truth.sql");
     }
     if (!calendarBatchPartsApplied) {
-      for (const statement of splitStatements(calendarBatchPartsMigrationSql)) {
-        await env.DB.prepare(`${statement};`).run();
-      }
+      await applyMigration("0032_calendar_batch_parts.sql");
     }
     if (!fieldLibraryApplied) {
-      for (const statement of splitStatements(fieldLibraryMigrationSql)) {
-        await env.DB.prepare(`${statement};`).run();
-      }
+      await applyMigration("0033_field_library.sql");
     }
     if (!requestOperationsApplied) {
-      for (const statement of splitStatements(requestOperationsMigrationSql)) {
-        await env.DB.prepare(`${statement};`).run();
-      }
+      await applyMigration("0034_request_operations.sql");
     }
     if (!personAliasesMergesApplied) {
-      for (const statement of splitStatements(personAliasesMergesMigrationSql)) {
-        await env.DB.prepare(`${statement};`).run();
-      }
+      await applyMigration("0035_person_aliases_merges.sql");
     }
     if (!modelUsageEventsApplied) {
-      for (const statement of splitStatements(modelUsageEventsMigrationSql)) {
-        await env.DB.prepare(`${statement};`).run();
-      }
+      await applyMigration("0038_model_usage_events.sql");
     }
     return;
   }
-  for (const statement of [
-    ...splitStatements(migrationSql),
-    ...splitStatements(venueGeographyMigrationSql),
-    ...splitStatements(venueAccessNoteMigrationSql),
-    ...splitStatements(calendarReversalMigrationSql),
-    ...splitStatements(taskCancellationWebhooksMigrationSql),
-    ...splitStatements(auditRequestIdMigrationSql),
-    ...splitStatements(embedWidgetKindsMigrationSql),
-    ...splitStatements(formFieldDatesMigrationSql),
-    ...splitStatements(personCustomFieldsMigrationSql),
-    ...splitStatements(fileCommentsMigrationSql),
-    ...splitStatements(criterionKindsMigrationSql),
-    ...splitStatements(boundFormOptionsMigrationSql),
-    ...splitStatements(savedEmbedsMigrationSql),
-    ...splitStatements(evaluationRoundCommitteesMigrationSql),
-    ...splitStatements(coldStartMigrationSql),
-    ...splitStatements(publicSchedulesMigrationSql),
-    ...splitStatements(peopleAnnotationsMigrationSql),
-    ...splitStatements(agentEvaluatorSeatsMigrationSql),
-    ...splitStatements(inboundDeliveryStateMigrationSql),
-    ...splitStatements(evaluationOverridesMigrationSql),
-    ...splitStatements(peopleImportUndoReceiptsMigrationSql),
-    ...splitStatements(orgSettingsMigrationSql),
-    ...splitStatements(eventDeletionMigrationSql),
-    ...splitStatements(outreachTargetingMigrationSql),
-    ...splitStatements(orgInviteSeatsMigrationSql),
-    ...splitStatements(portalInvitesMigrationSql),
-    ...splitStatements(auditOrgScopeMigrationSql),
-    ...splitStatements(attendeeSchedulesMigrationSql),
-    ...splitStatements(sponsorsMigrationSql),
-    ...splitStatements(airtableOutboundMigrationSql),
-    ...splitStatements(airtableConnectMigrationSql),
-    ...splitStatements(calendarTruthMigrationSql),
-    ...splitStatements(airtableDecisionActorMigrationSql),
-    ...splitStatements(participantFanoutMigrationSql),
-    ...splitStatements(submissionNotesMigrationSql),
-    ...splitStatements(submissionReferenceCodesMigrationSql),
-    ...splitStatements(submissionCapacityMigrationSql),
-    ...splitStatements(calendarBatchPartsMigrationSql),
-    ...splitStatements(fieldLibraryMigrationSql),
-    ...splitStatements(requestOperationsMigrationSql),
-    ...splitStatements(personAliasesMergesMigrationSql),
-    ...splitStatements(routingTagsMigrationSql),
-    ...splitStatements(formLengthRulesMigrationSql),
-    ...splitStatements(modelUsageEventsMigrationSql),
-  ]) {
+  for (const statement of migrationSql.flatMap(splitStatements)) {
     await env.DB.prepare(`${statement};`).run();
   }
 }

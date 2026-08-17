@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 const root = resolve(import.meta.dirname, "..");
 const bundle = resolve(root, "dist/marquee/index.js");
 await access(bundle).catch(() => {
-  throw new Error("build the Worker first with `npx vite build`");
+  throw new Error("build the Worker first with `npm run build`");
 });
 
 const worker = await import(`${pathToFileURL(bundle).href}?registry=${Date.now()}`);

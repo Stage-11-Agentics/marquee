@@ -14,6 +14,10 @@ speed-report.json
 playwright-report/
 test-results/
 
+# Generated at build time from the Worker and authored agent-facing sources.
+src/agent-front-door/llms.txt
+src/agent-front-door/llms-full.txt
+
 # Generated from the served OpenAPI document by cli/generate-api-registry.mjs.
 # Not tracked: a committed copy conflicts on every concurrent branch.
 cli/api-registry.json

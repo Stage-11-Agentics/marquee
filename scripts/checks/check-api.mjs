@@ -90,8 +90,8 @@ async function bundleIsStale() {
 async function loadWorker() {
   const { stale, reason } = await bundleIsStale();
   if (stale) {
-    process.stdout.write(`[check:api] ${reason}; running vite build\n`);
-    const code = await run(resolve(REPOSITORY_ROOT, "node_modules/.bin/vite"), ["build"]);
+    process.stdout.write(`[check:api] ${reason}; running npm run build\n`);
+    const code = await run("npm", ["run", "build"]);
     if (code !== 0) throw new Error("check:api could not build the Worker bundle");
   }
   // Cache-bust so a rebuild inside one process is never served from module cache.

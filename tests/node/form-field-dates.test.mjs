@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import test from "node:test";
 
@@ -38,11 +38,25 @@ test("CONTRACT · MRQ-95 rebuilds form fields and answers without changing the i
   assert.match(migration, /CREATE INDEX idx_submission_answers_field_submission/);
 });
 
-test("CONTRACT · MRQ-95 registers the migration after the existing schema sequence", () => {
-  assert.match(applier, /0008_form_field_dates\.sql\?raw/);
-  const previous = applier.indexOf("embedWidgetKindsMigrationSql)");
-  const registered = applier.indexOf("formFieldDatesMigrationSql)");
-  assert.ok(previous >= 0 && registered > previous, "0008 must apply after 0007");
+test("CONTRACT · MRQ-95 derives migration registration from the sorted directory", async () => {
+  assert.match(applier, /import\.meta\.glob\("\.\.\/\.\.\/migrations\/\*\.sql"/);
+  assert.match(applier, /\.sort\(\(\[left\], \[right\]\) => left\.localeCompare\(right\)\)/);
+  assert.match(applier, /migrationSql\.flatMap\(splitStatements\)/);
+  const migrationFiles = (await readdir(resolve(root, "migrations")))
+    .filter((file) => file.endsWith(".sql"))
+    .sort();
+  assert.ok(migrationFiles.indexOf("0008_form_field_dates.sql") > migrationFiles.indexOf("0007_embed_widget_kinds.sql"));
+  assert.deepEqual(
+    migrationFiles.filter((file) => file.startsWith("0009_") || file.startsWith("0010_")),
+    [
+      "0009_criterion_kinds.sql",
+      "0009_file_comments.sql",
+      "0009_person_custom_fields.sql",
+      "0010_bound_form_options.sql",
+      "0010_evaluation_round_committees.sql",
+      "0010_saved_embeds.sql",
+    ],
+  );
 });
 
 test("CONTRACT · MRQ-95 exposes Date through the organizer, API, seed, and native controls", () => {

@@ -2,8 +2,9 @@
  * check:docs — generated front-door markdown and served-manifest parity.
  *
  * The route is intentionally generated from source documents and live Worker
- * facts. A bare run compares bytes; --write is the only repair path, matching
- * check:routes' generate -> compare -> remedy contract.
+ * facts. `npm run build` writes the ignored build inputs; a bare run compares
+ * bytes and reports drift. `--write` remains available for a local rewrite,
+ * while `npm run build` is the authoritative repair/deploy path.
  */
 import { readFile } from "node:fs/promises";
 
@@ -30,8 +31,8 @@ const compare = async (path, expected, remedy) => {
 if (args.write) {
   await writeFrontDoorOutputs(result);
 } else {
-  await compare(LLMS_OUTPUT_PATH, result.llmsText, "npm run check:docs -- --write");
-  await compare(FULL_OUTPUT_PATH, result.fullText, "npm run check:docs -- --write");
+  await compare(LLMS_OUTPUT_PATH, result.llmsText, "npm run build");
+  await compare(FULL_OUTPUT_PATH, result.fullText, "npm run build");
 }
 
 const manifestText = await readFile(MANIFEST_PATH, "utf8");
