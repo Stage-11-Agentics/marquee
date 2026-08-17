@@ -125,6 +125,7 @@ export interface PeopleImportResult {
   headers: string[];
   attendances: number;
   roster_placements: number;
+  roster_already_seated: number;
   event: string | null;
   undo_path: string;
 }

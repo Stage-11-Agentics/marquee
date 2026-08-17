@@ -571,8 +571,10 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
       onImported={(result) => {
         setReloadToken((token) => token + 1);
         const placed = result.roster_placements > 0
-          ? ` · ${result.roster_placements} on the ${event?.name ?? "conference"} roster`
-          : result.attendances > 0
+          ? ` · ${result.roster_placements} on the ${event?.name ?? "conference"} roster${result.roster_already_seated > 0 ? ` · ${result.roster_already_seated} already there` : ""}`
+          : result.roster_already_seated > 0
+            ? ` · everyone was already on the ${event?.name ?? "conference"} roster`
+            : result.attendances > 0
             ? ` · ${result.attendances} attending ${event?.name ?? "the conference"}`
             : "";
         announce(`${result.created} created · ${result.updated} updated · ${result.skipped} skipped${placed} · receipt ready to undo`);

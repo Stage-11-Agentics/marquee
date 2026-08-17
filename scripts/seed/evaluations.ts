@@ -36,14 +36,14 @@ function criterionScores(byName: Readonly<Record<string, number>>): Record<strin
 }
 
 /**
- * Round one's completed reviews, two in every three carrying a real scorecard.
+ * Round one's completed reviews, four in every five carrying a real scorecard.
  *
  * A conference with one scored abstract out of a thousand cannot demonstrate
  * its own results view: the WEIGHTED SCORE column is a single number over a
  * wall of "Not scored", and sorting it high-to-low and low-to-high returns the
  * identical page — a working control that is indistinguishable from a broken
  * one, and read as broken by everyone who tries it. Enough of the round is
- * scored here for the column to rank, and the remaining third stays
+ * scored here for the column to rank, and every fifth stays
  * recommendation-only on purpose: "Not scored" is a real state a real
  * conference holds, it must keep sorting last in both directions, and the
  * unweighted/weighted distinction needs a case to show.

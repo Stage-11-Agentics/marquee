@@ -81,10 +81,18 @@ function Modal({
  */
 type ImportDestination = "roster" | "attendees" | "org";
 
-/** What the import did to the conference, in the receipt, or nothing to add. */
+/**
+ * What the import did to the conference, in the receipt, or nothing to add.
+ *
+ * Seated and already-seated are counted apart because they are different acts:
+ * only the first wrote a row, and only the first is a row this import's undo
+ * will take back.
+ */
 function importPlacementLine(result: PeopleImportResult, event: { name: string } | null): string {
   if (!event || !result.event) return "";
-  if (result.roster_placements > 0) return ` · ${result.roster_placements} seated on the ${event.name} roster`;
+  const already = result.roster_already_seated > 0 ? ` · ${result.roster_already_seated} already on the roster` : "";
+  if (result.roster_placements > 0) return ` · ${result.roster_placements} seated on the ${event.name} roster${already}`;
+  if (result.roster_already_seated > 0) return ` · everyone in the file was already on the ${event.name} roster`;
   if (result.attendances > 0) return ` · ${result.attendances} recorded as attending ${event.name}`;
   return "";
 }

@@ -161,6 +161,14 @@ task_rollup AS (
    WHERE task.event_id = runtime.event_id
    GROUP BY task.person_id
 ),
+-- Materialized once, then joined. As a correlated subquery in the SELECT list
+-- this ran per person per group and cost the board about a second on the demo
+-- conference, which R7 calls a defect rather than a cost to absorb. The event
+-- id arrives as a scalar subquery because SQLite has no LATERAL, so the CTE
+-- cannot see the runtime row through a join.
+invitable_people AS (
+  SELECT person_id FROM (${portalInvitablePersonSource("(SELECT event_id FROM runtime)")})
+),
 roster_people AS (
   SELECT person.id, person.name, person.email, person.title, person.company, person.bio,
          person.headshot_attachment_id,
@@ -170,12 +178,15 @@ roster_people AS (
          COALESCE(rollup.overdue_task_count, 0) AS overdue_task_count,
          COALESCE(rollup.risk_task_count, 0) AS risk_task_count,
          COALESCE(rollup.severity, 0) AS severity,
-         MAX(CASE WHEN person.id IN (${portalInvitablePersonSource("runtime.event_id")}) THEN 1 ELSE 0 END) AS portal_invitable
+         MAX(CASE WHEN invitable.person_id IS NOT NULL THEN 1 ELSE 0 END) AS portal_invitable
     FROM people person
     CROSS JOIN runtime
     LEFT JOIN outbox
       ON outbox.event_id = runtime.event_id AND outbox.person_id = person.id
     LEFT JOIN task_rollup rollup ON rollup.person_id = person.id
+    -- portalInvitablePersonSource is a UNION, so this is one row per person at
+    -- most and cannot multiply the group.
+    LEFT JOIN invitable_people invitable ON invitable.person_id = person.id
    WHERE person.id IN (${onboardingPersonSource("runtime.event_id")})
    GROUP BY person.id, person.name, person.email, person.title, person.company, person.bio,
             person.headshot_attachment_id, runtime.event_id,
