@@ -220,4 +220,135 @@ describe.sequential("MRQ-167 org people import receipt", () => {
     expect(await env.DB.prepare("SELECT id FROM people WHERE id = ?").bind(unreferenced?.id).first()).toBeNull();
     expect(await env.DB.prepare("SELECT status FROM imports WHERE id = ?").bind(result.import_id).first()).toEqual({ status: "undone" });
   });
+  /**
+   * MRQ-277 D3. The import reported "3 created" over a conference roster that
+   * had not moved and a CONFS column reading 0 — org-level creation without the
+   * event-scoped seat is a half-done import wearing a success receipt.
+   */
+  test("CONTRACT · MRQ-277 · a roster import seats everyone on the named conference, and undo withdraws the seats", async () => {
+    const rosterCount = async (): Promise<number> => Number((await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM memberships WHERE event_id = ? AND role = 'speaker'",
+    ).bind(EVENT_ID).first<{ count: number }>())?.count);
+    const before = await rosterCount();
+
+    const csv = [
+      "Full Name,Email,Company,Job Title",
+      "Rowan Fairweather,rowan@mrq277.test,Lantern Labs,Principal Engineer",
+      "Isla Petrov,isla@mrq277.test,Meridian Data,Director of AI",
+    ].join("\n");
+    const response = await post("/api/v1/org/imports", { csv, filename: "roster.csv", event: "mrq-167-import", roster: true });
+    expect(response.status).toBe(202);
+    const result = await response.json() as { import_id: string; created: number; roster_placements: number; event: string | null };
+    expect(result.created).toBe(2);
+    expect(result.roster_placements).toBe(2);
+    expect(result.event).toBe("mrq-167-import");
+    expect(await rosterCount()).toBe(before + 2);
+
+    const seated = await env.DB.prepare(
+      `SELECT person.email FROM memberships seat
+         JOIN people person ON person.id = seat.person_id
+        WHERE seat.event_id = ? AND seat.role = 'speaker' AND person.email IN ('rowan@mrq277.test', 'isla@mrq277.test')
+        ORDER BY person.email`,
+    ).bind(EVENT_ID).all<{ email: string }>();
+    expect(seated.results.map((row) => row.email)).toEqual(["isla@mrq277.test", "rowan@mrq277.test"]);
+
+    // Re-running the same file seats nobody twice, like every other part of it.
+    const again = await post("/api/v1/org/imports", { csv, filename: "roster.csv", event: "mrq-167-import", roster: true });
+    expect(again.status).toBe(202);
+    expect(await rosterCount()).toBe(before + 2);
+    const secondId = (await again.json() as { import_id: string }).import_id;
+
+    // Each import's undo reverses exactly its OWN writes. The re-run created
+    // nothing — it matched two seats that already existed — so its undo removes
+    // nothing, and the first import's undo removes the two it wrote.
+    //
+    // This is deliberately not "a row survives while anything still claims it",
+    // which is right for `event_attendances` because every import-sourced row
+    // there IS import-created (the unique key carries `source`). A membership
+    // has no such separation, so a claim-based rule has to reach rows it did not
+    // create — and that is the data loss this scoping exists to prevent. The
+    // cost is that undoing the first import drops a seat the live re-run still
+    // asserts; re-running the file restores it, and no row anyone else wrote is
+    // ever at risk.
+    const secondUndo = await post(`/api/v1/org/imports/${secondId}/undo`, {});
+    expect(secondUndo.status).toBe(200);
+    expect(await secondUndo.json()).toMatchObject({ roster_placements_removed: 0 });
+    expect(await rosterCount()).toBe(before + 2);
+
+    const firstUndo = await post(`/api/v1/org/imports/${result.import_id}/undo`, {});
+    expect(firstUndo.status).toBe(200);
+    expect(await firstUndo.json()).toMatchObject({ roster_placements_removed: 2 });
+    expect(await rosterCount()).toBe(before);
+  });
+
+  test("CONTRACT · MRQ-277 · a roster placement without a named conference is refused, not guessed at", async () => {
+    const response = await post("/api/v1/org/imports", {
+      csv: "Full Name,Email\nNo Conference,noconference@mrq277.test",
+      filename: "roster.csv",
+      roster: true,
+    });
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain("name the conference in `event`");
+    expect(await env.DB.prepare("SELECT id FROM people WHERE email = 'noconference@mrq277.test'").first()).toBeNull();
+  });
+  /**
+   * MRQ-277 review correction. An undo may remove a seat the import CREATED and
+   * never one it merely matched.
+   *
+   * The person-scoped predicate this replaced deleted any speaker seat held by
+   * anyone the import touched. Importing a file that only updated an existing
+   * speaker's job title, then undoing it, destroyed the seat the seat's real
+   * author had written — and that row is what gates speaker-portal sign-in, so
+   * the person silently lost their way back in. The consequence is what is
+   * asserted here, not a row count.
+   */
+  test("CONTRACT · MRQ-277 · undo leaves a matched person's pre-existing speaker seat, and their portal access, intact", async () => {
+    const seatFor = async (personId: string): Promise<{ id: string } | null> => env.DB.prepare(
+      "SELECT id FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
+    ).bind(EVENT_ID, personId).first<{ id: string }>();
+    /** The predicate the speaker portal signs someone in with. */
+    const portalResolves = async (personId: string): Promise<boolean> => Boolean(await env.DB.prepare(
+      `SELECT 1 AS present FROM memberships
+        WHERE org_id = ? AND person_id = ? AND event_id IS NOT NULL AND role IN ('speaker', 'co_speaker', 'moderator')
+        LIMIT 1`,
+    ).bind(ORG_ID, personId).first<{ present: number }>());
+
+    // A seat somebody else wrote — the seed, the acceptance cascade, an
+    // organizer. Not this import's, and not this import's to take away.
+    await env.DB.prepare(
+      "INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('mem_mrq277_preexisting', ?, ?, ?, 'speaker', ?, ?)",
+    ).bind(ORG_ID, SPEAKER_ID, EVENT_ID, NOW, NOW).run();
+    expect(await portalResolves(SPEAKER_ID)).toBe(true);
+
+    // An import that MATCHES that person by email, and creates one new one.
+    const csv = [
+      "Full Name,Email,Company,Job Title",
+      "Priya Raman,PRIYA@mrq167.test,Latticework Systems,Staff Engineer",
+      "Newly Imported,newly@mrq277.test,Lantern Labs,Principal Engineer",
+    ].join("\n");
+    const response = await post("/api/v1/org/imports", { csv, filename: "mixed.csv", event: "mrq-167-import", roster: true });
+    expect(response.status).toBe(202);
+    const result = await response.json() as { import_id: string; roster_placements: number; roster_already_seated: number };
+    // One seat written, one person already seated — counted apart, because only
+    // the first is a row this undo may reverse.
+    expect(result.roster_placements).toBe(1);
+    expect(result.roster_already_seated).toBe(1);
+    expect((await seatFor(SPEAKER_ID))?.id).toBe("mem_mrq277_preexisting");
+
+    const newcomer = await env.DB.prepare("SELECT id FROM people WHERE email = 'newly@mrq277.test'").first<{ id: string }>();
+    expect(await seatFor(newcomer!.id)).not.toBeNull();
+
+    const undone = await post(`/api/v1/org/imports/${result.import_id}/undo`, {});
+    expect(undone.status).toBe(200);
+    expect(await undone.json()).toMatchObject({ roster_placements_removed: 1 });
+
+    // The seat this import created is gone.
+    expect(await seatFor(newcomer!.id)).toBeNull();
+    // The seat it merely matched is untouched — same row, same id — and the
+    // person can still sign in to the portal.
+    expect((await seatFor(SPEAKER_ID))?.id).toBe("mem_mrq277_preexisting");
+    expect(await portalResolves(SPEAKER_ID)).toBe(true);
+
+    await env.DB.prepare("DELETE FROM memberships WHERE id = 'mem_mrq277_preexisting'").run();
+  });
 });

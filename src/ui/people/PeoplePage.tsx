@@ -566,10 +566,18 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
     /> : null}
 
     {modal === "import" ? <ImportPeopleModal
+      event={event ? { name: event.name, slug: event.slug } : null}
       onClose={() => setModal("")}
       onImported={(result) => {
         setReloadToken((token) => token + 1);
-        announce(`${result.created} created · ${result.updated} updated · ${result.skipped} skipped · receipt ready to undo`);
+        const placed = result.roster_placements > 0
+          ? ` · ${result.roster_placements} on the ${event?.name ?? "conference"} roster${result.roster_already_seated > 0 ? ` · ${result.roster_already_seated} already there` : ""}`
+          : result.roster_already_seated > 0
+            ? ` · everyone was already on the ${event?.name ?? "conference"} roster`
+            : result.attendances > 0
+            ? ` · ${result.attendances} attending ${event?.name ?? "the conference"}`
+            : "";
+        announce(`${result.created} created · ${result.updated} updated · ${result.skipped} skipped${placed} · receipt ready to undo`);
       }}
       onUndone={(undone) => {
         setReloadToken((token) => token + 1);
@@ -603,6 +611,14 @@ export function PeoplePage({ search = "", navigate, tab = "people" }: { search?:
       onClose={() => setModal("")}
       onSaved={(list) => {
         setModal("");
+        // Every other write on this screen reloads; this one used to navigate
+        // straight to a tab still holding the answer from before the save, so
+        // a list that exists rendered as "No lists yet · Lists · 0" and the
+        // organizer's reasonable next move was to save it again. The row the
+        // server just returned goes in first — lists read newest-first — so
+        // the tab is never briefly wrong on its way to being right.
+        setLists((current) => [list, ...(current ?? []).filter((entry) => entry.id !== list.id)]);
+        setReloadToken((token) => token + 1);
         announce(`List “${list.name}” saved`);
         navigate?.("/lists");
       }}

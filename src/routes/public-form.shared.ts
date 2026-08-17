@@ -13,6 +13,7 @@ import { sha256Hex } from "../lib/auth/random-token";
 import { readMagicLink } from "../lib/auth/magic-links";
 import { submitterEditability } from "../lib/submission-editing";
 import { boundSourceOf } from "../lib/bound-options";
+import { readStoredAnswerValue } from "../lib/stored-answer";
 import { taxonomyNameKey } from "../lib/taxonomy";
 import {
   DEFAULT_SUBMISSION_LIMIT,
@@ -317,11 +318,6 @@ export function writeParticipantRoster(roster: PublicParticipantRoster): string 
   return JSON.stringify({ on_behalf_of: roster.onBehalfOf, participants: roster.typed });
 }
 
-function answerValue(valueJson: string | null, valueText: string | null): unknown {
-  if (valueJson !== null) return parseJson(valueJson, null);
-  return valueText;
-}
-
 async function readAnswers(
   db: D1Database,
   submissionId: string,
@@ -335,7 +331,7 @@ async function readAnswers(
     )
     .bind(submissionId)
     .all<{ key: string; value_json: string | null; value_text: string | null }>();
-  return Object.fromEntries(rows.results.map((row) => [row.key, answerValue(row.value_json, row.value_text)]));
+  return Object.fromEntries(rows.results.map((row) => [row.key, readStoredAnswerValue(row)]));
 }
 
 async function readFiles(

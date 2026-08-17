@@ -69,15 +69,52 @@ function Modal({
   </>;
 }
 
+/**
+ * Where an imported file lands.
+ *
+ * The organization is where a person record lives; it is not where a
+ * conference finds its speakers. An import that only wrote the org row
+ * reported "3 created" over a roster that had not moved and a CONFS column
+ * reading 0 — a success message for a job half done. So the destination is a
+ * control the organizer sets, it defaults to the conference they are standing
+ * in, and the receipt says which one it wrote.
+ */
+type ImportDestination = "roster" | "attendees" | "org";
+
+/**
+ * What the import did to the conference, in the receipt, or nothing to add.
+ *
+ * Seated and already-seated are counted apart because they are different acts:
+ * only the first wrote a row, and only the first is a row this import's undo
+ * will take back.
+ */
+function importPlacementLine(result: PeopleImportResult, event: { name: string } | null): string {
+  if (!event || !result.event) return "";
+  const already = result.roster_already_seated > 0 ? ` · ${result.roster_already_seated} already on the roster` : "";
+  if (result.roster_placements > 0) return ` · ${result.roster_placements} seated on the ${event.name} roster${already}`;
+  if (result.roster_already_seated > 0) return ` · everyone in the file was already on the ${event.name} roster`;
+  if (result.attendances > 0) return ` · ${result.attendances} recorded as attending ${event.name}`;
+  return "";
+}
+
+const IMPORT_DESTINATIONS: Array<[ImportDestination, string]> = [
+  ["roster", "Speakers on the roster"],
+  ["attendees", "Attendees"],
+  ["org", "This organization only"],
+];
+
 export function ImportPeopleModal({
+  event,
   onClose,
   onImported,
   onUndone,
 }: {
+  event: { name: string; slug: string } | null;
   onClose: () => void;
   onImported: (result: PeopleImportResult) => void;
   onUndone: (undone: number) => void;
 }): JSX.Element {
+  const [destination, setDestination] = useState<ImportDestination>(event ? "roster" : "org");
   const [busy, setBusy] = useState(false);
   const [undoBusy, setUndoBusy] = useState(false);
   const [error, setError] = useState("");
@@ -98,7 +135,13 @@ export function ImportPeopleModal({
     setBusy(true);
     setError("");
     try {
-      const imported = await importPeople({ csv: file.text, filename: file.name });
+      const placed = event && destination !== "org";
+      const imported = await importPeople({
+        csv: file.text,
+        filename: file.name,
+        ...(placed ? { event: event.slug } : {}),
+        ...(placed && destination === "roster" ? { roster: true } : {}),
+      });
       setResult(imported);
       onImported(imported);
     } catch (caught) {
@@ -147,7 +190,7 @@ export function ImportPeopleModal({
       <div class="people-preview-subject">{undone === null ? "Import applied" : "Import undone"}</div>
       <div class="people-preview-body">
         {undone === null
-          ? `${result.created} created · ${result.updated} updated · ${result.skipped} skipped. The receipt records overwritten values and remains available until you undo it.`
+          ? `${result.created} created · ${result.updated} updated · ${result.skipped} skipped${importPlacementLine(result, event)}. The receipt records overwritten values and remains available until you undo it.`
           : `${undone} ${undone === 1 ? "person was" : "people were"} restored${undoOutcome?.skipped ? ` · ${undoOutcome.skipped} kept` : ""}. The receipt remains available for audit.`}
       </div>
       {undone !== null && undoOutcome?.skipped_rows.length ? <ul class="people-hint people-import-skips">
@@ -156,6 +199,23 @@ export function ImportPeopleModal({
       <div class="people-hint">Receipt <span class="tabular">{result.import_id}</span></div>
     </div> : <>
       <AgentBriefPanel copy={peopleImportBrief(window.location.origin)} />
+
+      {event ? <label class="people-field">
+        <span>Where they land in {event.name}</span>
+        <select
+          value={destination}
+          onChange={(changed) => setDestination((changed.currentTarget as HTMLSelectElement).value as ImportDestination)}
+        >
+          {IMPORT_DESTINATIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+        </select>
+        <span class="people-hint">
+          {destination === "roster"
+            ? `Everyone in the file is seated on the ${event.name} speaker roster, and appears in People CRM. Undo withdraws both.`
+            : destination === "attendees"
+              ? `Everyone in the file is recorded as attending ${event.name}. They do not join the speaker roster.`
+              : `People CRM only — nobody joins ${event.name}.`}
+        </span>
+      </label> : null}
 
       <div class="people-field">
         <span>Or just drop a file</span>

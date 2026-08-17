@@ -90,6 +90,27 @@ export const RETURNING_SPEAKER_PERSON_SOURCE = `
           AND candidate.id IN (${speakerRosterPersonSource("roster_event.id")})
      ) >= 2`;
 
+/**
+ * Who a speaker-portal invitation can actually reach at this conference.
+ *
+ * The onboarding board is deliberately wider than this — it also chases anyone
+ * holding a task, which includes a sponsor's contact working through the
+ * sponsor portal. Those people have no speaker seat, so a speaker-portal
+ * invitation for them is a link to a page that will not open. The board has to
+ * be able to say so on the row rather than let an operator find out from a
+ * batch that refused, so the list and the write read this one definition.
+ */
+export function portalInvitablePersonSource(eventIdExpression = "?"): string {
+  return `
+  SELECT invitable_seat.person_id FROM memberships invitable_seat
+   WHERE invitable_seat.event_id = ${eventIdExpression}
+     AND invitable_seat.role = 'speaker'
+  UNION
+  SELECT invitable_part.person_id FROM participations invitable_part
+    JOIN submissions invitable_submission ON invitable_submission.id = invitable_part.submission_id
+   WHERE invitable_submission.event_id = ${eventIdExpression}`;
+}
+
 /** Build the onboarding population with either a bound or a correlated event id. */
 export function onboardingPersonSource(eventIdExpression = "?"): string {
   return `

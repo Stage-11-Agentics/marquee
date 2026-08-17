@@ -137,3 +137,43 @@ test("CONTRACT · MRQ-164 · a speaker owing nothing is distinguishable from one
   expect(softenedNavigation.page).toBe(1);
   expect(softenedNavigation.per_page).toBe(50);
 });
+
+/**
+ * MRQ-277 D7. The board is wider than the speaker roster by design — it chases
+ * everyone holding a task, which includes a sponsor's contact working through
+ * the sponsor portal. Those people have no speaker seat, so a speaker-portal
+ * invitation is a link the portal will refuse; the row has to say so rather
+ * than let the operator discover it from a batch that failed.
+ */
+test("CONTRACT · MRQ-277 · a task-holder with no speaker seat is on the board and marked un-invitable", async () => {
+  const now = Date.now();
+  const SPONSOR_CONTACT_ID = "person_onboarding_sponsor_mrq164";
+  await env.DB.batch([
+    personRow(SPONSOR_CONTACT_ID, "Mona Haddad", "mona@mrq164.test"),
+    env.DB.prepare(
+      `INSERT INTO speaker_tasks (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status, created_at, updated_at)
+       VALUES (?, ?, ?, NULL, ?, 'Acknowledge acceptance', 'acknowledge', '', ?, 'open', ?, ?)`,
+    ).bind("task_sponsor_mrq164", EVENT_ID, SPONSOR_CONTACT_ID, ORIGINAL_TEMPLATE_ID, NEW_TASK_DUE, now, now),
+  ]);
+
+  const board = await (await request(`/api/v1/events/${EVENT_ID}/onboarding`)).json() as OnboardingSnapshot;
+  const byId = new Map(board.data.map((row) => [row.id, row]));
+
+  // On the board, because the conference is chasing them for work.
+  expect(byId.has(SPONSOR_CONTACT_ID)).toBe(true);
+  expect(byId.get(SPONSOR_CONTACT_ID)?.portal_invitable).toBe(false);
+
+  // And the people who do hold a seat are still invitable — through a
+  // membership (Priya) and through a participation (Marcus) alike.
+  expect(byId.get(PRIYA_ID)?.portal_invitable).toBe(true);
+  expect(byId.get(MARCUS_ID)?.portal_invitable).toBe(true);
+
+  // The drawer reads the same fact, so the two cannot disagree.
+  const detail = await (await request(`/api/v1/events/${EVENT_ID}/onboarding/speakers/${SPONSOR_CONTACT_ID}`)).json() as { portal_invitable: boolean };
+  expect(detail.portal_invitable).toBe(false);
+
+  // And the write agrees with both: this is a refusal, and it names the person.
+  const refused = await postJson(`/api/v1/events/${EVENT_ID}/speakers/invite`, { person_ids: [SPONSOR_CONTACT_ID] });
+  expect(refused.status).toBe(404);
+  expect(await refused.text()).toContain("Mona Haddad");
+});

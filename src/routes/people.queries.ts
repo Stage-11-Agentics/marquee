@@ -29,7 +29,8 @@ import { z } from "@hono/zod-openapi";
 
 import { resolveSort, type PageParams, type SortRegistry } from "../api/pagination";
 import { PIPELINE_STAGE_IDS } from "../lib/person-annotations";
-import { ATTENDEE_PERSON_SOURCE, SPEAKER_ROSTER_PERSON_SOURCE, type EventPopulation } from "../lib/roster-source";
+import { roleInSql } from "../lib/participants";
+import { ATTENDEE_PERSON_SOURCE, ROSTER_PARTICIPATION_ROLES, SPEAKER_ROSTER_PERSON_SOURCE, type EventPopulation } from "../lib/roster-source";
 
 /**
  * The saved filter behind a Live list. It lives beside the query rather than
@@ -312,11 +313,33 @@ export const LIVE_LIST_COUNT_SQL = `(
     )
 )`;
 
+/**
+ * How many of this organization's conferences this person is on.
+ *
+ * A submission is one way onto a roster and not the only one: an organizer who
+ * types a speaker in by hand, an acceptance cascade seating a moderator, a CSV
+ * of speakers placed on a conference — all of those write the seat and no
+ * participation, because `participations.submission_id` is NOT NULL and there
+ * is no session for one to hang off. Counting participations alone printed
+ * CONFS 0 beside people plainly listed on the roster, which reads as an import
+ * or an add that did not work.
+ *
+ * On-stage seats only. A reviewer's or an ops lead's seat is a job at the
+ * conference, not a place on it, and this column sits in a speaker CRM.
+ */
 const CONFERENCE_COUNT = `(
-  SELECT COUNT(DISTINCT counted.event_id)
-  FROM participations counted_part
-  JOIN submissions counted ON counted.id = counted_part.submission_id
-  WHERE counted_part.person_id = person.id
+  SELECT COUNT(*) FROM (
+    SELECT counted.event_id AS event_id
+      FROM participations counted_part
+      JOIN submissions counted ON counted.id = counted_part.submission_id
+     WHERE counted_part.person_id = person.id
+    UNION
+    SELECT seat.event_id
+      FROM memberships seat
+     WHERE seat.person_id = person.id
+       AND seat.event_id IS NOT NULL
+       AND ${roleInSql("seat", ROSTER_PARTICIPATION_ROLES)}
+  )
 )`;
 
 const LAST_CONTACT = `(

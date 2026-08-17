@@ -722,9 +722,43 @@ export function RoomBoard({
   </div>;
 }
 
+/**
+ * Escape and a click outside both close a floating agenda panel.
+ *
+ * These panels are `position: fixed` over the top-right of the builder, which
+ * is where the publication controls live. With no key and no click-outside, the
+ * only way past one was a small × in its corner: Escape did nothing, scrolling
+ * did nothing (fixed, by design), and every click aimed at the panel underneath
+ * landed on the floating layer instead — so opening Room details made publish
+ * unreachable. A layer with exactly one exit is a layer that traps the operator
+ * on the screen it is covering.
+ */
+function useDismissablePanel(onClose: () => void): { current: HTMLElement | null } {
+  const panel = useRef<HTMLElement | null>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") close.current(); };
+    const onPointerDown = (event: MouseEvent) => {
+      const node = panel.current;
+      if (node && event.target instanceof Node && !node.contains(event.target)) close.current();
+    };
+    document.addEventListener("keydown", onKey);
+    // On mousedown rather than click, so the same gesture that dismisses the
+    // panel still reaches the control the operator was aiming at.
+    document.addEventListener("mousedown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointerDown);
+    };
+  }, []);
+  return panel;
+}
+
 function RoomPanel({ room, showBuildingComparison, onClose }: { room: AgendaRoom; showBuildingComparison: boolean; onClose: () => void }): JSX.Element {
   const label = displayRoomLabel(room.name, room.building.name, showBuildingComparison);
-  return <aside class="agenda-room-panel" role="dialog" aria-label={`${label} details`}>
+  const panel = useDismissablePanel(onClose);
+  return <aside class="agenda-room-panel" role="dialog" aria-label={`${label} details`} ref={panel as never}>
     <header><div><span class="eyebrow">Room details</span><h2>{label}</h2></div><button type="button" aria-label="Close room details" onClick={onClose}>×</button></header>
     <div class="agenda-room-panel-body">
       <div class="agenda-panel-section"><span class="agenda-panel-label">Building</span><strong>{room.building.name}</strong><span>{room.building.address}</span></div>
@@ -751,7 +785,8 @@ export function ConflictCounter({ count, open, onOpen, children }: { count: numb
 export function ConflictPanel({ conflicts, sessions, showBuildingComparison = true, onClose, onJump }: { conflicts: AgendaConflict[]; sessions: AgendaSession[]; showBuildingComparison?: boolean; onClose: () => void; onJump: (sessionId: string) => void }): JSX.Element {
   const titleFor = (id: string) => sessions.find((session) => session.id === id)?.title ?? id;
   const visibleConflicts = visibleVenueConflicts(conflicts, showBuildingComparison);
-  return <aside id="agenda-conflicts-panel" class="agenda-conflict-panel" role="dialog" aria-label="Agenda conflicts">
+  const panel = useDismissablePanel(onClose);
+  return <aside id="agenda-conflicts-panel" class="agenda-conflict-panel" role="dialog" aria-label="Agenda conflicts" ref={panel as never}>
     <header><div><span class="eyebrow">Live detection</span><h2>Agenda conflicts · <span class="tabular">{visibleConflicts.length}</span></h2></div><button type="button" aria-label="Close conflicts" onClick={onClose}>×</button></header>
     <div class="agenda-conflict-list">{visibleConflicts.length ? visibleConflicts.map((conflict, index) => <section key={`${conflict.session_ids.join("-")}-${index}`}>
       <span class="agenda-conflict-icon">!</span><div><strong>{conflict.message}</strong><span>{titleFor(conflict.session_ids[0])} ↔ {titleFor(conflict.session_ids[1])}</span><button type="button" class="agenda-conflict-jump" data-conflict-jump={conflict.session_ids[0]} onClick={() => onJump(conflict.session_ids[0])}>Jump to Session</button></div>

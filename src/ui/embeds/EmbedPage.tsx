@@ -113,10 +113,18 @@ export const EMBED_STYLES = `
 .embed-field-options { min-height: 164px; border: 1px solid var(--public-rule); background: var(--public-sunk); padding: 9px; }
 .embed-field-options fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .embed-field-options legend { margin-bottom: 8px; color: var(--public-muted); font: 650 9px/1 var(--public-mono); letter-spacing: .08em; text-transform: uppercase; }
-.embed-field-option-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 10px; }
-.embed-field-option { display: flex; align-items: flex-start; gap: 7px; min-width: 0; color: var(--public-ink); font-size: 11px; line-height: 1.25; }
-.embed-field-option > span { min-width: 0; overflow-wrap: anywhere; }
-.embed-field-option input { flex: 0 0 auto; margin-top: 1px; accent-color: var(--public-accent); }
+/* Two columns only while two columns fit. A track narrower than its longest
+   word is how "Session title" becomes a stack of single letters. */
+.embed-field-option-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 7px 10px; }
+/* These labels are prose the organizer reads, not the micro-labels the
+   .embed-field label rule paints above a control — that rule is more specific
+   than a bare class, so the reset has to be explicit here. */
+.embed-field .embed-field-option { display: flex; align-items: flex-start; gap: 7px; min-width: 0; color: var(--public-ink); font: 400 11px/1.25 var(--public-sans); text-transform: none; letter-spacing: normal; }
+.embed-field .embed-field-option > span { min-width: 0; overflow-wrap: break-word; }
+/* The .embed-field input rule stretches text inputs to the panel; a checkbox
+   given that width takes the whole grid track and leaves its label a single
+   character of room. */
+.embed-field .embed-field-option input[type=checkbox] { flex: 0 0 auto; width: auto; margin-top: 1px; padding: 0; accent-color: var(--public-accent); }
 .embed-saved-panel { margin-top: 16px; }
 .embed-saved-head { display: flex; align-items: start; justify-content: space-between; gap: 14px; }
 .embed-saved-head p { margin: 5px 0 0; color: var(--public-muted); font-size: 11px; line-height: 1.45; }

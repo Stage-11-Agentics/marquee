@@ -9,6 +9,7 @@ import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole } from "../lib/auth/scope-resolution";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
+import { portalInvitablePersonSource } from "../lib/roster-source";
 
 const eventParams = z.object({ eventId: z.string().min(1) });
 const speakerParams = eventParams.extend({ personId: z.string().min(1) });
@@ -24,10 +25,17 @@ const inviteResult = z.object({
   outbox_inserted: z.boolean(),
   magic_link: z.string().optional(),
 });
+const inviteSkip = z.object({
+  person_id: z.string(),
+  name: z.string(),
+  reason: z.string().describe("Speaker-facing sentence naming why this person was not invited."),
+});
 const inviteResponse = z.object({
   ok: z.literal(true),
   message: z.string(),
   invites: z.array(inviteResult),
+  skipped: z.array(inviteSkip)
+    .describe("Recipients this batch could not invite, each named with the reason. The eligible recipients were still invited."),
 });
 const portalPreviewResponse = z.object({ url: z.string().url(), person_id: z.string() });
 
@@ -52,36 +60,50 @@ const inviteSpeakers = defineApiRoute(
     if (!event) throw ApiError.notFound("conference not found");
 
     const personIds: string[] = [...new Set<string>(body.person_ids as string[])];
-    const speakers = await context.env.DB.prepare(
-      `SELECT p.id, p.name, p.email
+    // Everyone asked for, and separately who among them can actually be
+    // reached. One ineligible recipient used to abort the whole batch with a
+    // sentence naming neither the person nor the cause, so an operator who
+    // selected forty speakers and one sponsor contact sent nothing and was not
+    // told why. The eligible recipients go; the rest come back named.
+    const candidates = await context.env.DB.prepare(
+      `SELECT p.id, p.name, p.email,
+              CASE WHEN p.id IN (${portalInvitablePersonSource("?")}) THEN 1 ELSE 0 END AS invitable
        FROM people p
        WHERE p.org_id = ? AND p.id IN (SELECT value FROM json_each(?))
-         AND (
-           EXISTS (
-             SELECT 1 FROM memberships m
-             WHERE m.org_id = p.org_id AND m.event_id = ? AND m.person_id = p.id AND m.role = 'speaker'
-           )
-           OR EXISTS (
-             SELECT 1 FROM participations pa
-             JOIN submissions s ON s.id = pa.submission_id
-             WHERE s.event_id = ? AND pa.person_id = p.id
-           )
-         )
        ORDER BY p.id`,
     )
-      .bind(event.org_id, JSON.stringify(personIds), eventId, eventId)
-      .all<{ id: string; name: string; email: string }>();
-    const speakerById = new Map(speakers.results.map((speaker) => [speaker.id, speaker]));
-    if (speakers.results.length !== personIds.length) {
-      throw ApiError.notFound("one or more speakers do not belong to this conference");
+      .bind(eventId, eventId, event.org_id, JSON.stringify(personIds))
+      .all<{ id: string; name: string; email: string; invitable: number }>();
+    const candidateById = new Map(candidates.results.map((candidate) => [candidate.id, candidate]));
+    const skipped = personIds.flatMap((personId) => {
+      const candidate = candidateById.get(personId);
+      if (candidate === undefined) {
+        return [{ person_id: personId, name: personId, reason: "this record is not in this organization" }];
+      }
+      if (candidate.invitable === 1) return [];
+      return [{
+        person_id: personId,
+        name: candidate.name,
+        reason: "no speaker seat at this conference — the speaker portal would refuse the link",
+      }];
+    });
+
+    // Nothing in the request can be invited: that is a refusal, not a partial
+    // success, and it keeps the cross-event request refused without writes
+    // (AC-282/AC-283). It says who and why, which the old blanket refusal did
+    // not — and which is the whole complaint about it.
+    if (skipped.length === personIds.length) {
+      throw ApiError.notFound(
+        `No portal invitation was sent. ${skipped.map((entry) => `${entry.name}: ${entry.reason}`).join("; ")}.`,
+      );
     }
 
     const now = Date.now();
     const origin = new URL(context.req.url).origin;
     const invites = [];
     for (const personId of personIds) {
-      const speaker = speakerById.get(personId);
-      if (!speaker) throw ApiError.notFound("speaker not found");
+      const speaker = candidateById.get(personId);
+      if (!speaker || speaker.invitable !== 1) continue;
       const link = await mintPortalMagicLink(context.env.DB, {
         personId: speaker.id,
         eventId,
@@ -115,11 +137,12 @@ const inviteSpeakers = defineApiRoute(
       });
     }
 
-    return context.json({
-      ok: true as const,
-      message: `${invites.length} portal invitation${invites.length === 1 ? "" : "s"} queued in the demo-safe outbox.`,
-      invites,
-    }, 200);
+    // A zero-effect or partial action states why, and names who (SPEC §7).
+    const skippedSentence = skipped.length === 0
+      ? ""
+      : ` ${skipped.length} skipped — ${skipped.map((entry) => `${entry.name}: ${entry.reason}`).join("; ")}.`;
+    const message = `${invites.length} portal invitation${invites.length === 1 ? "" : "s"} queued in the demo-safe outbox.${skippedSentence}`;
+    return context.json({ ok: true as const, message, invites, skipped }, 200);
   },
 );
 

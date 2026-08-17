@@ -1011,11 +1011,25 @@ export async function resolvePublicEmbed(
   };
 }
 
+/**
+ * The conference's call for papers — the form `/announce` hands out and the CFP
+ * embed renders.
+ *
+ * `kind = 'abstract'` is what makes it that form. Without it the query answers
+ * with whichever non-draft form happened to sort first, and a conference's
+ * post-acceptance forms are non-draft too: an organizer who closed the call for
+ * a week found "Call for speakers · open" pointing at Hotel and Travel
+ * Reservations, because closing the real one promoted a speaker-logistics form
+ * into the one place whose entire job is publishing correct public links.
+ *
+ * A conference with no abstract form has no call for papers, and saying so is
+ * the honest answer; the surfaces above both render that state.
+ */
 async function findPrimaryEmbedForm(database: D1Database, eventId: string): Promise<FormRow | null> {
   return database
     .prepare(
       `SELECT * FROM forms
-        WHERE event_id = ? AND status <> 'draft'
+        WHERE event_id = ? AND status <> 'draft' AND kind = 'abstract'
         ORDER BY (status = 'open') DESC, opens_at DESC, id ASC
         LIMIT 1`,
     )

@@ -117,7 +117,15 @@ embedRoutes.get("/embed/:slug", async (context) => {
   if (!result) return context.notFound();
   context.header("Cache-Control", "public, max-age=30, s-maxage=30");
   if (isCalendarFeed) {
-    context.header("Content-Type", "text/calendar; charset=utf-8");
+    // The configure screen previews every output in the same frame, and a
+    // browser will not render `text/calendar` in one — it treats the feed as a
+    // download, the frame keeps the document it already had, and choosing
+    // "iCal feed" silently leaves the previous output's body on screen. JSON
+    // and XML render because their types are renderable; the calendar needs to
+    // be handed over as text to read the same way. The feed itself is
+    // unchanged: only a request that asked for the preview gets the plain type.
+    const previewing = typeof query.preview === "string" && query.preview.length > 0;
+    context.header("Content-Type", previewing ? "text/plain; charset=utf-8" : "text/calendar; charset=utf-8");
     context.header("Content-Disposition", `inline; filename="${encodeURIComponent(slug)}.ics"`);
     return context.body(buildPublicCalendarFeed(result.data, new URL(context.req.url).origin));
   }

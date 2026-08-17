@@ -11,6 +11,7 @@
 
 import { parseUploadOwnerConfig, policyFor } from "../lib/r2/policy";
 import { listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
+import { readStoredAnswerValue } from "../lib/stored-answer";
 import { readTaskFileConfig } from "../lib/task-template-config";
 import { isTaskOverdue } from "../lib/task-due";
 import { isFieldApplicable, projectApplicableAnswers, type FormLengthRule } from "../lib/form-conditions";
@@ -73,8 +74,7 @@ export function parseObject(value: string | null | undefined): Record<string, un
 }
 
 function readStoredAnswer(row: { value_json: string | null; value_text: string | null }): unknown {
-  if (row.value_json !== null) return parseJson<unknown>(row.value_json, row.value_text ?? "");
-  return row.value_text ?? "";
+  return readStoredAnswerValue(row) ?? "";
 }
 
 export async function readSubmissionAnswers(

@@ -5,7 +5,7 @@ import { executeListPage, parsePagination } from "../api/pagination";
 import { localParts } from "../lib/event-time";
 import { listVersionsFor, listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
 import { isTaskDueWithinDays, isTaskOverdue, taskDaysOverdue } from "../lib/task-due";
-import { ONBOARDING_PERSON_SOURCE, ROSTER_PARTICIPATION_ROLES, onboardingPersonSource } from "../lib/roster-source";
+import { ONBOARDING_PERSON_SOURCE, ROSTER_PARTICIPATION_ROLES, onboardingPersonSource, portalInvitablePersonSource } from "../lib/roster-source";
 
 export const ONBOARDING_FILTERS = ["all", "overdue", "incomplete", "risk"] as const;
 export type OnboardingFilter = (typeof ONBOARDING_FILTERS)[number];
@@ -75,6 +75,15 @@ export interface OnboardingRow {
   tasks: OnboardingTaskCell[];
   cells: Record<string, OnboardingTaskCell>;
   last_contact: number | null;
+  /**
+   * Whether a speaker-portal invitation can reach this person.
+   *
+   * The board chases everyone who holds a task, which includes a sponsor's
+   * contact working through the sponsor portal. They have no speaker seat, so
+   * the speaker-portal invitation is a control that cannot succeed for them —
+   * and a control that cannot succeed must not look like one that can.
+   */
+  portal_invitable: boolean;
   owed_count: number;
   done_count: number;
   overdue_task_count: number;
@@ -152,6 +161,14 @@ task_rollup AS (
    WHERE task.event_id = runtime.event_id
    GROUP BY task.person_id
 ),
+-- Materialized once, then joined. As a correlated subquery in the SELECT list
+-- this ran per person per group and cost the board about a second on the demo
+-- conference, which R7 calls a defect rather than a cost to absorb. The event
+-- id arrives as a scalar subquery because SQLite has no LATERAL, so the CTE
+-- cannot see the runtime row through a join.
+invitable_people AS (
+  SELECT person_id FROM (${portalInvitablePersonSource("(SELECT event_id FROM runtime)")})
+),
 roster_people AS (
   SELECT person.id, person.name, person.email, person.title, person.company, person.bio,
          person.headshot_attachment_id,
@@ -160,12 +177,16 @@ roster_people AS (
          COALESCE(rollup.owed_count, 0) AS owed_count,
          COALESCE(rollup.overdue_task_count, 0) AS overdue_task_count,
          COALESCE(rollup.risk_task_count, 0) AS risk_task_count,
-         COALESCE(rollup.severity, 0) AS severity
+         COALESCE(rollup.severity, 0) AS severity,
+         MAX(CASE WHEN invitable.person_id IS NOT NULL THEN 1 ELSE 0 END) AS portal_invitable
     FROM people person
     CROSS JOIN runtime
     LEFT JOIN outbox
       ON outbox.event_id = runtime.event_id AND outbox.person_id = person.id
     LEFT JOIN task_rollup rollup ON rollup.person_id = person.id
+    -- portalInvitablePersonSource is a UNION, so this is one row per person at
+    -- most and cannot multiply the group.
+    LEFT JOIN invitable_people invitable ON invitable.person_id = person.id
    WHERE person.id IN (${onboardingPersonSource("runtime.event_id")})
    GROUP BY person.id, person.name, person.email, person.title, person.company, person.bio,
             person.headshot_attachment_id, runtime.event_id,
@@ -249,7 +270,7 @@ function onboardingPageQueries(
     countSql: `${ONBOARDING_PAGE_CTE}SELECT COUNT(*) AS total FROM roster_people roster ${where}`,
     countBindings: [...runtimeBindings, ...scope.bindings],
     dataSql: `${ONBOARDING_PAGE_CTE}SELECT roster.id, roster.name, roster.email, roster.title, roster.company, roster.bio,
-         roster.headshot_attachment_id, roster.last_contact
+         roster.headshot_attachment_id, roster.last_contact, roster.portal_invitable
     FROM roster_people roster ${where}
     ORDER BY roster.severity DESC, roster.risk_task_count DESC, roster.name COLLATE NOCASE ASC, roster.id ASC
     LIMIT ? OFFSET ?`,
@@ -266,6 +287,7 @@ interface SpeakerBaseRow {
   bio: string | null;
   headshot_attachment_id: string | null;
   last_contact: number | null;
+  portal_invitable: number;
 }
 
 interface TaskQueryRow {
@@ -523,6 +545,7 @@ function buildRows(
       tasks,
       cells,
       last_contact: person.last_contact,
+      portal_invitable: person.portal_invitable === 1,
       owed_count: owedCount,
       done_count: stateTasks.filter((task) => task.state === "done").length,
       overdue_task_count: overdueTaskCount,
@@ -746,6 +769,8 @@ export interface OnboardingSpeakerDetail {
   sessions: OnboardingSession[];
   tasks: OnboardingTaskCell[];
   last_contact: number | null;
+  /** See `OnboardingRow.portal_invitable`. */
+  portal_invitable: boolean;
   messages: Array<{
     id: string;
     template_key: string;
@@ -776,13 +801,14 @@ export async function getOnboardingSpeaker(
   const person = await db.prepare(
     `SELECT person.id, person.name, person.email, person.title, person.company, person.bio,
             person.headshot_attachment_id,
-            MAX(outbox.created_at) AS last_contact
+            MAX(outbox.created_at) AS last_contact,
+            MAX(CASE WHEN person.id IN (${portalInvitablePersonSource()}) THEN 1 ELSE 0 END) AS portal_invitable
      FROM people person
      LEFT JOIN outbox ON outbox.event_id = ? AND outbox.person_id = person.id
      WHERE person.id = ? AND person.id IN (${ONBOARDING_PERSON_SOURCE})
      GROUP BY person.id, person.name, person.email, person.title, person.company, person.bio,
               person.headshot_attachment_id`,
-  ).bind(eventId, personId, eventId, eventId, eventId).first<SpeakerBaseRow>();
+  ).bind(eventId, eventId, eventId, personId, eventId, eventId, eventId).first<SpeakerBaseRow>();
   if (!person) return null;
   const [templates, taskRows, sessions, profileFiles] = await Promise.all([
     listTemplates(db, eventId),
@@ -826,6 +852,7 @@ export async function getOnboardingSpeaker(
     sessions: sessions.get(personId) ?? [],
     tasks,
     last_contact: person.last_contact === null ? null : Number(person.last_contact),
+    portal_invitable: person.portal_invitable === 1,
     messages: messages.results,
     files: {
       profile: profileFiles,
