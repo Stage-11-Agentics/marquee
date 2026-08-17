@@ -46,6 +46,7 @@ import { auditStatement, writeAudit } from "../lib/audit";
 import { contentHistoryFor } from "../lib/history";
 import { submitterEditability } from "../lib/submission-editing";
 import { PUBLISHED_PARTICIPANT_REFUSAL, requirePublishedConfirmation } from "../lib/publication-guard";
+import { publicSpeakerPathForPerson } from "../lib/public-site";
 import {
   parseSocialLinks,
   personProfilePatchShape,
@@ -177,6 +178,7 @@ type SubmissionProjection = {
   }>;
   /** Everyone else on this talk, so a speaker can confirm the record is right. */
   co_presenters_json: string;
+  public_link?: string | null;
   arrival?: ArrivalProjection;
 };
 
@@ -770,7 +772,7 @@ async function listSubmissions(db: D1Database, event: EventProjection, personId:
   return [...grouped.values()];
 }
 
-function submissionView(event: EventProjection, row: SubmissionProjection, showBuildingComparison: boolean): Record<string, unknown> {
+function submissionView(event: EventProjection, row: SubmissionProjection, showBuildingComparison: boolean, publicLink: string | null = null): Record<string, unknown> {
   const dateTime = eventDateTime(event, row.starts_at);
   const waveName = row.wave_name ?? (row.wave_decision_on ? "Next wave" : null);
   const building = arrivalBuildingFor(row);
@@ -832,6 +834,7 @@ function submissionView(event: EventProjection, row: SubmissionProjection, showB
     decision_feedback: row.feedback_md
       ? { id: row.feedback_decision_id, markdown: row.feedback_md, decided_at: row.feedback_decided_at }
       : null,
+    public_link: row.is_published === 1 ? publicLink : null,
     participations: row.participations,
     co_presenters: JSON.parse(row.co_presenters_json ?? "[]") as Array<{ id: string; name: string; role: string }>,
     talk_editable: true,
@@ -993,12 +996,13 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrig
   }
   const event = speakerSeat;
   const person = await personFor(db, auth.personId);
-  const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount, socialPlatforms] = await Promise.all([
+  const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount, socialPlatforms, publicLink] = await Promise.all([
     listSubmissions(db, event, auth.personId),
     listPortalTasks(db, event, { kind: "person", personId: auth.personId }, mediaPublicOrigin, mediaSigningSecret),
     primaryBuildingFor(db, event.id),
     pinnedBuildingCountFor(db, event.id),
     enabledSocialPlatformsFor(db, event.id),
+    publicSpeakerPathForPerson(db, event.id, person.name, person.id),
   ]);
   const showBuildingComparison = showsBuildingComparisonCount(pinnedBuildingCount);
   const submissions = [...submissionRows];
@@ -1033,7 +1037,7 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrig
       historyFor(db, event.id, row.id),
       talkIsEditable(db, event.id, row.id),
     ]);
-    return { ...submissionView(event, row, showBuildingComparison), history, talk_editable };
+    return { ...submissionView(event, row, showBuildingComparison, publicLink), history, talk_editable };
   }));
   return {
     seat: "speaker" as const,

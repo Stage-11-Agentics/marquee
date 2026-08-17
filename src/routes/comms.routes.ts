@@ -17,7 +17,7 @@ import {
   type MailTemplateKey,
 } from "../jobs/mail/templates";
 import { renderAdHocMail, renderMail, type MergeData } from "../jobs/mail/render";
-import { mergeDataForRecipient, firstName } from "../jobs/mail/merge-data";
+import { mergeDataForRecipient } from "../jobs/mail/merge-data";
 import { mergeFieldErrorMessage, unknownMergeFieldsForCommunication, unknownMergeFieldsForCommunicationTemplate } from "../lib/mail-merge-fields";
 import {
   DEMO_MAIL_ALLOWLIST_LIMIT,
@@ -898,7 +898,7 @@ const previewComms = defineApiRoute(
       : undefined;
     let data: MergeData = selected
       ? mergeDataFor(selected)
-      : { "speaker.first_name": firstName(recipient.name), "speaker.name": recipient.name, "speaker.email": recipient.email };
+      : mergeDataForRecipient({ name: recipient.name, email: recipient.email });
     if (body.template_key) {
       if (!(COMMUNICATION_TEMPLATE_KEYS as readonly string[]).includes(body.template_key)) throw ApiError.badRequest("unknown template key", "template_key");
       const template = await findTemplate(context.env.DB, eventId, body.template_key);

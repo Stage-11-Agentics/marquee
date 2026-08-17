@@ -52,6 +52,7 @@ const ROW_LABELS = {
   waitlist: ["Will move", "Already notified — will not be sent twice", "No valid address — the decision applies", "Cannot move"],
   withdraw: ["Will move", "Already notified — will not be sent twice", "No valid address — the decision applies", "Cannot move"],
   notify: ["Will be notified now", "Still queued — sending again would deliver twice", "Need an address first — excluded from this send", "Cannot notify"],
+  announce: ["Will send share link", "Already queued or sent", "Need an address first — excluded from this send", "Cannot announce"],
 } as const;
 
 const ACTION_COPY = {
@@ -60,6 +61,7 @@ const ACTION_COPY = {
   waitlist: { verb: "Waitlist", past: "waitlisted", question: "Waitlist", consequence: "A waitlist saves the decision and sends no message. Waitlist feedback appears in the speaker’s portal; no email is sent. Review the records before they move." },
   withdraw: { verb: "Withdraw", past: "withdrawn", question: "Withdraw", consequence: "Withdrawal changes the record and sends no message. Review the records before they move." },
   notify: { verb: "Notify", past: "notified", question: "Notify", consequence: "Each record's own decision template renders per recipient. Records still queued from an earlier send are held in view so the duplicate-send risk is visible." },
+  announce: { verb: "Announce", past: "announced", question: "Announce", consequence: "Each published speaker receives the rendered share-link message after you review the bounded plan." },
 } as const;
 
 function displayRows(plan: DecisionPlanResponse): DecisionPlanResponse["rows"] {
@@ -83,6 +85,7 @@ function confirmLabel(plan: DecisionPlanResponse): string {
     return `${copy.verb} ${count.toLocaleString()} · sends nothing`;
   }
   if (plan.action === "notify") return `${copy.verb} ${count.toLocaleString()} speaker${count === 1 ? "" : "s"}`;
+  if (plan.action === "announce") return `${copy.verb} ${plan.rows[0].count.toLocaleString()} speaker${plan.rows[0].count === 1 ? "" : "s"}`;
   if (plan.action === "waitlist" || plan.action === "withdraw") return `${copy.verb} ${count.toLocaleString()}`;
   return `${copy.verb} and notify ${plan.rows[0].count.toLocaleString()}`;
 }
@@ -120,7 +123,7 @@ export function DecisionPlanPanel({
   const activeRows = plan ? rows[bucket] : null;
   const copy = plan ? ACTION_COPY[plan.action] : ACTION_COPY.accept;
   const detailRecords = activeRows?.records ?? [];
-  const hasFeedback = plan?.action !== "notify";
+  const hasFeedback = plan?.action !== "notify" && plan?.action !== "announce";
 
   return <section class="decision-plan-panel" aria-label="Decision plan">
     <header class="decision-plan-head">

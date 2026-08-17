@@ -138,6 +138,7 @@ export const routeTable: readonly RouteDefinition[] = [
   { id: "reviewer-queue", path: "/reviewer/queue", label: "Review queue", icon: "", group: "utility" },
   // The ↗ leads on every public row: the glyph is the promise that the click
   // leaves the admin shell, and it belongs before the label rather than after it.
+  { id: "announce", path: "/announce", label: "Announce", icon: "", group: "public-links", sidebar: true },
   { id: "event-site", path: "/agenda", label: "Conference site", icon: "↗", group: "public-links", sidebar: true, external: true },
   { id: "portal", path: "/portal", label: "Speaker portal", icon: "↗", group: "public-links", sidebar: true, external: true },
   // The sponsor portal is a real route with no sidebar row. An organizer holds no

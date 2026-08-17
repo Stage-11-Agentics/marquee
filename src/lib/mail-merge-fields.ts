@@ -11,6 +11,7 @@ export const MERGE_FIELDS = [
   "speaker.name",
   "speaker.email",
   "event.name",
+  "speaker.public_link",
   "reviewer.first_name",
   "submission.title",
   "session.title",

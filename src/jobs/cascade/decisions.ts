@@ -15,7 +15,7 @@ import {
   WORK_HOLDING_PARTICIPATION_ROLES,
 } from "../../lib/participants";
 import { acceptedSpeakerMembershipStatements } from "../../lib/speaker-membership";
-import { purgePublicEmbedCache, type PublicEmbedCache } from "../../lib/public-site";
+import { publicSpeakerPathForPerson, purgePublicEmbedCache, type PublicEmbedCache } from "../../lib/public-site";
 import { PUBLISHED_SESSION_REFUSAL } from "../../lib/publication-guard";
 import {
   drainCalendarCancellations,
@@ -31,8 +31,8 @@ import { mintPortalMagicLink } from "../../lib/auth/magic-links";
 import { isValidEmail } from "../../lib/email-validity";
 import type { DecisionPlanAction } from "./decision-plan";
 
-export type DecisionAction = Exclude<DecisionPlanAction, "withdraw" | "notify">;
-export type BulkAction = Exclude<DecisionPlanAction, "notify">;
+export type DecisionAction = Exclude<DecisionPlanAction, "withdraw" | "notify" | "announce">;
+export type BulkAction = Exclude<DecisionPlanAction, "notify" | "announce">;
 
 export interface DecisionActor {
   kind: "user" | "api_token";
@@ -512,10 +512,18 @@ async function enqueueDecisionMail(
   });
   const origin = (input.origin?.trim() || "https://marquee.stage11.dev").replace(/\/+$/, "");
   const portalLink = `${origin}/api/v1/auth/exchange?token=${encodeURIComponent(portalInvite.token)}`;
+  const publicLinkPath = await publicSpeakerPathForPerson(
+    input.db,
+    input.eventId,
+    input.submission.person_name,
+    input.submission.person_id,
+  );
+  const publicLink = publicLinkPath ? `${origin}${publicLinkPath}` : null;
   const data: MergeData = {
     "speaker.first_name": input.submission.person_name.trim().split(/\s+/)[0] ?? input.submission.person_name,
     "speaker.name": input.submission.person_name,
     "speaker.email": input.submission.person_email,
+    "speaker.public_link": publicLink,
     "event.name": input.submission.event_name,
     "submission.title": input.submission.title,
     "portal.link": portalLink,

@@ -4,8 +4,10 @@ import { renderToString } from "preact-render-to-string";
 
 import type { Env } from "../index";
 import { ICON_LINKS } from "../lib/head-icons";
+import { escapeHtml } from "../jobs/mail/render";
 import {
   loadPublicAgenda,
+  publicAbstractSnippet,
   loadPublicEvent,
   loadPublicSession,
   loadPublicSpeaker,
@@ -39,20 +41,65 @@ async function assetShell(assets: Fetcher | undefined, request: Request): Promis
 export function renderPublicDocument(
   shell: string,
   markup: string,
-  options: { title?: string; script?: string } = {},
+  options: {
+    title?: string;
+    /** Public speaker permalinks use the exact event-facing title contract. */
+    appendBrandToTitle?: boolean;
+    script?: string;
+    metadata?: {
+      title: string;
+      description: string;
+      url: string;
+      image: string;
+      type?: "website" | "article" | "profile";
+    };
+  } = {},
 ): string {
   const document = shell.includes('<div id="app"></div>')
     ? shell.replace('<div id="app"></div>', `<div id="app">${markup}</div>`)
     : FALLBACK_DOCUMENT.replace('<div id="app"></div>', `<div id="app">${markup}</div>`);
   const titled = options.title
-    ? document.replace(/<title>[^<]*<\/title>/i, `<title>${options.title} · Marquee</title>`)
+    ? document.replace(
+      /<title>[^<]*<\/title>/i,
+      `<title>${escapeHtml(options.title)}${options.appendBrandToTitle === false ? "" : " · Marquee"}</title>`,
+    )
     : document;
+  const metadata = options.metadata
+    ? `<meta property="og:title" content="${escapeHtml(options.metadata.title)}"><meta property="og:description" content="${escapeHtml(options.metadata.description)}"><meta property="og:type" content="${options.metadata.type ?? "website"}"><meta property="og:url" content="${escapeHtml(options.metadata.url)}"><meta property="og:image" content="${escapeHtml(options.metadata.image)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(options.metadata.title)}"><meta name="twitter:description" content="${escapeHtml(options.metadata.description)}"><meta name="twitter:image" content="${escapeHtml(options.metadata.image)}">`
+    : "";
   const responsive = /<meta\s+[^>]*name=["']viewport["']/i.test(titled)
     ? titled
     : titled.replace("</head>", '<meta name="viewport" content="width=device-width, initial-scale=1"> </head>');
-  return responsive
+  return (metadata ? responsive.replace("</head>", `${metadata}</head>`) : responsive)
     .replace("</head>", `<style data-marquee-public>${PUBLIC_SITE_STYLES}</style></head>`)
     .replace("</body>", options.script ? `<script data-marquee-public>${options.script}</script></body>` : "</body>");
+}
+
+const PUBLIC_PAGE_CACHE_CONTROL = "public, max-age=300";
+
+function agendaDescription(eventName: string, titles: readonly string[]): string {
+  const visible = titles.filter(Boolean).slice(0, 3).join(" · ");
+  return visible
+    ? `${eventName}'s published program: ${visible}${titles.length > 3 ? " and more" : ""}.`
+    : `${eventName}'s published program and speaker lineup.`;
+}
+
+function sessionDescription(title: string, abstract: string | null, speakers: readonly string[]): string {
+  const snippet = publicAbstractSnippet(abstract)?.head;
+  const speakerLine = speakers.filter(Boolean).join(" · ");
+  return [snippet ?? title, speakerLine ? `Featuring ${speakerLine}.` : null].filter(Boolean).join(" ");
+}
+
+function publicPageMetadata(
+  requestUrl: string,
+  metadata: { title: string; description: string; type?: "website" | "article" | "profile" },
+) {
+  const url = new URL(requestUrl);
+  return {
+    ...metadata,
+    url: url.toString(),
+    image: `${url.origin}/marquee-share-card.svg`,
+  };
 }
 
 /**
@@ -109,7 +156,11 @@ publicAgendaRoutes.get("/agenda", async (context) => {
   const turnstileSiteKey = (await publicTurnstileExempt(context.env.DB, data.event.id))
     ? null
     : context.env.TURNSTILE_SITE_KEY ?? null;
-  context.header("Cache-Control", "no-store");
+  context.header("Cache-Control", PUBLIC_PAGE_CACHE_CONTROL);
+  const metadata = publicPageMetadata(context.req.url, {
+    title: `${data.event.name} — public agenda`,
+    description: agendaDescription(data.event.name, data.sessions.map((session) => session.title)),
+  });
   return context.html(renderPublicDocument(
     shell,
     renderToString(
@@ -121,7 +172,7 @@ publicAgendaRoutes.get("/agenda", async (context) => {
         turnstileSiteKey={turnstileSiteKey}
       />,
     ),
-    { title: view === "mine" ? "My schedule" : "Agenda", script: `${PUBLIC_AGENDA_SCRIPT}\n${PUBLIC_SCHEDULE_SCRIPT}` },
+    { title: view === "mine" ? "My schedule" : "Agenda", metadata, script: `${PUBLIC_AGENDA_SCRIPT}\n${PUBLIC_SCHEDULE_SCRIPT}` },
   ));
 });
 
@@ -147,11 +198,15 @@ publicAgendaRoutes.get("/speakers", async (context) => {
   });
   const shell = await assetShell(context.env.ASSETS, context.req.raw);
   if (!data) return notFoundDocument(shell);
-  context.header("Cache-Control", "no-store");
+  context.header("Cache-Control", PUBLIC_PAGE_CACHE_CONTROL);
+  const metadata = publicPageMetadata(context.req.url, {
+    title: `${data.event.name} — speakers`,
+    description: `${data.event.name}'s published speaker directory.`,
+  });
   return context.html(renderPublicDocument(
     shell,
     renderToString(<PublicSpeakerDirectoryPage data={data} />),
-    { title: "Speakers", script: PUBLIC_SCHEDULE_SCRIPT },
+    { title: "Speakers", metadata, script: PUBLIC_SCHEDULE_SCRIPT },
   ));
 });
 
@@ -160,11 +215,16 @@ publicAgendaRoutes.get("/s/:slug", async (context) => {
   const result = await loadPublicSession(context.env.DB, context.req.param("slug"), query.event ?? query.event_slug);
   const shell = await assetShell(context.env.ASSETS, context.req.raw);
   if (!result) return notFoundDocument(shell);
-  context.header("Cache-Control", "no-store");
+  context.header("Cache-Control", PUBLIC_PAGE_CACHE_CONTROL);
+  const metadata = publicPageMetadata(context.req.url, {
+    title: `${result.session.title} — ${result.event.name}`,
+    description: sessionDescription(result.session.title, result.session.abstract, result.session.speakers.map((speaker) => speaker.name)),
+    type: "article",
+  });
   return context.html(renderPublicDocument(
     shell,
     renderToString(<PublicSessionPage event={result.event} venue={result.venue} session={result.session} origin={new URL(context.req.url).origin} starCounts={await publishableStarCounts(context.env.DB, result.event.id)} />),
-    { title: result.session.title, script: PUBLIC_SCHEDULE_SCRIPT },
+    { title: result.session.title, metadata, script: PUBLIC_SCHEDULE_SCRIPT },
   ));
 });
 
@@ -173,10 +233,15 @@ publicAgendaRoutes.get("/p/:slug", async (context) => {
   const result = await loadPublicSpeaker(context.env.DB, context.req.param("slug"), query.event ?? query.event_slug);
   const shell = await assetShell(context.env.ASSETS, context.req.raw);
   if (!result) return notFoundDocument(shell);
-  context.header("Cache-Control", "no-store");
+  context.header("Cache-Control", PUBLIC_PAGE_CACHE_CONTROL);
+  const metadata = publicPageMetadata(context.req.url, {
+    title: `${result.speaker.name} — speaking at ${result.event.name}`,
+    description: `${result.speaker.name}'s published talks at ${result.event.name}: ${result.speaker.sessions.map((session) => session.title).join(" · ")}.`,
+    type: "profile",
+  });
   return context.html(renderPublicDocument(
     shell,
     renderToString(<PublicSpeakerPage event={result.event} venue={result.venue} speaker={result.speaker} />),
-    { title: result.speaker.name, script: `${PUBLIC_SCHEDULE_SCRIPT}\n${PUBLIC_SPEAKER_SCRIPT}` },
+    { title: metadata.title, appendBrandToTitle: false, metadata, script: `${PUBLIC_SCHEDULE_SCRIPT}\n${PUBLIC_SPEAKER_SCRIPT}` },
   ));
 });

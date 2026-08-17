@@ -20,7 +20,7 @@ test("CONTRACT · MRQ-203 · the sidebar reproduces the ruled group structure", 
     ["conference", ["Program pipeline", "Program board", "Abstracts & sessions", "Agenda", "Speakers"]],
     ["speaker-ops", ["Onboarding", "Tasks", "Communications", "Files", "Follow-ups"]],
     ["cfp", ["Forms", "Evaluation", "Reviewer"]],
-    ["public-links", ["Conference site", "Speaker portal", "Embeds"]],
+    ["public-links", ["Announce", "Conference site", "Speaker portal", "Embeds"]],
     ["settings", ["Settings"]],
   ]);
 });

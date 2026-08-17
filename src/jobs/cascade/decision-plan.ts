@@ -9,7 +9,7 @@ export const DECISION_PLAN_DISPOSITIONS = [
 ] as const;
 
 export type DecisionPlanDisposition = (typeof DECISION_PLAN_DISPOSITIONS)[number];
-export type DecisionPlanAction = "accept" | "reject" | "waitlist" | "withdraw" | "notify";
+export type DecisionPlanAction = "accept" | "reject" | "waitlist" | "withdraw" | "notify" | "announce";
 
 export interface DecisionPlanRecordSnapshot {
   id: string;
@@ -64,6 +64,7 @@ function reasonFor(
   template: DecisionPlanTemplate,
 ): string {
   if (disposition === "already_notified") {
+    if (action === "announce") return "An announcement email is already queued or settled for this speaker.";
     return action === "notify"
       ? "A previous notification is still queued — sending again would deliver twice."
       : "A decision notification is already queued or settled for this record.";
@@ -82,6 +83,7 @@ function reasonFor(
   if (!template.enabled) return "The decision template is disabled; this action will send nothing.";
   if (snapshot.demoSuppressed) return "Demo safety will keep this message in the outbox.";
   if (action === "notify") return "The existing decision notification will be queued.";
+  if (action === "announce") return "The speaker's share-link email will be queued.";
   return action === "accept" ? "The acceptance email will be queued." : "The rejection email will be queued.";
 }
 

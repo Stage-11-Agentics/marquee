@@ -111,6 +111,9 @@ export const IDEMPOTENCY_REGISTRY = Object.freeze({
   /** Ad-hoc send: preserve the recipient business entity for timeline joins. */
   customRecipient: (recipientId: Id): EntityId => entityId(recipientId),
 
+  /** Announce mail: one public-link action per event and published speaker. */
+  announceRecipient: (eventId: Id, personId: Id): EntityId => entityId(`announce:${eventId}:${personId}`),
+
   /**
    * Ad-hoc send idempotency seed: one durable compose id, recipient, and copy
    * revision. The outbox row still stores customRecipient so consumer audit

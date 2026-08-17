@@ -94,6 +94,14 @@
 .portal-panel-meta { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; min-width: 0; }
 .portal-panel-flag { align-items: center; background: var(--accent-wash); border: 1px solid var(--accent); color: var(--accent-dark); display: inline-flex; font: 600 10.5px/1 var(--mono); letter-spacing: .06em; min-height: 22px; padding: 4px 8px; text-transform: uppercase; white-space: nowrap; }
 .portal-panel-body { padding: 16px; }
+.portal-announce { margin-top: 18px; }
+.portal-announce-copy { color: var(--ink); font-size: 15px; line-height: 1.55; margin: 0; max-width: 72ch; white-space: pre-wrap; }
+.portal-announce-note { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 12px 0 0; max-width: 72ch; }
+.portal-announce-link-row { align-items: end; border-top: 1px solid var(--rule-soft); display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) auto; margin-top: 16px; padding-top: 14px; }
+.portal-announce-link { color: var(--accent-dark); font: 600 11px/1.4 var(--mono); overflow-wrap: anywhere; text-decoration: underline; }
+.portal-announce-link.disabled { color: var(--muted); text-decoration: none; }
+.portal-announce-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.portal-announce-actions .portal-button { text-decoration: none; }
 .portal-task-list { display: grid; }
 
 /* An open task is stated three ways: the mark, the named flag, and a filled
@@ -296,6 +304,9 @@
   .portal-task-action { width: 110px; }
   .portal-task-payload { grid-column: 2 / 4; }
   .portal-task-title { overflow: visible; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
+  .portal-announce-link-row { align-items: stretch; grid-template-columns: minmax(0, 1fr); }
+  .portal-announce-actions { justify-content: stretch; }
+  .portal-announce-actions .portal-button { flex: 1 1 0; text-align: center; }
 }
 
 /* File deliverables: the speaker sees the filename in the collapsed row and
