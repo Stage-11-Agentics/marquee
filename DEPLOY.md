@@ -265,21 +265,36 @@ dies immediately with `CACError: Unknown option --var`. That is a fact about
 `--var`, not about the Vite path, and the two recipes below both work. Pick by
 which cost you would rather pay.
 
-**Either way, `.dev.vars` is what actually carries these — not a shell variable.**
-Measured three ways on a clean checkout (2026-08-17, MRQ-279):
+**`.dev.vars` and the shell environment are not additive. If `.dev.vars` exists it
+is the source, and exported variables are discarded silently.** This is the whole
+trap, and neither half of it announces itself. Measured on the Vite path by
+`Set-Cookie` on `POST /api/v1/auth/demo`, changing one thing at a time
+(2026-08-17, MRQ-279; reproduced independently in two worktrees):
 
-| how the flag was supplied | `Set-Cookie` on `POST /api/v1/auth/demo` |
-|---|---|
-| `env INSECURE_LOCAL_COOKIES=1 npx vite dev` | `… HttpOnly; **Secure**; SameSite=Lax` — **did not forward** |
-| `INSECURE_LOCAL_COOKIES=1` in `.dev.vars`, plain `npx vite dev` | `… HttpOnly; SameSite=Lax` — forwarded |
-| `--var INSECURE_LOCAL_COOKIES:1` on `wrangler dev` | forwarded |
+| `.dev.vars` | `INSECURE_LOCAL_COOKIES` exported | result |
+|---|---|---|
+| absent | no | `Secure` **present** — flag off, as configured |
+| absent | yes | `Secure` absent — **the export works** |
+| present, without the flag | yes | `Secure` **present** — **the export is ignored, with no warning** |
+| present, with the flag | — | `Secure` absent — works |
 
-Exporting it in the shell looks like it should work and silently does not: the
-Worker reads `context.env`, and the plugin populates that from the config and
-`.dev.vars`, not from the parent process. A server that *is* serving non-Secure
-cookies while its command line carries the env var is being served by one of the
-other two mechanisms — check its `.dev.vars` and its `dist/marquee/wrangler.json`
-before concluding the export did it.
+So both of these are true, and which one applies depends on a file you may not
+remember creating:
+
+- **`.dev.vars` exists** (the normal state — you copied `.dev.vars.example` for
+  the Turnstile and upload values): put the dev-only flags **in that file**.
+  Exporting them does nothing.
+- **No `.dev.vars` at all**: exporting them works.
+
+The failure mode is the one worth fearing: no error, no warning, a `Secure`
+cookie, and then every authenticated click 401s **in the browser only** while
+`curl` sails through. It is the same shape as `.dev.vars` breaking
+`auth-demo.test.ts`, arriving from the other direction — and the two conspire,
+because the moment you add the flag to `.dev.vars` to fix the browser you have
+armed the test failure, and the moment you delete `.dev.vars` for the gate you
+have disarmed the browser fix. **Check which state you are in before believing
+either.** `wrangler dev --var` sidesteps the question entirely, which is the
+argument for Recipe B.
 
 **Recipe A — `npm run dev`, with `.dev.vars`.** Add the flags you need to
 `.dev.vars` and use the ordinary dev server. This carries **all three**, uploads

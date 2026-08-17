@@ -3,7 +3,10 @@
 # see DEPLOY.md "Driving a local browser":
 #   - add them to YOUR OWN .dev.vars and run `npm run dev`; or
 #   - pass `--var INSECURE_LOCAL_COOKIES:1` on a `wrangler dev` command.
-# An exported shell variable does NOT reach the Worker on the Vite path.
+# Exporting them in the shell works ONLY if you have no .dev.vars at all: the
+# file's mere presence replaces the environment as the source, and an exported
+# flag is then discarded with no warning. If you copied this example, you have
+# the file, so put them in it.
 # They are deliberately absent from this example because `npm test` reads
 # .dev.vars too, and INSECURE_LOCAL_COOKIES=1 makes auth-demo.test.ts's cookie
 # contract fail on a cookie that is correct in production. Add them when you are
