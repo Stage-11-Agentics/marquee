@@ -71,6 +71,40 @@ describe.sequential("MRQ-113 portal invites", () => {
     expect(invitationMail?.text).toContain("opened again");
   });
 
+  /**
+   * MRQ-277 D6. One ineligible recipient used to abort the whole batch, with a
+   * sentence naming neither the person nor the cause: an organizer who ticked
+   * forty speakers and one sponsor contact sent nothing and was not told why.
+   */
+  test("CONTRACT · MRQ-277 · one ineligible recipient does not cancel the batch, and is named with the reason", async () => {
+    const before = Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM outbox WHERE template_key = 'portal_invite'").first<{ count: number }>())?.count);
+    const response = await request(`/api/v1/events/${EVENT_ID}/speakers/invite`, {
+      method: "POST",
+      body: JSON.stringify({ person_ids: [PRIYA_ID, OUTSIDER_ID, "person_mrq113_unknown"] }),
+    });
+    expect(response.status).toBe(200);
+    const result = await response.json<{
+      message: string;
+      invites: Array<{ person_id: string }>;
+      skipped: Array<{ person_id: string; name: string; reason: string }>;
+    }>();
+
+    // The eligible recipient was still invited.
+    expect(result.invites.map((invite) => invite.person_id)).toEqual([PRIYA_ID]);
+    expect(Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM outbox WHERE template_key = 'portal_invite'").first<{ count: number }>())?.count)).toBe(before + 1);
+
+    // And every recipient it could not reach is named, with a cause.
+    expect(result.skipped.map((entry) => entry.person_id).sort()).toEqual([OUTSIDER_ID, "person_mrq113_unknown"].sort());
+    const outsider = result.skipped.find((entry) => entry.person_id === OUTSIDER_ID);
+    expect(outsider?.name).toBe("Other event speaker");
+    expect(outsider?.reason).toContain("no speaker seat at this conference");
+    expect(result.skipped.find((entry) => entry.person_id === "person_mrq113_unknown")?.reason)
+      .toContain("not in this organization");
+    // The operator-facing sentence carries both halves, not just the count.
+    expect(result.message).toContain("1 portal invitation");
+    expect(result.message).toContain("Other event speaker");
+  });
+
   test("AC-282 + AC-283 · unauthenticated and cross-event speaker requests are refused without writes", async () => {
     const before = Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM outbox").first<{ count: number }>())?.count);
     expect((await request(`/api/v1/events/${EVENT_ID}/speakers/invite`, { method: "POST", body: JSON.stringify({ person_ids: [PRIYA_ID] }) }, "")).status).toBe(401);

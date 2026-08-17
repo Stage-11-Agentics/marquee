@@ -35,6 +35,35 @@ function criterionScores(byName: Readonly<Record<string, number>>): Record<strin
   );
 }
 
+/**
+ * Round one's completed reviews, two in every three carrying a real scorecard.
+ *
+ * A conference with one scored abstract out of a thousand cannot demonstrate
+ * its own results view: the WEIGHTED SCORE column is a single number over a
+ * wall of "Not scored", and sorting it high-to-low and low-to-high returns the
+ * identical page — a working control that is indistinguishable from a broken
+ * one, and read as broken by everyone who tries it. Enough of the round is
+ * scored here for the column to rank, and the remaining third stays
+ * recommendation-only on purpose: "Not scored" is a real state a real
+ * conference holds, it must keep sorting last in both directions, and the
+ * unweighted/weighted distinction needs a case to show.
+ *
+ * Deterministic in the index, like every other seeded value, so re-running
+ * converges instead of reshuffling the demo under a judge.
+ */
+function seededScorecard(index: number): { score: number; criteria: Record<string, number> } | null {
+  if (index % 3 === 2) return null;
+  // Half-steps across the published 1–5 scale, offset per criterion so the
+  // three do not move in lockstep.
+  const point = (offset: number): number => 1 + (((index * 7) + offset) % 9) * 0.5;
+  const criteria = { "Program fit": point(0), "Audience value": point(2), Clarity: point(4) };
+  const weights = { "Program fit": 40, "Audience value": 35, Clarity: 25 } as const;
+  const weighted = (criteria["Program fit"] * weights["Program fit"]
+    + criteria["Audience value"] * weights["Audience value"]
+    + criteria.Clarity * weights.Clarity) / 100;
+  return { score: Math.round(weighted * 100) / 100, criteria: criterionScores(criteria) };
+}
+
 function table(ctx: SeedContext, name: string): SeedRow["row"][] {
   return ctx.rows.filter((entry) => entry.table === name).map((entry) => entry.row);
 }
@@ -276,6 +305,7 @@ export function run(ctx: SeedContext): void {
   const recommendations = ["approve", "maybe", "deny"] as const;
   completed.forEach((submission, index) => {
     const reviewerId = reviewerIds[index % reviewerIds.length]!;
+    const scorecard = seededScorecard(index);
     ctx.add("round_assignments", {
       id: seedId("ras", `${ROUND_ONE_ID}-${submission.id}-${reviewerId}`),
       round_id: ROUND_ONE_ID,
@@ -292,9 +322,11 @@ export function run(ctx: SeedContext): void {
       submission_id: submission.id,
       reviewer_person_id: reviewerId,
       recommendation: recommendations[index % recommendations.length]!,
-      score: null,
-      criteria_scores: null,
-      comment: "Seeded recommendation; the optional numeric scorecard was intentionally skipped.",
+      score: scorecard?.score ?? null,
+      criteria_scores: scorecard ? JSON.stringify(scorecard.criteria) : null,
+      comment: scorecard
+        ? "Seeded round-one review: criteria scored against the published scorecard."
+        : "Seeded recommendation; the optional numeric scorecard was intentionally skipped.",
       abstained: 0,
       created_at: ctx.now - (index + 1) * 60_000,
       updated_at: ctx.now - (index + 1) * 60_000,

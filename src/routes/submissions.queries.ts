@@ -15,6 +15,7 @@ import { isFieldApplicable, type FormFieldConditionInput } from "../lib/form-con
 import { formatEventDateTime, localParts } from "../lib/event-time";
 import { DECISION_RECIPIENT_ROLES, participantListSql, primaryParticipantSql } from "../lib/participants";
 import { reviewAggregateColumns } from "../lib/review-aggregate";
+import { readStoredAnswerValue } from "../lib/stored-answer";
 import { submissionReferenceSearchPatterns, submissionReferenceSearchSql } from "../lib/submission-reference";
 import { showsBuildingComparisonCount } from "../lib/venue-disclosure";
 import { publicationClassificationPredicate } from "../lib/publication-truth";
@@ -670,14 +671,7 @@ async function hasColumns(database: D1Database, table: string, required: readonl
 }
 
 function answerValue(row: DraftAnswerRow): unknown {
-  if (row.value_json !== null) {
-    try {
-      return JSON.parse(row.value_json) as unknown;
-    } catch {
-      return row.value_text;
-    }
-  }
-  return row.value_text;
+  return readStoredAnswerValue(row);
 }
 
 function answerPresent(value: unknown): boolean {

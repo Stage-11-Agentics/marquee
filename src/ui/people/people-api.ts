@@ -123,11 +123,16 @@ export interface PeopleImportResult {
   skipped: number;
   unmapped: string[];
   headers: string[];
+  attendances: number;
+  roster_placements: number;
+  event: string | null;
   undo_path: string;
 }
 
 export interface PeopleImportUndoResult {
   undone: number;
+  attendances_removed: number;
+  roster_placements_removed: number;
   skipped: number;
   skipped_rows: Array<{
     target_id: string;
@@ -442,7 +447,14 @@ export function exportPeople(filters: PeopleFilters): Promise<string> {
   });
 }
 
-export function importPeople(input: { csv: string; filename?: string }): Promise<PeopleImportResult> {
+export function importPeople(input: {
+  csv: string;
+  filename?: string;
+  /** A conference id or slug: everyone in the file is recorded as attending it. */
+  event?: string;
+  /** Seat everyone in the file on that conference's roster, as a speaker. */
+  roster?: boolean;
+}): Promise<PeopleImportResult> {
   return write("/api/v1/org/imports", "/api/v1/org/imports", input);
 }
 

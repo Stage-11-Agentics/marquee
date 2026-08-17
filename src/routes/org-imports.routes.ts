@@ -19,6 +19,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { orgAttributionEventId, requireOrgAccess } from "../lib/auth/org-access";
 import { attendanceStatement, resolveEventForOrg } from "../lib/event-attendances";
 import { planPersonImport } from "../lib/people-import";
+import { speakerMembershipStatement } from "../lib/speaker-membership";
 import { noPersonReferencesPredicate, personReferences } from "../lib/person-references";
 
 const importParams = z.object({ importId: z.string().min(1) });
@@ -101,11 +102,11 @@ function restoreSnapshot(value: string): OrgPersonImportSnapshot {
  * means "this import did not mark anyone as attending" rather than an error:
  * a receipt written before this field existed is not a corrupt receipt.
  */
-function readAttendanceEventId(mapping: string | null): string | null {
+function readMappingEventId(mapping: string | null, key: "attendance_event_id" | "roster_event_id"): string | null {
   if (!mapping) return null;
   try {
-    const parsed = JSON.parse(mapping) as { attendance_event_id?: unknown };
-    return typeof parsed.attendance_event_id === "string" ? parsed.attendance_event_id : null;
+    const parsed = JSON.parse(mapping) as Record<string, unknown>;
+    return typeof parsed[key] === "string" ? parsed[key] : null;
   } catch {
     return null;
   }
@@ -124,6 +125,8 @@ const importResponse = z.object({
   headers: z.array(z.string()),
   attendances: z.number().int().nonnegative()
     .describe("Attendance rows written for the conference named in `event`; zero when none was named."),
+  roster_placements: z.number().int().nonnegative()
+    .describe("Speaker seats written on the conference roster named in `event`; zero unless `roster` was asked for."),
   event: z.string().nullable().describe("The conference slug these people were marked as attending, if one was named."),
   undo_path: z.string().describe("POST this path to restore the values overwritten by this import."),
 }).openapi("PeopleImportResult");
@@ -132,6 +135,8 @@ const undoResponse = z.object({
   undone: z.number().int().nonnegative(),
   attendances_removed: z.number().int().nonnegative()
     .describe("Attendance rows withdrawn at the conference this import named; zero when it named none."),
+  roster_placements_removed: z.number().int().nonnegative()
+    .describe("Speaker seats withdrawn at the conference this import placed people on; zero when it placed none."),
   skipped: z.number().int().nonnegative(),
   skipped_rows: z.array(z.object({
     target_id: z.string(),
@@ -149,7 +154,7 @@ const importPeople = defineApiRoute(
     operationId: "importOrgPeople",
     summary: "Import people from a CSV",
     description:
-      "Columns are mapped by header. Matched on email: an existing person is updated, never duplicated. Pass `event` (id or slug) to mark everyone in the file as an attendee of that conference — the attendance rows are written by this call, so importing a ticket export is one request, and re-running it neither duplicates a person nor a row. Returns created, updated, skipped, and any column it could not map.",
+      "Columns are mapped by header. Matched on email: an existing person is updated, never duplicated. Pass `event` (id or slug) to mark everyone in the file as an attendee of that conference — the attendance rows are written by this call, so importing a ticket export is one request, and re-running it neither duplicates a person nor a row. Add `roster: true` to seat them on that conference's speaker roster in the same pass. Returns created, updated, skipped, and any column it could not map.",
     tags: ["People"],
     request: {
       body: {
@@ -160,6 +165,8 @@ const importPeople = defineApiRoute(
               filename: z.string().trim().max(200).optional(),
               event: z.string().trim().min(1).max(120).optional()
                 .describe("A conference id or slug. Everyone imported is recorded as an attendee of it (source: import)."),
+              roster: z.boolean().optional()
+                .describe("Seat everyone imported on the roster of the conference in `event`, as a speaker. Requires `event`."),
             }),
           },
         },
@@ -182,6 +189,12 @@ const importPeople = defineApiRoute(
     if (body.event && !attendanceEvent) {
       throw ApiError.unprocessable(`this organization has no conference "${body.event}"`, "event");
     }
+    // A roster is a roster OF something. Asking to seat people without naming
+    // the conference is the one reading this call must not guess at.
+    if (body.roster && !attendanceEvent) {
+      throw ApiError.unprocessable("name the conference in `event` before asking for a place on its roster", "roster");
+    }
+    const rosterEvent = body.roster ? attendanceEvent : null;
     // `imports.event_id` is NOT NULL, so the receipt is attributed to the
     // organization's conference — the documented single-org shortcut, decided in
     // one place.
@@ -203,6 +216,7 @@ const importPeople = defineApiRoute(
         unmapped: plan.unmapped,
         headers: plan.headers,
         ...(attendanceEvent ? { attendance_event_id: attendanceEvent.id } : {}),
+        ...(rosterEvent ? { roster_event_id: rosterEvent.id } : {}),
       }),
       now,
       now,
@@ -212,6 +226,7 @@ const importPeople = defineApiRoute(
     let updated = 0;
     const receipts: D1PreparedStatement[] = [];
     const attendances: D1PreparedStatement[] = [];
+    const rosterSeats: D1PreparedStatement[] = [];
     for (const [index, row] of plan.rows.entries()) {
       const existing = await context.env.DB
         .prepare("SELECT id, name, title, company, bio FROM people WHERE org_id = ? AND lower(email) = ?")
@@ -260,9 +275,23 @@ const importPeople = defineApiRoute(
           now,
         }));
       }
+      // A speakers CSV that lands only in the organization is a half-done
+      // import wearing a success receipt: the people are in People CRM, the
+      // conference roster is exactly as empty as before, and nothing on either
+      // screen says so. The seat is the same row Add speaker writes, and the
+      // same upsert, so a re-run seats nobody twice.
+      if (rosterEvent) {
+        rosterSeats.push(speakerMembershipStatement(context.env.DB, {
+          orgId: access.orgId,
+          eventId: rosterEvent.id,
+          personId,
+          now,
+        }));
+      }
     }
     if (receipts.length > 0) await context.env.DB.batch(receipts);
     if (attendances.length > 0) await context.env.DB.batch(attendances);
+    if (rosterSeats.length > 0) await context.env.DB.batch(rosterSeats);
     return context.json({
       import_id: importId,
       created,
@@ -271,6 +300,7 @@ const importPeople = defineApiRoute(
       unmapped: plan.unmapped,
       headers: plan.headers,
       attendances: attendances.length,
+      roster_placements: rosterSeats.length,
       event: attendanceEvent?.slug ?? null,
       undo_path: `/api/v1/org/imports/${importId}/undo`,
     }, 202);
@@ -299,7 +329,7 @@ const undoPeopleImport = defineApiRoute(
     ).bind(importId, access.orgId).first<{ id: string; status: string; undone_at: number | null; mapping: string | null }>();
     if (!imported) throw ApiError.notFound("people import not found");
     if (imported.undone_at !== null || imported.status === "undone") {
-      return context.json({ undone: 0, attendances_removed: 0, skipped: 0, skipped_rows: [], retained_manifest: true }, 200);
+      return context.json({ undone: 0, attendances_removed: 0, roster_placements_removed: 0, skipped: 0, skipped_rows: [], retained_manifest: true }, 200);
     }
 
     const rows = await context.env.DB.prepare(
@@ -308,8 +338,10 @@ const undoPeopleImport = defineApiRoute(
        WHERE import_id = ? AND entity = 'person' AND outcome IN ('created', 'updated')
        ORDER BY row_index DESC`,
     ).bind(importId).all<OrgPeopleImportRow>();
-    // Which conference this import marked people as attending, if any.
-    const attendanceEventId = readAttendanceEventId(imported.mapping);
+    // Which conference this import marked people as attending, and which one
+    // it seated them on the roster of, if any.
+    const attendanceEventId = readMappingEventId(imported.mapping, "attendance_event_id");
+    const rosterEventId = readMappingEventId(imported.mapping, "roster_event_id");
     const statements: D1PreparedStatement[] = [];
     const operations: Array<{ resultIndex: number; kind: "restore" | "delete" }> = [];
     const skippedRows: UndoSkip[] = [];
@@ -370,6 +402,34 @@ const undoPeopleImport = defineApiRoute(
       ).bind(attendanceEventId, importId, importId, attendanceEventId));
     }
 
+    // The seat, withdrawn on exactly the same terms as the attendance above:
+    // one statement, and only while no other live import still seats this
+    // person here. `role = 'speaker'` is what this import wrote; a seat someone
+    // earned another way — the acceptance cascade, an organizer typing them in
+    // as a moderator — is not this import's to take away.
+    let rosterIndex = -1;
+    if (rosterEventId) {
+      rosterIndex = statements.length;
+      statements.push(context.env.DB.prepare(
+        `DELETE FROM memberships
+          WHERE event_id = ? AND role = 'speaker'
+            AND person_id IN (
+              SELECT target_id FROM import_rows
+               WHERE import_id = ? AND entity = 'person' AND target_id IS NOT NULL
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM import_rows other
+                JOIN imports live ON live.id = other.import_id
+               WHERE other.target_id = memberships.person_id
+                 AND other.entity = 'person'
+                 AND live.id <> ?
+                 AND live.status <> 'undone'
+                 AND live.undone_at IS NULL
+                 AND json_extract(live.mapping, '$.roster_event_id') = ?
+            )`,
+      ).bind(rosterEventId, importId, importId, rosterEventId));
+    }
+
     for (const row of rows.results) {
       if (!row.target_id) continue;
       if (row.outcome === "updated") {
@@ -412,6 +472,7 @@ const undoPeopleImport = defineApiRoute(
       ).bind(row.target_id, importId).first<{ n: number }>();
       const references = (await personHasReferences(context.env.DB, row.target_id))
         .filter((label) => label !== "event_attendances" || !attendanceEventId)
+        .filter((label) => label !== "memberships" || !rosterEventId)
         .filter((label) => label !== "import_rows.target_id" || Number(importReferenceCount?.n ?? 0) > 0);
       const strandedAttendance = attendanceEventId
         ? await context.env.DB.prepare(
@@ -420,6 +481,15 @@ const undoPeopleImport = defineApiRoute(
           ).bind(row.target_id, attendanceEventId).first<{ n: number }>()
         : null;
       if (Number(strandedAttendance?.n ?? 0) > 0) references.push("event_attendances");
+      // The seat this import wrote is deleted in the same batch, above; any
+      // other seat is somebody else's record and still blocks the delete.
+      const strandedMembership = rosterEventId
+        ? await context.env.DB.prepare(
+            `SELECT COUNT(*) AS n FROM memberships
+              WHERE person_id = ? AND NOT (event_id = ? AND role = 'speaker')`,
+          ).bind(row.target_id, rosterEventId).first<{ n: number }>()
+        : null;
+      if (Number(strandedMembership?.n ?? 0) > 0) references.push("memberships");
       if (references.length > 0) {
         addSkip(row, { target_id: row.target_id, reason: "has_references", fields: [], references });
         continue;
@@ -448,6 +518,7 @@ const undoPeopleImport = defineApiRoute(
     return context.json({
       undone,
       attendances_removed: attendancesRemoved,
+      roster_placements_removed: rosterIndex >= 0 ? Number(results[rosterIndex]?.meta?.changes ?? 0) : 0,
       skipped: skippedRows.length,
       skipped_rows: skippedRows,
       retained_manifest: true,

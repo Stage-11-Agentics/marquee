@@ -118,7 +118,11 @@ test("CONTRACT · MRQ-131 · one list query: event_id is the only difference bet
   const roster = buildPeopleQuery({ orgId: "org_1", eventId: "evt_1" });
   const rosterPage = buildSpeakerRosterQueries("evt_1", {}, parsePagination({ page: 1, per_page: 50 }));
   expect(org.dataSql).toMatch(/FROM people person/);
-  expect(org.dataSql).not.toMatch(/FROM memberships/);
+  // What must not appear on the org entrance is the roster NARROWING — the
+  // population source below. Membership may still be read as a column: the
+  // CONFS count reads on-stage seats so an organizer-added speaker, or a
+  // speaker imported onto a roster, is not printed as belonging to nothing.
+  expect(org.dataSql).not.toMatch(/SELECT person_id FROM memberships/);
   // The roster narrows to the ONE definition of who speaks at a conference.
   expect(roster.dataSql).toMatch(/SELECT person_id FROM memberships/);
   expect(roster.dataSql).toMatch(/part\.role IN \('speaker', 'co_speaker'\)/);
