@@ -269,11 +269,13 @@ export async function buildNotifyPlan(input: {
   db: D1Database;
   eventId: string;
   ids: readonly string[];
+  origin: string;
 }): Promise<DecisionPlanResponse> {
   const ids = [...new Set(input.ids)];
   if (ids.length > BULK_ID_LIMIT) {
     throw new Error(`decision plan is capped at ${BULK_ID_LIMIT} submissions`);
   }
+  const origin = (input.origin.trim() || "https://marquee.stage11.dev").replace(/\/+$/, "");
   const [event, submissions, notifications, acceptanceTemplate, rejectionTemplate] = await Promise.all([
     input.db.prepare("SELECT demo_mode, updated_at FROM events WHERE id = ?").bind(input.eventId).first<{ demo_mode: number; updated_at: number }>(),
     loadSubmissions(input.db, input.eventId, ids),
@@ -337,9 +339,10 @@ export async function buildNotifyPlan(input: {
     ? sendableState.resulting_status
     : null;
   const previewTemplate = sendableStatus ? templateByKey[notifyTemplateKey(sendableStatus)] : null;
-  const previewPublicLink = sendableSubmission
+  const previewPublicLinkPath = sendableSubmission
     ? await publicSpeakerPathForPerson(input.db, input.eventId, sendableSubmission.person_name, sendableSubmission.person_id)
     : null;
+  const previewPublicLink = previewPublicLinkPath ? `${origin}${previewPublicLinkPath}` : null;
   const recipientPreview = sendableSubmission && sendableState && sendableStatus && previewTemplate
     ? {
         ...renderDecisionMail(previewTemplate, previewData(sendableSubmission, sendableStatus, normalizeDecisionFeedback(sendableState.feedback_md), previewPublicLink)),

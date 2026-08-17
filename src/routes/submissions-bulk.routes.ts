@@ -275,7 +275,12 @@ const planNotifiedSubmissions = defineApiRoute(
       throw ApiError.unprocessable(`notification plan is capped at ${BULK_ID_LIMIT} submissions; narrow the selection`, "selection");
     }
     try {
-      return context.json(await buildNotifyPlan({ db: context.env.DB, eventId, ids }), 200);
+      return context.json(await buildNotifyPlan({
+        db: context.env.DB,
+        eventId,
+        ids,
+        origin: new URL(context.req.url).origin,
+      }), 200);
     } catch (error: unknown) {
       if (error instanceof Error && error.message === "event not found") throw ApiError.notFound("event not found");
       throw error;
