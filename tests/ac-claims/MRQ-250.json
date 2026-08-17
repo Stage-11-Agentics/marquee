@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-250",
+  "owns": ["AC-355", "AC-356", "AC-357", "AC-358", "AC-359"],
+  "exercises": [],
+  "notes": "Consolidation fold: decision-feedback provider mode, deterministic evidence boundaries, fallback, and bulk-call behavior."
+}

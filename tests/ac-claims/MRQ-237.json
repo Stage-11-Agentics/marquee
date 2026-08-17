@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-237",
+  "owns": ["AC-349", "AC-350", "AC-351", "AC-352", "AC-353", "AC-354"],
+  "exercises": [],
+  "notes": "Consolidation fold: publication truth, keyed operation replay, lease fencing, and typed scope evidence."
+}

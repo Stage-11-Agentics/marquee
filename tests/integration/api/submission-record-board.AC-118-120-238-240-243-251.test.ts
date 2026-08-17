@@ -379,7 +379,7 @@ describe.sequential("MRQ-33 admin record and program board", () => {
     expect(JSON.parse(auditRows.results[1]!.after_json)).toMatchObject({ agenda_is_published: false, submission_is_published: false });
   });
 
-  test("CONTRACT · MRQ-237 · record no-op, anomaly chip, and dashboard gauge clickthrough share publication truth", async () => {
+  test("AC-350 · MRQ-237 · record no-op, anomaly chip, and dashboard gauge clickthrough share publication truth", async () => {
     const privateSession = await createSubmission({
       kind: "session",
       title: "MRQ-237 private gauge session",

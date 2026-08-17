@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-249",
+  "owns": ["AC-364", "AC-365", "AC-366", "AC-367", "AC-368"],
+  "exercises": [],
+  "notes": "Consolidation fold: default and edited decision email, generic-message isolation, follow-up idempotency, and rejection-link evidence."
+}

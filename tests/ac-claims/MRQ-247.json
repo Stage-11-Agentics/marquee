@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-247",
+  "owns": ["AC-403", "AC-404", "AC-405", "AC-406"],
+  "exercises": [],
+  "notes": "Consolidation fold: saved-draft reminder selection, honest merge fields, capability boundaries, and upload semantics."
+}

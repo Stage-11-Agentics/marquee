@@ -141,7 +141,7 @@ async function applyDecision(submissionId: string, feedbackMd?: string): Promise
 describe.sequential("MRQ-250 kind rejection feedback", () => {
   beforeAll(seedFixture, 20_000);
 
-  test("CONTRACT · MRQ-250 · one forced tool draft becomes editable email feedback with counters-only evidence", async () => {
+  test("AC-356, AC-359 · MRQ-250 · one forced tool draft becomes editable email feedback with counters-only evidence", async () => {
     let calls = 0;
     let request: KindFeedbackProviderRequest | undefined;
     const provider: KindFeedbackProvider = async (providerRequest) => {
@@ -197,7 +197,7 @@ describe.sequential("MRQ-250 kind rejection feedback", () => {
     expect(outbox?.text).toContain("You can review the decision in your speaker portal:");
   });
 
-  test("CONTRACT · MRQ-250 · provider failure is non-blocking and the normal rejection template still sends", async () => {
+  test("AC-357 · MRQ-250 · provider failure is non-blocking and the normal rejection template still sends", async () => {
     let calls = 0;
     const unavailableProvider: KindFeedbackProvider = async () => {
       calls += 1;
@@ -235,7 +235,7 @@ describe.sequential("MRQ-250 kind rejection feedback", () => {
     expect(outbox?.text).not.toContain(GENERATED_NOTE);
   });
 
-  test("CONTRACT · MRQ-250 · bulk drafting makes one provider call for one shared paragraph", async () => {
+  test("AC-358 · MRQ-250 · bulk drafting makes one provider call for one shared paragraph", async () => {
     let calls = 0;
     let request: KindFeedbackProviderRequest | undefined;
     const provider: KindFeedbackProvider = async (providerRequest) => {
@@ -262,7 +262,7 @@ describe.sequential("MRQ-250 kind rejection feedback", () => {
     expect(JSON.parse(userMessage?.content ?? "{}") as Record<string, unknown>).toMatchObject({ selected_count: 2, title: "2 selected submissions" });
   });
 
-  test("CONTRACT · MRQ-250 · disabled mode never calls a supplied provider and still permits the rejection email", async () => {
+  test("AC-355 · MRQ-250 · disabled mode never calls a supplied provider and still permits the rejection email", async () => {
     let calls = 0;
     const shouldNotRun: KindFeedbackProvider = async () => {
       calls += 1;

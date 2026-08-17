@@ -115,7 +115,7 @@ describe.sequential("MRQ-69 admin answer applicability", () => {
     expect(await answerCount()).toBe(answersBefore + 3);
   });
 
-  test("CONTRACT · MRQ-246 · organizer writes reject a partial group violation even when the first rule field is omitted", async () => {
+  test("AC-401 · MRQ-246 · organizer writes reject a partial group violation even when the first rule field is omitted", async () => {
     const submissionsBefore = await submissionCount();
     const invalid = await request(`/api/v1/events/${EVENT_ID}/submissions`, {
       method: "POST",
@@ -136,7 +136,7 @@ describe.sequential("MRQ-69 admin answer applicability", () => {
     expect(await submissionCount()).toBe(submissionsBefore);
   });
 
-  test("CONTRACT · MRQ-246 · organizer draft edits merge stored answers before enforcing a combined budget", async () => {
+  test("AC-401 · MRQ-246 · organizer draft edits merge stored answers before enforcing a combined budget", async () => {
     const created = await request(`/api/v1/events/${EVENT_ID}/submissions`, {
       method: "POST",
       body: JSON.stringify({

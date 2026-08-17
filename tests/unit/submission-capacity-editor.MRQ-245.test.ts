@@ -16,7 +16,7 @@ afterEach(() => {
   while (document.body.firstChild) document.body.removeChild(document.body.firstChild);
 });
 
-test("CONTRACT · MRQ-245 · the builder shows effective inheritance, finite override, and clear behavior", () => {
+test("AC-396 · MRQ-245 · the builder shows effective inheritance, finite override, and clear behavior", () => {
   const root = mount();
   const patches: SubmissionCapacityPatch[] = [];
   act(() => render(h(SubmissionCapacityEditor, {
@@ -56,7 +56,7 @@ test("CONTRACT · MRQ-245 · the builder shows effective inheritance, finite ove
   expect(patches).toContainEqual({ submitter_limit_inherit: true });
 });
 
-test("CONTRACT · MRQ-245 · a stored legacy zero is displayed as legacy state without a zero input affordance", () => {
+test("AC-397 · MRQ-245 · a stored legacy zero is displayed as legacy state without a zero input affordance", () => {
   const root = mount();
   act(() => render(h(SubmissionCapacityEditor, {
     inherit: false,

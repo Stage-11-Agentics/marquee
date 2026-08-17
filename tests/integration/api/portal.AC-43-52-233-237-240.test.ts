@@ -234,7 +234,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
     });
   });
 
-  test("CONTRACT · MRQ-246 · portal form completion rejects stored-plus-submitted group overage like the organizer path", async () => {
+  test("AC-401 · MRQ-246 · portal form completion rejects stored-plus-submitted group overage like the organizer path", async () => {
     await env.DB.batch([
       env.DB.prepare(`
         INSERT INTO form_length_rules (id, form_id, label, field_keys, max_chars, sort_order, created_at, updated_at)

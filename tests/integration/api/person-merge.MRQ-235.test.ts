@@ -130,7 +130,7 @@ async function seedFixture(): Promise<void> {
 
 beforeEach(seedFixture);
 
-test("CONTRACT · MRQ-235 · preview and execute retain identity continuity across references", async () => {
+test("AC-384 · MRQ-235 · preview and execute retain identity continuity across references", async () => {
   const input = { firstPersonId: SURVIVOR_ID, secondPersonId: RETIRED_ID, survivorPersonId: SURVIVOR_ID };
   const preview = await previewPersonMerge(env.DB, ORG_ID, input, NOW + 10);
   expect(preview.default_survivor_id).toBe(SURVIVOR_ID);
@@ -171,7 +171,7 @@ test("CONTRACT · MRQ-235 · preview and execute retain identity continuity acro
   expect(aliasResolution).toMatchObject({ kind: "found", person: { id: SURVIVOR_ID } });
 });
 
-test("CONTRACT · MRQ-235 · clean undo restores the retired row and moved references without overwriting later edits", async () => {
+test("AC-385 · MRQ-235 · clean undo restores the retired row and moved references without overwriting later edits", async () => {
   const merge = await executePersonMerge(
     env.DB,
     ORG_ID,
@@ -191,7 +191,7 @@ test("CONTRACT · MRQ-235 · clean undo restores the retired row and moved refer
   expect(await env.DB.prepare("SELECT status FROM person_merges WHERE id = ?").bind(merge.merge_id).first()).toEqual({ status: "undone" });
 });
 
-test("CONTRACT · MRQ-235 · alias continuity flattens across a chained merge and blocks the old undo boundary", async () => {
+test("AC-386 · MRQ-235 · alias continuity flattens across a chained merge and blocks the old undo boundary", async () => {
   await env.DB.prepare(
     `INSERT INTO people
       (id, org_id, email, name, title, company, bio, company_id, social_links, custom_fields, do_not_contact, is_demo, kind, last_write_source, created_at, updated_at)

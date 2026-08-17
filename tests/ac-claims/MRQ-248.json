@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-248",
+  "owns": ["AC-407", "AC-408", "AC-409", "AC-410", "AC-411"],
+  "exercises": [],
+  "notes": "Consolidation fold: Airtable schema transport, provisioning, mapping, conflict handling, and resumable adoption evidence."
+}

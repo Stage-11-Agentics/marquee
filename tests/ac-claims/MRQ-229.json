@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-229",
+  "owns": ["AC-369", "AC-370", "AC-371", "AC-372", "AC-373"],
+  "exercises": [],
+  "notes": "Consolidation fold: routing taxonomy, evaluation, retention, copy, and preview evidence."
+}

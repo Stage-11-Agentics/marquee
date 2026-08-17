@@ -139,7 +139,7 @@ async function seedFixture(): Promise<void> {
 describe.sequential("MRQ-229 historical routing preview", () => {
   beforeEach(seedFixture);
 
-  test("CONTRACT · MRQ-229 · preview uses the last 100 public arrivals, preserves order states, resolves Level landing, and redacts answers", async () => {
+  test("AC-373 · MRQ-229 · preview uses the last 100 public arrivals, preserves order states, resolves Level landing, and redacts answers", async () => {
     const response = await request(`/api/v1/events/${EVENT_ID}/forms/${FORM_ID}/routing-preview`);
     expect(response.status).toBe(200);
     const body = await json<Envelope<{

@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-245",
+  "owns": ["AC-395", "AC-396", "AC-397", "AC-398"],
+  "exercises": [],
+  "notes": "Consolidation fold: bounded capacity defaults, override/clear state, legacy zero, and draft refusal evidence."
+}

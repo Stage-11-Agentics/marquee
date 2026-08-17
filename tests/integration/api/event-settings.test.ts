@@ -196,7 +196,7 @@ test("CONTRACT · an unknown platform id is refused rather than stored", async (
   expect(response.status).toBeGreaterThanOrEqual(400);
 });
 
-test("CONTRACT · MRQ-245 · the event default is bounded at 1–100 and is returned to inheriting readers", async () => {
+test("AC-395 · MRQ-245 · the event default is bounded at 1–100 and is returned to inheriting readers", async () => {
   const initial = await request(`/api/v1/events/${EVENT_ID}`);
   expect((await initial.json<{ data: { submission_default_limit: number } }>()).data.submission_default_limit).toBe(3);
 

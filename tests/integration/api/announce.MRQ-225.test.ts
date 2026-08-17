@@ -72,7 +72,7 @@ function authHeaders(): HeadersInit {
 describe.sequential("MRQ-225 Announce kit", () => {
   beforeAll(seedFixture, 20_000);
 
-  test("CONTRACT · MRQ-225 · snapshot reads only the published audience and emits canonical public assets", async () => {
+  test("AC-360 · MRQ-225 · snapshot reads only the published audience and emits canonical public assets", async () => {
     const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/announce`, { headers: authHeaders() });
     expect(response.status).toBe(200);
     const snapshot = await response.json<{
@@ -98,7 +98,7 @@ describe.sequential("MRQ-225 Announce kit", () => {
     ]);
   });
 
-  test("CONTRACT · MRQ-225 · the reviewed plan renders each speaker link and apply queues one idempotent outbox action", async () => {
+  test("AC-361 · MRQ-225 · the reviewed plan renders each speaker link and apply queues one idempotent outbox action", async () => {
     const body = {
       selector: { ids: [SPEAKER_ID] },
       subject: "Share your public page",

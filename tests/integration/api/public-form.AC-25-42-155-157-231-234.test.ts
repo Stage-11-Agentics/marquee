@@ -107,7 +107,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(html.indexOf("Session title")).toBeLessThan(html.indexOf("Product or service"));
   });
 
-  test("CONTRACT · MRQ-246 · the public counter and server refusal share the projected character budget", async () => {
+  test("AC-399, AC-402 · MRQ-246 · the public counter and server refusal share the projected character budget", async () => {
     await env.DB.prepare(
       `INSERT INTO form_length_rules
         (id, form_id, label, field_keys, max_chars, sort_order, created_at, updated_at)
@@ -416,7 +416,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(limited.status).toBe(429);
   });
 
-  test("CONTRACT · MRQ-247 · reminder resolution promotes the same reusable link, preserves raw resume, and revocation kills only the promoted capability", async () => {
+  test("AC-405 · MRQ-247 · reminder resolution promotes the same reusable link, preserves raw resume, and revocation kills only the promoted capability", async () => {
     const created = await request("/api/v1/public/forms/public-cfp/drafts", {
       method: "POST",
       body: JSON.stringify({ turnstileToken: nextTurnstileToken(), answers: { speaker_name: "Reminder Speaker", speaker_email: "reminder@example.com" } }),
@@ -485,7 +485,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(rawStillWorks).toMatchObject({ state: "submitted", submission: { id: draft.draft_id }, submissionOutcome: "accepted", resumeSource: "raw" });
   });
 
-  test("CONTRACT · MRQ-247 · the direct reminder URL resolves beside an unrelated live session without changing it", async () => {
+  test("AC-405 · MRQ-247 · the direct reminder URL resolves beside an unrelated live session without changing it", async () => {
     const created = await request("/api/v1/public/forms/public-cfp/drafts", {
       method: "POST",
       body: JSON.stringify({ turnstileToken: nextTurnstileToken(), answers: { speaker_name: "Cookie Speaker", speaker_email: "cookie-speaker@example.com" } }),
@@ -577,7 +577,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(participants.results.map((row) => row.role)).toEqual(["speaker", "submitter"]);
   });
 
-  test("CONTRACT · MRQ-245 · inherited capacity follows the event, while a legacy explicit zero remains unlimited", async () => {
+  test("AC-395, AC-397 · MRQ-245 · inherited capacity follows the event, while a legacy explicit zero remains unlimited", async () => {
     await env.DB.prepare("UPDATE forms SET submitter_limit_inherit = 1, per_submitter_limit = 3 WHERE id = ?").bind(FORM_ID).run();
     await env.DB.prepare(
       `INSERT INTO event_settings (id, event_id, key, value_json, created_at, updated_at)
@@ -599,7 +599,7 @@ describe.sequential("MRQ-15 public conference form", () => {
     expect(second.status).toBe(201);
   });
 
-  test("CONTRACT · MRQ-245 · resumed-draft capacity refusal names the saved draft and organizer next step", async () => {
+  test("AC-398 · MRQ-245 · resumed-draft capacity refusal names the saved draft and organizer next step", async () => {
     await env.DB.prepare("UPDATE forms SET submitter_limit_inherit = 0, per_submitter_limit = 1 WHERE id = ?").bind(FORM_ID).run();
     const draftResponse = await request("/api/v1/public/forms/public-cfp/drafts", {
       method: "POST",

@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-236",
+  "owns": ["AC-387", "AC-388", "AC-389", "AC-390"],
+  "exercises": [],
+  "notes": "Consolidation fold: event-scoped field-library definition and copy lifecycle evidence."
+}

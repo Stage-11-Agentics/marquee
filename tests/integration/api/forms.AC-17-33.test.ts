@@ -206,7 +206,7 @@ describe.sequential("MRQ-13 form builder API", () => {
     });
   });
 
-  test("CONTRACT · MRQ-246 · combined limits are authored through the form API and soft-disable after a field is deleted", async () => {
+  test("AC-400 · MRQ-246 · combined limits are authored through the form API and soft-disable after a field is deleted", async () => {
     const created = await request(`/api/v1/events/${EVENT_ID}/forms/${MAIN_FORM_ID}/length-rules`, {
       method: "POST",
       body: JSON.stringify({ label: "Printed programme block", field_keys: ["vendor_product"], max_chars: 120 }),
@@ -302,7 +302,7 @@ describe.sequential("MRQ-13 form builder API", () => {
     }
   });
 
-  test("CONTRACT · MRQ-245 · omitted create inherits with a bound dormant value, while whole-object and flag-omitted PATCHes stay observable", async () => {
+  test("AC-395, AC-396 · MRQ-245 · omitted create inherits with a bound dormant value, while whole-object and flag-omitted PATCHes stay observable", async () => {
     const created = await request(`/api/v1/events/${EVENT_ID}/forms`, {
       method: "POST",
       body: JSON.stringify({ name: "Inherited capacity", slug: "inherited-capacity" }),
@@ -360,7 +360,7 @@ describe.sequential("MRQ-13 form builder API", () => {
     expect(zero.status).toBe(400);
   });
 
-  test("CONTRACT · MRQ-245 · a legacy stored zero stays unlimited on the read path without becoming a write affordance", async () => {
+  test("AC-397 · MRQ-245 · a legacy stored zero stays unlimited on the read path without becoming a write affordance", async () => {
     await env.DB.prepare("UPDATE forms SET per_submitter_limit = 0, submitter_limit_inherit = 0 WHERE id = ?").bind(MAIN_FORM_ID).run();
     const detail = await request(`/api/v1/events/${EVENT_ID}/forms/${MAIN_FORM_ID}`);
     expect(detail.status).toBe(200);

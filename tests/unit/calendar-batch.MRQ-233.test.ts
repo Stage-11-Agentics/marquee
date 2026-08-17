@@ -5,7 +5,7 @@ import { buildCalendarBatchMail } from "../../src/jobs/calendar/ics";
 const UID_ONE = "submission-one.person-one@marquee.stage11.dev";
 const UID_TWO = "submission-two.person-one@marquee.stage11.dev";
 
-test("CONTRACT · batch mail renders one stable ICS link and old-to-new slot material per covered session", () => {
+test("AC-375 · batch mail renders one stable ICS link and old-to-new slot material per covered session", () => {
   const mail = buildCalendarBatchMail({
     eventName: "AIE NYC",
     eventTimezone: "America/New_York",

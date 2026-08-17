@@ -8,7 +8,7 @@ import {
 } from "../../src/lib/form-conditions";
 
 describe("MRQ-229 routing condition contract", () => {
-  test("CONTRACT · MRQ-229 · all six answer operators use the same blank and multiselect truth table", () => {
+  test("AC-369 · MRQ-229 · all six answer operators use the same blank and multiselect truth table", () => {
     const blankAnswers = { missing: undefined, empty: "", whitespace: "   ", empty_list: [] };
     for (const key of Object.keys(blankAnswers)) {
       expect(clauseMatches({ fieldKey: key, op: "equals", value: "x" }, blankAnswers)).toBe(false);
@@ -36,7 +36,7 @@ describe("MRQ-229 routing condition contract", () => {
     expect(clauseMatches({ fieldKey: "file", op: "answered" }, answers)).toBe(true);
   });
 
-  test("CONTRACT · MRQ-229 · legacy operator aliases remain equivalent to their canonical forms", () => {
+  test("AC-369 · MRQ-229 · legacy operator aliases remain equivalent to their canonical forms", () => {
     const answers = { choice: "Platform", text: "A useful answer" };
     expect(clauseMatches({ fieldKey: "choice", op: "eq", value: "Platform" }, answers)).toBe(true);
     expect(clauseMatches({ fieldKey: "choice", op: "is_not", value: "AI" }, answers)).toBe(true);
@@ -46,7 +46,7 @@ describe("MRQ-229 routing condition contract", () => {
     expect(clauseMatches({ fieldKey: "missing", op: "not_exists" }, answers)).toBe(true);
   });
 
-  test("CONTRACT · MRQ-229 · saved conditions enforce one-to-five clauses, values, and schema state", () => {
+  test("AC-369 · MRQ-229 · saved conditions enforce one-to-five clauses, values, and schema state", () => {
     const eventFields = ["notes", "audience_outcome", "tracks"];
     expect(validateRoutingConditions([], { eventFieldKeys: eventFields }).state).toBe("invalid");
     expect(validateRoutingConditions(new Array(6).fill({ fieldKey: "notes", op: "answered" }), { eventFieldKeys: eventFields }).state).toBe("invalid");
@@ -63,7 +63,7 @@ describe("MRQ-229 routing condition contract", () => {
     }).state).toBe("matched");
   });
 
-  test("CONTRACT · MRQ-229 · evaluation skips fields absent from a form and never turns a non-match into a match", () => {
+  test("AC-371 · MRQ-229 · evaluation skips fields absent from a form and never turns a non-match into a match", () => {
     const condition = [{ fieldKey: "audience_outcome", op: "not_equals", value: "No" }] as const;
     expect(evaluateRoutingConditions(condition, {
       eventFieldKeys: ["audience_outcome", "notes"],
