@@ -249,6 +249,23 @@ flag is read by `npm test` too, and `auth-demo.test.ts` then fails on a cookie
 that is correct in production. Pass the var on the dev command instead, and
 delete `.dev.vars` before running the gate.
 
+**Exercising a real file upload locally needs `LOCAL_UPLOAD_SHIM:1` *and*
+`UPLOAD_TOKEN_SECRET` on the same line**, or signing 500s:
+
+```sh
+npx vite dev --var INSECURE_LOCAL_COOKIES:1 --var LOCAL_UPLOAD_SHIM:1 --var UPLOAD_TOKEN_SECRET:<any-local-value>
+```
+
+Without it, no local browser can complete any flow with a required upload — the
+public CFP's headshot most of all. Two agents in one night concluded that
+proving that path needed real R2 credentials and deferred it; it does not, and
+the second one found this documented all along in
+`src/agent-front-door/llms-full.txt` — the file written for agents to read.
+Worth the general lesson: **the generated front door is where local runtime
+facts live, and it is faster to grep than to deduce.** A deferred "needs
+credentials I don't have" is worth thirty seconds of checking there first,
+because the upload path is exactly the kind that ships green and broken.
+
 Anything that changed a screen deserves one look at that screen, not just a 200.
 
 ---
