@@ -821,9 +821,9 @@ not promote an untested claim.
 | AC-349 | PD | `auto` | `tests/unit/publication-truth.MRQ-237.test.ts`: the closed reason vocabulary, pure publication classifier, accepted/agenda-item authority, malformed-slot boundary, and fixed reason precedence are all named and asserted. |
 | AC-350 | PD | `auto` | `tests/integration/api/submission-record-board.AC-118-120-238-240-243-251.test.ts`: record no-op, anomaly chip, and dashboard gauge clickthrough consume the same publication truth. |
 | AC-351 | PD | `auto` | `tests/integration/api/people.MRQ-131.test.ts`, `tests/integration/api/submission-decisions.AC-66-69-114-117.test.ts`, and `tests/integration/mail.test.ts`: keyed communication and bulk decision paths produce durable, reasoned zero-effect behavior and replay effectful requests. |
-| AC-352 | PD | `auto` | `tests/integration/api/request-operations.MRQ-237.test.ts`: typed operation/outbox-link schema exists and keyed claims replay byte-identically while changed request bodies are refused. |
-| AC-353 | PD | `auto` | `tests/integration/api/request-operations.MRQ-237.test.ts`: stale leases reclaim, stale workers and acknowledgements are fenced, and missing operation JSON recovers. |
-| AC-354 | PD | `auto` | `tests/integration/api/request-operations.MRQ-237.test.ts`: typed scope/actor checks reject cross-tenant claims and cascading cleanup removes links. |
+| AC-352 | PD | `auto` | `tests/integration/request-operations.MRQ-237.test.ts`: typed operation/outbox-link schema exists and keyed claims replay byte-identically while changed request bodies are refused. |
+| AC-353 | PD | `auto` | `tests/integration/request-operations.MRQ-237.test.ts`: stale leases reclaim, stale workers and acknowledgements are fenced, and missing operation JSON recovers. |
+| AC-354 | PD | `auto` | `tests/integration/request-operations.MRQ-237.test.ts`: typed scope/actor checks reject cross-tenant claims and cascading cleanup removes links. |
 | AC-355 | PD | `auto` | `tests/integration/api/kind-feedback.MRQ-250.test.ts`: disabled/default feedback mode is fail-closed, makes no provider call, and still permits deterministic rejection mail. |
 | AC-356 | PD | `auto` | `tests/integration/api/kind-feedback.MRQ-250.test.ts`: a forced configured-tool draft remains editable and keeps deterministic facts separate from generated evidence. |
 | AC-357 | PD | `auto` | `tests/integration/api/kind-feedback.MRQ-250.test.ts`: provider failure falls back without blocking the ordinary rejection flow. |
