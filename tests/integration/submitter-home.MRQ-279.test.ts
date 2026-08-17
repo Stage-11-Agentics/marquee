@@ -161,31 +161,56 @@ test("AC-414 · the link is scoped to the conference asked about, never blended 
   expect(snapshot.submissions.map((row) => row.reference_code).sort()).toEqual(["SUB-1", "SUB-2"]);
 });
 
+/** Sign in as the submitter and read their own page, the way the mail does. */
+async function submitterSnapshot(): Promise<{
+  submissions: Array<{
+    reference_code: string | null;
+    status: string;
+    decision: { status: string; decided_at: number; feedback_md: string | null } | null;
+  }>;
+}> {
+  await askForLink(SUBMITTER, SLUG_A);
+  const link = await linkFromMail(SUBMITTER);
+  expect(link, "the door must have mailed a link").toBeTruthy();
+  const target = new URL(link!);
+  const exchange = await request(target.pathname + target.search, { redirect: "manual" });
+  const cookie = exchange.headers.get("set-cookie")?.split(";")[0] ?? "";
+  const portal = await request(`/api/v1/me/portal?eventId=${EVENT_A}`, { headers: { cookie } });
+  expect(portal.status).toBe(200);
+  return portal.json();
+}
+
+/** An announced decision: the row plus the outbox row that carries it. */
+function announcedDecision(
+  id: string,
+  submissionId: string,
+  decision: string,
+  status: string,
+  feedback: string | null,
+  decidedAt: number,
+) {
+  // The outbox row first: `submission_decisions.outbox_id` references it, and a
+  // batch runs in order.
+  return [
+    env.DB.prepare(`INSERT INTO outbox (id, event_id, template_key, person_id, to_email, subject, html, text, status, send_policy, idempotency_key, entity_id, created_at, updated_at)
+      VALUES (?, ?, 'decision', 'person-nadia', ?, 'Your abstract', '<p>x</p>', 'x', 'sent', 'demo_safe', ?, ?, ?, ?)`)
+      .bind(`outbox-${id}`, EVENT_A, SUBMITTER, `idem-${id}`, id, NOW, NOW),
+    env.DB.prepare(`INSERT INTO submission_decisions (id, event_id, submission_id, decision, resulting_status, feedback_md, decided_by_person_id, decided_at, outbox_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'person-nadia', ?, ?, ?, ?)`)
+      .bind(id, EVENT_A, submissionId, decision, status, feedback, decidedAt, `outbox-${id}`, NOW, NOW),
+  ];
+}
+
 test("AC-415 · every proposal carries its reference code and the decision that stands", async () => {
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO submission_decisions (id, event_id, submission_id, decision, resulting_status, feedback_md, decided_by_person_id, decided_at, created_at, updated_at)
-      VALUES (?, ?, ?, 'maybe', 'waitlisted', ?, 'person-nadia', ?, ?, ?)`)
-      .bind("dec-first", EVENT_A, "sub-a1", "Held for a later round.", NOW - 1000, NOW, NOW),
+    ...announcedDecision("dec-first", "sub-a1", "maybe", "waitlisted", "Held for a later round.", NOW - 1000),
     // A record can be decided, reversed and decided again; the page owes the
     // submitter the one that stands, not the first one written.
-    env.DB.prepare(`INSERT INTO submission_decisions (id, event_id, submission_id, decision, resulting_status, feedback_md, decided_by_person_id, decided_at, created_at, updated_at)
-      VALUES (?, ?, ?, 'approve', 'accepted', ?, 'person-nadia', ?, ?, ?)`)
-      .bind("dec-second", EVENT_A, "sub-a1", "The committee wants this on the Infra track.", NOW, NOW, NOW),
+    ...announcedDecision("dec-second", "sub-a1", "approve", "accepted", "The committee wants this on the Infra track.", NOW),
     env.DB.prepare("UPDATE submissions SET status = 'accepted', decided_at = ? WHERE id = 'sub-a1'").bind(NOW),
   ]);
 
-  await askForLink(SUBMITTER, SLUG_A);
-  const link = await linkFromMail(SUBMITTER);
-  const exchange = await request(new URL(link!).pathname + new URL(link!).search, { redirect: "manual" });
-  const cookie = exchange.headers.get("set-cookie")?.split(";")[0] ?? "";
-  const portal = await request(`/api/v1/me/portal?eventId=${EVENT_A}`, { headers: { cookie } });
-  const snapshot = await portal.json<{
-    submissions: Array<{
-      reference_code: string | null;
-      status: string;
-      decision: { status: string; decided_at: number; feedback_md: string | null } | null;
-    }>;
-  }>();
+  const snapshot = await submitterSnapshot();
 
   const decided = snapshot.submissions.find((row) => row.reference_code === "SUB-1");
   expect(decided?.status).toBe("accepted");
@@ -196,10 +221,140 @@ test("AC-415 · every proposal carries its reference code and the decision that 
   expect(undecided?.decision).toBeNull();
 });
 
-test("AC-416 · a named conference is resolved whatever its status, so an open call before launch still has a door", async () => {
-  await env.DB.prepare("UPDATE events SET status = 'draft' WHERE id = ?").bind(EVENT_A).run();
+test("AC-419 · a reversed acceptance stops claiming it was accepted", async () => {
+  // Driven through the REAL cascade, not a synthesized second decision row.
+  // That distinction is the whole test: a reversal is deliberately NOT a
+  // decision row (the CHECK forbids `withdrawn`), so a page that trusts "the
+  // newest decision row" keeps announcing an acceptance that was taken back —
+  // and a test that simulates the reversal as a row never sees it.
+  const { writeAcceptanceReversal } = await import("../../src/jobs/cascade/decisions");
+  await env.DB.batch([
+    ...announcedDecision("dec-accept", "sub-a1", "approve", "accepted", "See you in October.", NOW),
+    env.DB.prepare("UPDATE submissions SET status = 'accepted', decided_at = ? WHERE id = 'sub-a1'").bind(NOW),
+  ]);
+
+  const before = await submitterSnapshot();
+  expect(before.submissions.find((row) => row.reference_code === "SUB-1")?.decision?.status).toBe("accepted");
+
+  const reversal = await writeAcceptanceReversal({
+    db: env.DB,
+    cache: undefined,
+    eventId: EVENT_A,
+    submissionId: "sub-a1",
+    actor: { kind: "user", personId: "person-nadia", requestId: null },
+    outcome: "withdrawn",
+    tasks: "cancel",
+    emails: "cancel",
+    calendar: "retain",
+    queue: { send: async () => undefined } as never,
+    now: NOW + 5000,
+  });
+  expect(reversal.outcome, "the reversal itself must succeed").toBe("succeeded");
+  // The acceptance is still the newest decision row — that is the trap.
+  const newest = await env.DB
+    .prepare("SELECT resulting_status FROM submission_decisions WHERE submission_id = 'sub-a1' ORDER BY decided_at DESC, id DESC LIMIT 1")
+    .first<{ resulting_status: string }>();
+  expect(newest?.resulting_status).toBe("accepted");
+
+  const after = await submitterSnapshot();
+  const row = after.submissions.find((entry) => entry.reference_code === "SUB-1");
+  expect(row?.status).toBe("withdrawn");
+  expect(row?.decision, "a withdrawn record must not still read as accepted").toBeNull();
+});
+
+test("AC-420 · a decision the organizer has not announced stays off the submitter's page", async () => {
+  // Decided and notified are distinct states, and bulk waitlist decisions queue
+  // no mail at all. Publishing one on sight would put committee state on a
+  // speaker's screen weeks before the announced date.
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO submission_decisions (id, event_id, submission_id, decision, resulting_status, feedback_md, decided_by_person_id, decided_at, outbox_id, created_at, updated_at)
+      VALUES (?, ?, ?, 'maybe', 'waitlisted', ?, 'person-nadia', ?, NULL, ?, ?)`)
+      .bind("dec-quiet", EVENT_A, "sub-a1", "Committee note nobody has sent.", NOW, NOW, NOW),
+    env.DB.prepare("UPDATE submissions SET status = 'waitlisted', decided_at = ? WHERE id = 'sub-a1'").bind(NOW),
+  ]);
+
+  const quiet = await submitterSnapshot();
+  const row = quiet.submissions.find((entry) => entry.reference_code === "SUB-1");
+  expect(row?.status).toBe("waitlisted");
+  expect(row?.decision, "an unsent decision must not be published").toBeNull();
+
+  // Notify later links the mail by `entity_id`, not by `outbox_id` — the page
+  // must honour that path too, or a decision that WAS announced stays hidden.
+  await env.DB
+    .prepare(`INSERT INTO outbox (id, event_id, template_key, person_id, to_email, subject, html, text, status, send_policy, idempotency_key, entity_id, created_at, updated_at)
+      VALUES ('outbox-late', ?, 'decision', 'person-nadia', ?, 'Your abstract', '<p>x</p>', 'x', 'sent', 'demo_safe', 'idem-late', 'dec-quiet', ?, ?)`)
+    .bind(EVENT_A, SUBMITTER, NOW, NOW)
+    .run();
+
+  const announced = await submitterSnapshot();
+  expect(announced.submissions.find((entry) => entry.reference_code === "SUB-1")?.decision?.status).toBe("waitlisted");
+});
+
+function openCall(id: string, eventId: string, slug: string) {
+  return env.DB
+    .prepare(`INSERT INTO forms (id, event_id, name, slug, kind, status, created_at, updated_at)
+      VALUES (?, ?, 'Call for Speakers', ?, 'abstract', 'open', ?, ?)`)
+    .bind(id, eventId, slug, NOW, NOW);
+}
+
+test("AC-416 · a conference whose call is open has a door before its site goes live", async () => {
+  // The real pre-launch case: the CFP is collecting, the event site is not up
+  // yet, and the person who just submitted still needs to ask where it stands.
+  await env.DB.batch([
+    env.DB.prepare("UPDATE events SET status = 'draft' WHERE id = ?").bind(EVENT_A),
+    openCall("form-a", EVENT_A, "cfp"),
+  ]);
   await askForLink(SUBMITTER, SLUG_A);
   expect(await linkFromMail(SUBMITTER)).toMatch(/\/api\/v1\/auth\/exchange\?token=/);
+});
+
+test("AC-421 · an unlaunched conference with no open call is not named to a stranger, and is not silently swapped", async () => {
+  // Draft, and not collecting: nothing about it is public yet, so a guessed
+  // slug must not print its name on an unauthenticated page.
+  await env.DB.prepare("UPDATE events SET status = 'draft' WHERE id = ?").bind(EVENT_A).run();
+
+  const page = await request(`/my-proposals?event=${SLUG_A}`);
+  expect(page.status).toBe(200);
+  const html = await page.text();
+  expect(html).not.toContain("Atlas Conference 2026");
+  // And it does not quietly become a different conference either: an
+  // unresolvable name falls back to the generic wording rather than to the live
+  // event, so the page never claims to be about a conference the caller did not
+  // ask for.
+  expect(html).not.toContain("Borealis Conference 2026");
+  expect(html).toContain("this conference");
+
+  // The mailing path is stricter. Naming a conference that does not resolve
+  // must NOT quietly mail a link to a different one — this person has proposals
+  // at Borealis too, so the wrong answer would arrive looking entirely correct.
+  await askForLink(SUBMITTER, SLUG_A);
+  expect(await linkFromMail(SUBMITTER), "a named-but-unresolvable conference must send nothing").toBeNull();
+});
+
+test("AC-422 · a slug belonging to another organization never resolves", async () => {
+  // Slugs are unique per org, not globally. Without scoping, a submitter
+  // following the link out of their own confirmation mail can land on a
+  // stranger's conference, find no submissions there, and be told "if that
+  // address has proposals…" forever — a silent, permanent lockout.
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
+      .bind("org_other", "Another Company", "another-company", NOW, NOW),
+    env.DB.prepare(`INSERT INTO events (id, org_id, name, slug, tagline, starts_on, ends_on, timezone, venue, accent, status, demo_mode, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live', 0, ?, ?)`)
+      .bind("evt_other", "org_other", "Somebody Else's Conference", "shared-slug", "A program", "2026-11-01", "2026-11-02", "America/New_York", "A venue", "#0b6a72", NOW, NOW),
+    // The same slug in OUR org, which is the one a link from our mail means.
+    env.DB.prepare("UPDATE events SET slug = 'shared-slug' WHERE id = ?").bind(EVENT_A),
+  ]);
+
+  const page = await request("/my-proposals?event=shared-slug");
+  expect(await page.text()).not.toContain("Somebody Else's Conference");
+
+  await askForLink(SUBMITTER, "shared-slug");
+  const link = await linkFromMail(SUBMITTER);
+  expect(link, "the submitter's own conference must still resolve").toBeTruthy();
+  const target = new URL(link!);
+  const exchange = await request(target.pathname + target.search, { redirect: "manual" });
+  expect(exchange.headers.get("location")).toBe(`/portal?eventId=${EVENT_A}`);
 });
 
 test("AC-417 · one address cannot be used as a mail cannon", async () => {

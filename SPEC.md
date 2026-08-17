@@ -1367,5 +1367,17 @@ submission remains **demo-mode only**. Handing a session to whoever typed an
 address is exactly the impersonation the rule above refuses; everywhere else the
 emailed link is the proof.
 
+**Two rules the review added, both about not saying more than the record
+supports.** A decision is shown only while it still describes the record — a
+reversal is not a decision row, so the newest row can outlive the status it
+described — and only once the conference has announced it, because *decided* and
+*notified* are distinct states here and the second is the organizer's to choose.
+
+**The door resolves one conference, narrowly.** Slugs are unique per
+organization, so the lookup is scoped to the deployment's own; a non-live
+conference resolves only when its call is open, which is what keeps an
+unlaunched conference's name off an unauthenticated page; and a named conference
+that does not resolve mails nothing rather than falling back to a different one.
+
 `EVALUATION.md` §2.16 is the verification authority for this amendment, and the
-next shared AC pointer after it is **AC-419**.
+next shared AC pointer after it is **AC-423**.

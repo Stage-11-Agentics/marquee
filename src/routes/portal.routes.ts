@@ -898,20 +898,38 @@ type SubmitterSubmissionRow = {
   decision_status: string | null;
   decision_at: number | null;
   decision_feedback: string | null;
+  decision_announced: number;
 };
 
 /**
- * What the decision is, said the way the decision mail already says it.
+ * What the decision is, said the way the decision mail already says it — and
+ * only when both of the things that make saying it honest are true.
  *
- * The submitter has read these words once already — the private link and the
- * decision mail both carry them — so the dashboard repeating them verbatim is
- * the point of CFP-13, not a duplication. `feedback_md` is the organizer's own
- * note when they wrote one; it is passed through untouched rather than
- * summarised, because a paraphrase of somebody's rejection is worse than
- * silence.
+ * **It must still describe the record.** A reversal is deliberately not a
+ * decision row: `submission_decisions` CHECKs
+ * `resulting_status IN ('accepted','waitlisted','rejected')`, and
+ * `writeAcceptanceReversal` inserts one only when the reversal outcome is
+ * `rejected`. So reversing an acceptance with the default `withdrawn` outcome
+ * leaves the acceptance as the newest row while the record moves on, and a
+ * dashboard reading "the newest row" tells a speaker their talk was accepted
+ * next to a status that says Withdrawn. When the two disagree, the record's
+ * status is what happened and the decision row is history.
+ *
+ * **The conference must have announced it.** Decided and notified are distinct
+ * states here on purpose — bulk waitlist decisions queue no mail at all, a
+ * decision can be recorded with `dispatchMail: false`, and Notify exists as a
+ * separate action precisely to close that gap later. Publishing a decision the
+ * organizer has not sent would put committee state on a speaker's screen weeks
+ * before the announced date. The gate is the same predicate the decision plan,
+ * the record and the health surface already use: an outbox row keyed to this
+ * decision. Existence, not delivery — once the organizer has pressed send, the
+ * announcement is theirs; whether Resend has finished is not the speaker's
+ * question, and a mail still in the queue must not blank the page.
  */
 function submitterDecision(row: SubmitterSubmissionRow) {
   if (row.decision_status === null || row.decision_at === null) return null;
+  if (row.decision_status !== row.status) return null;
+  if (row.decision_announced !== 1) return null;
   return {
     status: row.decision_status,
     decided_at: row.decision_at,
@@ -942,6 +960,11 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
          form.slug AS form_slug, form.status AS form_status, form.opens_at AS form_opens_at, form.closes_at AS form_closes_at,
          decision.resulting_status AS decision_status, decision.decided_at AS decision_at,
          decision.feedback_md AS decision_feedback,
+         EXISTS (
+           SELECT 1 FROM outbox announced
+            WHERE announced.event_id = s.event_id
+              AND (announced.id = decision.outbox_id OR announced.entity_id = decision.id)
+         ) AS decision_announced,
          (SELECT p.role FROM participations p
            WHERE p.submission_id = s.id AND p.person_id = ?
            ORDER BY CASE p.role WHEN 'submitter' THEN 0 ELSE 1 END, p.position ASC, p.id ASC

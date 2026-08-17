@@ -43,7 +43,10 @@ export const PROPOSALS_LINK_ACKNOWLEDGEMENT =
   "If that address has proposals for this conference, a link to them is on its way to it.";
 
 const requestSchema = z.object({
-  email: z.string().trim().min(3).max(320),
+  // A shape check, not an existence check: refusing "not-an-address" says
+  // nothing about who has submitted, and it is what the attendee claim already
+  // does. Everything past this point answers identically for every address.
+  email: z.string().trim().email().max(320),
   /** Which conference. Omitted resolves to the live one, as every public surface does. */
   event: z.string().trim().max(200).optional(),
   turnstileToken: z.string().optional(),
@@ -53,32 +56,45 @@ const requestSchema = z.object({
 const responseSchema = z.object({ ok: z.literal(true), message: z.string() });
 
 /**
- * Six mails an hour to one address.
+ * Six mails an hour to one mailbox — counted in D1, against the links themselves.
  *
- * Keyed on the ADDRESS, not the IP, for the reason the attendee claim spells
- * out at length: a conference is one NAT, so an IP ceiling low enough to bound
- * the damage is low enough to be an outage. A ceiling on the address bounds
- * exactly what can be abused here — a resend loop aimed at one mailbox — and
- * leaves every other submitter on the venue wifi untouched.
+ * Keyed on the PERSON, not the IP, for the reason the attendee claim spells out
+ * at length: a conference is one NAT, so an IP ceiling low enough to bound the
+ * damage is low enough to be an outage. The shared `send` bucket is per-IP at
+ * 30/60s, which bounds a client but not a mailbox — one caller can point that
+ * whole allowance at a single address.
+ *
+ * It counts rows in `magic_links` rather than a KV tally, and that is the point.
+ * KV is eventually consistent and non-transactional, so a read-compare-write
+ * counter under concurrent posts has every request read the same value and every
+ * request mail — the ceiling reads as enforcement and is not. D1 is strongly
+ * consistent and serialises its writes, and the rows counted are the very
+ * artefacts that cause the mail, so the count cannot drift from reality.
+ *
+ * **This is a ceiling, not a mutex.** Two requests interleaving between the
+ * count and the mint can still both pass at the boundary, so the true bound is
+ * six plus in-flight concurrency rather than exactly six. Said plainly here
+ * because a limit documented as exact and implemented as approximate is how a
+ * gap survives review. Bounding it exactly needs a Durable Object; the abuse
+ * this route can carry — a resend loop aimed at one mailbox — is bounded well
+ * enough by a strongly consistent count that never runs away.
  */
 const LINK_LIMIT = 6;
-const LINK_WINDOW_SECONDS = 3600;
+const LINK_WINDOW_MS = 3600_000;
 
 async function withinLinkLimit(
-  store: KVNamespace | undefined,
-  email: string,
+  database: D1Database,
+  personId: string,
   now: number,
 ): Promise<boolean> {
-  if (!store) return true;
-  const windowStart = Math.floor(now / (LINK_WINDOW_SECONDS * 1000)) * LINK_WINDOW_SECONDS * 1000;
-  const key = `proposals-link:${email}:${windowStart}`;
-  const seen = await store.get(key, "json").catch(() => null);
-  const count = typeof seen === "number" ? seen : 0;
-  if (count >= LINK_LIMIT) return false;
-  await store
-    .put(key, JSON.stringify(count + 1), { expirationTtl: LINK_WINDOW_SECONDS * 2 })
-    .catch(() => { /* an uncounted request beats a refused one */ });
-  return true;
+  const row = await database
+    .prepare(
+      `SELECT COUNT(*) AS n FROM magic_links
+        WHERE person_id = ? AND purpose = 'login' AND created_at > ?`,
+    )
+    .bind(personId, now - LINK_WINDOW_MS)
+    .first<{ n: number }>();
+  return Number(row?.n ?? 0) < LINK_LIMIT;
 }
 
 /**
@@ -94,10 +110,10 @@ async function submitterAtEvent(
   database: D1Database,
   eventId: string,
   email: string,
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; email: string } | null> {
   return database
     .prepare(
-      `SELECT DISTINCT person.id
+      `SELECT DISTINCT person.id, person.email
          FROM people person
          JOIN participations participation ON participation.person_id = person.id
          JOIN submissions submission
@@ -107,30 +123,71 @@ async function submitterAtEvent(
         LIMIT 1`,
     )
     .bind(eventId, email.trim().toLowerCase())
-    .first<{ id: string }>();
+    .first<{ id: string; email: string }>();
 }
 
 /**
  * Which conference this request is about.
  *
- * A named slug is matched whatever the conference's status, because a call for
- * speakers routinely opens months before the event site goes live — and a
- * submitter who has just sent an abstract to it must be able to ask about that
- * abstract. Only the unnamed case falls back to the live conference, which is
- * what every other public surface does.
+ * Slugs are unique **per organization** (`uq_events_org_slug`), not globally, and
+ * this route renders the conference's name on an unauthenticated page. Both facts
+ * bite, so the lookup is narrowed twice.
+ *
+ * **Scoped to the deployment's own organization.** Without it, two orgs both
+ * using `cfp-2026` race for the name, and a submitter following the link out of
+ * their own confirmation mail can resolve onto the other org's event — where
+ * they have no submissions, so they get the generic acknowledgement forever with
+ * no mail and no error. A silent permanent lockout is the worst shape a door can
+ * have. The organization is the one the public site itself resolves to.
+ *
+ * **Live conferences first, and a non-live one only when its call is open.**
+ * Every other public surface reads `status = 'live'` (`findLiveEvent`). Matching
+ * any status would let a guessed slug print the name of an unlaunched conference
+ * to anyone. But a call for speakers routinely opens months before the event site
+ * goes live, and that submitter still needs this door — so a non-live conference
+ * resolves only when it has an open public form, which is a surface that already
+ * publishes the conference's name to the world.
  */
 export async function resolveProposalsEvent(
   database: D1Database,
   slug: string | null | undefined,
 ): Promise<{ id: string; name: string; slug: string } | null> {
-  if (slug) {
-    const named = await database
-      .prepare("SELECT id, name, slug FROM events WHERE slug = ? LIMIT 1")
-      .bind(slug)
-      .first<{ id: string; name: string; slug: string }>();
-    if (named) return named;
-  }
   const live = await loadPublicEvent(database, null);
+  const scope = live
+    ? await database.prepare("SELECT org_id FROM events WHERE id = ? LIMIT 1").bind(live.id).first<{ org_id: string }>()
+    : null;
+
+  if (slug) {
+    // A fresh instance with no live conference at all has no organization to
+    // scope to; the open-form condition below is then the whole guard.
+    const orgPredicate = scope ? "AND org_id = ?" : "";
+    const bindings = scope ? [slug, scope.org_id] : [slug];
+    const named = await database
+      .prepare(
+        `SELECT id, name, slug FROM events
+          WHERE slug = ? ${orgPredicate}
+            AND (
+              status = 'live'
+              OR EXISTS (
+                SELECT 1 FROM forms
+                 WHERE forms.event_id = events.id
+                   AND forms.status = 'open'
+              )
+            )
+          -- Deterministic on a tie, and the same ordering the public site uses.
+          ORDER BY CASE WHEN status = 'live' THEN 0 ELSE 1 END, demo_mode DESC, created_at ASC, id ASC
+          LIMIT 1`,
+      )
+      .bind(...bindings)
+      .first<{ id: string; name: string; slug: string }>();
+    // A NAMED conference that does not resolve returns nothing rather than
+    // falling back to the live one. The fallback exists for a caller who named
+    // no conference; applying it here would answer "where do my Atlas proposals
+    // stand" with a link to Borealis — and on an instance where the person has
+    // submissions at both, that link works, which makes the wrong answer look
+    // like the right one.
+    return named ?? null;
+  }
   return live ? { id: live.id, name: live.name, slug: live.slug } : null;
 }
 
@@ -179,7 +236,7 @@ const requestProposalsLink = defineApiRoute(
       }
 
       const person = await submitterAtEvent(context.env.DB, event.id, body.email);
-      if (person && (await withinLinkLimit(context.env.CACHE, body.email.trim().toLowerCase(), now))) {
+      if (person && (await withinLinkLimit(context.env.DB, person.id, now))) {
         // The conference is named in the redirect rather than left to a later
         // fallback ordering, so a submitter at two conferences lands on the one
         // they asked about.
@@ -199,7 +256,11 @@ const requestProposalsLink = defineApiRoute(
           eventId: event.id,
           personId: person.id,
           entityId: IDEMPOTENCY_REGISTRY.authLink(link.id),
-          toEmail: body.email.trim(),
+          // The address on the RECORD we matched, never the string the caller
+          // typed. Matching is case-insensitive, so the two differ in ordinary
+          // use — and an outbox row is not the place for caller-controlled text
+          // in a recipient field. This is what the sign-in door does too.
+          toEmail: person.email,
           templateKey: "magic_link_login",
           ...mail,
         });

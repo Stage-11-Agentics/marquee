@@ -1,6 +1,18 @@
 {
   "ticket": "MRQ-279",
-  "owns": ["AC-412", "AC-413", "AC-414", "AC-415", "AC-416", "AC-417", "AC-418"],
+  "owns": [
+    "AC-412",
+    "AC-413",
+    "AC-414",
+    "AC-415",
+    "AC-416",
+    "AC-417",
+    "AC-418",
+    "AC-419",
+    "AC-420",
+    "AC-421",
+    "AC-422"
+  ],
   "exercises": [],
-  "notes": "The submitter's own home: one page listing every proposal a person has sent this conference and its status, reached by a magic link and no password. The band covers the door's no-oracle answer, its request-then-verify silence before the mail is opened, conference scoping across a two-conference submitter, reference codes and the standing decision on every row, named-conference resolution whatever the event's status, the per-address mail ceiling, and the sessionless page itself."
+  "notes": "The submitter's own home: one page listing every proposal a person has sent this conference and its status, reached by a magic link and no password. The band covers the door's no-oracle answer, its request-then-verify silence before the mail is opened, conference scoping across a two-conference submitter, reference codes and the standing decision on every row, the pre-launch open-call door, the per-mailbox mail ceiling, and the sessionless page itself. AC-419 to AC-422 were added at review: a reversed acceptance must stop claiming it was accepted (driven through the real cascade, not a synthesized decision row), an unannounced decision must stay off the page, an unlaunched conference must not be named to a stranger or silently swapped for another, and a slug belonging to a different organization must never resolve."
 }
