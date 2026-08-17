@@ -8,7 +8,11 @@ const root = resolve(import.meta.dirname, "../..");
 test("AC-282 + AC-283 · the onboarding speaker surface exposes single and bulk portal invites", async () => {
   const source = await readFile(resolve(root, "src/ui/onboarding/OnboardingPage.tsx"), "utf8");
   assert.match(source, /Invite to portal/);
-  assert.match(source, /Invite to portal \(\$\{selectedRows\.length\}\)/);
+  // MRQ-277 D7: the count is the recipients the invite can actually reach, not
+  // every ticked row — the board also chases sponsor contacts, who hold no
+  // speaker seat and whose invitation the portal would refuse.
+  assert.match(source, /Invite to portal \(\$\{invitableSelectedRows\.length\}\)/);
+  assert.match(source, /const invitableSelectedRows = selectedRows\.filter\(\(row\) => row\.portal_invitable\)/);
   assert.match(source, /\/api\/v1\/events\/\$\{encodeURIComponent\(eventId\)\}\/speakers\/invite/);
   assert.match(source, /outbox row .*delivery remains provider-controlled/);
 });
@@ -28,7 +32,15 @@ test("AC-282 + AC-283 · invite API is organizer-authenticated and event-scoped"
   const source = await readFile(resolve(root, "src/routes/speaker-invites.routes.ts"), "utf8");
   assert.match(source, /path: "\/api\/v1\/events\/\{eventId\}\/speakers\/invite"/);
   assert.match(source, /kind: "grants", grants: \["program:write"\]/);
-  assert.match(source, /m\.event_id = \? AND m\.person_id = p\.id AND m\.role = 'speaker'/);
-  assert.match(source, /s\.event_id = \? AND pa\.person_id = p\.id/);
   assert.match(source, /UPDATE participations SET invited_at/);
+  // The eligibility predicate itself moved to one definition (MRQ-277 D6/D7),
+  // so the board can say on the row what the write will do. Follow it there
+  // rather than pinning a copy of the SQL that no longer exists here.
+  assert.match(source, /portalInvitablePersonSource\("\?"\)/);
+  assert.match(source, /from "\.\.\/lib\/roster-source"/);
+  const rosterSource = await readFile(resolve(root, "src/lib/roster-source.ts"), "utf8");
+  assert.match(rosterSource, /export function portalInvitablePersonSource/);
+  assert.match(rosterSource, /invitable_seat\.event_id = \$\{eventIdExpression\}/);
+  assert.match(rosterSource, /invitable_seat\.role = 'speaker'/);
+  assert.match(rosterSource, /invitable_submission\.event_id = \$\{eventIdExpression\}/);
 });

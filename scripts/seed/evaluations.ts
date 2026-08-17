@@ -52,7 +52,11 @@ function criterionScores(byName: Readonly<Record<string, number>>): Record<strin
  * converges instead of reshuffling the demo under a judge.
  */
 function seededScorecard(index: number): { score: number; criteria: Record<string, number> } | null {
-  if (index % 3 === 2) return null;
+  // Every fifth review stays recommendation-only. Five, not three: the
+  // recommendation cycles on three, so a scorecard on the same modulus would
+  // lock the two in phase and leave every unscored review carrying the same
+  // recommendation — which is exactly the coverage AC-245 exists to keep.
+  if (index % 5 === 4) return null;
   // Half-steps across the published 1–5 scale, offset per criterion so the
   // three do not move in lockstep.
   const point = (offset: number): number => 1 + (((index * 7) + offset) % 9) * 0.5;
