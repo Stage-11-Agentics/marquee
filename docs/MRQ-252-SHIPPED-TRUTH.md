@@ -186,7 +186,7 @@ Documented deviation: the independent review retained a non-blocking note that A
 
 This is the deployment truth paired with the migration landings, not a Git PR. Production D1 now has **44 migrations applied through `0038`**. The out-of-order `0034_request_operations.sql` application was proven live under filename-tracked Wrangler migration semantics; no migration was renumbered. The production-shaped 0030 repair was verified through two live passes: `35 → 42` applied with `1008` rows and `1008` distinct reference pairs, then `42 → 44` after `0034` and `0038` still reported `1008/1008`. The hub's final `8f` proof is the close-out pointer; the earlier `9f` proof covered the intermediate `0037` state.
 
-Source receipt: Lattice event `ev_01M06HA6F9S92EYN9CR3B9S1ZV1` on MRQ-259 records the snapshot rehearsal, both live passes, the `1008/1008` convergence, and the migration sequence. This operational row is the twentieth shipped unit in the merge log below; it must remain separate from source-tree and PR claims.
+Source receipt: Lattice event `ev_01M06HA6F9S92EYN9CR3B9S1ZV` on MRQ-259 records the snapshot rehearsal, both live passes, the `1008/1008` convergence, and the migration sequence. This operational row is the twentieth shipped unit in the merge log below; it must remain separate from source-tree and PR claims.
 
 ## Hub-gated merge log
 
