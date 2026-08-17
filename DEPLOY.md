@@ -159,6 +159,14 @@ is granted with nowhere to land and no error naming the cause.
 **Verify by build hash, not by the page loading.** The old build serves a perfectly healthy
 200. `/health` carries the commit; that is the only honest check.
 
+**Say it out loud when a PR touches `wrangler.jsonc`, in the PR body and to whoever owns
+deploys.** The reader cannot tell a benign edit from a blocking one without opening the diff,
+and the two live in the same file: a `run_worker_first` path costs nothing, while a name added
+to `secrets.required` refuses somebody else's deploy hours later with no clue why. Naming the
+file is cheap; the deploy owner then checks the one thing that matters — `diff` the `secrets`
+block against the deployed sha — instead of discovering the file changed at all. (MRQ-279
+touched it benignly and did not say so; the deploy owner caught it. No harm that time.)
+
 **A new name in `wrangler.jsonc`'s `secrets.required` blocks the next deploy, whoever runs
 it.** Adding a name there is free at merge time — no test covers it, CI stays green, and the
 PR that added it looks finished. The bill arrives when someone else runs `wrangler deploy` and
