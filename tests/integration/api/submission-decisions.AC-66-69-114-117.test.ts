@@ -334,7 +334,7 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     expect(await env.DB.prepare("SELECT is_published FROM agenda_items WHERE submission_id = 'sub-mrq19-bulk-live'").first()).toEqual({ is_published: 0 });
   }, 20_000);
 
-  test("CONTRACT · MRQ-225 · decision-plan preview and sent decision mail use the same absolute public link", async () => {
+  test("AC-362 · MRQ-225 · decision-plan preview and sent decision mail use the same absolute public link", async () => {
     const previewSubmissionId = "sub-mrq19-preview-mail";
     const publicAnchorSubmissionId = "sub-mrq19-preview-anchor";
     const notifySubmissionId = "sub-mrq19-notify-preview";
@@ -536,7 +536,7 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     expect(row?.status).toBe("in_review");
   });
 
-  test("CONTRACT · MRQ-237 · an effectful keyed bulk decision replays its stored 200 after the state changes", async () => {
+  test("AC-351 · MRQ-237 · an effectful keyed bulk decision replays its stored 200 after the state changes", async () => {
     const accepted = await env.DB.prepare(
       "SELECT id FROM submissions WHERE event_id = ? AND status = 'accepted' ORDER BY id LIMIT 1",
     ).bind(EVENT_ID).first<{ id: string }>();
@@ -571,7 +571,7 @@ describe.sequential("MRQ-19 shared decision cascade", () => {
     expect(afterReplay).toEqual(afterFirst);
   });
 
-  test("CONTRACT · MRQ-237 · an all-already bulk decision is a keyed, reasoned zero-effect replay", async () => {
+  test("AC-351 · MRQ-237 · an all-already bulk decision is a keyed, reasoned zero-effect replay", async () => {
     const accepted = await env.DB.prepare(
       "SELECT id FROM submissions WHERE event_id = ? AND status = 'accepted' ORDER BY id LIMIT 1",
     ).bind(EVENT_ID).first<{ id: string }>();

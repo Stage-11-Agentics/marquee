@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-235",
+  "owns": ["AC-384", "AC-385", "AC-386"],
+  "exercises": [],
+  "notes": "Consolidation fold: person merge identity, undo, and alias-chain evidence."
+}

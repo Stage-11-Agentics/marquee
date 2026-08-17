@@ -28,7 +28,7 @@ const programmeRule: FormLengthRule = {
 };
 
 describe("MRQ-246 combined character budgets", () => {
-  test("CONTRACT · MRQ-246 · counts projected answers and gives condition-hidden fields zero weight", () => {
+  test("AC-399 · MRQ-246 · counts projected answers and gives condition-hidden fields zero weight", () => {
     const projected = projectApplicableAnswers(fields, {
       include_bio: "No",
       title: "Title",
@@ -45,7 +45,7 @@ describe("MRQ-246 combined character budgets", () => {
     });
   });
 
-  test("CONTRACT · MRQ-246 · the same answers flip from pass to refusal when the conditional field appears", () => {
+  test("AC-399 · MRQ-246 · the same answers flip from pass to refusal when the conditional field appears", () => {
     const projected = projectApplicableAnswers(fields, {
       include_bio: "Yes",
       title: "Title",
@@ -66,7 +66,7 @@ describe("MRQ-246 combined character budgets", () => {
     });
   });
 
-  test("CONTRACT · MRQ-246 · soft-disables a rule whose field was deleted and evaluates no-rule forms at no cost", () => {
+  test("AC-400 · MRQ-246 · soft-disables a rule whose field was deleted and evaluates no-rule forms at no cost", () => {
     const remainingFields = fields.filter((field) => field.key !== "bio");
     const disabled = evaluateFormLengthRules([programmeRule], remainingFields, { title: "Title", abstract: "12345" })[0];
 
@@ -75,7 +75,7 @@ describe("MRQ-246 combined character budgets", () => {
     expect(evaluateFormLengthRules([], remainingFields, { title: "Title" })).toEqual([]);
   });
 
-  test("CONTRACT · MRQ-246 · orders multiple rules by sort order and then stable id", () => {
+  test("AC-400 · MRQ-246 · orders multiple rules by sort order and then stable id", () => {
     const rules = [
       { ...programmeRule, id: "z-last", sort_order: 2 },
       { ...programmeRule, id: "b-first", sort_order: 1 },
@@ -85,7 +85,7 @@ describe("MRQ-246 combined character budgets", () => {
     expect(evaluateFormLengthRules(rules, fields, {}).map((rule) => rule.id)).toEqual(["a-first", "b-first", "z-last"]);
   });
 
-  test("CONTRACT · MRQ-246 · focuses the first visible member when a rule starts with a hidden field", () => {
+  test("AC-402 · MRQ-246 · focuses the first visible member when a rule starts with a hidden field", () => {
     const conditionalFields: FormFieldAnswerInput[] = [
       { key: "show_bio", type: "single_select" },
       { key: "hidden_bio", type: "long_text", condition: { all: [{ fieldKey: "show_bio", op: "equals", value: "yes" }] } },
@@ -111,7 +111,7 @@ describe("MRQ-246 combined character budgets", () => {
     });
   });
 
-  test("CONTRACT · MRQ-246 · public copy uses field type and never label substrings", () => {
+  test("AC-402 · MRQ-246 · public copy uses field type and never label substrings", () => {
     const issue = {
       fieldKey: "programme",
       kind: "form_length_rule" as const,

@@ -78,7 +78,7 @@ test.describe("CONTRACT · public-form recovery focus", () => {
     await expect(page.locator('[data-field-key="title"] [role="alert"]')).toContainText("Add an answer");
   });
 
-  test("CONTRACT · MRQ-246 · the combined counter crosses its cap and focuses the first visible group field", async ({ page }) => {
+  test("AC-402 · MRQ-246 · the combined counter crosses its cap and focuses the first visible group field", async ({ page }) => {
     await use375px(page);
     await installUploadRoutes(page);
     await installCombinedLengthRule(page);

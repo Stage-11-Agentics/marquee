@@ -305,7 +305,7 @@ test("AC-138 + AC-139 + AC-140 · the configure, schedule, publish and search ve
   }
 });
 
-test("CONTRACT · MRQ-234 · CLI plan and apply carry the shared fingerprint, ETag, and Notify queue revision", async () => {
+test("AC-383 · MRQ-234 · CLI plan and apply carry the shared fingerprint, ETag, and Notify queue revision", async () => {
   const api = await startApi();
   try {
     const plan = await runCli(scopedArgs(api.url, "submissions", "plan", "evt_test", "--action", "accept", "--filter", "status=submitted"), api.url);

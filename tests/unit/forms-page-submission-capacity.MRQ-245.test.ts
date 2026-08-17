@@ -142,7 +142,7 @@ function buttonWithText(root: any, text: string): any {
   return [...root.querySelectorAll("button")].find((button: any) => button.textContent === text);
 }
 
-test("CONTRACT · MRQ-245 · legacy raw zero can transition to conference default through the real save request", async () => {
+test("AC-397 · MRQ-245 · legacy raw zero can transition to conference default through the real save request", async () => {
   // Explicit legacy state: a pre-floor row, not a freshly created form.
   const network = installApi(formFixture({ per_submitter_limit: 0, submitter_limit_inherit: false, effective_submitter_limit: 0 }));
   const root = mountPage();
@@ -170,7 +170,7 @@ test("CONTRACT · MRQ-245 · legacy raw zero can transition to conference defaul
   expect(root.querySelector('[role="status"]')?.textContent ?? "").not.toContain("needs attention");
 });
 
-test("CONTRACT · MRQ-245 · explicit finite override remains a bounded whole-object PATCH", async () => {
+test("AC-396 · MRQ-245 · explicit finite override remains a bounded whole-object PATCH", async () => {
   const network = installApi(formFixture({ id: "form-explicit", per_submitter_limit: 5, submitter_limit_inherit: false, effective_submitter_limit: 5 }));
   const root = mountPage();
   await settle();

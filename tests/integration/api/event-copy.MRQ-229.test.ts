@@ -85,7 +85,7 @@ async function seedFixture(): Promise<void> {
 
 beforeEach(seedFixture);
 
-test("CONTRACT · MRQ-229 · a levels-bound form cannot be copied without the routing set, and the copy plan says why", async () => {
+test("AC-373 · MRQ-229 · a levels-bound form cannot be copied without the routing set, and the copy plan says why", async () => {
   const plan = await request(`/api/v1/events/${SOURCE_EVENT_ID}/copy-plan`);
   expect(plan.status).toBe(200);
   const planBody = await json<Envelope<{ requires: Record<string, string[]>; reasons: Record<string, string> }>>(plan);
@@ -103,7 +103,7 @@ test("CONTRACT · MRQ-229 · a levels-bound form cannot be copied without the ro
   expect(after?.total).toBe(before?.total);
 });
 
-test("CONTRACT · MRQ-229 · selected routing copy remaps level conditions, track/tag/level actions, and bound-form metadata", async () => {
+test("AC-373 · MRQ-229 · selected routing copy remaps level conditions, track/tag/level actions, and bound-form metadata", async () => {
   const response = await createConference({
     copy_from: SOURCE_EVENT_ID,
     copy: { forms: true, formats: true, tracks: true, routing: true },

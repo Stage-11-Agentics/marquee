@@ -81,7 +81,7 @@ function seedSubmissions(database, { eventId, count, startedAt }) {
   }
 }
 
-test("CONTRACT · MRQ-259 · 0030 backfills a populated submissions table without colliding", () => {
+test("AC-348 · MRQ-259 · 0030 backfills a populated submissions table without colliding", () => {
   const database = migrateTo0030();
   const startedAt = Date.parse("2026-08-16T12:00:00.000Z");
   seedSubmissions(database, { eventId: "evt_ref", count: 25, startedAt });
@@ -104,7 +104,7 @@ test("CONTRACT · MRQ-259 · 0030 backfills a populated submissions table withou
   );
 });
 
-test("CONTRACT · MRQ-259 · 0030 numbers each conference independently", () => {
+test("AC-343 · MRQ-259 · 0030 numbers each conference independently", () => {
   const database = migrateTo0030();
   const startedAt = Date.parse("2026-08-16T12:00:00.000Z");
   seedSubmissions(database, { eventId: "evt_one", count: 4, startedAt });
@@ -121,7 +121,7 @@ test("CONTRACT · MRQ-259 · 0030 numbers each conference independently", () => 
   assert.deepEqual(codesFor("evt_two"), ["SUB-1", "SUB-2", "SUB-3"]);
 });
 
-test("CONTRACT · MRQ-259 · 0030 seeds the reference ledger floor from the backfill", () => {
+test("AC-346 · MRQ-259 · 0030 seeds the reference ledger floor from the backfill", () => {
   const database = migrateTo0030();
   const startedAt = Date.parse("2026-08-16T12:00:00.000Z");
   seedSubmissions(database, { eventId: "evt_one", count: 4, startedAt });
@@ -137,7 +137,7 @@ test("CONTRACT · MRQ-259 · 0030 seeds the reference ledger floor from the back
   assert.deepEqual(ledger, ["evt_one=4", "evt_two=3"]);
 });
 
-test("CONTRACT · MRQ-259 · 0030 leaves no backfill scaffolding behind", () => {
+test("AC-348 · MRQ-259 · 0030 leaves no backfill scaffolding behind", () => {
   const database = migrateTo0030();
   const startedAt = Date.parse("2026-08-16T12:00:00.000Z");
   seedSubmissions(database, { eventId: "evt_ref", count: 3, startedAt });

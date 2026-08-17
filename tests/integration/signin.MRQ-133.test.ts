@@ -241,7 +241,7 @@ test("CONTRACT · MRQ-133 · a link minted through the door exchanges into a ses
   expect(response.headers.get("set-cookie")).toMatch(/mq_session=/);
 });
 
-test("CONTRACT · MRQ-247 · draft-resume capabilities cannot enter the session-producing auth exchange", async () => {
+test("AC-405 · MRQ-247 · draft-resume capabilities cannot enter the session-producing auth exchange", async () => {
   await seedRealInstance();
   const minted = await mintMagicLink(env.DB, {
     personId: PERSON,

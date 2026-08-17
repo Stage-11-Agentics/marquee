@@ -40,7 +40,7 @@ function fact(overrides: Partial<PublicationSubmissionFact> = {}): PublicationSu
 }
 
 describe("MRQ-237 publication truth partition", () => {
-  test("CONTRACT · MRQ-237 · every wire reason code is closed and represented", () => {
+  test("AC-349 · MRQ-237 · every wire reason code is closed and represented", () => {
     expect(PUBLICATION_REASON_CODES).toEqual([
       "READY_TO_PUBLISH",
       "ALREADY_PUBLISHED",
@@ -61,7 +61,7 @@ describe("MRQ-237 publication truth partition", () => {
     ]);
   });
 
-  test("CONTRACT · MRQ-237 · the pure classifier partitions unscheduled, withheld, ready, live, and anomaly states", () => {
+  test("AC-349 · MRQ-237 · the pure classifier partitions unscheduled, withheld, ready, live, and anomaly states", () => {
     expect(classifyPublicationFact(null, open).classification).toBe("UNKNOWN_ID");
     expect(classifyPublicationFact(fact({ kind: "abstract", agendaItems: [] }), open).classification).toBe("WRONG_KIND");
     expect(classifyPublicationFact(fact({ kind: "abstract" }), open).classification).toBe("READY_TO_PUBLISH");
@@ -87,7 +87,7 @@ describe("MRQ-237 publication truth partition", () => {
     });
   });
 
-  test("CONTRACT · AIA-07 · accepted status and agenda-item publication are authoritative, not the legacy mirror", () => {
+  test("AC-349 · AIA-07 · accepted status and agenda-item publication are authoritative, not the legacy mirror", () => {
     expect(classifyPublicationFact(fact({ submissionIsPublished: true }), open)).toMatchObject({
       classification: "READY_TO_PUBLISH",
       primaryReasonCode: "READY_TO_PUBLISH",
@@ -102,7 +102,7 @@ describe("MRQ-237 publication truth partition", () => {
     });
   });
 
-  test("CONTRACT · MRQ-237 · malformed slots and a closed public boundary remain named rather than silently publishable", () => {
+  test("AC-349 · MRQ-237 · malformed slots and a closed public boundary remain named rather than silently publishable", () => {
     expect(classifyPublicationFact(fact({ agendaItems: [item({ startsAt: null })] }), open)).toMatchObject({
       classification: "EXISTING_ITEM_MALFORMED",
       primaryReasonCode: "MALFORMED_SLOT",
@@ -120,7 +120,7 @@ describe("MRQ-237 publication truth partition", () => {
       .toBe("PUBLISHED_NOT_PUBLIC");
   });
 
-  test("CONTRACT · MRQ-237 · named reason details retain the fixed precedence", () => {
+  test("AC-349 · MRQ-237 · named reason details retain the fixed precedence", () => {
     expect(classifyPublicationFact(fact({ eventId: "other-event" }), open)).toMatchObject({
       classification: "FOREIGN_EVENT",
       primaryReasonCode: "FOREIGN_EVENT",

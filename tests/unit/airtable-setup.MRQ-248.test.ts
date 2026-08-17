@@ -53,7 +53,7 @@ function progress(role: "submissions" | "speaker_tasks" | "people", state: "crea
   };
 }
 
-test("CONTRACT · MRQ-248 · setup progress keeps earlier per-column creation receipts across continuations", () => {
+test("AC-408, AC-411 · MRQ-248 · setup progress keeps earlier per-column creation receipts across continuations", () => {
   const merged = mergeSetupProgress(
     [progress("submissions", "created")],
     [progress("submissions", "adopted"), progress("speaker_tasks", "complete")],
@@ -67,7 +67,7 @@ test("CONTRACT · MRQ-248 · setup progress keeps earlier per-column creation re
   expect(merged[1]).toMatchObject({ state: "complete" });
 });
 
-test("CONTRACT · MRQ-248 · schema mutation 403 and 429 envelopes keep only safe setup copy and retry progress", () => {
+test("AC-411 · MRQ-248 · schema mutation 403 and 429 envelopes keep only safe setup copy and retry progress", () => {
   const progressRows = [progress("submissions", "created")];
   const forbidden = mirrorActionFailureError({
     ok: false,
@@ -111,7 +111,7 @@ test("CONTRACT · MRQ-248 · schema mutation 403 and 429 envelopes keep only saf
   expect(summary).not.toContain("provider-private");
 });
 
-test("CONTRACT · MRQ-248 · rendered setup keeps three rows from empty-base offer through the completed report", async () => {
+test("AC-408 · MRQ-248 · rendered setup keeps three rows from empty-base offer through the completed report", async () => {
   const roles = ["submissions", "speaker_tasks", "people"] as const;
   const counts = { submissions: 27, speaker_tasks: 19, people: 17 } as const;
   const tables = roles.map((role) => ({ id: `tbl_${role}`, name: role, fields: [] }));
@@ -229,7 +229,7 @@ test("CONTRACT · MRQ-248 · rendered setup keeps three rows from empty-base off
   expect(requestBodies.map((body) => body.intent)).toEqual(["verify", "provision", "adopt"]);
 });
 
-test("CONTRACT · MRQ-248 · route table summaries preserve unknown schema as null, distinct from known empty fields", () => {
+test("AC-410 · MRQ-248 · route table summaries preserve unknown schema as null, distinct from known empty fields", () => {
   expect(mirrorTableSummaries([{ id: "tbl_unknown", name: "Submissions" }])).toEqual([
     { id: "tbl_unknown", name: "Submissions", fields: null },
   ]);

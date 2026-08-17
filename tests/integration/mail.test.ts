@@ -121,7 +121,7 @@ test("CONTRACT · MRQ-211 · queue admission says queued and the consumer alone 
   expect(JSON.parse(afterConsumer.results[1]?.after_json ?? "{}")).toMatchObject({ outbox_id: outboxId, provider_message_id: `provider-${outboxId}` });
 });
 
-test("CONTRACT · MRQ-237 · conference communication with no valid address refuses with a durable zero-effect reason", async () => {
+test("AC-351 · MRQ-237 · conference communication with no valid address refuses with a durable zero-effect reason", async () => {
   await env.DB.prepare("UPDATE people SET email = '' WHERE id = 'per_mail'").run();
   const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "mrq-237-empty-mail" });
   const headers = {
@@ -429,7 +429,7 @@ test("AC-127 · the pre-close schedule fires at the configured offset and not be
   expect(await enqueuePreCloseReminders(env.DB, NOW + 25 * 60 * 60_000)).toBe(0);
 });
 
-test("CONTRACT · MRQ-247 · draft reminders are submitter-grained, per-draft, and do not require missing fields", async () => {
+test("AC-403 · MRQ-247 · draft reminders are submitter-grained, per-draft, and do not require missing fields", async () => {
   await env.DB.batch([
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, created_at, updated_at) VALUES ('per_mail_on_behalf', 'org_mail', 'on-behalf@example.com', 'Grace Hopper', ?, ?)").bind(NOW, NOW),
     env.DB.prepare("INSERT INTO submissions (id, event_id, form_id, kind, title, status, origin, submitter_person_id, created_at, updated_at) VALUES ('draft_mail_one', 'evt_mail', 'form_mail', 'abstract', 'Draft One', 'draft', 'public', 'per_mail', ?, ?), ('draft_mail_two', 'evt_mail', 'form_mail', 'abstract', 'Draft Two', 'draft', 'public', 'per_mail', ?, ?)").bind(NOW, NOW, NOW, NOW),
@@ -676,7 +676,7 @@ test("AC-130 · one real recipient's rendered preview is available before queuei
   expect(preview.text).toContain("Ada");
 });
 
-test("CONTRACT · MRQ-247 · draft reminder preview uses honest placeholders without exposing a raw token", async () => {
+test("AC-404 · MRQ-247 · draft reminder preview uses honest placeholders without exposing a raw token", async () => {
   const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "draft-preview" });
   const response = await app.request(
     "/api/v1/events/evt_mail/comms/preview",
@@ -698,7 +698,7 @@ test("CONTRACT · MRQ-247 · draft reminder preview uses honest placeholders wit
   expect(rendered.html).not.toContain("{{draft.missing_fields}}");
 });
 
-test("CONTRACT · MRQ-247 · draft resume merge fields round-trip only in the keyed editor and never in manual or bulk sends", async () => {
+test("AC-404 · MRQ-247 · draft resume merge fields round-trip only in the keyed editor and never in manual or bulk sends", async () => {
   const session = await createSession(env.DB, { personId: "per_mail", roleHint: "owner", userAgent: "draft-editor" });
   const requestContext = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
   const headers = { cookie: `mq_session=${session.id}`, "content-type": "application/json" };

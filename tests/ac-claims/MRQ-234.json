@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-234",
+  "owns": ["AC-379", "AC-380", "AC-381", "AC-382", "AC-383"],
+  "exercises": [],
+  "notes": "Consolidation fold: decision-plan predicate, route, UI, CLI, and queue-race evidence."
+}

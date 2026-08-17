@@ -1281,3 +1281,36 @@ and `sub 41` without changing their existing event scoping or speed budget.
 The Airtable submission field is outbound read-only; `reference_code` is not
 an inbound mirror allowlist field and Airtable is never read on a request
 path.
+
+---
+
+## Amendment 32 — adoption batch consolidation *(2026-08-17)*
+
+This amendment records the specification deltas for the single-writer fold of
+the landed adoption batch. It does not alter the runtime design by itself:
+each row points to the existing canonical section that the implementation and
+its AC band now make concrete. The post-deadline fold leaves the terminal gate
+arithmetic unchanged.
+
+| Ticket | Canonical sections touched | Delta carried by the fold | AC band |
+|---|---|---|---|
+| MRQ-237 | §3.8, §4.2, §5.2, §5.9, §5.11 | Publication truth is a pure, named classifier shared by record actions, dashboard attention, public projections, and typed keyed operations; replay, lease fencing, and scope/actor isolation remain durable write contracts. | AC-349–AC-354 |
+| MRQ-250 | §3.8, §4.2, §5.6, §5.9 | Decision feedback has explicit disabled/forced-provider/fallback/bulk modes; generated evidence is editable and counters-only facts do not become persisted prompt or message text. | AC-355–AC-359 |
+| MRQ-225 | §3.8, §4.2, §5.9, §5.12 | Announce planning reads the published audience and canonical public assets, uses one idempotent outbox action per reviewed speaker link, and keeps public metadata/title/404 boundaries honest. | AC-360–AC-363 |
+| MRQ-249 | §3.8, §4.2, §5.6, §5.9 | Decision emails keep event facts, portal links, private-note attribution, fallback-link behavior, generic-message isolation, and one-off queue idempotency in the decision seam. | AC-364–AC-368 |
+| MRQ-229 | §3.3, §3.5, §4.2, §5.4, §5.9 | Routing rules have a closed taxonomy, deleted/dangling lifecycle, first-match evaluation, retained/tombstoned answers, bounded preview, and explicit copy remapping. | AC-369–AC-373 |
+| MRQ-233 | §3.6, §3.8, §4.2, §5.2, §5.9, §5.11 | Calendar delivery is a bounded, materiality-aware batch projection with stable ICS precedence, recipient validation, CAS admission, audit/timeline truth, and fail-closed corruption handling. | AC-374–AC-378 |
+| MRQ-234 | §3.8, §4.2, §5.7, §5.9 | Decision waves share one four-row eligibility/plan contract across bulk, single, Notify, CLI, and UI; preconditions, zero-effect results, fingerprints, ETags, and queue races are explicit. | AC-379–AC-383 |
+| MRQ-235 | §3.2, §4.2, §5.9 | Organization-level person identity is preserved through merge, undo, and chained alias references without overwriting later edits or crossing the old undo boundary. | AC-384–AC-386 |
+| MRQ-236 | §3.3, §4.2, §5.4 | Field-library definitions are searchable, event-scoped, self-contained snapshots with stale/reference protection, copied-condition warnings, and authenticated authoring. | AC-387–AC-390 |
+| MRQ-244 | §3.7, §4.2, §5.2, §5.9, §5.10 | First-week surfaces distinguish acceptance prerequisites from true all-clear, keep compact setup geometry live after dismissal, route honest empty actions, and expose reset only for demo accounts. | AC-391–AC-394 |
+| MRQ-245 | §3.3, §3.4, §4.2, §5.4, §5.5, §5.6 | Capacity defaults are bounded and inherited, finite overrides and clear operations are observable, legacy zero remains read-only unlimited, and resumed drafts receive actionable refusal copy. | AC-395–AC-398 |
+| MRQ-246 | §3.3, §3.5, §4.2, §5.4, §5.5, §5.6 | Combined character budgets use one projected evaluator across organizer and portal writes, merge stored answers for partial updates, give hidden fields zero weight, and drive truthful counter/refusal/focus copy. | AC-399–AC-402 |
+| MRQ-247 | §3.7, §4.2, §5.5, §5.6 | Saved-draft reminders are submitter-grained and keyed, with honest placeholders, capability isolation, direct-URL boundaries, and open/closed upload semantics. | AC-403–AC-406 |
+| MRQ-248 | §3.9, §4.2, §5.15 | Airtable adoption uses canonical transport/registry shapes, explicit empty-base provisioning, authoritative submitted IDs and organizer columns, safe conflict handling, and resumable final-switch mapping; D1 remains source of truth and Airtable remains off read paths. | AC-407–AC-411 |
+| MRQ-259 | §3.4, §3.12, §4.2, §5.9 | Backfill evidence strengthens the existing event-scoped reference-code contract and its high-water/ledger guarantees; it does not mint a duplicate criterion band. | Existing AC-343, AC-346, AC-348 |
+| MRQ-255 / MRQ-256 / MRQ-257 | Tooling/guard seams only | Existing exercises and generated-front-door/migration discovery guards remain intact; no product behavior or product AC is minted. | N/A |
+
+The consolidation claims are owned by the ticket manifests under
+`tests/ac-claims/`. `EVALUATION.md` §2.15 is the verification authority, and
+the next shared AC pointer after this fold is **AC-412**.

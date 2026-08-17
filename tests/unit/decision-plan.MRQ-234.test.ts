@@ -11,7 +11,7 @@ const template = {
 };
 
 describe("MRQ-234 pure decision planner", () => {
-  test("CONTRACT · MRQ-234 · always returns the four rows, including an empty muted shape", () => {
+  test("AC-379 · MRQ-234 · always returns the four rows, including an empty muted shape", () => {
     const plan = planBulkDecision({ action: "accept", selected: [], template });
     expect(plan.rows.map((row) => [row.disposition, row.count])).toEqual([
       ["will_send", 0],
@@ -22,7 +22,7 @@ describe("MRQ-234 pure decision planner", () => {
     expect(plan.zero_effect).toBeNull();
   });
 
-  test("CONTRACT · MRQ-234 · classifies the signed truth table without dropping records", () => {
+  test("AC-379 · MRQ-234 · classifies the signed truth table without dropping records", () => {
     const plan = planBulkDecision({
       action: "accept",
       template,
@@ -42,7 +42,7 @@ describe("MRQ-234 pure decision planner", () => {
     expect(plan.zero_effect).toBeNull();
   });
 
-  test("CONTRACT · MRQ-234 · disabled templates and demo suppression stay advisory on the sendable row", () => {
+  test("AC-379 · MRQ-234 · disabled templates and demo suppression stay advisory on the sendable row", () => {
     const plan = planBulkDecision({
       action: "reject",
       template: { ...template, key: "rejection", enabled: false },
@@ -60,7 +60,7 @@ describe("MRQ-234 pure decision planner", () => {
     expect(plan.zero_effect).toBeNull();
   });
 
-  test("CONTRACT · MRQ-234 · waitlist and withdraw are no-mail actions, not address failures", () => {
+  test("AC-379 · MRQ-234 · waitlist and withdraw are no-mail actions, not address failures", () => {
     for (const action of ["waitlist", "withdraw"] as const) {
       const plan = planBulkDecision({
         action,
@@ -72,14 +72,14 @@ describe("MRQ-234 pure decision planner", () => {
     }
   });
 
-  test("CONTRACT · MRQ-234 · feedback is normalized in the pure contract", () => {
+  test("AC-379 · MRQ-234 · feedback is normalized in the pure contract", () => {
     const plan = planBulkDecision({ action: "accept", template, feedbackMd: "  first\r\nsecond  ", selected: [] });
     expect(plan.feedback_md).toBe("first\nsecond");
   });
 });
 
 describe("MRQ-234 shared email validity", () => {
-  test("CONTRACT · MRQ-234 · email validity accepts valid and rejects invalid forms", () => {
+  test("AC-379 · MRQ-234 · email validity accepts valid and rejects invalid forms", () => {
     for (const [value, expected] of [
       ["ada@example.test", true],
       [" Ada@example.test ", true],
@@ -92,7 +92,7 @@ describe("MRQ-234 shared email validity", () => {
     }
   });
 
-  test("CONTRACT · MRQ-234 · the SQL predicate has the same named shape instead of the old LIKE twin", () => {
+  test("AC-379 · MRQ-234 · the SQL predicate has the same named shape instead of the old LIKE twin", () => {
     const sql = emailValiditySql("people.email");
     expect(sql).toContain("length(trim(people.email)) - length(replace(trim(people.email), '@', '')) = 1");
     expect(sql).toContain("instr(substr(trim(people.email), instr(trim(people.email), '@') + 1), '.') < length(substr(trim(people.email), instr(trim(people.email), '@') + 1))");

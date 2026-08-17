@@ -101,7 +101,7 @@ async function expectPortalLinkWorks(link: string): Promise<string> {
 describe.sequential("MRQ-249 decision emails", () => {
   beforeAll(seedFixture, 20_000);
 
-  test("CONTRACT · MRQ-249 · default acceptance carries event facts, a recipient portal link, and an attributed private note", async () => {
+  test("AC-364 · MRQ-249 · default acceptance carries event facts, a recipient portal link, and an attributed private note", async () => {
     const response = await applyDecision(FIRST_SUBMISSION, {
       recommendation: "approve",
       feedback_md: "Bring the practical examples.",
@@ -144,7 +144,7 @@ describe.sequential("MRQ-249 decision emails", () => {
     expect(await publicAgenda.text()).not.toContain(FIRST_NOTE);
   });
 
-  test("CONTRACT · MRQ-249 · edited token-deleted templates get a fallback link and markdown feedback keeps its URL", async () => {
+  test("AC-365 · MRQ-249 · edited token-deleted templates get a fallback link and markdown feedback keeps its URL", async () => {
     await env.DB.prepare(
       `INSERT INTO email_templates (id, event_id, key, name, subject, body_md, enabled, created_at, updated_at)
        VALUES ('template-mrq249-acceptance', ?, 'acceptance', 'Acceptance override', 'Decision for {{submission.title}}', 'Hi {{speaker.first_name}},\n\n{{decision.feedback}}', 1, ?, ?)`,
@@ -171,7 +171,7 @@ describe.sequential("MRQ-249 decision emails", () => {
     await expectPortalLinkWorks(portalLink);
   });
 
-  test("CONTRACT · MRQ-249 · generic communications cannot send decision-only facts", async () => {
+  test("AC-366 · MRQ-249 · generic communications cannot send decision-only facts", async () => {
     const response = await SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/comms/send`, {
       method: "POST",
       headers: authHeaders(),
@@ -187,7 +187,7 @@ describe.sequential("MRQ-249 decision emails", () => {
     expect(message).toContain("portal.link");
   });
 
-  test("CONTRACT · MRQ-249 · one-off follow-ups with changed copy both queue", async () => {
+  test("AC-367 · MRQ-249 · one-off follow-ups with changed copy both queue", async () => {
     const selector = { submission_ids: [FIRST_SUBMISSION], person_ids: [SPEAKER_ID], role: "speaker" };
     const idempotencyKey = "mrq249-follow-up";
     const send = (subject: string, body: string) => SELF.fetch(`${ORIGIN}/api/v1/events/${EVENT_ID}/comms/send`, {
@@ -221,7 +221,7 @@ describe.sequential("MRQ-249 decision emails", () => {
     expect(rows.results.map((row) => row.text)).toEqual(expect.arrayContaining(["First follow-up", "Second follow-up"]));
   });
 
-  test("CONTRACT · MRQ-249 · default rejection carries the event signoff and a working portal link", async () => {
+  test("AC-368 · MRQ-249 · default rejection carries the event signoff and a working portal link", async () => {
     const response = await applyDecision(THIRD_SUBMISSION, {
       recommendation: "deny",
       feedback_md: "The program is full for this round.",

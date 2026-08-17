@@ -111,7 +111,7 @@ async function json<T>(response: Response): Promise<T> {
 describe.sequential("MRQ-236 event-scoped question library", () => {
   beforeEach(seedFixture);
 
-  test("CONTRACT · MRQ-236 · creates searchable definitions and excludes participant machinery", async () => {
+  test("AC-387 · MRQ-236 · creates searchable definitions and excludes participant machinery", async () => {
     const created = await request(`/api/v1/events/${EVENT_ID}/field-library`, {
       method: "POST",
       body: JSON.stringify({
@@ -149,7 +149,7 @@ describe.sequential("MRQ-236 event-scoped question library", () => {
     expect(rows.data[0]).toMatchObject({ id: library.id, on_destination_form: false });
   });
 
-  test("CONTRACT · MRQ-236 · copies a self-contained snapshot, tracks stale versions, and protects referenced definitions", async () => {
+  test("AC-388 · MRQ-236 · copies a self-contained snapshot, tracks stale versions, and protects referenced definitions", async () => {
     const created = await request(`/api/v1/events/${EVENT_ID}/field-library`, {
       method: "POST",
       body: JSON.stringify({
@@ -228,7 +228,7 @@ describe.sequential("MRQ-236 event-scoped question library", () => {
     expect(deleted.status).toBe(200);
   });
 
-  test("CONTRACT · MRQ-236 · warns when a copied condition has no destination trigger and supports save-to-library", async () => {
+  test("AC-389 · MRQ-236 · warns when a copied condition has no destination trigger and supports save-to-library", async () => {
     const conditional = await request(`/api/v1/events/${EVENT_ID}/field-library`, {
       method: "POST",
       body: JSON.stringify({
@@ -290,7 +290,7 @@ describe.sequential("MRQ-236 event-scoped question library", () => {
     expect((await json<{ data: LibraryBody[] }>(listed)).data[0]?.on_destination_form).toBe(true);
   });
 
-  test("CONTRACT · MRQ-236 · keeps definitions event-scoped and requires authoring authentication", async () => {
+  test("AC-390 · MRQ-236 · keeps definitions event-scoped and requires authoring authentication", async () => {
     const other = await request(`/api/v1/events/${OTHER_EVENT_ID}/field-library`, {
       method: "POST",
       body: JSON.stringify({ key: "other_question", label: "Other question", type: "short_text" }),

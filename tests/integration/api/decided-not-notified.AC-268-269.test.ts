@@ -276,7 +276,7 @@ describe.sequential("MRQ-68 decided not notified", () => {
     ]);
   });
 
-  test("CONTRACT · MRQ-234 · two Notify requests from one queue revision yield one drain and one stale refusal", async () => {
+  test("AC-383 · MRQ-234 · two Notify requests from one queue revision yield one drain and one stale refusal", async () => {
     const candidates = ["one", "two"].map((suffix) => ({
       submissionId: `sub-mrq68-race-${suffix}`,
       participationId: `par-mrq68-race-${suffix}`,

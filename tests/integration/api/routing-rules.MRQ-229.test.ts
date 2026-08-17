@@ -161,7 +161,7 @@ async function seedFixture(): Promise<void> {
 describe.sequential("MRQ-229 routing rules", () => {
   beforeEach(seedFixture);
 
-  test("CONTRACT · MRQ-229 · CRUD validates taxonomy, soft-disables deleted fields, and archives rules", async () => {
+  test("AC-370 · MRQ-229 · CRUD validates taxonomy, soft-disables deleted fields, and archives rules", async () => {
     const createdTag = await request(`/api/v1/events/${EVENT_ID}/tags`, { method: "POST", body: JSON.stringify({ name: "Created tag" }) });
     expect(createdTag.status).toBe(201);
     const tag = (await json<Envelope<{ id: string; name: string }>>(createdTag)).data;
@@ -204,7 +204,7 @@ describe.sequential("MRQ-229 routing rules", () => {
     expect((await json<Envelope<RuleView>>(disabled)).data).toMatchObject({ name: "CRUD second rule disabled", enabled: false });
   });
 
-  test("CONTRACT · MRQ-229 · CRUD rejects a cross-event action and marks a rule dangling until its field returns", async () => {
+  test("AC-370 · MRQ-229 · CRUD rejects a cross-event action and marks a rule dangling until its field returns", async () => {
     const foreign = await request(`/api/v1/events/${EVENT_ID}/routing-rules`, {
       method: "POST",
       body: JSON.stringify({ name: "Foreign destination", when_json: { all: [{ fieldKey: "notes", op: "answered" }] }, then_json: { track_id: TRACK_OTHER } }),
@@ -250,7 +250,7 @@ describe.sequential("MRQ-229 routing rules", () => {
     expect((await request(`/api/v1/events/${EVENT_ID}/routing-rules` , {}, null)).status).toBe(401);
   });
 
-  test("CONTRACT · MRQ-229 · first match wins across track, tag, level, and review actions, while a non-match is inert", async () => {
+  test("AC-371 · MRQ-229 · first match wins across track, tag, level, and review actions, while a non-match is inert", async () => {
     const first = await createRule({
       name: "First arbitrary answer landing",
       when: [{ fieldKey: "notes", op: "contains", value: "MRQ-229-ARBITRARY-ANSWER" }],
@@ -282,7 +282,7 @@ describe.sequential("MRQ-229 routing rules", () => {
     expect(Number((await env.DB.prepare("SELECT COUNT(*) AS total FROM submission_tags WHERE submission_id = ?").bind(nonmatchRow?.id).first<{ total: number }>())?.total)).toBe(0);
   });
 
-  test("CONTRACT · MRQ-229 · admin creation preserves caller routing and does not evaluate a matching public rule", async () => {
+  test("AC-372 · MRQ-229 · admin creation preserves caller routing and does not evaluate a matching public rule", async () => {
     const publicRule = await createRule({
       name: "Admin must not inherit public routing",
       when: [{ fieldKey: "notes", op: "contains", value: "MRQ-229-ADMIN-MATCH" }],
@@ -316,7 +316,7 @@ describe.sequential("MRQ-229 routing rules", () => {
     expect(Number((await env.DB.prepare("SELECT COUNT(*) AS total FROM audit_log WHERE entity_id = ? AND action = 'submission.routed'").bind(row?.id).first<{ total: number }>())?.total)).toBe(0);
   });
 
-  test("CONTRACT · MRQ-229 · missing form answers are skipped, and the next rule can still match", async () => {
+  test("AC-371 · MRQ-229 · missing form answers are skipped, and the next rule can still match", async () => {
     await createRule({
       name: "Outcome rule is skipped on this form",
       when: [{ fieldKey: "audience_outcome", op: "not_equals", value: "No" }],
@@ -336,7 +336,7 @@ describe.sequential("MRQ-229 routing rules", () => {
     expect(Number((await env.DB.prepare("SELECT COUNT(*) AS total FROM submission_tags st JOIN submissions s ON s.id = st.submission_id WHERE s.title = ?").bind("Skipped condition").first<{ total: number }>())?.total)).toBe(0);
   });
 
-  test("CONTRACT · MRQ-229 · arrival idempotency and apply-once preserve an explicit organizer projection", async () => {
+  test("AC-372 · MRQ-229 · arrival idempotency and apply-once preserve an explicit organizer projection", async () => {
     const first = await createRule({
       name: "Apply once rule",
       when: [{ fieldKey: "notes", op: "contains", value: "MRQ-229-APPLY-ONCE" }],

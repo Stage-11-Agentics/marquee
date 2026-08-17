@@ -804,6 +804,86 @@ allocation seam, and the read projections form one reference-code contract.
 
 ---
 
+### 2.15 Post-deadline adoption consolidation band — AC-349–AC-411 *(Amendment 32, 2026-08-17)*
+
+**Outside the Wednesday terminal gate, on the same terms as §2.4–§2.14.** Not
+folded into the live in-scope count or tier arithmetic. This is the single
+consolidation fold for the landed adoption batch. Each owned criterion has a
+direct test title and a claims manifest; tooling-only checkpoints MRQ-255,
+MRQ-256, and MRQ-257 mint no product criterion. MRQ-259 strengthens the
+existing AC-343/AC-346/AC-348 evidence rather than minting a second reference
+code contract. The MRQ-225 evidence has no separate portal-panel criterion:
+the landed test set proves the four listed behaviors below, and this fold does
+not promote an untested claim.
+
+| AC | Tier | Tag | How verified |
+|---|---|---|---|
+| AC-349 | PD | `auto` | `tests/unit/publication-truth.MRQ-237.test.ts`: the closed reason vocabulary, pure publication classifier, accepted/agenda-item authority, malformed-slot boundary, and fixed reason precedence are all named and asserted. |
+| AC-350 | PD | `auto` | `tests/integration/api/submission-record-board.AC-118-120-238-240-243-251.test.ts`: record no-op, anomaly chip, and dashboard gauge clickthrough consume the same publication truth. |
+| AC-351 | PD | `auto` | `tests/integration/api/people.MRQ-131.test.ts`, `tests/integration/api/submission-decisions.AC-66-69-114-117.test.ts`, and `tests/integration/mail.test.ts`: keyed communication and bulk decision paths produce durable, reasoned zero-effect behavior and replay effectful requests. |
+| AC-352 | PD | `auto` | `tests/integration/api/request-operations.MRQ-237.test.ts`: typed operation/outbox-link schema exists and keyed claims replay byte-identically while changed request bodies are refused. |
+| AC-353 | PD | `auto` | `tests/integration/api/request-operations.MRQ-237.test.ts`: stale leases reclaim, stale workers and acknowledgements are fenced, and missing operation JSON recovers. |
+| AC-354 | PD | `auto` | `tests/integration/api/request-operations.MRQ-237.test.ts`: typed scope/actor checks reject cross-tenant claims and cascading cleanup removes links. |
+| AC-355 | PD | `auto` | `tests/integration/api/kind-feedback.MRQ-250.test.ts`: disabled/default feedback mode is fail-closed, makes no provider call, and still permits deterministic rejection mail. |
+| AC-356 | PD | `auto` | `tests/integration/api/kind-feedback.MRQ-250.test.ts`: a forced configured-tool draft remains editable and keeps deterministic facts separate from generated evidence. |
+| AC-357 | PD | `auto` | `tests/integration/api/kind-feedback.MRQ-250.test.ts`: provider failure falls back without blocking the ordinary rejection flow. |
+| AC-358 | PD | `auto` | `tests/integration/api/kind-feedback.MRQ-250.test.ts`: bulk drafting makes exactly one provider call and produces one shared paragraph. |
+| AC-359 | PD | `auto` | `tests/integration/api/kind-feedback.MRQ-250.test.ts`: counters-only evidence does not become a prompt, note, or persisted/generated text outside the organizer edit path. |
+| AC-360 | PD | `auto` | `tests/integration/api/announce.MRQ-225.test.ts`: announce snapshot reads only the published audience and emits canonical public assets. |
+| AC-361 | PD | `auto` | `tests/integration/api/announce.MRQ-225.test.ts`: reviewed speaker-link planning renders each link and apply queues one idempotent outbox action. |
+| AC-362 | PD | `auto` | `tests/integration/api/submission-decisions.AC-66-69-114-117.test.ts`: decision-plan preview and sent mail use the same absolute public speaker link. |
+| AC-363 | PD | `auto` | `tests/integration/public-site.AC-83-86-240-252-253.test.ts`: public pages bound share metadata, preserve exact speaker titles, and return honest 404s without title leakage. |
+| AC-364 | PD | `auto` | `tests/integration/api/decision-emails.MRQ-249.test.ts`: default acceptance carries event facts, a recipient portal link, and an attributed private note. |
+| AC-365 | PD | `auto` | `tests/integration/api/decision-emails.MRQ-249.test.ts`: edited token-deleted templates receive a fallback link and markdown feedback retains its URL. |
+| AC-366 | PD | `auto` | `tests/integration/api/decision-emails.MRQ-249.test.ts`: generic communications cannot send decision-only facts. |
+| AC-367 | PD | `auto` | `tests/integration/api/decision-emails.MRQ-249.test.ts`: changed-copy one-off follow-ups both queue. |
+| AC-368 | PD | `auto` | `tests/integration/api/decision-emails.MRQ-249.test.ts`: default rejection carries event signoff and a working portal link. |
+| AC-369 | PD | `auto` | `tests/unit/routing-rules.MRQ-229.test.ts`: operator aliases, blank/multiselect truth, and one-to-five-clause/schema validation share the saved-rule contract. |
+| AC-370 | PD | `auto` | `tests/integration/api/routing-rules.MRQ-229.test.ts`: CRUD validates taxonomy, soft-disables deleted fields, archives rules, rejects cross-event actions, and marks dangling fields. |
+| AC-371 | PD | `auto` | `tests/integration/api/routing-rules.MRQ-229.test.ts` and `tests/unit/routing-rules.MRQ-229.test.ts`: first-match action behavior and missing-answer/non-match semantics are explicit. |
+| AC-372 | PD | `auto` | `tests/integration/api/routing-rules.MRQ-229.test.ts` and `tests/integration/api/submission-answers-retention.MRQ-229.test.ts`: admin/import/arrival apply-once behavior preserves explicit answers and tombstone/removal semantics. |
+| AC-373 | PD | `auto` | `tests/integration/api/event-copy.MRQ-229.test.ts` and `tests/integration/api/routing-preview.MRQ-229.test.ts`: copy/preview validates routing prerequisites, remaps selected clauses, reports bounded would-land counts, preserves order states, and redacts answers. |
+| AC-374 | PD | `auto` | `tests/e2e/mrq-233-calendar-strip.spec.ts`: agenda gauge, record resend action, blocked-row naming, and dashboard calendar attention geometry are present. |
+| AC-375 | PD | `auto` | `tests/integration/calendar-batch.MRQ-233.test.ts` and `tests/unit/calendar-batch.MRQ-233.test.ts`: one speaker email/VEVENT per session, real-submission audit/timeline, stable ICS link, and old/new slot material are asserted. |
+| AC-376 | PD | `auto` | `tests/integration/calendar-batch.MRQ-233.test.ts`: bounded projection and invalid-recipient ordering are explicit, and an all-blocked batch fails closed. |
+| AC-377 | PD | `auto` | `tests/integration/calendar-batch.MRQ-233.test.ts`: materiality debt, idempotency, CAS sequence claims, duplicate admission, and same-owner/provider resumption are covered. |
+| AC-378 | PD | `auto` | `tests/integration/calendar-batch.MRQ-233.test.ts`: newest resolver precedence and every mixed-grain, missing-part, unknown-template, and corrupt-material path fail closed. |
+| AC-379 | PD | `auto` | `tests/integration/api/decision-plan.MRQ-234.test.ts` and `tests/unit/decision-plan.MRQ-234.test.ts`: pure eligibility, four-row shape, SQL parity, feedback/email validity, and advisory no-mail behavior are asserted. |
+| AC-380 | PD | `auto` | `tests/e2e/mrq-234-decision-plan.spec.ts` and `tests/integration/api/decision-plan.routes.MRQ-234.test.ts`: bulk/single/Notify plan shape and render parity are exercised. |
+| AC-381 | PD | `auto` | `tests/integration/api/decision-plan.routes.MRQ-234.test.ts`: changed-email and missing-precondition refusals are authored 409/400 responses, and zero-effect apply is 409. |
+| AC-382 | PD | `auto` | `tests/integration/api/decision-plan.routes.MRQ-234.test.ts`: no fabricated mail is produced and mixed apply preserves per-record post-send failure. |
+| AC-383 | PD | `auto` | `tests/integration/api/decided-not-notified.AC-268-269.test.ts` and `tests/node/cli.AC-138-141-250.test.mjs`: Notify race, fingerprint, ETag, queue revision, and CLI plan/apply contracts agree. |
+| AC-384 | PD | `auto` | `tests/integration/api/person-merge.MRQ-235.test.ts`: merge preview/execute preserves identity continuity across references. |
+| AC-385 | PD | `auto` | `tests/integration/api/person-merge.MRQ-235.test.ts`: clean undo restores moved references without overwriting later edits. |
+| AC-386 | PD | `auto` | `tests/integration/api/person-merge.MRQ-235.test.ts`: chained aliases flatten and the old undo boundary is blocked. |
+| AC-387 | PD | `auto` | `tests/integration/api/field-library.MRQ-236.test.ts`: searchable definitions are created while participant machinery is excluded. |
+| AC-388 | PD | `auto` | `tests/integration/api/field-library.MRQ-236.test.ts`: self-contained snapshots, stale versions, and referenced-definition protection are enforced. |
+| AC-389 | PD | `auto` | `tests/integration/api/field-library.MRQ-236.test.ts`: copied-condition warnings and save-to-library behavior are explicit. |
+| AC-390 | PD | `auto` | `tests/integration/api/field-library.MRQ-236.test.ts`: field-library definitions remain event-scoped and authoring-authenticated. |
+| AC-391 | PD | `auto` | `tests/unit/mrq-244-truth.test.ts`: running and dismissed programs retain live compact setup-row state, reserved geometry, and next-step routing. |
+| AC-392 | PD | `auto` | `tests/unit/mrq-244-truth.test.ts`: acceptance is the prerequisite and genuine all-clear is reserved for accepted speakers with no open tasks. |
+| AC-393 | PD | `auto` | `tests/unit/mrq-244-truth.test.ts`: communications and agenda empty actions are honest and route to live surfaces. |
+| AC-394 | PD | `auto` | `tests/unit/mrq-244-truth.test.ts`: demo-only reset visibility and footer reachability are truthful. |
+| AC-395 | PD | `auto` | `tests/integration/api/event-settings.test.ts`, `tests/integration/api/forms.AC-17-33.test.ts`, `tests/integration/api/public-form.AC-25-42-155-157-231-234.test.ts`, and `tests/node/submission-capacity.MRQ-245.test.mjs`: bounded event defaults and inheritance hold across real readers without a demo row. |
+| AC-396 | PD | `auto` | `tests/integration/api/forms.AC-17-33.test.ts`, `tests/unit/forms-page-submission-capacity.MRQ-245.test.ts`, and `tests/unit/submission-capacity-editor.MRQ-245.test.ts`: finite override, clear, whole-object PATCH, and flag-omitted PATCH state transitions remain observable. |
+| AC-397 | PD | `auto` | `tests/integration/api/forms.AC-17-33.test.ts`, `tests/integration/api/public-form.AC-25-42-155-157-231-234.test.ts`, `tests/unit/forms-page-submission-capacity.MRQ-245.test.ts`, and `tests/unit/submission-capacity-editor.MRQ-245.test.ts`: legacy zero stays unlimited on read and has no zero write affordance. |
+| AC-398 | PD | `auto` | `tests/integration/api/public-form.AC-25-42-155-157-231-234.test.ts`: resumed-draft capacity refusal names the saved draft and organizer recovery step. |
+| AC-399 | PD | `auto` | `tests/unit/form-length-rules.MRQ-246.test.ts` and `tests/integration/api/public-form.AC-25-42-155-157-231-234.test.ts`: one projected evaluator gives conditional hidden fields zero weight and the public counter/server refusal share the budget. |
+| AC-400 | PD | `auto` | `tests/unit/form-length-rules.MRQ-246.test.ts` and `tests/integration/api/forms.AC-17-33.test.ts`: authoring lifecycle, deleted-field soft-disable, no-rule behavior, and stable rule ordering are enforced. |
+| AC-401 | PD | `auto` | `tests/integration/api/portal.AC-43-52-233-237-240.test.ts` and `tests/integration/api/submission-applicability.MRQ-69.test.ts`: organizer and portal enforcement merge stored answers, survive partial updates, and reject the same group overage. |
+| AC-402 | PD | `auto` | `tests/unit/form-length-rules.MRQ-246.test.ts` and `tests/e2e/mrq-240-public-form-focus.spec.ts`: public refusal/counter copy uses field type, and focus selects the first visible group field. |
+| AC-403 | PD | `auto` | `tests/integration/mail.test.ts`: draft reminders are submitter-grained, per-draft, and idempotent without requiring missing fields. |
+| AC-404 | PD | `auto` | `tests/integration/mail.test.ts`: placeholders are honest, raw tokens stay hidden, and keyed editor merge fields do not leak into manual or bulk sends. |
+| AC-405 | PD | `auto` | `tests/integration/api/public-form.AC-25-42-155-157-231-234.test.ts` and `tests/integration/signin.MRQ-133.test.ts`: reminder capability isolation, direct-URL boundaries, keyed promotion, and auth-exchange refusal are enforced. |
+| AC-406 | PD | `auto` | `tests/integration/api/public-upload-presign.MRQ-81.test.ts`: raw and submission-bound reminder uploads work only while open and return honest closed-form copy. |
+| AC-407 | PD | `auto` | `tests/integration/mirror-schema.MRQ-248.test.ts`: canonical provider transport paths/bodies and exhaustive schema keys/shapes/record values are asserted. |
+| AC-408 | PD | `auto` | `tests/integration/mirror-schema.MRQ-248.test.ts` and `tests/unit/airtable-setup.MRQ-248.test.ts`: empty/default provisioning and visible multi-row progress are explicit while organizer Table 1 remains untouched. |
+| AC-409 | PD | `auto` | `tests/integration/mirror-schema.MRQ-248.test.ts`: submitted IDs and organizer columns are authoritative, partial templates create only unfilled roles, and safe copy handles exact-name conflicts. |
+| AC-410 | PD | `auto` | `tests/integration/mirror-schema.MRQ-248.test.ts` and `tests/unit/airtable-setup.MRQ-248.test.ts`: unknown schema/type conflicts remain distinct from empty schema and reject before webhook registration. |
+| AC-411 | PD | `auto` | `tests/integration/mirror-schema.MRQ-248.test.ts` and `tests/unit/airtable-setup.MRQ-248.test.ts`: resumable retry-safe adoption preserves receipts and changes the active mapping only at the final switch. |
+
+---
+
 ## 3. Felt checkpoints
 
 Four in-scope ACs are judgements no assertion settles. Each is a scheduled human-use session with an explicit trigger, an explicit method, and a recorded verdict. A checkpoint that has not run is not a pass.

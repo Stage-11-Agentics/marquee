@@ -60,7 +60,7 @@ async function seedFixture(): Promise<void> {
 
 beforeEach(seedFixture);
 
-test("CONTRACT · MRQ-229 · answer edits retain an omitted tombstoned level and explicit removal deletes only that answer", async () => {
+test("AC-372 · MRQ-229 · answer edits retain an omitted tombstoned level and explicit removal deletes only that answer", async () => {
   const submitted = await request("/api/v1/public/forms/mrq229-retention/submissions", {
     method: "POST",
     body: JSON.stringify({

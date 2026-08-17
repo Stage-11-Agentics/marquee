@@ -149,7 +149,7 @@ test("AC-83, AC-84, AC-240, AC-252, AC-253 · the anonymous agenda renders publi
   await env.DB.prepare("DELETE FROM buildings WHERE id = 'building-public-annex'").run();
 });
 
-test("CONTRACT · MRQ-225 · public pages publish bounded share metadata, exact speaker titles, and honest 404s", async () => {
+test("AC-363 · MRQ-225 · public pages publish bounded share metadata, exact speaker titles, and honest 404s", async () => {
   const agenda = await request(`/agenda?event=${EVENT_SLUG}`);
   const agendaBody = await agenda.text();
   expect(agenda.headers.get("cache-control")).toBe("public, max-age=300");

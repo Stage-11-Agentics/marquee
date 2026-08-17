@@ -543,7 +543,7 @@ test("CONTRACT · MRQ-226 · an org nudge retries by compose id but a new nudge 
   expect(rows?.total).toBe(2);
 });
 
-test("CONTRACT · MRQ-237 · organization communication with no valid address is an honest keyed no-op", async () => {
+test("AC-351 · MRQ-237 · organization communication with no valid address is an honest keyed no-op", async () => {
   await env.DB.prepare("UPDATE people SET email = '' WHERE id = ? AND org_id = ?").bind(SPEAKER, ORG_ID).run();
   const input = { person_ids: [SPEAKER], subject: "MRQ-237 no address", body: "Hello {{speaker.first_name}}" };
   const headers = { "content-type": "application/json", "Idempotency-Key": "mrq237-org-no-address" };

@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-225",
+  "owns": ["AC-360", "AC-361", "AC-362", "AC-363"],
+  "exercises": [],
+  "notes": "Consolidation fold: four direct announce/public-projection contract tests; no untested portal-panel criterion was minted."
+}

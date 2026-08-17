@@ -76,7 +76,7 @@ async function outboxFor(suffix: string, now: number): Promise<string> {
 describe.sequential("MRQ-237 durable request operations", () => {
   beforeAll(seedFixture, 10_000);
 
-  test("CONTRACT · MRQ-237 · migration creates the typed operation and outbox-link schema", async () => {
+  test("AC-352 · MRQ-237 · migration creates the typed operation and outbox-link schema", async () => {
     const tables = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('request_operations', 'request_operation_outbox') ORDER BY name",
     ).all<{ name: string }>();
@@ -91,7 +91,7 @@ describe.sequential("MRQ-237 durable request operations", () => {
     expect(operationSchema?.sql).toContain("state IN ('in_flight', 'dispatch_pending', 'completed', 'failed')");
   });
 
-  test("CONTRACT · MRQ-237 · keyed claims replay byte-identically and reject changed request bodies", async () => {
+  test("AC-352 · MRQ-237 · keyed claims replay byte-identically and reject changed request bodies", async () => {
     expect(canonicalRequestJson({ b: 2, a: ["first", "second"] })).toBe('{"a":["first","second"],"b":2}');
     expect(canonicalRequestJson({ a: ["first", "second"] })).not.toBe(canonicalRequestJson({ a: ["second", "first"] }));
     expect(canonicalRequestJson({ a: ["first", "first"] })).not.toBe(canonicalRequestJson({ a: ["first"] }));
@@ -123,7 +123,7 @@ describe.sequential("MRQ-237 durable request operations", () => {
     } satisfies Partial<ApiError>);
   });
 
-  test("CONTRACT · MRQ-237 · stale in-flight leases reclaim and fence the old worker", async () => {
+  test("AC-353 · MRQ-237 · stale in-flight leases reclaim and fence the old worker", async () => {
     const initial = await claimRequestOperation({
       ...eventInput("events.mrq237.stale", { submission_id: "stale" }, 1_000),
       idempotencyKey: "mrq237-stale",
@@ -156,7 +156,7 @@ describe.sequential("MRQ-237 durable request operations", () => {
     expect(replay.replay?.body).toEqual({ worker: "new" });
   });
 
-  test("CONTRACT · MRQ-237 · dispatch leases fence stale acknowledgements and recover missing operation JSON", async () => {
+  test("AC-353 · MRQ-237 · dispatch leases fence stale acknowledgements and recover missing operation JSON", async () => {
     const now = 10_000;
     const outboxId = await outboxFor("dispatch-fence", now);
     const operation = await claimRequestOperation({
@@ -222,7 +222,7 @@ describe.sequential("MRQ-237 durable request operations", () => {
     });
   });
 
-  test("CONTRACT · MRQ-237 · typed scope and actor checks reject cross-tenant claims and cascades remove links", async () => {
+  test("AC-354 · MRQ-237 · typed scope and actor checks reject cross-tenant claims and cascades remove links", async () => {
     await expect(claimRequestOperation({
       ...eventInput("events.mrq237.actor", { action: "cross-tenant" }),
       actorPersonId: OTHER_PERSON_ID,

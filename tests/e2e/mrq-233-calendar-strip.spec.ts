@@ -15,7 +15,7 @@ async function enterOrganizer(page: Page): Promise<void> {
 // repo-wide trace:ac title-prefix contract scans every such call).
 test.describe("CONTRACT · MRQ-233 calendar attention and explicit record resend", () => {
   if (eventId && submissionId) {
-    test("CONTRACT · agenda keeps the zero-debt calendar gauge and fixed send geometry", async ({ page }) => {
+    test("AC-374 · agenda keeps the zero-debt calendar gauge and fixed send geometry", async ({ page }) => {
       await enterOrganizer(page);
       await page.goto(`/agenda-builder?event=${encodeURIComponent(eventId!)}`);
 
@@ -27,7 +27,7 @@ test.describe("CONTRACT · MRQ-233 calendar attention and explicit record resend
       await expect(send).toBeDisabled();
     });
 
-    test("CONTRACT · scheduled submission record keeps the explicit per-session calendar resend action", async ({ page }) => {
+    test("AC-374 · scheduled submission record keeps the explicit per-session calendar resend action", async ({ page }) => {
       await enterOrganizer(page);
       await page.goto(`/submissions/${encodeURIComponent(submissionId!)}?event=${encodeURIComponent(eventId!)}`);
 
@@ -39,7 +39,7 @@ test.describe("CONTRACT · MRQ-233 calendar attention and explicit record resend
   }
 
   if (blockedEventId) {
-    test("CONTRACT · agenda modal names blocked rows instead of silently filtering them", async ({ page }) => {
+    test("AC-374 · agenda modal names blocked rows instead of silently filtering them", async ({ page }) => {
       await enterOrganizer(page);
       await page.goto(`/agenda-builder?event=${encodeURIComponent(blockedEventId!)}`);
       await page.locator('[data-calendar-send="true"]').click();
@@ -52,7 +52,7 @@ test.describe("CONTRACT · MRQ-233 calendar attention and explicit record resend
   }
 
   if (eventId) {
-    test("CONTRACT · dashboard keeps the calendar row in the signed three-column attention grid", async ({ page }) => {
+    test("AC-374 · dashboard keeps the calendar row in the signed three-column attention grid", async ({ page }) => {
       await enterOrganizer(page);
       await page.goto(`/dashboard?event=${encodeURIComponent(eventId!)}`);
 

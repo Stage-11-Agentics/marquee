@@ -1365,3 +1365,36 @@ reading an opaque identifier aloud.
 post-deadline band leaves the terminal gate unchanged.
 
 **Next mint: AC-349.**
+
+---
+
+## Amendment 32 — adoption batch consolidation *(2026-08-17)*
+
+This is the single-writer consolidation of the landed adoption batch. It
+introduces no new US numbers: the tickets below fold into the existing stories
+and seams, while `EVALUATION.md` §2.15 mints the owned AC-349–AC-411 band.
+The mapping is deliberately broader than the test title where a ticket
+strengthens an existing journey, but no criterion is claimed without a direct
+test title. MRQ-259 is evidence added to US-97's AC-343/AC-346/AC-348 band;
+MRQ-255, MRQ-256, and MRQ-257 are tooling-only and have no product story or
+product AC mint.
+
+| Ticket | Existing story/seam strengthened | Folded AC band |
+|---|---|---|
+| MRQ-237 | Publication truth and reliable organizer actions: US-06, US-50, US-57, US-93 | AC-349–AC-354 |
+| MRQ-250 | Decision feedback and organizer messaging: US-34, US-81, US-93 | AC-355–AC-359 |
+| MRQ-225 | Announce and public speaker projection: US-39, US-57, US-58 | AC-360–AC-363 |
+| MRQ-249 | Decision mail and private context: US-34, US-81, US-93, with the US-96 notes seam | AC-364–AC-368 |
+| MRQ-229 | Form routing authoring, evaluation, and arrival application: US-07, US-11, US-12 | AC-369–AC-373 |
+| MRQ-233 | Calendar truth across agenda, record, and delivery: US-47, US-56, US-94 | AC-374–AC-378 |
+| MRQ-234 | Decision waves, notifications, and operator feedback: US-33, US-34, US-45, US-46, US-81, US-93 | AC-379–AC-383 |
+| MRQ-235 | Organization-level people identity and reference continuity; the CRM seam in `SPEC.md` §3.2 | AC-384–AC-386 |
+| MRQ-236 | Reusable form fields and conditional authoring: US-07, US-08, US-09 | AC-387–AC-390 |
+| MRQ-244 | First-week truth, setup, communications, agenda, and demo boundary: US-06, US-38, US-44, US-73 | AC-391–AC-394 |
+| MRQ-245 | Capacity defaults and resumed-draft boundary: US-10, US-17, US-19 | AC-395–AC-398 |
+| MRQ-246 | Combined form budgets and truthful validation: US-07, US-09, US-17, US-19 | AC-399–AC-402 |
+| MRQ-247 | Saved-draft resume, portal boundary, and upload lifecycle: US-14, US-19, US-46 | AC-403–AC-406 |
+| MRQ-248 | Airtable schema adoption and mirror configuration: US-72, US-92 | AC-407–AC-411 |
+
+The post-deadline band leaves the terminal gate arithmetic unchanged. After
+this fold the shared AC pointer is **AC-412**.

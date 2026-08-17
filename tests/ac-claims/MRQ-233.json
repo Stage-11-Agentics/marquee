@@ -1,0 +1,6 @@
+{
+  "ticket": "MRQ-233",
+  "owns": ["AC-374", "AC-375", "AC-376", "AC-377", "AC-378"],
+  "exercises": [],
+  "notes": "Consolidation fold: calendar batch projection, admission, resolver, UI, and runtime contract evidence."
+}
