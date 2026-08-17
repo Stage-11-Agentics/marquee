@@ -948,6 +948,7 @@ function RoutingRulesPanel({ eventId, form, previewAnswers }: { eventId: string;
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [lookupMessages, setLookupMessages] = useState<string[]>([]);
   const [editor, setEditor] = useState<RoutingRuleDraft | null>(null);
   const [fixingRuleId, setFixingRuleId] = useState<string | null>(null);
 
@@ -966,17 +967,26 @@ function RoutingRulesPanel({ eventId, form, previewAnswers }: { eventId: string;
 
   const load = async (): Promise<void> => {
     setLoading(true);
+    setLookupMessages([]);
+    async function optionalLookup<T>(label: string, operation: () => Promise<T>, fallback: T): Promise<T> {
+      try {
+        return await operation();
+      } catch (error) {
+        setLookupMessages((current) => [...current, `${label} unavailable: ${errorSummary(error)}`]);
+        return fallback;
+      }
+    }
     try {
-      const [ruleResult, settingsResult, tagResult, levelResult, planResult] = await Promise.all([
+      const [ruleResult, trackResult, tagResult, levelResult, planResult] = await Promise.all([
         request<{ data: RoutingRule[] }>(`/api/v1/events/${eventId}/routing-rules`, "/api/v1/events/{eventId}/routing-rules"),
-        request<{ data: { tracks: RoutingOption[] } }>(`/api/v1/events/${eventId}/settings`, "/api/v1/events/{eventId}/settings"),
-        request<{ data: RoutingOption[] }>(`/api/v1/events/${eventId}/tags`, "/api/v1/events/{eventId}/tags"),
-        request<{ data: RoutingOption[] }>(`/api/v1/events/${eventId}/levels`, "/api/v1/events/{eventId}/levels"),
-        request<{ data: ReviewOption[] }>(`/api/v1/events/${eventId}/plans?page=1&per_page=100`, "/api/v1/events/{eventId}/plans"),
+        optionalLookup("Track destinations", () => request<{ data: RoutingOption[] }>(`/api/v1/events/${eventId}/tracks`, "/api/v1/events/{eventId}/tracks"), { data: [] }),
+        optionalLookup("Tag destinations", () => request<{ data: RoutingOption[] }>(`/api/v1/events/${eventId}/tags`, "/api/v1/events/{eventId}/tags"), { data: [] }),
+        optionalLookup("Audience levels", () => request<{ data: RoutingOption[] }>(`/api/v1/events/${eventId}/levels`, "/api/v1/events/{eventId}/levels"), { data: [] }),
+        optionalLookup("Review plans", () => request<{ data: ReviewOption[] }>(`/api/v1/events/${eventId}/plans?page=1&per_page=100`, "/api/v1/events/{eventId}/plans"), { data: [] }),
       ]);
-      const planDetails = await Promise.all(planResult.data.map((plan) => request<{ rounds?: ReviewOption[]; committees?: ReviewOption[] }>(`/api/v1/events/${eventId}/plans/${plan.id}`, "/api/v1/events/{eventId}/plans/{planId}")));
+      const planDetails = await Promise.all(planResult.data.map((plan) => optionalLookup(`Review plan “${plan.name}” details`, () => request<{ rounds?: ReviewOption[]; committees?: ReviewOption[] }>(`/api/v1/events/${eventId}/plans/${plan.id}`, "/api/v1/events/{eventId}/plans/{planId}"), { rounds: [], committees: [] })));
       setRules(ruleResult.data.sort((left, right) => left.position - right.position || left.id.localeCompare(right.id)));
-      setTracks(settingsResult.data.tracks);
+      setTracks(trackResult.data);
       setTags(tagResult.data);
       setLevels(levelResult.data);
       setReviewPlans(planResult.data);
@@ -1098,6 +1108,7 @@ function RoutingRulesPanel({ eventId, form, previewAnswers }: { eventId: string;
     </div>
     <p class="subtle">Rules run top to bottom. The first matching rule wins; setting a track replaces the submitted track projection, while tags are added idempotently. Manual record edits never re-run these rules.</p>
     {message && <p class="record-inline-message error" role="alert">{message}</p>}
+    {lookupMessages.length > 0 && <div class="forms-routing-lookup-notices" aria-live="polite">{lookupMessages.map((lookupMessage) => <p class="field-note" key={lookupMessage}>{lookupMessage}</p>)}</div>}
 
     {editor && <section class="forms-routing-editor" aria-label={editor.id ? "Edit routing rule" : "New routing rule"}>
       <div class="forms-editor-heading"><div><span class="eyebrow">{editor.id ? fixingRuleId ? "Fix rule" : "Edit rule" : "New rule"}</span><h3>{editor.name || "Untitled routing rule"}</h3></div><Button small variant="ghost" onClick={() => { setEditor(null); setFixingRuleId(null); }}>Cancel</Button></div>
