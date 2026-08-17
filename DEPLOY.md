@@ -261,8 +261,46 @@ delete `.dev.vars` before running the gate.
 `UPLOAD_TOKEN_SECRET`**, or signing 500s.
 
 **`--var` is a `wrangler dev` flag, and Vite 8 rejects it** — `npx vite dev --var …`
-dies immediately with `CACError: Unknown option --var`. So a run that needs either
-dev-only flag talks to Wrangler directly, against the config the build emits:
+dies immediately with `CACError: Unknown option --var`. That is a fact about
+`--var`, not about the Vite path, and the two recipes below both work. Pick by
+which cost you would rather pay.
+
+**Either way, `.dev.vars` is what actually carries these — not a shell variable.**
+Measured three ways on a clean checkout (2026-08-17, MRQ-279):
+
+| how the flag was supplied | `Set-Cookie` on `POST /api/v1/auth/demo` |
+|---|---|
+| `env INSECURE_LOCAL_COOKIES=1 npx vite dev` | `… HttpOnly; **Secure**; SameSite=Lax` — **did not forward** |
+| `INSECURE_LOCAL_COOKIES=1` in `.dev.vars`, plain `npx vite dev` | `… HttpOnly; SameSite=Lax` — forwarded |
+| `--var INSECURE_LOCAL_COOKIES:1` on `wrangler dev` | forwarded |
+
+Exporting it in the shell looks like it should work and silently does not: the
+Worker reads `context.env`, and the plugin populates that from the config and
+`.dev.vars`, not from the parent process. A server that *is* serving non-Secure
+cookies while its command line carries the env var is being served by one of the
+other two mechanisms — check its `.dev.vars` and its `dist/marquee/wrangler.json`
+before concluding the export did it.
+
+**Recipe A — `npm run dev`, with `.dev.vars`.** Add the flags you need to
+`.dev.vars` and use the ordinary dev server. This carries **all three**, uploads
+included: two real headshot uploads through the public CFP completed this way in
+Chromium. Vite's plugin persists to `.wrangler/state`, so migrate and seed *that*
+directory or every API read 500s on an empty database.
+
+```sh
+printf 'INSECURE_LOCAL_COOKIES=1\nLOCAL_UPLOAD_SHIM=1\n' >> .dev.vars
+CI=1 npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+npm run seed -- --persist-to .wrangler/state
+npm run dev
+```
+
+The cost is the one this section already warns about, and it is real: **`npm test`
+reads `.dev.vars` too**, and with `INSECURE_LOCAL_COOKIES=1` in it,
+`auth-demo.test.ts`'s cookie-policy contract fails on a cookie that is correct in
+production (verified). **Delete `.dev.vars` before running the gate.**
+
+**Recipe B — `wrangler dev`, flags on the command line.** Keeps the flags out of
+`.dev.vars`, so the gate is never poisoned by them:
 
 ```sh
 npm run build
@@ -274,11 +312,11 @@ npx wrangler dev --config dist/marquee/wrangler.json --local \
   --var INSECURE_LOCAL_COOKIES:1 --var LOCAL_UPLOAD_SHIM:1
 ```
 
-`UPLOAD_TOKEN_SECRET` comes from `.dev.vars` (copy `.dev.vars.example`), which is
-why the copy into `dist/marquee/` is on the list: **Wrangler reads `.dev.vars`
-from beside the config file, not from the repository root.** `npm run dev` is
-still the right command when you need neither flag — it is the Vite plugin path
-and has no way to pass them.
+`UPLOAD_TOKEN_SECRET` still comes from `.dev.vars` (copy `.dev.vars.example`),
+which is why the copy into `dist/marquee/` is on the list: **Wrangler reads
+`.dev.vars` from beside the config file, not from the repository root.** Recipe B
+also rebuilds, so it serves the real bundle rather than Vite's dev transform —
+which is what you want when the thing under test is a server-rendered page.
 
 Without it, no local browser can complete any flow with a required upload — the
 public CFP's headshot most of all. Two agents in one night concluded that

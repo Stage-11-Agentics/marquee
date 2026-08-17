@@ -1,6 +1,13 @@
-# Note: the plain-HTTP local recipe also needs `--var INSECURE_LOCAL_COOKIES:1`
-# on the `wrangler dev` command (see README). It cannot live in this file — the
-# build only forwards keys declared in wrangler.jsonc's required-secrets list.
+# Note: the plain-HTTP local recipe also needs INSECURE_LOCAL_COOKIES=1 (and
+# LOCAL_UPLOAD_SHIM=1 for uploads). Two ways to supply them, both verified —
+# see DEPLOY.md "Driving a local browser":
+#   - add them to YOUR OWN .dev.vars and run `npm run dev`; or
+#   - pass `--var INSECURE_LOCAL_COOKIES:1` on a `wrangler dev` command.
+# An exported shell variable does NOT reach the Worker on the Vite path.
+# They are deliberately absent from this example because `npm test` reads
+# .dev.vars too, and INSECURE_LOCAL_COOKIES=1 makes auth-demo.test.ts's cookie
+# contract fail on a cookie that is correct in production. Add them when you are
+# driving a browser; delete .dev.vars before running the gate.
 
 # Cloudflare's published always-pass Turnstile keys for local testing only.
 # Never deploy these values to production.
