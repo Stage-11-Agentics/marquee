@@ -1,6 +1,7 @@
 import type { Id } from "../../db/schema";
 import { IDEMPOTENCY_REGISTRY, type EntityId } from "../../jobs/mail/idempotency";
 import { enqueueOutbox } from "../../jobs/mail/outbox";
+import { escapeHtml } from "../../jobs/mail/render";
 
 export const AUTH_TEMPLATE_KEYS = ["magic_link_login", "portal_invite", "draft_resume", "task_link"] as const;
 export type AuthTemplateKey = (typeof AUTH_TEMPLATE_KEYS)[number];
@@ -46,6 +47,26 @@ export function renderMagicLinkLoginMail(link: string): { subject: string; text:
   const subject = "Your Marquee sign-in link";
   const text = `Sign in to Marquee: ${link}\n\nThis link works once and expires in 15 minutes.`;
   const html = `<p><a href="${link}">Sign in to Marquee</a></p><p>This link works once and expires in 15 minutes.</p>`;
+  return { subject, text, html };
+}
+
+/**
+ * The mail the submitter's door sends.
+ *
+ * It is an ordinary `login` link, so it inherits the same one-use, 15-minute
+ * terms as every other sign-in — but the words have to be about proposals
+ * rather than about Marquee, because the person who asked for it did not think
+ * of themselves as signing in to anything. They asked where their proposals
+ * stand.
+ */
+export function renderProposalsLinkMail(input: { eventName: string; link: string }): {
+  subject: string;
+  text: string;
+  html: string;
+} {
+  const subject = `Your ${input.eventName} proposals`;
+  const text = `See every proposal you have sent to ${input.eventName}, and where each one stands: ${input.link}\n\nThis link works once and expires in 15 minutes. There is no password — ask for a new link any time.`;
+  const html = `<p><a href="${input.link}">See every proposal you have sent to ${escapeHtml(input.eventName)}</a></p><p>This link works once and expires in 15 minutes. There is no password — ask for a new link any time.</p>`;
   return { subject, text, html };
 }
 

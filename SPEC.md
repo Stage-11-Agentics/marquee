@@ -1314,3 +1314,58 @@ arithmetic unchanged.
 The consolidation claims are owned by the ticket manifests under
 `tests/ac-claims/`. `EVALUATION.md` §2.15 is the verification authority, and
 the next shared AC pointer after this fold is **AC-412**.
+
+---
+
+## Amendment 33 — the submitter's own home *(2026-08-17, MRQ-279)*
+
+> *As someone who submitted proposals, I can open one page that lists every
+> proposal I have sent this conference and its current status, without creating
+> a password.*
+
+A public submission is anonymous, and the only handle it leaves is one private
+resume link **per abstract**. A person who sends three proposals therefore holds
+three unrelated links and no place that shows them their three proposals. This
+amendment gives that person one address, and gives it a door.
+
+**§3.7, §5.5 — the door.** `GET /my-proposals` (aliases `/my-submissions`,
+`/proposals`) is a server-rendered public page that asks for one thing: the
+email the person submitted with. `POST /api/v1/public/proposals/link` mails a
+`login` magic link redirecting to `/portal?eventId=…`, and **answers every
+caller with the same sentence** — whether the address has three proposals or has
+never been seen. No new identity system is introduced: the magic link that
+already carries every other seat carries this one.
+
+**§3.2, §5.6 — request → verify, as ruled for the attendee claim.** Typing an
+address sends mail and writes nothing at all: no session, no person, no
+participation. Only opening the mailed link produces a seat. That is what makes
+typing a stranger's address useless rather than informative, and it is the
+binding rule for any future door of this shape.
+
+**§3.4, §10 — the org/event split holds.** The door resolves one conference
+(named slug whatever its status; otherwise the live one) and mints a link
+scoped to it. A submitter at two conferences receives a link to the one they
+asked about and a list containing only that conference's proposals. The person
+is org-scoped; the participation is not.
+
+**§3.12, §5.7 — every proposal is named and its decision is shown.** The
+submitter seat carries each proposal's `reference_code` and the **decision that
+stands** — `resulting_status`, `decided_at`, and the organizer's own
+`feedback_md`, passed through rather than paraphrased. A record decided,
+reversed and decided again shows the latest. This is the dashboard half of the
+decision the private link already delivers in words.
+
+**§5.5 — the handoff exists on the state people actually reach.** An abstract
+stays editable while the call is open, so the public form re-renders in edit
+mode after a submit and its confirmation panel is not reached on the ordinary
+path. The reference code and the way to `/my-proposals` therefore live on the
+submitted banner as well, and in the confirmation mail beside the per-abstract
+resume link.
+
+**Unchanged on purpose.** The instant on-screen portal link at the end of a
+submission remains **demo-mode only**. Handing a session to whoever typed an
+address is exactly the impersonation the rule above refuses; everywhere else the
+emailed link is the proof.
+
+`EVALUATION.md` §2.16 is the verification authority for this amendment, and the
+next shared AC pointer after it is **AC-419**.

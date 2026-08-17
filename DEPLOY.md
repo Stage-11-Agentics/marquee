@@ -250,11 +250,27 @@ that is correct in production. Pass the var on the dev command instead, and
 delete `.dev.vars` before running the gate.
 
 **Exercising a real file upload locally needs `LOCAL_UPLOAD_SHIM:1` *and*
-`UPLOAD_TOKEN_SECRET` on the same line**, or signing 500s:
+`UPLOAD_TOKEN_SECRET`**, or signing 500s.
+
+**`--var` is a `wrangler dev` flag, and Vite 8 rejects it** — `npx vite dev --var …`
+dies immediately with `CACError: Unknown option --var`. So a run that needs either
+dev-only flag talks to Wrangler directly, against the config the build emits:
 
 ```sh
-npx vite dev --var INSECURE_LOCAL_COOKIES:1 --var LOCAL_UPLOAD_SHIM:1 --var UPLOAD_TOKEN_SECRET:<any-local-value>
+npm run build
+cp .dev.vars dist/marquee/.dev.vars
+CI=1 npx wrangler d1 migrations apply DB --local --persist-to .wrangler/marquee-local
+npm run seed -- --persist-to .wrangler/marquee-local
+npx wrangler dev --config dist/marquee/wrangler.json --local \
+  --persist-to .wrangler/marquee-local --local-protocol http --port 8787 \
+  --var INSECURE_LOCAL_COOKIES:1 --var LOCAL_UPLOAD_SHIM:1
 ```
+
+`UPLOAD_TOKEN_SECRET` comes from `.dev.vars` (copy `.dev.vars.example`), which is
+why the copy into `dist/marquee/` is on the list: **Wrangler reads `.dev.vars`
+from beside the config file, not from the repository root.** `npm run dev` is
+still the right command when you need neither flag — it is the Vite plugin path
+and has no way to pass them.
 
 Without it, no local browser can complete any flow with a required upload — the
 public CFP's headshot most of all. Two agents in one night concluded that

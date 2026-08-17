@@ -19,6 +19,17 @@ export const PUBLIC_FORM_STYLES = `
 .public-progress i.is-active { background: var(--accent); }
 .public-notice { border-left: 3px solid var(--accent); background: var(--accent-soft); color: var(--accent-ink); margin: 24px 0 0; padding: 13px 15px; font-size: 13px; line-height: 1.55; }
 .public-notice.alarm { border-left-color: var(--alarm); background: var(--alarm-wash); color: #7c2018; }
+/* The post-submit handoff. It sits below the notice that announces the
+   submission and carries the two things the notice cannot: what this abstract
+   is called, and where every abstract lives. */
+.public-submitted-strip { align-items: center; background: var(--surface); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: var(--radius); display: flex; flex-wrap: wrap; gap: 10px 18px; justify-content: space-between; margin: 14px 0 0; padding: 12px 15px; }
+.public-submitted-strip-copy { display: grid; gap: 3px; min-width: 0; }
+.public-submitted-strip-copy span { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.public-submitted-strip-reference { color: var(--muted); font: 600 10.5px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.public-submitted-strip-reference strong { color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.public-submitted-strip-actions { display: flex; flex-wrap: wrap; gap: 14px; }
+.public-submitted-strip-link { color: var(--accent-ink); font: 600 12.5px/1.4 var(--sans); text-decoration: none; white-space: nowrap; }
+.public-submitted-strip-link:hover { text-decoration: underline; }
 .public-form-card { background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); margin-top: 26px; min-width: 0; overflow: clip; }
 .public-form-card-head { align-items: center; background: var(--sunk); border-bottom: 1px solid var(--line-strong); display: flex; justify-content: space-between; padding: 13px 16px; }
 .public-form-card-head h2 { font: 600 11px/1.2 var(--mono); letter-spacing: .15em; margin: 0; text-transform: uppercase; }

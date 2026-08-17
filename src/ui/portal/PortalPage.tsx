@@ -120,6 +120,10 @@ type SubmitterSubmission = {
   title: string;
   description?: string | null;
   status: string;
+  /** `SUB-n` — the name this proposal has in every mail the conference sends about it. */
+  reference_code?: string | null;
+  /** The decision that stands, in the words the decision mail already used. */
+  decision?: { status: string; decided_at: number; feedback_md: string | null } | null;
   format: string | null;
   submitted_at: number | null;
   updated_at: number;
@@ -791,6 +795,56 @@ function submitterProgressCopy(status: string, draftCallOpen: boolean): string {
   return "Status current";
 }
 
+/**
+ * The one line that answers "where do my proposals stand" for somebody holding
+ * more than one — the question this page exists for. Counting by status in a
+ * fixed order keeps it stable as decisions land: an accepted talk does not
+ * reshuffle the sentence, it just moves one number.
+ */
+const SUBMITTER_TALLY_ORDER: ReadonlyArray<{ statuses: readonly string[]; label: string }> = [
+  { statuses: ["accepted"], label: "accepted" },
+  { statuses: ["waitlisted"], label: "Maybe" },
+  { statuses: ["submitted", "in_review"], label: "under review" },
+  { statuses: ["draft"], label: "still a draft" },
+  { statuses: ["rejected"], label: "not selected" },
+  { statuses: ["withdrawn"], label: "withdrawn" },
+];
+
+function submitterTally(submissions: readonly SubmitterSubmission[]): string {
+  const parts = SUBMITTER_TALLY_ORDER
+    .map((band) => ({ label: band.label, count: submissions.filter((row) => band.statuses.includes(row.status)).length }))
+    .filter((band) => band.count > 0)
+    .map((band) => `${band.count} ${band.label}`);
+  return parts.join(" · ");
+}
+
+/**
+ * The right-hand progress chip for somebody holding several proposals. It has
+ * to describe the SET: "Not selected" beside a list containing an acceptance is
+ * the same lie the singular hero told, moved one line down.
+ */
+function submitterSetProgress(submissions: readonly SubmitterSubmission[], draftCallOpen: boolean): string {
+  if (submissions.some((row) => row.status === "draft")) {
+    return draftCallOpen ? "One is still a draft" : "One draft · call closed";
+  }
+  if (submissions.some((row) => isSubmitterAwaitingReview(row.status))) return "Nothing is waiting on you";
+  if (submissions.some((row) => row.status === "waitlisted")) return "One is a Maybe";
+  return "Every decision is in";
+}
+
+/**
+ * Which proposal the hero and the next-steps panel describe when there are
+ * several: the one that still has something to say. A draft has an action
+ * attached to it, an undecided abstract has a date, and a decided one has
+ * neither — so they rank in exactly that order.
+ */
+function leadRank(submission: SubmitterSubmission): number {
+  if (submission.status === "draft") return 0;
+  if (isSubmitterAwaitingReview(submission.status)) return 1;
+  if (submission.status === "waitlisted") return 2;
+  return 3;
+}
+
 function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX.Element {
   const [title, setTitle] = useState(submission.title);
   const [description, setDescription] = useState(submission.description ?? "");
@@ -829,17 +883,36 @@ function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX
     }
   }
 
-  return <article class="portal-submitted-row" data-submission-id={submission.id} data-submission-status={submission.status}>
+  const decision = submission.decision ?? null;
+  return <article class="portal-submitted-row" data-submission-id={submission.id} data-submission-status={submission.status} data-submission-reference={submission.reference_code ?? undefined} data-submission-editable={edit.enabled ? "true" : "false"}>
     <div class="portal-submitted-copy">
+      {/* The reference code sits above the title because it is what the
+          submitter quotes back, and because it is the only thing on the row
+          that distinguishes two proposals with similar names at a glance. */}
+      <span class="portal-submitted-reference">{submission.reference_code ?? "No reference yet"}</span>
       <strong title={title}>{title}</strong>
       <span>{submission.format ?? "Format not set"} · {submission.submitted_at === null ? "Not yet submitted" : `Submitted ${formatDate(submission.submitted_at)}`}</span>
       {decisionLabel ? <span class="portal-submitted-wave">{decisionLabel}</span> : null}
+      {/* The decision, in the same words the decision mail used (CFP-13). The
+          slot is only rendered once a decision exists; an undecided proposal
+          carries the wave line above instead, so the row keeps its height
+          either way. */}
+      {decision ? <div class="portal-submitted-decision" data-decision-status={decision.status}>
+        <strong>{submitterOutcomeCopy(decision.status)}</strong>
+        <span>Decided {formatDate(decision.decided_at)}</span>
+        {decision.feedback_md ? <p class="portal-submitted-decision-note">{decision.feedback_md}</p> : null}
+      </div> : null}
       <p class="portal-submitted-abstract">{description || "No abstract text recorded."}</p>
-      <form class={`portal-submitter-editor${editing ? "" : " is-hidden"}`} aria-hidden={!editing} onSubmit={(event) => { event.preventDefault(); void save(); }}>
+      {/* The editor is reserved-but-hidden on a row that can open it, so nothing
+          jumps when it does — and not rendered at all on one that cannot, because
+          `visibility: hidden` still occupies its full height. A decided proposal
+          can never be edited, so that reservation was a screen of emptiness per
+          row, which is most of the list once a wave has gone out. */}
+      {edit.enabled ? <form class={`portal-submitter-editor${editing ? "" : " is-hidden"}`} aria-hidden={!editing} onSubmit={(event) => { event.preventDefault(); void save(); }}>
         <label><span>Title</span><input disabled={!editing || busy} value={title} onInput={(event) => setTitle(event.currentTarget.value)} /></label>
         <label><span>Abstract</span><textarea disabled={!editing || busy} rows={6} value={description} onInput={(event) => setDescription(event.currentTarget.value)} /></label>
         <div class="portal-submitter-editor-actions"><span class="portal-submitter-edit-error" role={error ? "alert" : undefined}>{error ?? " "}</span><button class="portal-button secondary" type="button" disabled={!editing || busy} onClick={() => setEditing(false)}>Cancel</button><button class="portal-button" type="submit" disabled={!editing || busy}>{busy ? "Saving…" : "Save changes"}</button></div>
-      </form>
+      </form> : null}
     </div>
     <div class="portal-submitted-actions"><span class="portal-submitted-status">{submitterStatusLabel(submission.status)}</span><button class="portal-task-action" type="button" disabled={!edit.enabled || busy} aria-describedby={`submitter-edit-reason-${submission.id}`} onClick={() => { setError(null); setEditing((current) => !current); }}>{editing ? "Close editor" : "Edit abstract"}</button><span class="portal-submitter-edit-reason" id={`submitter-edit-reason-${submission.id}`}>{edit.reason ?? "You can edit this abstract while the call for speakers is open."}</span></div>
   </article>;
@@ -854,9 +927,16 @@ function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX
  */
 function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { snapshot: SubmitterSnapshot; onSignOut: () => void; viewingAsSpeaker?: boolean }): JSX.Element {
   // The resolver only returns this seat through a participation on a
-  // submission. Keep that invariant explicit: the hero and its date always
-  // describe the same lead abstract.
-  const lead = snapshot.submissions[0]!;
+  // submission, so there is always at least one.
+  //
+  // `lead` drives the single-proposal hero and the next-steps panel. It is the
+  // FIRST proposal that still needs something said about it — a draft before an
+  // undecided abstract before a decided one — rather than simply
+  // `submissions[0]`. Somebody holding a decided talk and an unfinished draft
+  // was previously told about whichever the ORDER BY happened to put first, and
+  // the draft is the one with an action attached to it.
+  const lead = [...snapshot.submissions].sort((left, right) => leadRank(left) - leadRank(right))[0]!;
+  const plural = snapshot.submissions.length > 1;
   const decisionOn = lead.wave_decision_on;
   const waveName = lead.wave_name;
   const isDraft = lead.status === "draft";
@@ -887,21 +967,30 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
       : isAwaitingReview
       ? decisionCopy
       : submitterOutcomeCopy(lead.status);
-  const progressCopy = submitterProgressCopy(lead.status, draftCallOpen);
+  const progressCopy = plural
+    ? submitterSetProgress(snapshot.submissions, draftCallOpen)
+    : submitterProgressCopy(lead.status, draftCallOpen);
   return <div class="portal-shell portal-submitter-seat">
     <header class="portal-top">
-      <span class="portal-brand">Marquee · Your submission</span>
+      <span class="portal-brand">Marquee · Your proposals</span>
       <button type="button" onClick={onSignOut}>Sign out</button>
     </header>
     <main class="portal-main">
       {viewingAsSpeaker ? <ViewingAsBanner /> : null}
-      <section class="portal-status-hero" aria-labelledby="portal-status-heading" data-portal-seat="submitter">
-        <span class="eyebrow">Current status</span>
-        <h1 id="portal-status-heading">{submitterHeadline(lead.status)}</h1>
+      {/* Plural is the first-class case: somebody who sent three proposals came
+          here to see three, and a hero describing one of them reads as though
+          the other two were lost. One proposal keeps the singular hero it
+          always had. */}
+      <section class="portal-status-hero" aria-labelledby="portal-status-heading" data-portal-seat="submitter" data-submission-count={snapshot.submissions.length}>
+        <span class="eyebrow">{plural ? "Your proposals" : "Current status"}</span>
+        <h1 id="portal-status-heading">{plural
+          ? `Your ${snapshot.submissions.length} proposals to ${snapshot.event.name}`
+          : submitterHeadline(lead.status)}</h1>
         <div class="portal-status-meta">
           <div class="portal-status-copy">
-            <strong title={lead.title}>{lead.title}</strong><br />
-            {snapshot.event.name} · {heroCopy}
+            {plural
+              ? <><strong data-submitter-tally>{submitterTally(snapshot.submissions)}</strong><br />Every proposal you have sent this conference is listed below, each with where it stands.</>
+              : <><strong title={lead.title}>{lead.title}</strong><br />{snapshot.event.name} · {heroCopy}</>}
           </div>
         </div>
       </section>
@@ -934,14 +1023,16 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
           </div>
         </section> : <section class="portal-panel portal-submitter-flow" aria-labelledby="status-update-heading">
           <header class="portal-panel-head"><h2 id="status-update-heading">Submission update</h2><span>current outcome</span></header>
-          <div class="portal-panel-body"><p class="portal-submitter-status-note">{submitterOutcomeDetail(lead.status)}</p></div>
+          <div class="portal-panel-body"><p class="portal-submitter-status-note">{plural
+            ? "Every proposal you sent has an answer. Each one is listed below in the program team's own words."
+            : submitterOutcomeDetail(lead.status)}</p></div>
         </section>}
         <section class="portal-panel" aria-labelledby="reach-heading">
           <header class="portal-panel-head"><h2 id="reach-heading">Getting back here</h2><span>{snapshot.person.email}</span></header>
           <div class="portal-panel-body">
-            <p class="portal-empty">Bookmark this page. If the link expires, sign in with <strong>{snapshot.person.email}</strong> and you will land right back here.</p>
+            <p class="portal-empty">Bookmark this page. There is no password — if the link expires, ask for a new one with <strong>{snapshot.person.email}</strong> and you will land right back here.</p>
             <div class="portal-seat-actions">
-              <a class="portal-button secondary" href="/signin?next=/portal">Sign in with your email</a>
+              <a class="portal-button secondary" href="/my-proposals">Email me a link to my proposals</a>
               {openForm ? <a class="portal-button secondary" href={`/f/${encodeURIComponent(openForm)}`}>Open the call for speakers</a> : null}
             </div>
           </div>
@@ -949,7 +1040,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
       </div>
       <section class="portal-panel portal-talks" aria-labelledby="submitted-heading">
         <header class="portal-panel-head">
-          <h2 id="submitted-heading">What you sent</h2>
+          <h2 id="submitted-heading">Every proposal you have sent</h2>
           <span>{snapshot.submissions.length} abstract{snapshot.submissions.length === 1 ? "" : "s"}</span>
         </header>
         <div class="portal-panel-body">

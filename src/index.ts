@@ -27,6 +27,7 @@ import { correlateQueue, instrumentBindings } from "./lib/observability/request-
 import { claimRoutes } from "./routes/claim.route";
 import { landingRoutes } from "./routes/landing.route";
 import { signinRoutes } from "./routes/signin.route";
+import { myProposalsRoutes } from "./routes/my-proposals.route";
 import { publicFormRoutes } from "./routes/public-form.route";
 import { publicAgendaRoutes } from "./routes/public-agenda.route";
 import { embedRoutes } from "./routes/embed.route";
@@ -204,6 +205,7 @@ app.post("/mirror/webhook", async (context) => {
 app.route("/", landingRoutes);
 app.route("/", claimRoutes);
 app.route("/", signinRoutes);
+app.route("/", myProposalsRoutes);
 app.route("/", publicFormRoutes);
 app.route("/", publicAgendaRoutes);
 app.route("/", embedRoutes);

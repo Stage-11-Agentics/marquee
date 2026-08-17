@@ -44,6 +44,7 @@ flowchart TD
 
   subgraph Public["Public — server-rendered, no auth"]
     CFP["#cfp<br/>Call for speakers"]
+    Proposals["/my-proposals<br/>Your proposals · email door"]
     Site["#publicAgenda<br/>Conference site"]
     Session["#s/:id<br/>Session page"]
     Person["#p/:name<br/>Speaker page"]
@@ -55,6 +56,8 @@ flowchart TD
   Site --> Session
   Site --> Person
   Onboard --> Portal
+  CFP --> Proposals
+  Proposals -->|emailed link| Portal
 ```
 
 ---
@@ -209,6 +212,8 @@ flowchart TD
   CFP["#cfp<br/>Call for speakers"]
   CFP --> Draft["Draft autosave<br/>private resume link"]
   CFP --> Submitted["Submission received"]
+  Submitted --> Mine["/my-proposals<br/>every proposal, one page"]
+  Mine -->|emailed link, no password| Home["#portal<br/>submitter seat"]
 
   Site["#publicAgenda<br/>Conference site"]
   Site --> Sess["#s/:id<br/>Session page"]
@@ -250,6 +255,7 @@ flowchart TD
 | `#import` | Sessionize importer | Organizer |
 | `#portal` | Speaker portal | Speaker |
 | `#cfp` | Public call for speakers | Public |
+| `/my-proposals` | Your proposals — the submitter's email door (aliases `/my-submissions`, `/proposals`) | Public |
 | `#publicAgenda` | Conference site | Public |
 | `#s/:id` | Public session page | Public |
 | `#p/:name` | Public speaker page | Public |

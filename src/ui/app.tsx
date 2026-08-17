@@ -32,6 +32,9 @@ const isPublicPage =
   window.location.pathname === "/signin" ||
   window.location.pathname === "/login" ||
   window.location.pathname === "/sign-in" ||
+  window.location.pathname === "/my-proposals" ||
+  window.location.pathname === "/my-submissions" ||
+  window.location.pathname === "/proposals" ||
   window.location.pathname.startsWith("/claim/") ||
   window.location.pathname.startsWith("/join/") ||
   window.location.pathname.startsWith("/f/") ||

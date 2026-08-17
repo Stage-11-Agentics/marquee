@@ -90,7 +90,10 @@ Registered in `src/routes/*.route.tsx`, outside the SPA.
 | `/f/:slug` | src/routes/public-form.route.tsx |
 | `/join/:token` | src/routes/claim.route.tsx |
 | `/login` | src/routes/signin.route.tsx |
+| `/my-proposals` | src/routes/my-proposals.route.tsx |
+| `/my-submissions` | src/routes/my-proposals.route.tsx |
 | `/p/:slug` | src/routes/public-agenda.route.tsx |
+| `/proposals` | src/routes/my-proposals.route.tsx |
 | `/s/:slug` | src/routes/public-agenda.route.tsx |
 | `/sign-in` | src/routes/signin.route.tsx |
 | `/signin` | src/routes/signin.route.tsx |
@@ -99,7 +102,7 @@ Registered in `src/routes/*.route.tsx`, outside the SPA.
 
 ## Public-page predicate
 
-`app.tsx` treats a path as public when it is exactly `/`, `/signin`, `/login`, `/sign-in`, `/agenda`, `/agenda/agents`, `/speakers`, or begins with `/claim/`, `/join/`, `/f/`, `/s/`, `/p/`, `/embed/`, or matches 1 embed pattern.
+`app.tsx` treats a path as public when it is exactly `/`, `/signin`, `/login`, `/sign-in`, `/my-proposals`, `/my-submissions`, `/proposals`, `/agenda`, `/agenda/agents`, `/speakers`, or begins with `/claim/`, `/join/`, `/f/`, `/s/`, `/p/`, `/embed/`, or matches 1 embed pattern.
 
 ## Route summary
 
@@ -108,7 +111,7 @@ routes — the text to hand any agent or reader that needs to know what exists.
 
 ```text
 ROUTES (real paths, not hash routes):
-  Public, no auth: / /:eventSlug/:kind/embed /agenda /agenda/agents /claim/:token /embed/:slug /embed/config /f/:slug /join/:token /login /p/:slug /s/:slug /sign-in /signin /site /speakers
+  Public, no auth: / /:eventSlug/:kind/embed /agenda /agenda/agents /claim/:token /embed/:slug /embed/config /f/:slug /join/:token /login /my-proposals /my-submissions /p/:slug /proposals /s/:slug /sign-in /signin /site /speakers
   Organizer (admin shell): /org/home /people /lists /pipeline /agents /org /org/server /org/instance /org/tokens /crm /directory /contacts /org/organizers /dashboard /board /submissions /submissions/new /submissions?status=submitted /submissions?status=in_review /submissions?status=waved /submissions?status=accepted /onboarding /submissions?status=scheduled /submissions?status=published /agenda-builder /roster /tasks /communications /files /delivery-health /forms /evaluation /announce /sponsor-portal /settings /delivery-health?view=system /conferences/new /handoff /settings/venues /submissions/:id /settings/tasks /settings/api /org/activity /settings/webhooks /settings/airtable /import
   Reviewer: /reviewer
   Review queue: /reviewer/queue

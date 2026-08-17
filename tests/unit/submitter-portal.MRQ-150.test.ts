@@ -70,9 +70,14 @@ describe("MRQ-150 the submitter's empty state", () => {
     expect(html).toContain("avery.okonkwo@example.com");
   });
 
+  // MRQ-279 replaced the way back with the submitter's own door. `/signin` is
+  // the organizer's page and said nothing to a person who has never had an
+  // account; `/my-proposals` asks for the address they submitted with and mails
+  // a link. The criterion is unchanged — every next action is a real link — and
+  // the assertion now names the link that is actually there.
   test("CONTRACT · MRQ-150 · every next action is a real link, so the screen is not a cul-de-sac", () => {
     const html = render(snapshot());
-    expect(html).toContain('href="/signin?next=/portal"');
+    expect(html).toContain('href="/my-proposals"');
     expect(html).toContain('href="/f/cfp"');
     expect(html).toContain('href="/agenda"');
     expect(html).toContain('href="/"');
@@ -83,7 +88,7 @@ describe("MRQ-150 the submitter's empty state", () => {
     // must simply not appear rather than link somewhere that refuses the reader.
     const html = render(snapshot({ submissions: [submission({ form_slug: null })] }));
     expect(html).not.toContain("Open the call for speakers");
-    expect(html).toContain('href="/signin?next=/portal"');
+    expect(html).toContain('href="/my-proposals"');
   });
 
   test("CONTRACT · MRQ-150 · a closed draft does not promise that it can be submitted now", () => {
@@ -185,7 +190,12 @@ describe("MRQ-150 the submitter's empty state", () => {
         submission({ id: "other-submitted", title: "Other abstract", status: "submitted", wave_name: "Wave 2", wave_decision_on: "2026-10-01" }),
       ],
     }));
-    expect(html).toContain("Your abstract was not selected");
+    // MRQ-279: with more than one proposal the hero describes the SET, not the
+    // lead — a headline about one abstract reads, to somebody holding two, as
+    // though the other were lost. The lead still drives the next-steps panel,
+    // which is what the wave-date assertions below actually protect.
+    expect(html).toContain("Your 2 proposals to AI Engineer New York 2026");
+    expect(html).toContain("1 under review · 1 not selected");
     expect(html).toContain("Lead abstract");
     expect(html).toContain("Other abstract");
     const otherStart = html.indexOf('data-submission-id="other-submitted"');
@@ -207,7 +217,9 @@ describe("MRQ-150 the submitter's empty state", () => {
     }));
     const otherStart = html.indexOf('data-submission-id="other-submitted"');
     const otherRow = html.slice(otherStart, html.indexOf("</article>", otherStart));
-    expect(html).toContain("Your draft is saved, not yet submitted");
+    expect(html).toContain("Your 2 proposals to AI Engineer New York 2026");
+    // The draft still leads the next-steps panel: it is the proposal with an
+    // action attached to it, which is the whole point of the lead.
     expect(html).toContain("Finish and submit your abstract");
     expect(otherRow).toContain("Wave 2");
     expect(otherRow).toContain("October 1, 2026");

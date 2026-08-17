@@ -954,11 +954,11 @@ export async function projectedAnswerRemovals(
 export async function findEventContext(
   db: D1Database,
   eventId: string,
-): Promise<{ id: string; org_id: string; name: string; timezone: string; demo_mode: number } | null> {
+): Promise<{ id: string; org_id: string; slug: string; name: string; timezone: string; demo_mode: number } | null> {
   return db
-    .prepare("SELECT id, org_id, name, timezone, demo_mode FROM events WHERE id = ?")
+    .prepare("SELECT id, org_id, slug, name, timezone, demo_mode FROM events WHERE id = ?")
     .bind(eventId)
-    .first<{ id: string; org_id: string; name: string; timezone: string; demo_mode: number }>();
+    .first<{ id: string; org_id: string; slug: string; name: string; timezone: string; demo_mode: number }>();
 }
 
 /**

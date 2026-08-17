@@ -109,6 +109,18 @@ test("CONTRACT · A-5 has one enumerated session writer path and cookie-safe emb
   // server-minted redirect before it returns a record. Its purpose and exact
   // redirect are positive-controlled below; this is a new credential path and
   // must stay visible to A-5 reviewers.
+  // The fifth issuer is the submitter's door (MRQ-279). It is enumerated here
+  // rather than excused: it is a PUBLIC route that mints a session-producing
+  // `login` link, which is the sharpest shape A-5 watches. Three things bound
+  // it, and all three are asserted in
+  // `tests/integration/submitter-home.MRQ-279.test.ts`. It mints only for an
+  // address that already holds a participation on a submission at the named
+  // conference, so it can issue a credential to nobody the conference does not
+  // already know. It returns a byte-identical acknowledgement either way, so it
+  // cannot be used to discover whether an address is one of those people. And
+  // it never returns the link — the mail does — so possession of the mailbox
+  // remains the whole of the proof. The route sets no cookie: note the
+  // session-writer inventory above is unchanged.
   assert.deepEqual(magicMintCalls.map(({ file }) => file).sort(), [
     "src/jobs/mail/triggers.ts",
     "src/lib/auth/instance-claim.ts",
@@ -116,6 +128,7 @@ test("CONTRACT · A-5 has one enumerated session writer path and cookie-safe emb
     "src/routes/auth.routes.ts",
     "src/routes/evaluation.routes.ts",
     "src/routes/public-form.routes.ts",
+    "src/routes/public-proposals.routes.ts",
   ]);
   const mailTriggers = modules.find(({ path }) => path === "src/jobs/mail/triggers.ts");
   assert.ok(mailTriggers);
