@@ -28,10 +28,11 @@ export default defineConfig({
     testTimeout: 20_000,
     hookTimeout: 20_000,
     maxConcurrency: 8,
-    // Keep Vitest's project group compatible with the Worker experiment's
-    // explicit four-vCPU runner limit.
+    // Run the inexpensive node project before the more expensive Worker
+    // project, whose separate group can use the runner's four CPUs fully.
+    sequence: { groupOrder: 0 },
     fileParallelism: true,
-    maxWorkers: 4,
+    maxWorkers: 2,
     passWithNoTests: false,
   },
 });

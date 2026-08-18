@@ -45,9 +45,10 @@ export default defineConfig({
     testTimeout: 20_000,
     hookTimeout: 20_000,
     maxConcurrency: 8,
-    // Vitest 4 moved the old poolOptions knobs to the project level. Keep
-    // file scheduling explicit for the four-vCPU CI runner; the hosted
-    // verbose reporter timestamps are the proof that files overlap.
+    // Vitest 4 moved the old poolOptions knobs to the project level. Run this
+    // project after node, then let its files use the four-vCPU CI runner; the
+    // hosted verbose reporter timestamps are the proof that files overlap.
+    sequence: { groupOrder: 1 },
     fileParallelism: true,
     maxWorkers: 4,
     passWithNoTests: false,
