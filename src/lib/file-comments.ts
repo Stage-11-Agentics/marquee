@@ -121,17 +121,18 @@ async function validateAuthor(
     .prepare(
       `SELECT person.id
        FROM people person
+       JOIN speaker_tasks task ON task.id = ?
        WHERE person.id = ? AND person.org_id = ?
          AND (
            EXISTS (
              SELECT 1 FROM memberships membership
              WHERE membership.person_id = person.id
                AND membership.org_id = person.org_id
-               AND (membership.event_id = ? OR membership.event_id IS NULL)
+               AND (membership.event_id = task.event_id OR membership.event_id IS NULL)
            )
            OR EXISTS (
              SELECT 1 FROM speaker_helpers helper
-             WHERE helper.event_id = ?
+             WHERE helper.event_id = task.event_id
                AND helper.speaker_person_id = task.person_id
                AND helper.helper_person_id = person.id
                AND helper.removed_at IS NULL
@@ -139,7 +140,7 @@ async function validateAuthor(
          )
        LIMIT 1`,
     )
-    .bind(authorPersonId, task.org_id, task.event_id, task.event_id)
+    .bind(task.id, authorPersonId, task.org_id)
     .first<{ id: string }>();
   if (!author) throw ApiError.forbidden("comment author is not a member of this conference");
 }
