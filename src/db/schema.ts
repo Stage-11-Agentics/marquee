@@ -842,6 +842,18 @@ export interface SpeakerTaskRow extends MutableRecord {
   title: string;
 }
 
+/** An event-scoped helper relationship; the helper's typed name is history. */
+export interface SpeakerHelperRow {
+  added_at: EpochMilliseconds;
+  added_by: Id;
+  event_id: Id;
+  helper_name: string;
+  helper_person_id: Id;
+  id: Id;
+  removed_at: EpochMilliseconds | null;
+  speaker_person_id: Id;
+}
+
 export interface CalendarInviteRow extends MutableRecord {
   last_method: CalendarMethod;
   last_sent_at: EpochMilliseconds | null;
@@ -1172,6 +1184,7 @@ export const CORE_TABLE_NAMES = [
   "agenda_items",
   "task_templates",
   "speaker_tasks",
+  "speaker_helpers",
   "calendar_cancellations",
   "calendar_invites",
   "calendar_sequence_ledger",
@@ -1280,6 +1293,7 @@ export const CORE_TABLES = {
   rubric_criteria: "rubric_criteria",
   saved_views: "saved_views",
   speaker_tasks: "speaker_tasks",
+  speaker_helpers: "speaker_helpers",
   submission_answers: "submission_answers",
   submission_decisions: "submission_decisions",
   submission_notes: "submission_notes",
@@ -1360,6 +1374,7 @@ export interface CoreTableRows {
   rubric_criteria: RubricCriterionRow;
   saved_views: SavedViewRow;
   speaker_tasks: SpeakerTaskRow;
+  speaker_helpers: SpeakerHelperRow;
   submission_answers: SubmissionAnswerRow;
   submission_decisions: SubmissionDecisionRow;
   submission_notes: SubmissionNoteRow;
@@ -1451,6 +1466,7 @@ interface CoreDefaultColumns {
   rubric_criteria: never;
   saved_views: never;
   speaker_tasks: "description" | "last_write_source" | "status";
+  speaker_helpers: never;
   submission_answers: never;
   submission_decisions: never;
   submission_notes: never;

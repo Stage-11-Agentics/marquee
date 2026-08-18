@@ -35,6 +35,7 @@ import { verifyTurnstile } from "../lib/r2/turnstile";
 import { verifyAndComplete } from "../lib/r2/complete";
 import { publicFormIsClosed, publicTurnstileExempt, resolvePublicFormResume } from "./public-form.shared";
 import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "../lib/participants";
+import { speakerHelperTaskAccess } from "../lib/speaker-helpers";
 
 export interface UploadsEnv {
   DB: D1Database;
@@ -411,10 +412,13 @@ async function handleAuthenticatedSign(context: Context<ApiEnv>) {
     // colleague — the same predicate the completion route uses, so a file task
     // can never validate on one route and fail at the PUT on the other.
     const ownedByCaller = task !== null && task.person_id === session.person_id;
-    const sponsorSeat = task !== null && !ownedByCaller
+    const helperSeat = task !== null && !ownedByCaller
+      ? await speakerHelperTaskAccess(env.DB, session.person_id, ownerId)
+      : null;
+    const sponsorSeat = task !== null && !ownedByCaller && !helperSeat
       ? await sponsorContactTaskAccess(env.DB, session.person_id, ownerId)
       : null;
-    if (!task || (!ownedByCaller && !sponsorSeat)) {
+    if (!task || (!ownedByCaller && !helperSeat && !sponsorSeat)) {
       return uploadError(context, "forbidden", "task does not belong to the authenticated principal");
     }
     eventId = task.event_id;

@@ -35,6 +35,12 @@ export const PERSON_BOUND_LINK_PURPOSES: readonly MagicLinkPurpose[] = [
   "task_link",
 ];
 
+/** Event invitations are only consumed when the event-scoped seat is removed. */
+export const CONFERENCE_BOUND_LINK_PURPOSES: readonly MagicLinkPurpose[] = [
+  ...PERSON_BOUND_LINK_PURPOSES,
+  "portal_invite",
+];
+
 /** Arm 1 — every live session for this person stops answering on the next request. */
 export function revokeSessionsStatement(
   db: D1Database,
@@ -187,5 +193,5 @@ export function revokeConferenceAccessStatements(
   db: D1Database,
   input: { personId: Id; eventId: Id; now: number },
 ): D1PreparedStatement[] {
-  return [consumeLinksStatement(db, input.personId, input.now, PERSON_BOUND_LINK_PURPOSES, input.eventId)];
+  return [consumeLinksStatement(db, input.personId, input.now, CONFERENCE_BOUND_LINK_PURPOSES, input.eventId)];
 }

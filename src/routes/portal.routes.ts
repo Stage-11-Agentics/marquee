@@ -47,6 +47,7 @@ import { contentHistoryFor } from "../lib/history";
 import { submitterEditability } from "../lib/submission-editing";
 import { PUBLISHED_PARTICIPANT_REFUSAL, requirePublishedConfirmation } from "../lib/publication-guard";
 import { publicSpeakerPathForPerson } from "../lib/public-site";
+import { listHelperScopes, listSpeakerHelpers, resolvePortalSeat } from "../lib/speaker-helpers";
 import {
   parseSocialLinks,
   personProfilePatchShape,
@@ -54,7 +55,11 @@ import {
   resolvePersonProfile,
 } from "../lib/person-profile";
 
-const eventQuery = z.object({ eventId: z.string().min(1).optional() });
+const eventQuery = z.object({
+  eventId: z.string().min(1).optional(),
+  helperSpeakerId: z.string().min(1).optional(),
+  helperView: z.enum(["1", "true"]).optional(),
+});
 const taskParams = z.object({ taskId: z.string().min(1) });
 const submissionParams = z.object({ submissionId: z.string().min(1) });
 const participationParams = z.object({ participationId: z.string().min(1) });
@@ -95,7 +100,7 @@ const portalResponseSchema = z
      * schedule; `submitter` is a person who submitted an abstract and holds no
      * speaker role yet, and carries only their own submissions and their status.
      */
-    seat: z.enum(["speaker", "submitter"]),
+    seat: z.enum(["speaker", "submitter", "helper"]),
     event: z.any(),
     person: z.any(),
     submissions: z.array(z.any()),
@@ -105,6 +110,9 @@ const portalResponseSchema = z
     // Submitter seats expose only conferences reached through this person's
     // own submissions; speaker seats do not need this switcher.
     available_events: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
+    helpers: z.array(z.any()).optional(),
+    helping: z.array(z.any()).optional(),
+    helper: z.any().optional(),
   })
   .openapi("SpeakerPortal");
 
@@ -1030,22 +1038,109 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
   };
 }
 
-async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrigin: string, mediaSigningSecret: string, requestedEventId?: string) {
-  const speakerSeat = await findSpeakerEvent(db, auth, requestedEventId);
-  if (!speakerSeat) {
-    const submitterSeat = await findSubmitterEvent(db, auth, requestedEventId);
-    if (submitterSeat) return submitterSnapshot(db, auth, submitterSeat);
-    throw ApiError.notFound("conference not found");
+async function helperEventFor(db: D1Database, eventId: string): Promise<EventProjection> {
+  const event = await db.prepare(
+    `SELECT id, name, slug, starts_on, ends_on, timezone, status
+       FROM events WHERE id = ?`,
+  ).bind(eventId).first<EventProjection>();
+  if (!event) throw ApiError.notFound("conference not found");
+  return event;
+}
+
+/**
+ * A helper gets the logistics needed to do the work and nothing that turns
+ * the speaker's record into a second speaker portal. In particular the
+ * projection deliberately omits abstract, status, decision feedback,
+ * participations, co-presenters, public links, and profile fields.
+ */
+async function helperSnapshot(
+  db: D1Database,
+  auth: SessionAuth,
+  scope: Awaited<ReturnType<typeof listHelperScopes>>[number],
+  allScopes: Awaited<ReturnType<typeof listHelperScopes>>,
+  mediaPublicOrigin: string,
+  mediaSigningSecret: string,
+) {
+  const event = await helperEventFor(db, scope.event_id);
+  const person = await personFor(db, auth.personId);
+  const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount] = await Promise.all([
+    listSubmissions(db, event, scope.speaker_person_id),
+    listPortalTasks(db, event, { kind: "person", personId: scope.speaker_person_id }, mediaPublicOrigin, mediaSigningSecret),
+    primaryBuildingFor(db, event.id),
+    pinnedBuildingCountFor(db, event.id),
+  ]);
+  const sessions = submissionRows.map(arrivalSessionFor);
+  for (const row of submissionRows) {
+    row.arrival = arrivalForSession({
+      current: arrivalSessionFor(row),
+      previousSessions: sessions,
+      primaryBuilding,
+      timezone: event.timezone,
+    });
   }
+  const showBuildingComparison = showsBuildingComparisonCount(pinnedBuildingCount);
+  const sessionViews = submissionRows.map((row) => {
+    const full = submissionView(event, row, showBuildingComparison);
+    return { id: full.id, title: full.title, slot: full.slot };
+  });
+  return {
+    seat: "helper" as const,
+    event,
+    person: { id: person.id, name: scope.helper_name, email: person.email },
+    helper: {
+      helper_name: scope.helper_name,
+      speaker: { id: scope.speaker_person_id, name: scope.speaker_name },
+      speakers: allScopes
+        .filter((candidate) => candidate.event_id === scope.event_id)
+        .map((candidate) => ({ id: candidate.speaker_person_id, name: candidate.speaker_name })),
+    },
+    submissions: sessionViews,
+    tasks,
+    handbook: { markdown: "" },
+    venue: { pinned_building_count: pinnedBuildingCount },
+  };
+}
+
+async function portalSnapshot(
+  db: D1Database,
+  auth: SessionAuth,
+  mediaPublicOrigin: string,
+  mediaSigningSecret: string,
+  requestedEventId?: string,
+  requestedHelperSpeakerId?: string,
+  helperView = false,
+) {
+  const [speakerSeat, submitterSeat, helperScopes] = await Promise.all([
+    findSpeakerEvent(db, auth, requestedEventId),
+    findSubmitterEvent(db, auth, requestedEventId),
+    listHelperScopes(db, auth.personId, requestedEventId, requestedHelperSpeakerId),
+  ]);
+  const seat = resolvePortalSeat({
+    hasSpeakerSeat: speakerSeat !== null,
+    hasSubmitterSeat: submitterSeat !== null,
+    hasHelperSeat: helperScopes.length > 0,
+    helperView,
+  });
+  if (seat === "helper") {
+    const scope = helperScopes[0];
+    if (!scope) throw ApiError.notFound("conference not found");
+    return helperSnapshot(db, auth, scope, helperScopes, mediaPublicOrigin, mediaSigningSecret);
+  }
+  if (seat === "submitter") {
+    if (!submitterSeat) throw ApiError.notFound("conference not found");
+    return submitterSnapshot(db, auth, submitterSeat);
+  }
+  if (!speakerSeat) throw ApiError.notFound("conference not found");
   const event = speakerSeat;
   const person = await personFor(db, auth.personId);
-  const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount, socialPlatforms, publicLink] = await Promise.all([
+  const [submissionRows, tasks, primaryBuilding, pinnedBuildingCount, socialPlatforms, publicLink, helpers] = await Promise.all([
     listSubmissions(db, event, auth.personId),
     listPortalTasks(db, event, { kind: "person", personId: auth.personId }, mediaPublicOrigin, mediaSigningSecret),
     primaryBuildingFor(db, event.id),
     pinnedBuildingCountFor(db, event.id),
     enabledSocialPlatformsFor(db, event.id),
     publicSpeakerPathForPerson(db, event.id, person.name, person.id),
+    listSpeakerHelpers(db, event.id, [auth.personId]),
   ]);
   const showBuildingComparison = showsBuildingComparisonCount(pinnedBuildingCount);
   const submissions = [...submissionRows];
@@ -1103,6 +1198,10 @@ async function portalSnapshot(db: D1Database, auth: SessionAuth, mediaPublicOrig
     tasks,
     handbook: { markdown: HANDBOOKS[event.slug] ?? HANDBOOKS.default },
     venue: { pinned_building_count: pinnedBuildingCount },
+    helpers,
+    helping: helperScopes
+      .filter((scope) => scope.event_id === event.id)
+      .map((scope) => ({ speaker_person_id: scope.speaker_person_id, speaker_name: scope.speaker_name, helper_name: scope.helper_name })),
   };
 }
 
@@ -1124,11 +1223,21 @@ async function speakerTaskFor(db: D1Database, auth: SessionAuth, taskId: string)
        JOIN events conference ON conference.id = task.event_id AND conference.org_id = ?
        JOIN task_templates template ON template.id = task.template_id AND template.event_id = task.event_id
        LEFT JOIN submissions submission ON submission.id = task.submission_id AND submission.event_id = task.event_id
-       JOIN memberships membership ON membership.event_id = task.event_id
-         AND membership.person_id = task.person_id AND ${roleInSql("membership", WORK_HOLDING_PARTICIPATION_ROLES)}
-       WHERE task.id = ? AND task.person_id = ?`,
+       LEFT JOIN memberships membership ON membership.event_id = task.event_id
+         AND membership.person_id = ? AND ${roleInSql("membership", WORK_HOLDING_PARTICIPATION_ROLES)}
+       WHERE task.id = ?
+         AND (
+           (task.person_id = ? AND membership.id IS NOT NULL)
+           OR EXISTS (
+             SELECT 1 FROM speaker_helpers helper
+             WHERE helper.event_id = task.event_id
+               AND helper.speaker_person_id = task.person_id
+               AND helper.helper_person_id = ?
+               AND helper.removed_at IS NULL
+           )
+         )`,
     )
-    .bind(auth.orgId, taskId, auth.personId)
+    .bind(auth.orgId, auth.personId, taskId, auth.personId, auth.personId)
     .first<TaskProjection>();
 }
 
@@ -1266,16 +1375,30 @@ async function completeTask(
     now,
   });
 
-  const result = await db
-    .prepare(
+  const result = await db.batch([
+    db.prepare(
       `UPDATE speaker_tasks
        SET status = 'done', completed_at = ?, completed_by_person_id = ?, response_json = ?,
            attachment_id = ?, last_write_source = 'marquee', updated_at = ?
        WHERE id = ? AND event_id = ? AND person_id = ? AND cancelled_at IS NULL`,
-    )
-    .bind(now, auth.personId, JSON.stringify(response), attachmentId, now, task.id, task.event_id, task.person_id)
-    .run();
-  if (Number(result?.meta?.changes ?? 0) !== 1) {
+    ).bind(now, auth.personId, JSON.stringify(response), attachmentId, now, task.id, task.event_id, task.person_id),
+    auditStatement(db, {
+      eventId: task.event_id,
+      actorKind: "user",
+      actorPersonId: auth.personId,
+      action: "speaker_task.completed",
+      entityType: "speaker_task",
+      entityId: task.id,
+      after: {
+        status: "done",
+        completed_by_person_id: auth.personId,
+        ...(auth.personId === task.person_id ? {} : { on_behalf_of_person_id: task.person_id }),
+      },
+      now,
+      requestId,
+    }),
+  ]);
+  if (Number(result[0]?.meta?.changes ?? 0) !== 1) {
     throw ApiError.conflict("this task was cancelled before completion");
   }
 
@@ -1452,7 +1575,7 @@ const getPortal = defineApiRoute(
     path: "/api/v1/me/portal",
     operationId: "getSpeakerPortal",
     summary: "Read the authenticated speaker portal",
-    description: "Returns only the current session's own conference status, submissions, tasks, profile, schedule, and handbook. A session holding no speaker role but carrying a submission answers with `seat: \"submitter\"` and that person's submissions alone.",
+    description: "Returns the session's own speaker or submitter surface, or an event-scoped helper surface when the person holds only a helper relationship. Helper mode carries session logistics and task work without speaker status, talk content, or profile fields.",
     tags: ["Speaker portal"],
     request: { query: eventQuery },
     policy: { auth: { kind: "authenticated" }, rateLimit: { bucket: "read" }, concurrency: "none" },
@@ -1461,7 +1584,15 @@ const getPortal = defineApiRoute(
   async (context) => {
     const auth = requireUnscopedSpeakerSession(context);
     const query = context.req.valid("query");
-    return context.json(await portalSnapshot(context.env.DB, auth, portalMediaOrigin(context), portalMediaSigningSecret(context), query.eventId), 200);
+    return context.json(await portalSnapshot(
+      context.env.DB,
+      auth,
+      portalMediaOrigin(context),
+      portalMediaSigningSecret(context),
+      query.eventId,
+      query.helperSpeakerId,
+      query.helperView !== undefined,
+    ), 200);
   },
 );
 

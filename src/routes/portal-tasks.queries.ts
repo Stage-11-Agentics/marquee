@@ -49,6 +49,7 @@ export interface PortalTaskRow {
   completed_at: number | null;
   completed_by_person_id: string | null;
   completed_by_name: string | null;
+  completed_by_helper_name: string | null;
   assignee_name: string;
   cancelled_at: number | null;
   response_json: string | null;
@@ -190,6 +191,15 @@ export async function listPortalTasks(
            task.title, task.kind, task.description, task.due_at,
            task.status, task.completed_at, task.cancelled_at,
            task.completed_by_person_id, completer.name AS completed_by_name,
+           (SELECT history.helper_name
+              FROM speaker_helpers history
+             WHERE history.event_id = task.event_id
+               AND history.speaker_person_id = task.person_id
+               AND history.helper_person_id = task.completed_by_person_id
+               AND history.added_at <= task.completed_at
+               AND (history.removed_at IS NULL OR history.removed_at >= task.completed_at)
+             ORDER BY history.added_at DESC, history.id DESC
+             LIMIT 1) AS completed_by_helper_name,
            assignee.name AS assignee_name,
            task.response_json, task.attachment_id, template.form_id, template.file_config
          FROM speaker_tasks task
@@ -242,7 +252,7 @@ export async function listPortalTasks(
       // task view inherits it rather than growing its own query later.
       assignee: { person_id: task.person_id, name: task.assignee_name },
       completed_by: task.completed_by_person_id
-        ? { person_id: task.completed_by_person_id, name: task.completed_by_name ?? "Someone at your company" }
+        ? { person_id: task.completed_by_person_id, name: task.completed_by_helper_name ?? task.completed_by_name ?? "Someone at your company" }
         : null,
       cancelled_at: task.cancelled_at,
       cancelled_reason: cancelled ? cancelledReasonFor(task, submissionReasons, sponsorshipReasons) : null,

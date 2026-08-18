@@ -113,6 +113,23 @@ type PortalSnapshot = {
   submissions: PortalSubmission[];
   tasks: PortalTask[];
   handbook: { markdown: string };
+  helpers: Array<{ id: string; event_id: string; speaker_person_id: string; speaker_name: string; helper_person_id: string; helper_name: string; helper_email: string; added_at: number; removed_at: number | null }>;
+  helping: Array<{ speaker_person_id: string; speaker_name: string; helper_name: string }>;
+};
+
+type HelperSnapshot = {
+  seat: "helper";
+  event: { id: string; name: string; slug: string; timezone: string; status: string };
+  person: { id: string; name: string; email: string };
+  helper: {
+    helper_name: string;
+    speaker: { id: string; name: string };
+    speakers: Array<{ id: string; name: string }>;
+  };
+  submissions: Array<{ id: string; title: string; slot: PortalSubmission["slot"] }>;
+  tasks: PortalTask[];
+  handbook: { markdown: string };
+  venue: { pinned_building_count: number };
 };
 
 type SubmitterSubmission = {
@@ -148,7 +165,7 @@ type SubmitterSnapshot = {
   submissions: SubmitterSubmission[];
 };
 
-type AnyPortalSnapshot = PortalSnapshot | SubmitterSnapshot;
+type AnyPortalSnapshot = PortalSnapshot | HelperSnapshot | SubmitterSnapshot;
 
 /**
  * The way back out of an organizer preview.
@@ -704,7 +721,7 @@ function ArrivalMap({ slot }: { slot: NonNullable<PortalSubmission["slot"]> }): 
   </div>;
 }
 
-function ArrivalCard({ slot, timezone }: { slot: NonNullable<PortalSubmission["slot"]>; timezone: string }): JSX.Element {
+function ArrivalCard({ slot, timezone, helper = false }: { slot: NonNullable<PortalSubmission["slot"]>; timezone: string; helper?: boolean }): JSX.Element {
   const { location, arrival } = slot;
   const showBuildingComparison = slot.show_building_comparison;
   let arrivalCopy = "Arrival timing will appear when this session is placed.";
@@ -725,7 +742,7 @@ function ArrivalCard({ slot, timezone }: { slot: NonNullable<PortalSubmission["s
     arrivalCopy = "Your arrival instructions will appear when the session time is set.";
   }
   return <section class="portal-arrival-card" aria-labelledby={`arrival-heading-${slot.starts_at}`}>
-    <header class="portal-arrival-head"><div><h2 id={`arrival-heading-${slot.starts_at}`}>Where you are speaking</h2><span>{slot.day} · {slot.date} · {slot.time}</span></div></header>
+    <header class="portal-arrival-head"><div><h2 id={`arrival-heading-${slot.starts_at}`}>{helper ? "Where to be" : "Where you are speaking"}</h2><span>{slot.day} · {slot.date} · {slot.time}</span></div></header>
     <div class="portal-arrival-body"><dl class="portal-arrival-details">
       <div><dt>Room</dt><dd>{location.room ?? "—"}</dd></div>
       <div><dt>Building</dt><dd>{location.building ?? "No building assigned yet"}</dd></div>

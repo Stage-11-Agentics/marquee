@@ -70,13 +70,23 @@ export async function fileTaskForSpeaker(
       `SELECT task.id, task.event_id, task.person_id, event.org_id
        FROM speaker_tasks task
        JOIN events event ON event.id = task.event_id AND event.org_id = ?
-       JOIN memberships membership
+       LEFT JOIN memberships membership
          ON membership.event_id = task.event_id
         AND membership.person_id = ?
         AND ${roleInSql("membership", WORK_HOLDING_PARTICIPATION_ROLES)}
-       WHERE task.id = ? AND task.person_id = ? AND task.kind = 'file'`,
+       WHERE task.id = ? AND task.kind = 'file'
+         AND (
+           (task.person_id = ? AND membership.id IS NOT NULL)
+           OR EXISTS (
+             SELECT 1 FROM speaker_helpers helper
+             WHERE helper.event_id = task.event_id
+               AND helper.speaker_person_id = task.person_id
+               AND helper.helper_person_id = ?
+               AND helper.removed_at IS NULL
+           )
+         )`,
     )
-    .bind(orgId, personId, taskId, personId)
+    .bind(orgId, personId, taskId, personId, personId)
     .first<FileTaskRow>();
   if (!task) throw ApiError.notFound("deliverable not found");
   return task;
@@ -111,14 +121,25 @@ async function validateAuthor(
     .prepare(
       `SELECT person.id
        FROM people person
-       JOIN memberships membership
-         ON membership.person_id = person.id
-        AND membership.org_id = person.org_id
-        AND (membership.event_id = ? OR membership.event_id IS NULL)
        WHERE person.id = ? AND person.org_id = ?
+         AND (
+           EXISTS (
+             SELECT 1 FROM memberships membership
+             WHERE membership.person_id = person.id
+               AND membership.org_id = person.org_id
+               AND (membership.event_id = ? OR membership.event_id IS NULL)
+           )
+           OR EXISTS (
+             SELECT 1 FROM speaker_helpers helper
+             WHERE helper.event_id = ?
+               AND helper.speaker_person_id = task.person_id
+               AND helper.helper_person_id = person.id
+               AND helper.removed_at IS NULL
+           )
+         )
        LIMIT 1`,
     )
-    .bind(task.event_id, authorPersonId, task.org_id)
+    .bind(authorPersonId, task.org_id, task.event_id, task.event_id)
     .first<{ id: string }>();
   if (!author) throw ApiError.forbidden("comment author is not a member of this conference");
 }
