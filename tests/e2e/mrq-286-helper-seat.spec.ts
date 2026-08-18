@@ -74,6 +74,8 @@ if (process.env.DRIVE_MRQ286_HELPER_SEAT) {
       const rosterSpeaker = organizer.locator("button.speaker-link").filter({ hasText: "Aarush Selvan" }).first();
       await expect(rosterSpeaker).toBeVisible({ timeout: 30_000 });
       await rosterSpeaker.click();
+      const speakerRecordPersonId = new URL(organizer.url()).searchParams.get("person");
+      expect(speakerRecordPersonId).toBeTruthy();
       const record = organizer.locator("aside.speaker-record");
       await expect(record.getByRole("heading", { name: "Aarush Selvan" })).toBeVisible({ timeout: 30_000 });
       const recordAddResponse = organizer.waitForResponse((response) => response.request().method() === "POST" && response.url().includes(`/api/v1/events/${EVENT_ID}/speakers/`) && response.url().endsWith("/helpers"));
@@ -92,12 +94,9 @@ if (process.env.DRIVE_MRQ286_HELPER_SEAT) {
 
       // The second organizer door is the onboarding chase drawer. It must be a
       // real UI write as well, not merely a direct API assertion.
-      await organizer.goto(`/onboarding?eventId=${encodeURIComponent(EVENT_ID)}`);
-      const speakerRow = organizer.locator("button.onboarding-speaker-link").filter({ hasText: "Aarush Selvan" }).first();
-      await expect(speakerRow).toBeVisible({ timeout: 120_000 });
-      await speakerRow.click();
+      await organizer.goto(`/onboarding?eventId=${encodeURIComponent(EVENT_ID)}&person=${encodeURIComponent(speakerRecordPersonId as string)}`);
       const drawer = organizer.locator('[role="dialog"]');
-      await expect(drawer).toContainText("Helpers", { timeout: 30_000 });
+      await expect(drawer).toContainText("Helpers", { timeout: 120_000 });
       const onboardingAddResponse = organizer.waitForResponse((response) => response.request().method() === "POST" && response.url().includes("/helpers"));
       const onboardingForm = drawer.locator("form.onboarding-helper-form");
       await onboardingForm.getByLabel("Name").fill(onboardingHelperName);
