@@ -130,8 +130,10 @@ export function AgentsPage({ navigate, origin }: { navigate: (target: string) =>
           <p class="subtle">
             With no token, <code>{mcp}</code> serves the public tier — the published program, one
             session, one speaker, what the call for proposals asks, and sending a proposal. Add a
-            scoped token and the tool set widens to exactly what that token already allows over the
-            API: never more, and never on a conference it is not scoped to.
+            scoped token and the tool set widens to what that token reaches — never more than it
+            can already do over the API, and never on a conference it is not scoped to. A few of the
+            signed tools check which seat you hold when they are called rather than when they are
+            listed, so an organizer's tool asked for from a reviewer seat is refused, and says so.
           </p>
           <p class="subtle">Mint the token in <a href="/org/tokens" onClick={go("/org/tokens")}>API tokens</a>, then paste it in place of <code>mq_YOUR_TOKEN</code>.</p>
           <div><CopyButton onCopy={() => copy(mcpConfig, CONFIG_COPIED_TOAST)}>Copy config</CopyButton></div>
@@ -169,7 +171,7 @@ export function AgentsPage({ navigate, origin }: { navigate: (target: string) =>
           has instead is a seat your own agent can sit in, and a place to put what it thought.
         </p>
         <div class="agents-contract-line"><span class="agents-contract-key">Mint the seat</span><span>On a committee, create an Agent evaluator seat. It is a real reviewer seat with its own name, its own track responsibilities, and its own token — created and revoked like any other.</span></div>
-        <div class="agents-contract-line"><span class="agents-contract-key">Point your agent at it</span><span>Give it the MCP config above with that token. It can reach its own queue and nothing else.</span></div>
+        <div class="agents-contract-line"><span class="agents-contract-key">Point your agent at it</span><span>Give it the MCP config above with that token. Its reach is the seat's: its own queue, and a refusal anywhere else.</span></div>
         <div class="agents-contract-line"><span class="agents-contract-key">Read the result beside your own</span><span>An agent's score is shown next to the committee's and is never averaged into the human number. Sort the pile by <em>Agent read high → low</em> to order your evening.</span></div>
         <div class="agents-contract-line"><span class="agents-contract-key">Disagree freely</span><span>A chair can override any agent score, and the row then shows the override. The first read is a suggestion about reading order, not a verdict.</span></div>
         <div class="agents-quote">“{AGENT_FIRST_READ_BRIEF}”</div>

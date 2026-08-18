@@ -82,60 +82,77 @@ export function jsonRpcError(
 }
 
 /**
- * A notification is a request with no `id`, and the specification says a server
- * returns no body for one. Distinguishing it here — rather than at the call
- * site — is what keeps `initialized` from being answered with "unknown method".
+ * A member is either a request to dispatch or a structural fault to answer —
+ * per member, never for the whole envelope. One malformed entry in a batch of
+ * ten leaves the other nine perfectly answerable, and the id the bad entry
+ * carried is what lets its client correlate the failure with what it sent.
  */
-export function isNotification(request: JsonRpcRequest): boolean {
-  return request.id === undefined;
-}
+export type EnvelopeMember =
+  | { kind: "request"; request: JsonRpcRequest }
+  | { kind: "invalid"; id: JsonRpcId; error: JsonRpcErrorBody };
 
 export interface ParsedEnvelope {
-  /** One request, or the members of a batch, in arrival order. */
-  requests: JsonRpcRequest[];
+  members: EnvelopeMember[];
   /** True when the client sent a JSON array, which must be answered with one. */
   batch: boolean;
+}
+
+/** A readable id survives a member that is otherwise unusable. */
+function readableId(candidate: Record<string, unknown>): JsonRpcId {
+  const id = candidate.id;
+  if (typeof id === "string" || typeof id === "number") return id;
+  return null;
+}
+
+function validateMember(member: unknown): EnvelopeMember {
+  if (member === null || typeof member !== "object" || Array.isArray(member)) {
+    return {
+      kind: "invalid",
+      id: null,
+      error: { code: JSON_RPC_ERRORS.invalidRequest, message: "each JSON-RPC message must be an object" },
+    };
+  }
+  const candidate = member as Record<string, unknown>;
+  const id = readableId(candidate);
+  const invalid = (code: number, message: string): EnvelopeMember => ({ kind: "invalid", id, error: { code, message } });
+  if (candidate.jsonrpc !== JSONRPC_VERSION) {
+    return invalid(JSON_RPC_ERRORS.invalidRequest, `jsonrpc must be "${JSONRPC_VERSION}"`);
+  }
+  if (typeof candidate.method !== "string" || candidate.method.length === 0) {
+    return invalid(JSON_RPC_ERRORS.invalidRequest, "method must be a non-empty string");
+  }
+  const rawId = candidate.id;
+  if (rawId !== undefined && rawId !== null && typeof rawId !== "string" && typeof rawId !== "number") {
+    return invalid(JSON_RPC_ERRORS.invalidRequest, "id must be a string, a number, or null");
+  }
+  const params = candidate.params;
+  if (params !== undefined && (params === null || typeof params !== "object" || Array.isArray(params))) {
+    return invalid(JSON_RPC_ERRORS.invalidParams, "params must be an object");
+  }
+  return {
+    kind: "request",
+    request: {
+      jsonrpc: JSONRPC_VERSION,
+      ...(rawId === undefined ? {} : { id: rawId as JsonRpcId }),
+      method: candidate.method,
+      ...(params === undefined ? {} : { params: params as Record<string, unknown> }),
+    },
+  };
 }
 
 /**
  * Structural validation only. Whether the method exists and whether its params
  * make sense belongs to the dispatcher; this asks only "is this JSON-RPC at
  * all?", which is the one question that has to be answered before there is an
- * id to attach a failure to.
+ * id to attach a failure to. An empty batch is the sole whole-envelope fault,
+ * because there is no member to attach anything to.
  */
 export function parseEnvelope(payload: unknown): ParsedEnvelope | JsonRpcErrorBody {
-  const members = Array.isArray(payload) ? payload : [payload];
   if (Array.isArray(payload) && payload.length === 0) {
     return { code: JSON_RPC_ERRORS.invalidRequest, message: "a JSON-RPC batch must not be empty" };
   }
-  const requests: JsonRpcRequest[] = [];
-  for (const member of members) {
-    if (member === null || typeof member !== "object" || Array.isArray(member)) {
-      return { code: JSON_RPC_ERRORS.invalidRequest, message: "each JSON-RPC message must be an object" };
-    }
-    const candidate = member as Record<string, unknown>;
-    if (candidate.jsonrpc !== JSONRPC_VERSION) {
-      return { code: JSON_RPC_ERRORS.invalidRequest, message: `jsonrpc must be "${JSONRPC_VERSION}"` };
-    }
-    if (typeof candidate.method !== "string" || candidate.method.length === 0) {
-      return { code: JSON_RPC_ERRORS.invalidRequest, message: "method must be a non-empty string" };
-    }
-    const id = candidate.id;
-    if (id !== undefined && id !== null && typeof id !== "string" && typeof id !== "number") {
-      return { code: JSON_RPC_ERRORS.invalidRequest, message: "id must be a string, a number, or null" };
-    }
-    const params = candidate.params;
-    if (params !== undefined && (params === null || typeof params !== "object" || Array.isArray(params))) {
-      return { code: JSON_RPC_ERRORS.invalidParams, message: "params must be an object" };
-    }
-    requests.push({
-      jsonrpc: JSONRPC_VERSION,
-      ...(id === undefined ? {} : { id: id as JsonRpcId }),
-      method: candidate.method,
-      ...(params === undefined ? {} : { params: params as Record<string, unknown> }),
-    });
-  }
-  return { requests, batch: Array.isArray(payload) };
+  const members = (Array.isArray(payload) ? payload : [payload]).map(validateMember);
+  return { members, batch: Array.isArray(payload) };
 }
 
 /** Answer in the caller's revision when we know it; otherwise in our newest. */

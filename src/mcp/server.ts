@@ -15,11 +15,10 @@
  * `operationId`, and the registry says what that operation costs.
  */
 import type { ApiRouteEntry } from "../api/route";
-import type { ApiBindings, Principal } from "../api/runtime";
+import type { Principal } from "../api/runtime";
 import { REQUEST_ID_HEADER } from "../api/errors";
 import {
   JSON_RPC_ERRORS,
-  JSONRPC_VERSION,
   jsonRpcError,
   jsonRpcResult,
   negotiateProtocolVersion,
@@ -33,6 +32,14 @@ import { MCP_TOOLS, MCP_TOOLS_BY_NAME, type McpTool } from "./tools";
 export const MCP_PATH = "/mcp";
 
 const SERVER_INFO = { name: "marquee", title: "Marquee", version: "1" } as const;
+
+/**
+ * A batch is answered inside one Worker invocation, and each member is a real
+ * D1-backed sub-request, so an unbounded array is a way to spend this
+ * deployment's CPU budget in a single POST. The cap is generous for any real
+ * client and small enough that no batch can be a denial of service.
+ */
+const MAX_BATCH_MEMBERS = 32;
 
 /**
  * Said once, on the way in. A model that has never seen a conference platform
@@ -102,17 +109,33 @@ function refusalFromEnvelope(status: number, body: unknown, requestId: string): 
   return refusal(`${message}${field} [${code} · request ${requestId}]`);
 }
 
-/** `/api/v1/events/{eventId}/…` -> the concrete path, or the missing argument. */
+/**
+ * `/api/v1/events/{eventId}/…` -> the concrete path.
+ *
+ * A path parameter is checked before it is substituted, because
+ * `encodeURIComponent` does not encode `.` and the WHATWG URL parser then
+ * removes dot segments: a `round_id` of `..` would turn
+ * `/events/E/rounds/../submissions/S` into `/events/E/submissions/S` — a
+ * DIFFERENT registered operation than the one whose policy the tier check just
+ * evaluated. Every route still enforces itself, so this was never an escalation;
+ * it was worse in one specific way, which is that the binding this design rests
+ * on — a tool's tier is the tier of the route that serves it — stopped being
+ * true. An id in this product is a ULID-shaped string, never a path.
+ */
 function fillPath(
   template: string,
   pathParams: Record<string, string> | undefined,
   args: Record<string, unknown>,
-): { path: string } | { missing: string } {
+): { path: string } | { missing: string } | { invalid: string } {
   let path = template;
   for (const [parameter, argument] of Object.entries(pathParams ?? {})) {
     const value = args[argument];
     if (value === undefined || value === null || value === "") return { missing: argument };
-    path = path.replace(`{${parameter}}`, encodeURIComponent(String(value)));
+    const text = String(value);
+    if (text.includes("/") || text.includes("\\") || /^\.{1,2}$/.test(text)) {
+      return { invalid: argument };
+    }
+    path = path.replace(`{${parameter}}`, encodeURIComponent(text));
   }
   return { path };
 }
@@ -169,6 +192,19 @@ function missingRequired(tool: McpTool, args: Record<string, unknown>): string[]
   );
 }
 
+/**
+ * One sentence for "you spelled it wrong" and for "you may not have this",
+ * because telling those two apart is exactly what a caller must not be able to
+ * do. The hint that follows names the general remedy, never the tool.
+ */
+function notOnThisConnection(name: string, context: McpContext): ToolResult {
+  return refusal(
+    `there is no tool called '${name}' on this connection. Call tools/list to see what this one reaches; ${context.principal.kind === "anonymous"
+      ? "the set widens when you present a bearer token, which you mint from the Agents page of this deployment."
+      : "the set is what this token's grants, seat, and conference restriction allow — call whoami to see them."}`,
+  );
+}
+
 async function callTool(
   context: McpContext,
   routes: ReadonlyMap<string, ApiRouteEntry>,
@@ -178,15 +214,17 @@ async function callTool(
   if (typeof name !== "string") return refusal("tools/call needs a tool name.");
   const tool = MCP_TOOLS_BY_NAME.get(name);
   const route = tool ? routes.get(tool.operationId) : undefined;
-  if (!tool || !route) {
-    return refusal(
-      `there is no tool called '${name}'. Call tools/list to see what this connection can reach; the set widens when you present a bearer token.`,
-    );
-  }
+  if (!tool || !route) return notOnThisConnection(name, context);
   if (rawArguments !== undefined && (rawArguments === null || typeof rawArguments !== "object" || Array.isArray(rawArguments))) {
     return refusal(`${name} takes an arguments object.`);
   }
   const args = (rawArguments ?? {}) as Record<string, unknown>;
+
+  // Concealment first, and in the SAME words as a misspelling. Validating the
+  // arguments before checking reachability would answer an unreachable tool with
+  // its own argument list, which hands out the schema `tools/list` withheld and
+  // makes the pair of replies a clean existence oracle for the whole catalogue.
+  if (!toolIsVisible(tool, route, context.principal)) return notOnThisConnection(name, context);
 
   const unknown = unknownArguments(tool, args);
   if (unknown.length > 0) {
@@ -195,22 +233,13 @@ async function callTool(
     );
   }
   const missing = missingRequired(tool, args);
-  if (missing.length > 0) {
-    return refusal(`${name} needs ${missing.join(", ")}.`);
-  }
-  // Concealment, not disclosure: a caller who cannot reach a tool is told the
-  // tool is not on this connection, in the same words as a misspelling — and
-  // never that it exists and is being withheld.
-  if (!toolIsVisible(tool, route, context.principal)) {
-    return refusal(
-      `${name} is not available on this connection. ${context.principal.kind === "anonymous"
-        ? "It needs a bearer token; mint one from the Agents page of this deployment."
-        : "This token's grants, seat, or conference restriction do not reach it — call whoami to see what it does reach."}`,
-    );
-  }
+  if (missing.length > 0) return refusal(`${name} needs ${missing.join(", ")}.`);
 
   const filled = fillPath(route.path, tool.pathParams, args);
   if ("missing" in filled) return refusal(`${name} needs ${filled.missing}.`);
+  if ("invalid" in filled) {
+    return refusal(`${name} cannot take a path separator or a dot segment in ${filled.invalid}; it wants an id.`);
+  }
 
   const body = buildBody(tool, args);
   const headers = new Headers(context.forwardedHeaders);
@@ -247,7 +276,16 @@ async function callTool(
   // out of HTTP — otherwise the two-phase decision contract cannot be driven
   // from here at all.
   const etag = response.headers.get("etag");
-  if (etag !== null && payload !== null && typeof payload === "object" && !Array.isArray(payload)) {
+  if (
+    etag !== null
+    && payload !== null
+    && typeof payload === "object"
+    && !Array.isArray(payload)
+    // Never shadow a body the route already wrote: a plan returns its own
+    // `etag`, and silently replacing it with a header would hand the caller a
+    // different value than the one the API meant it to carry.
+    && !("etag" in (payload as Record<string, unknown>))
+  ) {
     return ok({ ...(payload as Record<string, unknown>), etag });
   }
   return ok(payload);
@@ -347,16 +385,51 @@ export async function handleMcpRequest(
     return jsonResponse(jsonRpcError(null, envelope.code, envelope.message), 400);
   }
 
+  if (envelope.members.length > MAX_BATCH_MEMBERS) {
+    return jsonResponse(
+      jsonRpcError(
+        null,
+        JSON_RPC_ERRORS.invalidRequest,
+        `a batch may carry at most ${MAX_BATCH_MEMBERS} messages; this one carried ${envelope.members.length}`,
+      ),
+      400,
+    );
+  }
+
   const routes = indexRoutesByOperationId(context.entries);
   const responses: JsonRpcResponse[] = [];
-  for (const member of envelope.requests) {
-    const answer = await dispatch(context, routes, member);
+  for (const member of envelope.members) {
+    if (member.kind === "invalid") {
+      responses.push(jsonRpcError(member.id, member.error.code, member.error.message));
+      continue;
+    }
+    // One member's fault is that member's. Without this, a header value the
+    // runtime rejects throws out of the loop, the composition root answers with
+    // a plain-text 500 rather than JSON-RPC, and every other member of the batch
+    // is discarded along with it.
+    let answer: JsonRpcResponse | null;
+    try {
+      answer = await dispatch(context, routes, member.request);
+    } catch (error) {
+      if (member.request.id === undefined) continue;
+      answer = jsonRpcError(
+        member.request.id ?? null,
+        JSON_RPC_ERRORS.internal,
+        "the server could not complete this call",
+        { request_id: context.requestId, reason: error instanceof Error ? error.name : "unknown" },
+      );
+    }
     if (answer !== null) responses.push(answer);
   }
   // Notifications only: the specification asks for 202 and no body.
+  // (Batching itself is a courtesy to clients on revisions that had it; the
+  // 2025-06-18 revision this server prefers removed it.)
   if (responses.length === 0) return new Response(null, { status: 202 });
-  return jsonResponse(envelope.batch ? responses : responses[0]);
+  if (envelope.batch) return jsonResponse(responses);
+  // A lone malformed message is a bad HTTP request as well as a JSON-RPC error;
+  // saying so in the status is what lets a proxy or a client's error handling
+  // see it without parsing the body.
+  const malformed = envelope.members[0]?.kind === "invalid";
+  return jsonResponse(responses[0], malformed ? 400 : 200);
 }
 
-export { JSONRPC_VERSION, INSTRUCTIONS as MCP_INSTRUCTIONS, SERVER_INFO as MCP_SERVER_INFO };
-export type { ApiBindings };

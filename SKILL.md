@@ -83,7 +83,7 @@ This instance also answers MCP at `POST /mcp` — stateless JSON-RPC 2.0 over St
 }
 ```
 
-With no `Authorization` header the connection serves the public tier: the published Agenda, one Session, one speaker, the questions the public form asks, and sending an Abstract to it — exactly what a signed-out browser reaches. With a scoped token the tool set widens to what that token's grants, seat, and conference restriction already allow, and no further. Call `tools/list` on the connection you actually have rather than assuming a set; the listing is what that credential reaches, and every tool description names its preconditions and what a refusal means.
+With no `Authorization` header the connection serves the public tier: the published Agenda, one Session, one speaker, the questions the public form asks, and sending an Abstract to it — exactly what a signed-out browser reaches. With a scoped token the tool set widens to what that token's grants, seat, and conference restriction already allow, and no further. Some of the signed tools check which seat you hold when you call them rather than when they are listed, so a listing is what the connection reaches, not a promise that every entry will answer. Call `tools/list` on the connection you actually have rather than assuming a set; the listing is what that credential reaches, and every tool description names its preconditions and what a refusal means.
 
 Two habits the descriptions repeat, because they are the ones that matter: run `comms_audience` before `send_reminder`, and treat the fingerprint `decision_plan` returns as a human's confirmation — show that plan to a person before calling `apply_decisions`.
 

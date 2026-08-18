@@ -96,7 +96,27 @@ test("CONTRACT · MRQ-284 · a session is judged by the role it holds, per confe
   expect(toolIsVisible(anyTool, route({ kind: "authenticated" }), reviewer)).toBe(true);
 });
 
-test("CONTRACT · MRQ-284 · a credential that reaches no conference at all is shown no event-scoped tool", () => {
+test("CONTRACT · MRQ-284 · an org-wide seat is not hidden merely because its membership names no conference", () => {
+  // owner/program_lead/ops are ONE row with event_id null that applies to every
+  // conference. Requiring an enumerable event here would hide every grant-scoped
+  // tool from the credential that can use all of them.
+  const owner: Principal = {
+    kind: "session",
+    sessionId: "sess_1",
+    personId: "per_1",
+    orgId: "org_1",
+    memberships: [membership(null, "owner")],
+  };
+  expect(toolIsVisible(anyTool, route({ kind: "grants", grants: ["program:write"] }), owner)).toBe(true);
+
+  // A token whose events cannot be enumerated at all still has to hold the grant
+  // in its own scopes AND have a seat that carries it.
+  const legacy = token({ grants: ["program:read"], legacyRole: "ops" });
+  expect(toolIsVisible(anyTool, route({ kind: "grants", grants: ["program:read"] }), legacy)).toBe(true);
+  expect(toolIsVisible(anyTool, route({ kind: "grants", grants: ["program:write"] }), legacy)).toBe(false);
+});
+
+test("CONTRACT · MRQ-284 · a credential holding no authority anywhere is shown no event-scoped tool", () => {
   expect(toolIsVisible(anyTool, route({ kind: "grants", grants: ["program:read"] }), token({ grants: ["program:read"] })))
     .toBe(false);
 });

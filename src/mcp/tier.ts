@@ -47,27 +47,53 @@ export function indexRoutesByOperationId(
 }
 
 /**
- * Every conference this principal could plausibly act on. Not an authorization
- * answer — the input to one. A token pinned to a single conference reduces to
- * that one, which is what makes "restricted to one conference" visible in the
- * listing rather than only at call time.
+ * Every conference this principal could act on — or `null` when that set cannot
+ * be enumerated at all.
+ *
+ * `null` is the important case, and it is not hypothetical. An owner, program
+ * lead, or ops seat is normally ONE membership row with `event_id = null` that
+ * `roleForEvent` applies to every conference in the organization; a legacy
+ * integration token can carry authority through `legacyRole` with no event list
+ * anywhere. Returning `[]` for those and then requiring a match would hide every
+ * grant-scoped tool from a credential that can in fact use all of them — a
+ * listing gate failing CLOSED against the pipeline it is supposed to mirror.
  */
-function reachableEventIds(principal: Principal): readonly string[] {
-  if (principal.kind === "anonymous") return [];
-  const fromMemberships = (memberships: readonly MembershipRow[]) =>
+function reachableEventIds(principal: Principal): readonly string[] | null {
+  const eventScoped = (memberships: readonly MembershipRow[]) =>
     memberships.map((membership) => membership.event_id).filter((id): id is string => id !== null);
-  if (principal.kind === "session") return [...new Set(fromMemberships(principal.memberships))];
+  if (principal.kind === "anonymous") return [];
+  if (principal.kind === "session") {
+    return principal.memberships.some((membership) => membership.event_id === null)
+      ? null
+      : [...new Set(eventScoped(principal.memberships))];
+  }
   if (principal.eventId !== null) return [principal.eventId];
-  const declared = principal.eventIds.length > 0
-    ? principal.eventIds
-    : principal.organizationEventIds ?? fromMemberships(principal.memberships);
-  return [...new Set(declared)];
+  if (principal.eventIds.length > 0) return [...new Set(principal.eventIds)];
+  if (principal.organizationEventIds !== undefined) return [...new Set(principal.organizationEventIds)];
+  const fromMemberships = eventScoped(principal.memberships);
+  return fromMemberships.length > 0 ? [...new Set(fromMemberships)] : null;
 }
 
-function satisfiesOnSomeEvent(principal: Principal, grants: readonly string[]): boolean {
+/**
+ * The seat-shaped question, asked without an event: could ANY authority this
+ * principal holds carry these grants somewhere? Used only when the conference
+ * set cannot be enumerated, and deliberately generous — the pipeline still
+ * decides on the real conference when the tool is actually called.
+ */
+function anyRoleCouldSatisfy(principal: Principal, grants: readonly string[]): boolean {
+  if (principal.kind === "anonymous") return false;
+  const roles = principal.memberships.map((membership) => membership.role);
+  if (principal.kind === "token") {
+    if (!grants.every((grant) => principal.grants.includes(grant as never))) return false;
+    if (principal.legacyRole !== undefined) roles.push(principal.legacyRole);
+  }
+  return roles.some((role) => grants.every((grant) => membershipAllowsGrant(role, grant as never)));
+}
+
+function satisfiesSomewhere(principal: Principal, grants: readonly string[]): boolean {
   if (principal.kind === "anonymous") return false;
   const events = reachableEventIds(principal);
-  if (events.length === 0) return false;
+  if (events === null) return anyRoleCouldSatisfy(principal, grants);
   return events.some((eventId) =>
     grants.every((grant) => {
       if (principal.kind === "token") return tokenHasGrant(principal, grant as never, eventId);
@@ -89,10 +115,6 @@ export function toolIsVisible(
   if (auth.kind === "public") return true;
   if (principal.kind === "anonymous") return false;
   if (auth.kind === "authenticated") return true;
-  return satisfiesOnSomeEvent(principal, auth.grants);
+  return satisfiesSomewhere(principal, auth.grants);
 }
 
-/** True when this tool needs no credential at all — the public tier. */
-export function toolIsPublic(route: ApiRouteEntry): boolean {
-  return route.policy.auth.kind === "public";
-}

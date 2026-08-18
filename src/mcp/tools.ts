@@ -92,6 +92,17 @@ const submissionFilterProperties = {
   placement: { type: "string", enum: ["unplaced"], description: "`unplaced` narrows to accepted sessions with no room and time yet." },
 } as const;
 
+/**
+ * The speaker's own portal is deliberately absent.
+ *
+ * `GET /api/v1/me/portal` and `POST /api/v1/me/tasks/{id}/complete` require a
+ * browser session — `requireUnscopedSpeakerSession` refuses anything that is not
+ * `kind: "session"`, and this endpoint is bearer-only. There is no credential it
+ * accepts that could drive them, so tools for them would be doors that open onto
+ * a wall: listed, described, and refused every time. Making them work is an API
+ * change (a token bound to a speaker seat), which is a change to what REST
+ * permits and therefore not this façade's to make.
+ */
 export const MCP_TOOLS: readonly McpTool[] = [
   // ── Public tier ────────────────────────────────────────────────────────────
   // Exactly what a signed-out browser can reach, and nothing more. Note what is
@@ -436,35 +447,6 @@ export const MCP_TOOLS: readonly McpTool[] = [
     query: ["q", "status", "track", "page", "per_page"],
   },
   {
-    name: "my_tasks",
-    operationId: "getSpeakerPortal",
-    title: "Read what this speaker seat owes",
-    description:
-      "The speaker's own portal: their accepted sessions, the tasks still outstanding, what has been sent, and their profile. This is the speaker's own view of themselves and reaches nobody else's — an organizer token sees nothing here and should use `speakers` instead. Task ids from this response are what `complete_task` takes.",
-    inputSchema: { type: "object", properties: {}, additionalProperties: false },
-  },
-  {
-    name: "complete_task",
-    operationId: "completeSpeakerTask",
-    title: "Complete one of this speaker's tasks",
-    description:
-      "Marks one of this speaker's own tasks done. WRITE. What it needs depends on the task: an acknowledgement takes `acknowledged` true, a form takes `answers`, a file task takes the `attachment_id` of an already-uploaded file — the wrong payload is refused rather than silently accepted, which is what stops a task looking done with nothing behind it. To undo: an organizer can reopen a completed task.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        task_id: { type: "string", description: "From `my_tasks`." },
-        acknowledged: { type: "boolean", description: "For an acknowledgement task." },
-        answers: { type: "object", description: "For a form task, keyed by field id.", additionalProperties: true },
-        attachment_id: { type: "string", description: "For a file task: an upload already completed by this speaker." },
-      },
-      required: ["task_id"],
-      additionalProperties: false,
-    },
-    pathParams: { taskId: "task_id" },
-    body: { fields: ["acknowledged", "answers", "attachment_id"] },
-    write: true,
-  },
-  {
     name: "decision_plan",
     operationId: "planBulkSubmissionDecision",
     title: "Preview a decision before making it",
@@ -529,7 +511,7 @@ export const MCP_TOOLS: readonly McpTool[] = [
     operationId: "listCommunicationAudience",
     title: "Count and list who a message would reach",
     description:
-      "Resolves the same filters `list_submissions` takes into one row per person who would actually receive a message, with the total. Changes nothing and sends nothing. Call it before `send_reminder` every time: the total is the number to put in front of a human, and 'nudge everyone still owing a headshot' is a very different act at 4 people than at 400.",
+      "Resolves the same filters `list_submissions` takes into one row per person who would actually receive a message, with the total. Changes nothing and sends nothing. Call it before `send_reminder` every time: the total is the number to put in front of a human, and 'nudge everyone still owing a headshot' is a very different act at 4 people than at 400. Then pass the `person_id` values it returned to `send_reminder` — do NOT re-type the filter there. The two tools speak different selection languages (this one filters by track name and task state; the sender takes ids, a track id, a role, or a status), so a filter retyped into the sender can resolve to a far larger set than the one a human just approved.",
     inputSchema: {
       type: "object",
       properties: {
@@ -550,7 +532,7 @@ export const MCP_TOOLS: readonly McpTool[] = [
     operationId: "sendCommunication",
     title: "Queue a message to a selected audience",
     description:
-      "Queues one message to a selected audience — a stored template, or a subject and body you write. WRITE, and it reaches real people's inboxes. Run `comms_audience` with the same selection first and tell the human the count. Mail here is demo-safe by design: the queue and the receipts are real, and what actually leaves depends on how this deployment is configured. Set `idempotency_key` when retrying one compose after a timeout; omit it and each call is a fresh nudge. To undo: nothing already queued can be recalled.",
+      "Queues one message to a selected audience — a stored template, or a subject and body you write. WRITE, and it reaches real people's inboxes. Run `comms_audience` first, tell the human the count, and then send with the `person_ids` that call returned. That is the only selection guaranteed to be the set that was counted: this tool's other selectors (`role`, `status`, `track_id`, `task_state`) are a different vocabulary resolved by different code, so a filter copied across can quietly mean hundreds of people where the count said forty. Mail here is demo-safe by design: the queue and the receipts are real, and what actually leaves depends on how this deployment is configured. Set `idempotency_key` when retrying one compose after a timeout; omit it and each call is a fresh nudge. To undo: nothing already queued can be recalled.",
     inputSchema: {
       type: "object",
       properties: {

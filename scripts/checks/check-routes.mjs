@@ -203,8 +203,12 @@ ${pageRows.join("\n")}
 
 Registered directly in \`src/index.ts\`, outside both the SPA and the API app.
 These are the doors a machine walks through: \`/mcp\` speaks the Model Context
-Protocol over JSON-RPC, \`/SKILL.md\` and \`/llms.txt\` serve the agent front
-door, and \`/health\` names the build actually running.
+Protocol over JSON-RPC, \`/SKILL.md\` serves the installable skill, and
+\`/health\` names the build actually running. \`/mirror/webhook\` accepts a signed
+ping from Airtable, and \`/__validation/session-cookie\` is a local-validation
+hook that 404s unless \`LOCAL_VALIDATION_TOKEN\` is set and presented — it is
+listed because this table is generated from the code rather than curated, which
+is the whole point of it.
 
 | Path | Methods |
 | --- | --- |

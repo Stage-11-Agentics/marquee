@@ -350,11 +350,24 @@ test("CONTRACT · MRQ-284 acceptance 4 · an agent seat's evaluation lands as an
     },
   );
   expect(override.status).toBe(200);
-  const afterOverride = payloadOf(await call("list_submissions", { event_id: EVENT }, OWNER_TOKEN)).data as Array<{
+  const afterOverride = payloadOf(await call("list_submissions", { event_id: EVENT, sort: "agent_score" }, OWNER_TOKEN)).data as Array<{
     id: string;
     agent_reviews: Array<{ override_score: number | null }>;
   }>;
   expect(afterOverride.find((item) => item.id === SUBMISSION)?.agent_reviews[0].override_score).toBe(2);
+  // The sort takes the override too, so the column orders by the number the row
+  // displays rather than by the score the chair overruled.
+  const scored = await call("record_evaluation", {
+    event_id: EVENT,
+    round_id: ROUND,
+    submission_id: SECOND_SUBMISSION,
+    score: 4,
+    recommendation: "approve",
+    comment: "A second read, deliberately between the agent's 5 and the chair's 2.",
+  }, AGENT_TOKEN);
+  expect(scored.isError, scored.content[0]?.text).toBeUndefined();
+  const ordered = payloadOf(await call("list_submissions", { event_id: EVENT, sort: "agent_score" }, OWNER_TOKEN)).data as Array<{ id: string }>;
+  expect(ordered[0].id).toBe(SECOND_SUBMISSION);
 });
 
 test("CONTRACT · MRQ-284 acceptance 4 · abstaining over MCP is recorded as an abstention rather than a low score", async () => {
@@ -424,10 +437,20 @@ test("CONTRACT · MRQ-284 · a tool this connection cannot reach reads as absent
     plan_fingerprint: "0".repeat(64),
     if_match: "x",
   }, AGENT_TOKEN);
-  // Not "you lack program:write on evt_mcp" — a caller learns nothing about
-  // what exists behind a door it may not open.
   expect(hidden.isError).toBe(true);
-  expect(hidden.content[0].text).toContain("not available on this connection");
+  // Word for word what a misspelling gets. A caller must not be able to tell
+  // "that tool does not exist" from "that tool exists and is not yours" — and
+  // the refusal must arrive BEFORE argument validation, or the reply hands out
+  // the argument list of a tool `tools/list` deliberately withheld.
+  const misspelled = await call("apply_decisionz", { zzz: 1 }, AGENT_TOKEN);
+  // Identical but for the name the caller itself supplied.
+  expect(hidden.content[0].text.replace("apply_decisions", "«name»"))
+    .toBe(misspelled.content[0].text.replace("apply_decisionz", "«name»"));
+  expect(hidden.content[0].text).not.toContain("plan_fingerprint");
+
+  const anonymous = await call("apply_decisions", { zzz: 1 });
+  expect(anonymous.content[0].text).not.toContain("plan_fingerprint");
+  expect(anonymous.content[0].text).not.toContain("does not take");
 });
 
 test("CONTRACT · MRQ-284 · a misspelled tool and a bad argument are refusals a caller can act on, not protocol faults", async () => {
@@ -460,4 +483,94 @@ test("CONTRACT · MRQ-284 · the endpoint speaks JSON over POST and says so to a
   });
   expect(unreadable.status).toBe(400);
   expect((await unreadable.json<RpcResponse>()).error?.code).toBe(-32700);
+});
+
+test("CONTRACT · MRQ-284 · a path parameter cannot move the call onto a different operation", async () => {
+  // `encodeURIComponent` leaves `.` alone and the URL parser removes dot
+  // segments, so `..` here would have been served by getSubmissionRecord — the
+  // organizer's UNBLINDED record — while the tier check had been evaluated
+  // against the blinded reviewer route it names.
+  const refused = await call("review_submission", {
+    event_id: EVENT,
+    round_id: "..",
+    submission_id: SUBMISSION,
+  }, OWNER_TOKEN);
+  expect(refused.isError).toBe(true);
+  expect(refused.content[0].text).toContain("path separator");
+  expect(refused.content[0].text).not.toContain("A talk about queues");
+
+  const slashed = await call("submission", { event_id: EVENT, submission_id: `${SUBMISSION}/timeline` }, OWNER_TOKEN);
+  expect(slashed.isError).toBe(true);
+});
+
+test("CONTRACT · MRQ-284 · a batch is bounded, and one bad member costs only itself", async () => {
+  const oversized = await post(
+    Array.from({ length: 40 }, (_unused, index) => ({ jsonrpc: "2.0", id: index, method: "ping" })),
+  );
+  expect(oversized.status).toBe(400);
+  expect((await oversized.json<RpcResponse>()).error?.message).toContain("at most");
+
+  const mixed = await post([
+    { jsonrpc: "2.0", id: "good", method: "ping" },
+    { jsonrpc: "2.0", id: "bad", method: "tools/call", params: "oops" },
+  ]);
+  const answers = await mixed.json<RpcResponse[]>();
+  expect(answers.map((answer) => answer.id)).toEqual(["good", "bad"]);
+  expect(answers[0].error).toBeUndefined();
+  expect(answers[1].error?.code).toBe(-32602);
+});
+
+test("CONTRACT · MRQ-284 · every tool this connection lists can be called without an argument-mapping fault", async () => {
+  // The gap this closes is the one that shipped two dead tools: a façade does no
+  // schema validation of its own, so a body-field typo — or a tool whose handler
+  // no credential this endpoint accepts could ever satisfy — is invisible until
+  // somebody calls it. A domain refusal here is fine and expected; an argument
+  // fault, a 500, or a tool that is listed and then unknown is not.
+  const plausible: Record<string, Record<string, unknown>> = {
+    agenda: {},
+    session: { slug: "not-a-real-session" },
+    speaker: { slug: "not-a-real-speaker" },
+    cfp_form: { slug: "mcp-cfp" },
+    submit_proposal: {
+      slug: "mcp-cfp",
+      email: "smoke@mcp.example",
+      answers: { title: "Smoke", speaker_name: "Smoke Speaker", speaker_email: "smoke@mcp.example" },
+    },
+    star_session: { session_id: "not-a-real-session", device_hash: "0123456789abcdef", starred: true },
+    whoami: {},
+    list_events: {},
+    event: { event_id: EVENT },
+    pipeline_summary: { event_id: EVENT },
+    list_submissions: { event_id: EVENT, per_page: 1 },
+    submission: { event_id: EVENT, submission_id: SUBMISSION },
+    review_queue: { event_id: EVENT },
+    review_submission: { event_id: EVENT, round_id: ROUND, submission_id: SUBMISSION },
+    record_evaluation: { event_id: EVENT, round_id: ROUND, submission_id: SUBMISSION, score: 3, recommendation: "maybe", comment: "Smoke." },
+    abstain: { event_id: EVENT, round_id: ROUND, submission_id: SUBMISSION, comment: "Smoke." },
+    speakers: { event_id: EVENT },
+    decision_plan: { event_id: EVENT, action: "accept", ids: [SECOND_SUBMISSION] },
+    apply_decisions: {
+      event_id: EVENT,
+      action: "accept",
+      ids: [SECOND_SUBMISSION],
+      plan_fingerprint: "0".repeat(64),
+      if_match: '"not-the-current-etag"',
+    },
+    comms_audience: { event_id: EVENT },
+    send_reminder: { event_id: EVENT, subject: "Smoke", body: "Smoke.", person_ids: [HUMAN_REVIEWER] },
+    place_session: { event_id: EVENT, submission_id: SUBMISSION, room_id: "room_absent", starts_at: NOW },
+    publish_sessions: { event_id: EVENT, submission_ids: [SUBMISSION] },
+  };
+  const listed = await listToolNames(OWNER_TOKEN);
+  // Every listed tool is covered here, and nothing is covered that is not listed.
+  expect(Object.keys(plausible).sort()).toEqual(listed);
+
+  for (const name of listed) {
+    const result = await call(name, plausible[name], OWNER_TOKEN);
+    const text = result.content[0]?.text ?? "";
+    expect(text, `${name}: ${text}`).not.toContain("does not take");
+    expect(text, `${name}: ${text}`).not.toMatch(/^\w+ needs /);
+    expect(text, `${name}: ${text}`).not.toContain("an unexpected error occurred");
+    expect(text, `${name}: ${text}`).not.toContain("there is no tool called");
+  }
 });
