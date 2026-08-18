@@ -394,13 +394,20 @@ describe.sequential("MRQ-167 org people import receipt", () => {
     expect(adoptedSeat?.id).toBe(importedSeat?.id);
     expect(adoptedSeat?.invited_at).toBeNull();
     const adoptionAudit = await env.DB.prepare(
-      `SELECT action, created_at FROM audit_log
+      `SELECT action, created_at, after_json FROM audit_log
         WHERE event_id = ? AND entity_type = 'person' AND entity_id = ?
           AND action = 'speaker_roster_linked'
         ORDER BY created_at DESC, id DESC LIMIT 1`,
-    ).bind(EVENT_ID, importedPerson!.id).first<{ action: string; created_at: number }>();
+    ).bind(EVENT_ID, importedPerson!.id).first<{ action: string; created_at: number; after_json: string }>();
     expect(adoptionAudit?.action).toBe("speaker_roster_linked");
     expect(adoptionAudit?.created_at).toBeGreaterThanOrEqual(importedSeat!.created_at);
+    expect(JSON.parse(adoptionAudit?.after_json ?? "{}")).toMatchObject({ source: "organizer_add", role: "speaker" });
+    const adoptionAuditCount = await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM audit_log
+        WHERE event_id = ? AND entity_type = 'person' AND entity_id = ?
+          AND action = 'speaker_roster_linked'`,
+    ).bind(EVENT_ID, importedPerson!.id).first<{ n: number }>();
+    expect(adoptionAuditCount?.n).toBe(1);
 
     const undone = await post(`/api/v1/org/imports/${result.import_id}/undo`, {});
     expect(undone.status).toBe(200);

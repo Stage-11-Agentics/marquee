@@ -1,26 +1,30 @@
 /**
  * The runtime bridge from "this person speaks here" to `memberships`.
  *
- * `memberships(role='speaker')` is shared by three runtime writers and four
- * readers that matter: the onboarding board's person list, **speaker portal
- * sign-in** (a runtime-created speaker could not reach their own portal at all),
- * headshot ownership on the upload read path, and the bulk-comms speaker
- * audience. A roster derived only from participations would have papered over
- * the gap and left the other three broken, so the row is written where a person
- * becomes a speaker of this conference:
+ * `memberships(role='speaker')` has five runtime write sites and four readers
+ * that matter: the onboarding board's person list, **speaker portal sign-in**
+ * (a runtime-created speaker could not reach their own portal at all), headshot
+ * ownership on the upload read path, and the bulk-comms speaker audience. A
+ * roster derived only from participations would have papered over the gap and
+ * left the other three broken. The write sites are:
  *
- *   - an organizer adding them to the roster,
+ *   - an organizer adding the person to the roster,
  *   - the acceptance boundary, where the cascade already mints their tasks,
- *   - and the Sessionize speakers import, which reconciles every speaker row
- *     into the event even when the person's fields do not change.
+ *   - the people roster import, which owns its created-row receipt,
+ *   - the Sessionize speakers import, which reconciles every speaker row even
+ *     when the person's fields do not change, and
+ *   - the organizer's confirmation-status patch, whose `invited_at` update is
+ *     its retention signal.
  *
- * The first two are claims on an imported seat and emit the
- * `speaker_roster_linked` audit ledger entry in the same batch as their
- * membership upsert. The import is deliberately the exception: its receipt
- * records the row it created, and it must not claim that it adopted its own
- * seat. Any fourth writer must use one of these two explicit paths; a raw
- * membership upsert without either its import receipt or claim ledger is an
- * incomplete writer, not a new provenance mechanism.
+ * The membership writer below requires every caller to declare its intent.
+ * Organizer and acceptance claims return the membership upsert and their
+ * `speaker_roster_linked` audit row together, so the caller can put both in
+ * one batch. The people and Sessionize imports are deliberately the exception:
+ * their receipts own the rows they create, and an import must not claim that
+ * it adopted its own seat. A confirmation-status writer declares the
+ * `invited_at` signal it stamps in the same operation. A fourth writer cannot
+ * add an unclassified raw upsert through this module; it must choose one of
+ * these three semantics and make that choice reviewable at the call site.
  *
  * Duplicates are absorbed by the constraint, not by a read-then-write check:
  * `uq_memberships_event` already covers `(org_id, event_id, person_id, role)`
@@ -83,10 +87,28 @@ export interface SpeakerMembershipAuditActor {
   requestId: string | null;
 }
 
+type SpeakerMembershipLedger =
+  | {
+      kind: "import";
+      source: "people_import" | "sessionize_import";
+    }
+  | {
+      kind: "status";
+      source: "organizer_status";
+    }
+  | {
+      kind: "claim";
+      source: "organizer_add" | "acceptance_cascade";
+      action: "speaker_roster_linked" | "speaker_created";
+      actor?: SpeakerMembershipAuditActor;
+      before?: unknown;
+      after?: unknown;
+    };
+
 /** The on-stage seat vocabulary `memberships.role` accepts (migration 0028). */
 export type MembershipSeatRole = (typeof ON_STAGE_MEMBERSHIP_ROLES)[number];
 
-export function speakerMembershipStatement(db: D1Database, input: SpeakerMembershipInput): D1PreparedStatement {
+function membershipUpsertStatement(db: D1Database, input: SpeakerMembershipInput): D1PreparedStatement {
   return db
     .prepare(
       `INSERT INTO memberships
@@ -112,25 +134,43 @@ export function speakerMembershipStatement(db: D1Database, input: SpeakerMembers
     );
 }
 
-function speakerRosterLinkedAuditStatement(
+/**
+ * Build the membership write with an explicit ownership/claim decision.
+ *
+ * This is intentionally the only exported membership writer. Import paths
+ * choose `kind: \"import\"` and rely on their own receipts; the organizer
+ * Add speaker and acceptance paths choose `kind: \"claim\"` and receive the
+ * adoption audit row beside the upsert; confirmation-status writes choose
+ * `kind: \"status\"` because their `invited_at` update is the retention
+ * signal. Keeping the choice in this function prevents a new caller from
+ * copying the upsert and silently omitting the ledger.
+ */
+export function speakerMembershipStatements(
   db: D1Database,
   input: SpeakerMembershipInput,
-  actor: SpeakerMembershipAuditActor | undefined,
-): D1PreparedStatement {
-  return auditStatement(db, {
-    eventId: input.eventId,
-    actorKind: actor?.kind ?? "system",
-    actorPersonId: actor?.personId ?? null,
-    action: "speaker_roster_linked",
-    entityType: "person",
-    entityId: input.personId,
-    after: {
-      source: "acceptance_cascade",
-      role: input.role ?? "speaker",
-    },
-    now: input.now,
-    requestId: actor?.requestId ?? null,
-  });
+  ledger: SpeakerMembershipLedger,
+): D1PreparedStatement[] {
+  const statements = [membershipUpsertStatement(db, input)];
+  if (ledger.kind !== "claim") return statements;
+  statements.push(
+    auditStatement(db, {
+      eventId: input.eventId,
+      actorKind: ledger.actor?.kind ?? "system",
+      actorPersonId: ledger.actor?.personId ?? null,
+      action: ledger.action,
+      entityType: "person",
+      entityId: input.personId,
+      before: ledger.before,
+      after: {
+        ...(ledger.after ?? {}),
+        source: ledger.source,
+        role: input.role ?? "speaker",
+      },
+      now: input.now,
+      requestId: ledger.actor?.requestId ?? null,
+    }),
+  );
+  return statements;
 }
 
 /**
@@ -193,10 +233,12 @@ export async function acceptedSpeakerMembershipStatements(
     .all<{ person_id: string; role: MembershipSeatRole }>();
   return people.results.flatMap((row) => {
     const input = { orgId: event.org_id, eventId, personId: row.person_id, role: row.role, now };
-    return [
-      speakerMembershipStatement(db, input),
-      speakerRosterLinkedAuditStatement(db, input, actor),
-    ];
+    return speakerMembershipStatements(db, input, {
+      kind: "claim",
+      source: "acceptance_cascade",
+      action: "speaker_roster_linked",
+      actor,
+    });
   });
 }
 

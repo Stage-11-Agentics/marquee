@@ -2,7 +2,7 @@ import type { ImportRowRow, MembershipRow } from "../db/schema";
 
 import { isPublishedSession } from "./publication-guard";
 import { prepareCalendarCancellationBatch } from "../jobs/calendar/invites";
-import { speakerMembershipStatement } from "./speaker-membership";
+import { speakerMembershipStatements } from "./speaker-membership";
 import { withSubmissionReferenceAllocation } from "./submission-reference";
 import { activeMergeForImportedPerson } from "./person-merge";
 import { personReferences } from "./person-references";
@@ -662,7 +662,11 @@ async function importSpeaker(
     }
   }
   person = (await db.prepare("SELECT * FROM people WHERE id = ?").bind(id).first<PersonRow>())!;
-  const membershipWrite = await speakerMembershipStatement(db, { orgId: event.org_id, eventId: event.id, personId: person.id, now }).run();
+  const membershipWrite = await speakerMembershipStatements(
+    db,
+    { orgId: event.org_id, eventId: event.id, personId: person.id, now },
+    { kind: "import", source: "sessionize_import" },
+  )[0].run();
   if (!beforeMembership && membershipWrite.meta.changes > 0) {
     before.membership_created = true;
     before.membership_id = (await speakerMembershipForPerson(db, event.id, person.id))?.id ?? null;

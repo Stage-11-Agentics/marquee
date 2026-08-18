@@ -19,7 +19,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { orgAttributionEventId, requireOrgAccess } from "../lib/auth/org-access";
 import { attendanceStatement, resolveEventForOrg } from "../lib/event-attendances";
 import { planPersonImport } from "../lib/people-import";
-import { speakerMembershipStatement } from "../lib/speaker-membership";
+import { speakerMembershipStatements } from "../lib/speaker-membership";
 import { noPersonReferencesPredicate, personReferences } from "../lib/person-references";
 
 const importParams = z.object({ importId: z.string().min(1) });
@@ -339,13 +339,19 @@ const importPeople = defineApiRoute(
         if (alreadySeated.has(personId)) continue;
         const membershipId = newUlid(now);
         rosterCreated.push(membershipId);
-        seatStatements.push(speakerMembershipStatement(context.env.DB, {
-          orgId: access.orgId,
-          eventId: rosterEvent.id,
-          personId,
-          now,
-          id: membershipId,
-        }));
+        seatStatements.push(
+          ...speakerMembershipStatements(
+            context.env.DB,
+            {
+              orgId: access.orgId,
+              eventId: rosterEvent.id,
+              personId,
+              now,
+              id: membershipId,
+            },
+            { kind: "import", source: "people_import" },
+          ),
+        );
       }
       if (seatStatements.length > 0) await context.env.DB.batch(seatStatements);
       if (rosterCreated.length > 0) {
@@ -491,10 +497,14 @@ const undoPeopleImport = defineApiRoute(
     // change undo semantics and must be treated as a data-model change.
     // Only `speaker_roster_linked` counts: an imported person already exists
     // before Add speaker runs, so the route's `speaker_created` branch cannot be
-    // the adoption of this import-created seat. The three membership writers
-    // are centralized in speaker-membership.ts; a fourth writer must choose the
-    // import receipt or the claim helper rather than silently bypassing the
-    // ledger.
+    // the adoption of this import-created seat. The membership writer API has
+    // an explicit intent for every caller: people import and Sessionize import
+    // choose their own receipts, the confirmation-status patch chooses the
+    // invited_at signal, and Add speaker plus acceptance choose the claim
+    // ledger. The claim helper emits the audit row beside the upsert, while an
+    // unclassified fourth writer cannot call a raw membership writer through
+    // this module. A future external writer must choose one of these semantics
+    // and add the matching retention regression before it can be safe to undo.
     let rosterIndex = -1;
     if (rosterEventId && createdMembershipIds.length > 0) {
       rosterIndex = statements.length;
