@@ -79,6 +79,7 @@ function snapshot(): RunOfShow {
     is_break: false,
     speakers: [],
     arrived_count: 0,
+    expected_count: 0,
     slides: slides(state),
   });
   return {
