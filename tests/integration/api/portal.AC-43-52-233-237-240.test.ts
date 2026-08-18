@@ -624,6 +624,11 @@ describe.sequential("MRQ-16 speaker portal", () => {
 
     const removed = await request(`/api/v1/me/helpers/${addedBody.helper.helper_person_id}?eventId=${EVENT_ID}`, { method: "DELETE" });
     expect(removed.status).toBe(200);
+    const revokedWrite = await request("/api/v1/me/tasks/task-portal-ack/complete", {
+      method: "POST",
+      body: JSON.stringify({ acknowledged: true }),
+    }, helperCookie);
+    expect([403, 404]).toContain(revokedWrite.status);
     const revokedPortal = await request(`/api/v1/me/portal?eventId=${EVENT_ID}`, {}, helperCookie);
     expect([403, 404]).toContain(revokedPortal.status);
   });

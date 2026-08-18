@@ -1,6 +1,7 @@
 import { beforeEach, expect, test } from "vitest";
 
 import { resolvePersonForSignin } from "../../../src/lib/auth/person-signin";
+import { deleteEventCascade } from "../../../src/lib/events/delete-event";
 import {
   executePersonMerge,
   previewPersonMerge,
@@ -12,6 +13,8 @@ import { applyMigrations, env } from "../apply-migrations";
 const NOW = Date.UTC(2026, 7, 16, 12, 0, 0);
 const ORG_ID = "org_mrq235";
 const EVENT_ID = "evt_mrq235";
+const COMPLETED_ELSEWHERE_EVENT_ID = "evt_mrq235_completed_elsewhere";
+const COMPLETED_ELSEWHERE_TASK_ID = "task_mrq235_completed_elsewhere";
 const SURVIVOR_ID = "person_mrq235_survivor";
 const RETIRED_ID = "person_mrq235_retired";
 const HELPER_ID = "person_mrq235_helper";
@@ -144,6 +147,37 @@ async function seedFixture(): Promise<void> {
   ]);
 }
 
+async function seedCompletedOtherPersonTask(demoMode: 0 | 1): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO events
+      (id, org_id, name, slug, tagline, starts_on, ends_on, timezone, venue, accent, status, demo_mode, created_at, updated_at)
+      VALUES (?, ?, 'Completed elsewhere', ?, 'Merge event scope', '2026-11-01', '2026-11-02', 'UTC', 'Online', '#2563eb', 'live', ?, ?, ?)`)
+      .bind(COMPLETED_ELSEWHERE_EVENT_ID, ORG_ID, "mrq-235-completed-elsewhere", demoMode, NOW, NOW),
+    env.DB.prepare(`INSERT INTO task_templates
+      (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
+      VALUES (?, ?, 'Another person task', 'acknowledge', 'A task completed by somebody else.', ?, NULL, NULL, NULL, 0, 0, ?, ?)`)
+      .bind("template_mrq235_completed_elsewhere", COMPLETED_ELSEWHERE_EVENT_ID, NOW + 86_400_000, NOW, NOW),
+    // SURVIVOR_ID is the only person reference in this event: the task belongs
+    // to HELPER_ID, while its completed_by_person_id records the other actor.
+    env.DB.prepare(`INSERT INTO speaker_tasks
+      (id, event_id, person_id, submission_id, template_id, title, kind, description, due_at, status,
+       completed_at, response_json, attachment_id, last_write_source, created_at, updated_at, completed_by_person_id)
+      VALUES (?, ?, ?, NULL, ?, 'Another person task', 'acknowledge', 'Completed by the merged person.', ?, 'done', ?, ?, NULL, 'marquee', ?, ?, ?)`)
+      .bind(
+        COMPLETED_ELSEWHERE_TASK_ID,
+        COMPLETED_ELSEWHERE_EVENT_ID,
+        HELPER_ID,
+        "template_mrq235_completed_elsewhere",
+        NOW + 86_400_000,
+        NOW,
+        JSON.stringify({ acknowledged: true }),
+        NOW,
+        NOW,
+        SURVIVOR_ID,
+      ),
+  ]);
+}
+
 beforeEach(seedFixture);
 
 test("AC-384 · MRQ-235 · preview and execute retain identity continuity across references", async () => {
@@ -236,6 +270,73 @@ test("AC-386 · MRQ-235 · alias continuity flattens across a chained merge and 
   expect(await env.DB.prepare("SELECT person_id FROM person_aliases WHERE email = 'retired@mrq235.test'").first()).toEqual({ person_id: "person_mrq235_third" });
   await expect(undoPersonMerge(env.DB, ORG_ID, first.merge_id, ACTOR, NOW + 30)).rejects.toMatchObject({ code: "undo_blocked" });
   expect(await env.DB.prepare("SELECT status, undo_reason FROM person_merges WHERE id = ?").bind(first.merge_id).first()).toEqual({ status: "undo_blocked", undo_reason: "survivor_remerged" });
+});
+
+test("CONTRACT · MRQ-286 · a completed task for somebody else keeps the event in an ordinary merge-delete guard", async () => {
+  await seedCompletedOtherPersonTask(0);
+  expect(await env.DB.prepare("SELECT event_id, person_id, completed_by_person_id FROM speaker_tasks WHERE id = ?").bind(COMPLETED_ELSEWHERE_TASK_ID).first()).toEqual({
+    event_id: COMPLETED_ELSEWHERE_EVENT_ID,
+    person_id: HELPER_ID,
+    completed_by_person_id: SURVIVOR_ID,
+  });
+  const input = { firstPersonId: SURVIVOR_ID, secondPersonId: RETIRED_ID, survivorPersonId: SURVIVOR_ID };
+  const preview = await previewPersonMerge(env.DB, ORG_ID, input, NOW + 10);
+  expect(preview.event_scope).toEqual([EVENT_ID, COMPLETED_ELSEWHERE_EVENT_ID]);
+
+  const merge = await executePersonMerge(
+    env.DB,
+    ORG_ID,
+    { ...input, idempotencyKey: "5d9b5c62-a79b-4a9e-8f99-235000000006" },
+    ACTOR,
+    NOW + 10,
+  );
+  const event = await env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(COMPLETED_ELSEWHERE_EVENT_ID).first();
+  expect(event).not.toBeNull();
+  const deleted = await deleteEventCascade(
+    env.DB,
+    [event as never],
+    { actorKind: "system", actorPersonId: null, requestId: "req_mrq235_delete" },
+    {},
+    undefined,
+    NOW + 20,
+  );
+
+  expect(deleted.removedEvents).toBe(1);
+  expect(await env.DB.prepare("SELECT status, undo_reason FROM person_merges WHERE id = ?").bind(merge.merge_id).first()).toEqual({
+    status: "undo_blocked",
+    undo_reason: "event_deleted",
+  });
+});
+
+test("CONTRACT · MRQ-286 · the demo-removal merge guard also sees a completed task for somebody else", async () => {
+  await seedCompletedOtherPersonTask(1);
+  const input = { firstPersonId: SURVIVOR_ID, secondPersonId: RETIRED_ID, survivorPersonId: SURVIVOR_ID };
+  const preview = await previewPersonMerge(env.DB, ORG_ID, input, NOW + 10);
+  expect(preview.event_scope).toEqual([EVENT_ID, COMPLETED_ELSEWHERE_EVENT_ID]);
+
+  const merge = await executePersonMerge(
+    env.DB,
+    ORG_ID,
+    { ...input, idempotencyKey: "5d9b5c62-a79b-4a9e-8f99-235000000007" },
+    ACTOR,
+    NOW + 10,
+  );
+  const event = await env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(COMPLETED_ELSEWHERE_EVENT_ID).first();
+  expect(event).not.toBeNull();
+  const removed = await deleteEventCascade(
+    env.DB,
+    [event as never],
+    { actorKind: "system", actorPersonId: null, requestId: "req_mrq235_remove_demo" },
+    { removeDemoPeople: true },
+    undefined,
+    NOW + 20,
+  );
+
+  expect(removed.removedEvents).toBe(1);
+  expect(await env.DB.prepare("SELECT status, undo_reason FROM person_merges WHERE id = ?").bind(merge.merge_id).first()).toEqual({
+    status: "undo_blocked",
+    undo_reason: "demo_person_removed",
+  });
 });
 
 test("CONTRACT · MRQ-286 · merging a helper into the speaker they help cannot create a self-reference", async () => {
