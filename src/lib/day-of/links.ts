@@ -8,7 +8,7 @@
  * the link cannot be taken back from an individual, so it has to be killable as
  * a whole, instantly, from a list an organizer can read.
  *
- * Two kinds, one table, one door (migration 0039). `green_room` reads the run
+ * Two kinds, one table, one door (migration 0040). `green_room` reads the run
  * of show. `checkin` reads it and may mark a speaker arrived — nothing else,
  * ever: authority here is a ladder of exactly two rungs, and no route outside
  * `day-of.routes.ts` accepts one of these tokens at all.

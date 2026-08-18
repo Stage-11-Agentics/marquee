@@ -11,7 +11,7 @@
  * the green room, the volunteer's check-in link, the organizer's slides board,
  * and the API an agent calls.
  *
- * Arrival is per (session, person) — see migration 0039. A person is not "here
+ * Arrival is per (session, person) — see migration 0040. A person is not "here
  * today"; they are here for the 10:40 in Broadway, and the panel beside them
  * may still be missing two.
  */
