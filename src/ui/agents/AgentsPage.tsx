@@ -4,8 +4,12 @@ import { useCallback } from "preact/hooks";
 import { Chip, PageHeader } from "../shell/components";
 import { announce } from "../shell/OverlayHosts";
 import {
+  AGENT_FIRST_READ_BRIEF,
   AGENTS_ROSTER,
   agentsConnectPrompt,
+  CONFIG_COPIED_TOAST,
+  mcpClientConfig,
+  mcpUrl,
   PROMPT_COPIED_TOAST,
   resolveOrigin,
   skillUrl,
@@ -60,6 +64,8 @@ export function AgentsPage({ navigate, origin }: { navigate: (target: string) =>
   const instanceOrigin = resolveOrigin(origin);
   const connectPrompt = agentsConnectPrompt(instanceOrigin);
   const skill = skillUrl(instanceOrigin);
+  const mcp = mcpUrl(instanceOrigin);
+  const mcpConfig = mcpClientConfig(instanceOrigin);
   const go = (target: string) => (event: MouseEvent) => { event.preventDefault(); navigate(target); };
 
   return <>
@@ -113,6 +119,27 @@ export function AgentsPage({ navigate, origin }: { navigate: (target: string) =>
         </div>
       </div>
     </div>
+    <section class="card agents-connect">
+      <header class="card-head">
+        <div><h2>Connect over MCP</h2><span class="subtle">One endpoint, for any Model Context Protocol client</span></div>
+        <Chip tone="success">POST /mcp</Chip>
+      </header>
+      <div class="card-body agents-connect-body">
+        <pre class="agents-quote agents-code">{mcpConfig}</pre>
+        <div class="agents-connect-side">
+          <p class="subtle">
+            With no token, <code>{mcp}</code> serves the public tier — the published program, one
+            session, one speaker, what the call for proposals asks, and sending a proposal. Add a
+            scoped token and the tool set widens to what that token reaches — never more than it
+            can already do over the API, and never on a conference it is not scoped to. A few of the
+            signed tools check which seat you hold when they are called rather than when they are
+            listed, so an organizer's tool asked for from a reviewer seat is refused, and says so.
+          </p>
+          <p class="subtle">Mint the token in <a href="/org/tokens" onClick={go("/org/tokens")}>API tokens</a>, then paste it in place of <code>mq_YOUR_TOKEN</code>.</p>
+          <div><CopyButton onCopy={() => copy(mcpConfig, CONFIG_COPIED_TOAST)}>Copy config</CopyButton></div>
+        </div>
+      </div>
+    </section>
     <div class="agents-roster-head">
       <h2>Four agents worth running</h2>
       <span class="subtle">Start from the prompt · check the receipts on these screens</span>
@@ -132,6 +159,27 @@ export function AgentsPage({ navigate, origin }: { navigate: (target: string) =>
         </div>
       </section>)}
     </div>
+    <section class="card">
+      <header class="card-head">
+        <div><h2>Let an outside agent do the AI first read</h2><span class="subtle">A worked example · your agent reads the pile, you decide the program</span></div>
+        <Chip>Example</Chip>
+      </header>
+      <div class="card-body">
+        <p>
+          A conference with a thousand proposals has one real problem on a Tuesday night: what to read
+          first. Marquee will not do that reading for you — there is no model running in here. What it
+          has instead is a seat your own agent can sit in, and a place to put what it thought.
+        </p>
+        <div class="agents-contract-line"><span class="agents-contract-key">Mint the seat</span><span>On a committee, create an Agent evaluator seat. It is a real reviewer seat with its own name, its own track responsibilities, and its own token — created and revoked like any other.</span></div>
+        <div class="agents-contract-line"><span class="agents-contract-key">Point your agent at it</span><span>Give it the MCP config above with that token. Its reach is the seat's: its own queue, and a refusal anywhere else.</span></div>
+        <div class="agents-contract-line"><span class="agents-contract-key">Read the result beside your own</span><span>An agent's score is shown next to the committee's and is never averaged into the human number. Sort the pile by <em>Agent read high → low</em> to order your evening.</span></div>
+        <div class="agents-contract-line"><span class="agents-contract-key">Disagree freely</span><span>A chair can override any agent score, and the row then shows the override. The first read is a suggestion about reading order, not a verdict.</span></div>
+        <div class="agents-quote">“{AGENT_FIRST_READ_BRIEF}”</div>
+        <div class="agents-card-actions">
+          <CopyButton onCopy={() => copy(AGENT_FIRST_READ_BRIEF, PROMPT_COPIED_TOAST)}>Copy brief</CopyButton>
+        </div>
+      </div>
+    </section>
     <div class="agents-next-year">When the year turns: <code>event create --from</code> stands up the next conference — structure carried across, people already there.</div>
     {/* The shell's own two-up, which already collapses to one column on a
         phone — the contract cards want no layout of their own. */}

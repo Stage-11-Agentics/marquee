@@ -60,7 +60,7 @@ interface SavedView {
   config: {
     q: string;
     filters: Record<string, string>;
-    sort: "newest" | "updated" | "title" | "score" | "score_asc";
+    sort: "newest" | "updated" | "title" | "score" | "score_asc" | "agent_score";
     columns: SubmissionColumnId[];
   };
   /** This view's own matching total — never the list currently on screen. */
@@ -125,6 +125,7 @@ const SORT_OPTIONS = [
   ["updated", "Recently updated"],
   ["score", "Score high → low"],
   ["score_asc", "Score low → high"],
+  ["agent_score", "Agent read high → low"],
   ["title", "Title A → Z"],
 ] as const;
 

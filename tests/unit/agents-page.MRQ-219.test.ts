@@ -138,8 +138,11 @@ describe("MRQ-219 · the roster and the contract cards", () => {
     const cards = markup.split('class="card agents-card"').slice(1);
     expect(cards).toHaveLength(4);
     for (const card of cards) {
-      expect(card.match(/<button/g) ?? []).toHaveLength(1);
-      expect(card.slice(0, card.indexOf("</section>"))).not.toContain("<a ");
+      // Bounded to the card's own section: the tail of the last split carries
+      // whatever the page renders after the roster, which is not this card's.
+      const own = card.slice(0, card.indexOf("</section>"));
+      expect(own.match(/<button/g) ?? []).toHaveLength(1);
+      expect(own).not.toContain("<a ");
     }
   });
 
@@ -175,11 +178,20 @@ describe("MRQ-219 · copying is the page's only write", () => {
     // jump). Every button on the page renders a literal, so the rendered labels
     // are the whole set — assert them rather than a spelling of their absence.
     const labels = [...markup.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((match) => match[1]);
-    expect(labels).toEqual(["Copy prompt", "Copy the URL →", "Copy prompt", "Copy prompt", "Copy prompt", "Copy prompt"]);
+    expect(labels).toEqual([
+      "Copy prompt",
+      "Copy the URL →",
+      "Copy config",
+      "Copy prompt",
+      "Copy prompt",
+      "Copy prompt",
+      "Copy prompt",
+      "Copy brief",
+    ]);
   });
 
   it("CONTRACT · MRQ-219 AC2/AC3 — a repeated receipt is still an event", () => {
-    // Four of this page's five buttons announce the SAME words, and the shell
+    // Five of this page's eight buttons announce the SAME words, and the shell
     // holds one message: writing an identical string renders nothing, so the
     // second Copy would leave the screen unchanged. The binding prototype's
     // toast clears itself after 2.4s and re-shows on every call; the shell now

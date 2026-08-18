@@ -33,6 +33,14 @@ export const SUBMISSION_SORTS = {
   title: { column: "s.title COLLATE NOCASE", direction: "asc" },
   score: { column: "score", direction: "desc", nullsLast: true },
   score_asc: { column: "score", direction: "asc", nullsLast: true },
+  /**
+   * The agent first read, high to low — a separate key from `score` because the
+   * two numbers are separate facts. An agent's scores are shown beside the
+   * committee's and never averaged into the human number; ordering by them is
+   * what turns a first read into what it is for, which is deciding what a chair
+   * reads first this evening. Rows no agent has read sort last, not as zero.
+   */
+  agent_score: { column: "agent_score", direction: "desc", nullsLast: true },
 } as const satisfies SortRegistry;
 
 export const SUBMISSION_STATUS_FILTERS = [
@@ -221,6 +229,7 @@ interface SubmissionQueryRow {
   review_count: number | null;
   score_is_weighted: number | null;
   agent_reviews_json: string;
+  agent_score: number | null;
   submitted_at: number | null;
   updated_at: number;
   origin: SubmissionListItem["origin"];
@@ -576,6 +585,26 @@ function agentReviewsSelect(includeOverrides: boolean): string {
   ), '[]') AS agent_reviews_json`;
 }
 
+/**
+ * One scalar per submission for ordering by the agent read: the mean of what
+ * the agent seats scored, taking a chair's override where one exists, so the
+ * column sorts by the same number the row displays. Null when no agent has read
+ * it, which `nullsLast` then keeps out of the way.
+ */
+function agentScoreSelect(includeOverrides: boolean): string {
+  return `(
+    SELECT AVG(COALESCE(${includeOverrides ? "evaluation.override_score" : "NULL"}, evaluation.score))
+    FROM evaluations evaluation
+    JOIN people reviewer
+      ON reviewer.id = evaluation.reviewer_person_id
+     AND reviewer.kind = 'agent'
+    JOIN evaluation_rounds evaluation_round ON evaluation_round.id = evaluation.round_id
+    WHERE evaluation.submission_id = s.id
+      AND evaluation.abstained = 0
+      AND evaluation_round.mode = 'scorecard'
+  ) AS agent_score`;
+}
+
 interface ReviewQueryCapabilities {
   includeReviewerIdentity: boolean;
   includeAgentReviews: boolean;
@@ -615,6 +644,9 @@ function itemSelect(
   const agentReviews = reviewCapabilities.includeAgentReviews
     ? agentReviewsSelect(reviewCapabilities.includeOverrides)
     : "'[]' AS agent_reviews_json";
+  const agentScore = reviewCapabilities.includeAgentReviews
+    ? agentScoreSelect(reviewCapabilities.includeOverrides)
+    : "NULL AS agent_score";
   return `
   s.event_id,
   s.id,
@@ -648,6 +680,7 @@ function itemSelect(
   ), '[]') AS tracks_json,
   ${reviewAggregateColumns("s.id", reviewCapabilities.includeReviewerIdentity, reviewCapabilities.includeOverrides)},
   ${agentReviews},
+  ${agentScore},
   s.submitted_at,
   s.updated_at,
   s.origin,

@@ -1,7 +1,7 @@
 export const SUBMISSIONS_PAGE_SIZE = 50;
 
 /** The sort ids the list endpoint accepts. `newest` is the default. */
-export const SUBMISSION_SORTS = ["newest", "updated", "score", "score_asc", "title"] as const;
+export const SUBMISSION_SORTS = ["newest", "updated", "score", "score_asc", "agent_score", "title"] as const;
 export type SubmissionSort = (typeof SUBMISSION_SORTS)[number];
 
 /**

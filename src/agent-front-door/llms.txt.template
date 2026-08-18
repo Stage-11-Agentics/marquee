@@ -20,6 +20,10 @@ Marquee has no OAuth step, CAPTCHA, email verification, or shared passcode in it
 10. **Embed the program**: the saved embed or public embed URL is the receipt that another site can carry the live schedule.
 11. **Reset the demo**: the reset job status is the receipt that the judge can return to a known conference without hand-cleaning data.
 
+## Model Context Protocol
+
+`POST /mcp` answers stateless JSON-RPC 2.0 (Streamable HTTP; no SSE, no OAuth). It is a façade over the same API: every tool call re-enters the handler, guard, rate limit, and refusal the REST route already uses, so a credential can never do more through MCP than through the API. No `Authorization` header is the public tier — the published program, one session, one speaker, what the call for proposals asks, and sending a proposal. `Authorization: Bearer mq_…` widens the tool set to what that token's grants, seat, and conference restriction allow; a few of the signed tools check the seat when they are called rather than when they are listed, and refuse in the handler's own words. Mint a token at `/org/tokens`; the connect block is on `/agents`.
+
 ## Machine index
 
 {{MACHINE_INDEX}}

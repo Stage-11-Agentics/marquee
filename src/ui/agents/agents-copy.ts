@@ -73,9 +73,49 @@ export function agentsConnectPrompt(origin: string): string {
   return `Install Marquee's skill: fetch ${skillUrl(origin)} and save it where you load skills. Then I'll paste a scoped API token — set MARQUEE_URL and MARQUEE_TOKEN, verify the connection with a read-only command, and show me what you can see.`;
 }
 
+/** Where this instance answers the Model Context Protocol. */
+export function mcpUrl(origin: string): string {
+  return `${origin}/mcp`;
+}
+
+/**
+ * The connect block a person pastes into their MCP client's config. It is JSON
+ * rather than prose because that is what the client asks for, and it carries
+ * the header rather than describing it — the one thing people get wrong is
+ * forgetting that the token goes in a header and not in the URL.
+ */
+export function mcpClientConfig(origin: string): string {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        marquee: {
+          type: "http",
+          url: mcpUrl(origin),
+          headers: { Authorization: "Bearer mq_YOUR_TOKEN" },
+        },
+      },
+    },
+    null,
+    2,
+  );
+}
+
+/**
+ * The first-read brief, verbatim as an organizer pastes it.
+ *
+ * Every sentence in it is load-bearing. It sends the agent to the queue rather
+ * than the pile (the queue carries the rubric and the blind rules); it asks for
+ * a rationale that cites the abstract, because a rationale a chair cannot check
+ * is worth nothing; it names abstaining as the honest move on a conflict; and
+ * it ends by forbidding the one thing an eager agent will otherwise reach for.
+ */
+export const AGENT_FIRST_READ_BRIEF =
+  "Connect to Marquee over MCP with the token I am pasting. Call whoami to confirm your seat, then review_queue to get your assignment and the rubric criteria. For each proposal: read it with review_submission, then call record_evaluation with a score for every criterion and a two-sentence rationale that quotes the part of the abstract you are judging. If you have a conflict of interest or the subject is outside what you can judge, call abstain and say why instead of guessing. Do not decide anything, do not email anyone, and do not touch decision_plan or apply_decisions — you are ordering my evening's reading, not choosing the program.";
+
 /** The two receipts a copy action leaves. Both are the prototype's, verbatim. */
 export const PROMPT_COPIED_TOAST = "Prompt copied · paste it to your agent";
 export const URL_COPIED_TOAST = "URL copied · your agent can fetch it";
+export const CONFIG_COPIED_TOAST = "Config copied · paste it into your MCP client";
 
 /**
  * The running deployment's origin, resolved where it is true — the same read

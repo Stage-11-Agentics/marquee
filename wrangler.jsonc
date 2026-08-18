@@ -44,6 +44,7 @@
       "/",
       "/api/*",
       "/health",
+      "/mcp",
       "/SKILL.md",
       "/llms.txt",
       "/llms-full.txt",
