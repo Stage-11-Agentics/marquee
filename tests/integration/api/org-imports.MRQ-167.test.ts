@@ -6,6 +6,7 @@ import { beforeAll, describe, expect, test } from "vitest";
 
 import { app, type Env } from "../../../src/index";
 import { createSession } from "../../../src/lib/auth/auth-sessions";
+import { mintPortalMagicLink } from "../../../src/lib/auth/magic-links";
 import { applyMigrations, env } from "../apply-migrations";
 
 const NOW = Date.UTC(2026, 7, 13, 9, 0, 0);
@@ -30,9 +31,10 @@ function runtimeEnv(): Env {
   } as unknown as Env;
 }
 
-async function request(path: string, init: RequestInit = {}): Promise<Response> {
+async function request(path: string, init: RequestInit = {}, cookie = `mq_session=${AUTH_SESSION}`): Promise<Response> {
   const headers = new Headers(init.headers ?? {});
-  headers.set("cookie", `mq_session=${AUTH_SESSION}`);
+  if (cookie) headers.set("cookie", cookie);
+  else headers.delete("cookie");
   return app.request(`${ORIGIN}${path}`, { ...init, headers }, runtimeEnv());
 }
 
@@ -350,5 +352,66 @@ describe.sequential("MRQ-167 org people import receipt", () => {
     expect(await portalResolves(SPEAKER_ID)).toBe(true);
 
     await env.DB.prepare("DELETE FROM memberships WHERE id = 'mem_mrq277_preexisting'").run();
+  });
+
+  test("CONTRACT · MRQ-281 · undo retains a seat adopted by Add speaker, and the current portal still resolves it", async () => {
+    const csv = [
+      "Full Name,Email,Company,Job Title",
+      "Priya Raman,PRIYA@mrq167.test,Latticework Systems,Principal Engineer",
+    ].join("\n");
+    const response = await post("/api/v1/org/imports", { csv, filename: "adopted-speaker.csv", event: "mrq-167-import", roster: true });
+    expect(response.status).toBe(202);
+    const result = await response.json() as { import_id: string; roster_placements: number };
+    expect(result.roster_placements).toBe(1);
+
+    const importedSeat = await env.DB.prepare(
+      "SELECT id, invited_at FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
+    ).bind(EVENT_ID, SPEAKER_ID).first<{ id: string; invited_at: number | null }>();
+    expect(importedSeat).toMatchObject({ invited_at: null });
+
+    // This is the organizer's later claim: the API returns 201 against the
+    // imported row and records the invitation on that same row.
+    const adopted = await post(`/api/v1/events/${EVENT_ID}/speakers`, {
+      name: "Priya Raman",
+      email: "priya@mrq167.test",
+      invited: true,
+    });
+    expect(adopted.status).toBe(201);
+    expect((await adopted.json() as { speaker: { is_member: boolean } }).speaker.is_member).toBe(true);
+
+    const adoptedSeat = await env.DB.prepare(
+      "SELECT id, invited_at FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
+    ).bind(EVENT_ID, SPEAKER_ID).first<{ id: string; invited_at: number | null }>();
+    expect(adoptedSeat?.id).toBe(importedSeat?.id);
+    expect(adoptedSeat?.invited_at).toEqual(expect.any(Number));
+
+    const undone = await post(`/api/v1/org/imports/${result.import_id}/undo`, {});
+    expect(undone.status).toBe(200);
+    expect(await undone.json()).toMatchObject({
+      undone: 1,
+      roster_placements_removed: 0,
+      roster_placements_retained: 1,
+      retained_manifest: true,
+    });
+    expect(await env.DB.prepare(
+      "SELECT id, invited_at FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
+    ).bind(EVENT_ID, SPEAKER_ID).first()).toMatchObject({ id: importedSeat?.id, invited_at: expect.any(Number) });
+
+    // Exercise the current speaker sign-in door, then the current `/me` portal
+    // resolver. A row count alone would miss the user-facing consequence.
+    const link = await mintPortalMagicLink(env.DB, {
+      personId: SPEAKER_ID,
+      eventId: EVENT_ID,
+      redirectTo: "/portal",
+      now: Date.now(),
+    });
+    const exchanged = await request(`/api/v1/auth/exchange?token=${encodeURIComponent(link.token)}`, { redirect: "manual" }, "");
+    expect(exchanged.status).toBe(302);
+    const sessionCookie = exchanged.headers.get("set-cookie")?.split(";", 1)[0];
+    expect(sessionCookie).toMatch(/^mq_session=/);
+
+    const portal = await request(`/api/v1/me/portal?eventId=${EVENT_ID}`, {}, sessionCookie ?? "");
+    expect(portal.status).toBe(200);
+    expect(await portal.json()).toMatchObject({ seat: "speaker", event: { id: EVENT_ID }, person: { id: SPEAKER_ID } });
   });
 });
