@@ -596,6 +596,19 @@ async function execute(command, arguments_, options, flags, client) {
     if (!["all", "overdue", "incomplete", "risk"].includes(filter)) usageError("--filter must be all, overdue, incomplete, or risk");
     return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/onboarding`, { query: { filter } });
   }
+  if (root === "helpers") {
+    const speakerPersonId = arguments_[1];
+    if (!speakerPersonId) usageError(`${command.usage} requires a speaker person ID`);
+    const base = `/api/v1/events/${encodeURIComponent(eventId)}/speakers/${encodeURIComponent(speakerPersonId)}/helpers`;
+    if (verb === "list") return client.get(base);
+    if (verb === "add") return client.post(base, requireSetValues(command, options));
+    if (verb === "remove") {
+      const helperPersonId = arguments_[2];
+      if (!helperPersonId) usageError(`${command.usage} requires a helper person ID`);
+      await client.remove(`${base}/${encodeURIComponent(helperPersonId)}`);
+      return { removed: helperPersonId, event_id: eventId, speaker_person_id: speakerPersonId };
+    }
+  }
   if (root === "files" && verb === "list") {
     const state = option(options, "--state") ?? "all";
     if (!["all", "uploaded", "missing", "overdue"].includes(state)) usageError("--state must be all, uploaded, missing, or overdue");
