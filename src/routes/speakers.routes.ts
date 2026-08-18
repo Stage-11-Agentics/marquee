@@ -24,7 +24,7 @@ import {
   resolvePersonProfile,
   type PersonProfileColumns,
 } from "../lib/person-profile";
-import { earnedSeatRole, speakerMembershipStatement } from "../lib/speaker-membership";
+import { earnedSeatRole, speakerMembershipStatements } from "../lib/speaker-membership";
 import { listSpeakerFiles } from "./speaker-files.queries";
 import { getSpeaker, listSpeakers } from "./speakers.queries";
 
@@ -325,25 +325,24 @@ const createSpeaker = defineApiRoute(
     }
 
     statements.push(
-      speakerMembershipStatement(context.env.DB, {
-        orgId: event.org_id,
-        eventId,
-        personId,
-        now,
-        invitedAt: body.invited ? now : null,
-      }),
-      auditStatement(context.env.DB, {
-        eventId,
-        actorKind: "user",
-        actorPersonId: actor,
-        action: existing ? "speaker_roster_linked" : "speaker_created",
-        entityType: "person",
-        entityId: personId,
-        before: existing ? { name: existing.name, title: existing.title, company: existing.company, bio: existing.bio } : undefined,
-        after: { name: body.name, email: body.email, title: resolved.title, company: resolved.company, bio: resolved.bio },
-        now,
-        requestId: context.get("requestId") ?? null,
-      }),
+      ...speakerMembershipStatements(
+        context.env.DB,
+        {
+          orgId: event.org_id,
+          eventId,
+          personId,
+          now,
+          invitedAt: body.invited ? now : null,
+        },
+        {
+          kind: "claim",
+          source: "organizer_add",
+          action: existing ? "speaker_roster_linked" : "speaker_created",
+          actor: { kind: "user", personId: actor, requestId: context.get("requestId") ?? null },
+          before: existing ? { name: existing.name, title: existing.title, company: existing.company, bio: existing.bio } : undefined,
+          after: { name: body.name, email: body.email, title: resolved.title, company: resolved.company, bio: resolved.bio },
+        },
+      ),
     );
 
     await context.env.DB.batch(statements);
@@ -415,7 +414,11 @@ const patchSpeaker = defineApiRoute(
       // confirms the phantom while the real seat stays pending.
       const seatRole = await earnedSeatRole(context.env.DB, eventId, personId);
       statements.push(
-        speakerMembershipStatement(context.env.DB, { orgId: event.org_id, eventId, personId, role: seatRole, now }),
+        ...speakerMembershipStatements(
+          context.env.DB,
+          { orgId: event.org_id, eventId, personId, role: seatRole, now },
+          { kind: "status", source: "organizer_status" },
+        ),
         context.env.DB
           .prepare(
             // Confirming a speaker invited in May must not restamp the

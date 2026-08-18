@@ -1,18 +1,30 @@
 /**
  * The runtime bridge from "this person speaks here" to `memberships`.
  *
- * `memberships(role='speaker')` had exactly one writer in this codebase — the
- * demo reseeder — and four readers that matter: the onboarding board's person
- * list, **speaker portal sign-in** (a runtime-created speaker could not reach
- * their own portal at all), headshot ownership on the upload read path, and the
- * bulk-comms speaker audience. A roster derived only from participations would
- * have papered over the gap and left the other three broken, so the row is
- * written where a person becomes a speaker of this conference:
+ * `memberships(role='speaker')` has five runtime write sites and four readers
+ * that matter: the onboarding board's person list, **speaker portal sign-in**
+ * (a runtime-created speaker could not reach their own portal at all), headshot
+ * ownership on the upload read path, and the bulk-comms speaker audience. A
+ * roster derived only from participations would have papered over the gap and
+ * left the other three broken. The write sites are:
  *
- *   - an organizer adding them to the roster,
+ *   - an organizer adding the person to the roster,
  *   - the acceptance boundary, where the cascade already mints their tasks,
- *   - and the Sessionize speakers import, which reconciles every speaker row
- *     into the event even when the person's fields do not change.
+ *   - the people roster import, which owns its created-row receipt,
+ *   - the Sessionize speakers import, which reconciles every speaker row even
+ *     when the person's fields do not change, and
+ *   - the organizer's confirmation-status patch, whose `invited_at` update is
+ *     its retention signal.
+ *
+ * The membership writer below requires every caller to declare its intent.
+ * Organizer and acceptance claims return the membership upsert and their
+ * `speaker_roster_linked` audit row together, so the caller can put both in
+ * one batch. The people and Sessionize imports are deliberately the exception:
+ * their receipts own the rows they create, and an import must not claim that
+ * it adopted its own seat. A confirmation-status writer declares the
+ * `invited_at` signal it stamps in the same operation. A fourth writer cannot
+ * add an unclassified raw upsert through this module; it must choose one of
+ * these three semantics and make that choice reviewable at the call site.
  *
  * Duplicates are absorbed by the constraint, not by a read-then-write check:
  * `uq_memberships_event` already covers `(org_id, event_id, person_id, role)`
@@ -32,6 +44,8 @@
  * roster is an organizer act and wants its own control.
  */
 import { newUlid } from "../api/ids";
+import { auditStatement } from "./audit";
+import type { AuditActorKind } from "../db/schema";
 import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "./participants";
 import { ON_STAGE_MEMBERSHIP_ROLES } from "./roster-source";
 
@@ -53,22 +67,48 @@ export interface SpeakerMembershipInput {
   /**
    * The id to give the row IF this statement inserts one.
    *
-   * A caller that has to be able to reverse exactly its own writes — the people
-   * import's undo — needs to know which seats it created, and the upsert below
-   * cannot tell an insert from a match after the fact. Supplying the id means
-   * the caller already holds it: if the insert lands, the id names the row it
-   * made; if the seat already existed, the conflict keeps the ORIGINAL row's id
-   * and the caller's id names nothing, so a delete against it is a harmless
-   * no-op. That failure direction is the point — a reversal can under-delete,
-   * never over-delete.
+   * A caller that has to reverse exactly its own writes — the people import's
+   * undo — needs to know which seats it created, and the upsert below cannot
+   * tell an insert from a match after the fact. Supplying the id means the
+   * caller already holds it: if the insert lands, the id names the row it made;
+   * if the seat already existed, the conflict keeps the ORIGINAL row's id and
+   * the caller's id names nothing, so an id-scoped delete cannot reach a
+   * different membership row. The id records which row the import created; it
+   * does not make that row permanently owned by the import. A later organizer
+   * claim can adopt the same row, so an undo must still check the row's current
+   * intent before deleting it.
    */
   id?: string;
 }
 
+export interface SpeakerMembershipAuditActor {
+  kind: AuditActorKind;
+  personId: string | null;
+  requestId: string | null;
+}
+
+type SpeakerMembershipLedger =
+  | {
+      kind: "import";
+      source: "people_import" | "sessionize_import";
+    }
+  | {
+      kind: "status";
+      source: "organizer_status";
+    }
+  | {
+      kind: "claim";
+      source: "organizer_add" | "acceptance_cascade";
+      action: "speaker_roster_linked" | "speaker_created";
+      actor?: SpeakerMembershipAuditActor;
+      before?: unknown;
+      after?: unknown;
+    };
+
 /** The on-stage seat vocabulary `memberships.role` accepts (migration 0028). */
 export type MembershipSeatRole = (typeof ON_STAGE_MEMBERSHIP_ROLES)[number];
 
-export function speakerMembershipStatement(db: D1Database, input: SpeakerMembershipInput): D1PreparedStatement {
+function membershipUpsertStatement(db: D1Database, input: SpeakerMembershipInput): D1PreparedStatement {
   return db
     .prepare(
       `INSERT INTO memberships
@@ -95,6 +135,45 @@ export function speakerMembershipStatement(db: D1Database, input: SpeakerMembers
 }
 
 /**
+ * Build the membership write with an explicit ownership/claim decision.
+ *
+ * This is intentionally the only exported membership writer. Import paths
+ * choose `kind: \"import\"` and rely on their own receipts; the organizer
+ * Add speaker and acceptance paths choose `kind: \"claim\"` and receive the
+ * adoption audit row beside the upsert; confirmation-status writes choose
+ * `kind: \"status\"` because their `invited_at` update is the retention
+ * signal. Keeping the choice in this function prevents a new caller from
+ * copying the upsert and silently omitting the ledger.
+ */
+export function speakerMembershipStatements(
+  db: D1Database,
+  input: SpeakerMembershipInput,
+  ledger: SpeakerMembershipLedger,
+): D1PreparedStatement[] {
+  const statements = [membershipUpsertStatement(db, input)];
+  if (ledger.kind !== "claim") return statements;
+  statements.push(
+    auditStatement(db, {
+      eventId: input.eventId,
+      actorKind: ledger.actor?.kind ?? "system",
+      actorPersonId: ledger.actor?.personId ?? null,
+      action: ledger.action,
+      entityType: "person",
+      entityId: input.personId,
+      before: ledger.before,
+      after: {
+        ...(ledger.after ?? {}),
+        source: ledger.source,
+        role: input.role ?? "speaker",
+      },
+      now: input.now,
+      requestId: ledger.actor?.requestId ?? null,
+    }),
+  );
+  return statements;
+}
+
+/**
  * Bridge every on-stage participant of the given accepted submissions into the
  * event's membership list. Called from the acceptance cascade, where the
  * conference has just committed to these people.
@@ -113,6 +192,7 @@ export async function acceptedSpeakerMembershipStatements(
   eventId: string,
   submissionIds: readonly string[],
   now: number,
+  actor?: SpeakerMembershipAuditActor,
 ): Promise<D1PreparedStatement[]> {
   const ids = [...new Set(submissionIds)];
   if (ids.length === 0) return [];
@@ -151,9 +231,15 @@ export async function acceptedSpeakerMembershipStatements(
     )
     .bind(eventId, JSON.stringify(ids))
     .all<{ person_id: string; role: MembershipSeatRole }>();
-  return people.results.map((row) =>
-    speakerMembershipStatement(db, { orgId: event.org_id, eventId, personId: row.person_id, role: row.role, now }),
-  );
+  return people.results.flatMap((row) => {
+    const input = { orgId: event.org_id, eventId, personId: row.person_id, role: row.role, now };
+    return speakerMembershipStatements(db, input, {
+      kind: "claim",
+      source: "acceptance_cascade",
+      action: "speaker_roster_linked",
+      actor,
+    });
+  });
 }
 
 /**

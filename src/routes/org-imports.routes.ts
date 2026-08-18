@@ -19,7 +19,7 @@ import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import { orgAttributionEventId, requireOrgAccess } from "../lib/auth/org-access";
 import { attendanceStatement, resolveEventForOrg } from "../lib/event-attendances";
 import { planPersonImport } from "../lib/people-import";
-import { speakerMembershipStatement } from "../lib/speaker-membership";
+import { speakerMembershipStatements } from "../lib/speaker-membership";
 import { noPersonReferencesPredicate, personReferences } from "../lib/person-references";
 
 const importParams = z.object({ importId: z.string().min(1) });
@@ -165,6 +165,8 @@ const undoResponse = z.object({
     .describe("Attendance rows withdrawn at the conference this import named; zero when it named none."),
   roster_placements_removed: z.number().int().nonnegative()
     .describe("Speaker seats withdrawn at the conference this import placed people on; zero when it placed none."),
+  roster_placements_retained: z.number().int().nonnegative()
+    .describe("Speaker seats this import created but retained because a later organizer claim was recorded."),
   skipped: z.number().int().nonnegative(),
   skipped_rows: z.array(z.object({
     target_id: z.string(),
@@ -337,13 +339,19 @@ const importPeople = defineApiRoute(
         if (alreadySeated.has(personId)) continue;
         const membershipId = newUlid(now);
         rosterCreated.push(membershipId);
-        seatStatements.push(speakerMembershipStatement(context.env.DB, {
-          orgId: access.orgId,
-          eventId: rosterEvent.id,
-          personId,
-          now,
-          id: membershipId,
-        }));
+        seatStatements.push(
+          ...speakerMembershipStatements(
+            context.env.DB,
+            {
+              orgId: access.orgId,
+              eventId: rosterEvent.id,
+              personId,
+              now,
+              id: membershipId,
+            },
+            { kind: "import", source: "people_import" },
+          ),
+        );
       }
       if (seatStatements.length > 0) await context.env.DB.batch(seatStatements);
       if (rosterCreated.length > 0) {
@@ -390,7 +398,7 @@ const undoPeopleImport = defineApiRoute(
     ).bind(importId, access.orgId).first<{ id: string; status: string; undone_at: number | null; mapping: string | null }>();
     if (!imported) throw ApiError.notFound("people import not found");
     if (imported.undone_at !== null || imported.status === "undone") {
-      return context.json({ undone: 0, attendances_removed: 0, roster_placements_removed: 0, skipped: 0, skipped_rows: [], retained_manifest: true }, 200);
+      return context.json({ undone: 0, attendances_removed: 0, roster_placements_removed: 0, roster_placements_retained: 0, skipped: 0, skipped_rows: [], retained_manifest: true }, 200);
     }
 
     const rows = await context.env.DB.prepare(
@@ -476,14 +484,46 @@ const undoPeopleImport = defineApiRoute(
     // Scoped by id rather than by person, so it also cannot be widened by a
     // second seat the person acquired afterwards. The event and role are
     // re-asserted as a belt-and-braces guard, not as the selector.
+    //
+    // `invited_at` is only one adoption signal. The default Speakers -> Add
+    // speaker request omits `invited`, and the membership conflict upsert
+    // deliberately leaves that column null. That route does, however, write
+    // `speaker_roster_linked` to the append-only audit log in the same batch.
+    // The acceptance cascade is the other runtime writer of this shared row; it
+    // now writes the same ledger action beside its membership upsert. Treat
+    // that event-scoped/person-scoped action as the claim ledger, bounded by
+    // the seat's own `created_at`; a later claim keeps this exact seat. The
+    // audit row is now a correctness dependency: pruning or archiving it would
+    // change undo semantics and must be treated as a data-model change.
+    // Only `speaker_roster_linked` counts: an imported person already exists
+    // before Add speaker runs, so the route's `speaker_created` branch cannot be
+    // the adoption of this import-created seat. The membership writer API has
+    // an explicit intent for every caller: people import and Sessionize import
+    // choose their own receipts, the confirmation-status patch chooses the
+    // invited_at signal, and Add speaker plus acceptance choose the claim
+    // ledger. The claim helper emits the audit row beside the upsert, while an
+    // unclassified fourth writer cannot call a raw membership writer through
+    // this module. A future external writer must choose one of these semantics
+    // and add the matching retention regression before it can be safe to undo.
     let rosterIndex = -1;
     if (rosterEventId && createdMembershipIds.length > 0) {
       rosterIndex = statements.length;
       statements.push(context.env.DB.prepare(
         `DELETE FROM memberships
           WHERE event_id = ? AND role = 'speaker'
-            AND id IN (SELECT value FROM json_each(?))`,
-      ).bind(rosterEventId, JSON.stringify(createdMembershipIds)));
+            AND id IN (SELECT value FROM json_each(?))
+            AND NOT (
+              invited_at IS NOT NULL
+              OR EXISTS (
+                SELECT 1 FROM audit_log adoption
+                 WHERE adoption.event_id = ?
+                   AND adoption.action = 'speaker_roster_linked'
+                   AND adoption.entity_type = 'person'
+                   AND adoption.entity_id = memberships.person_id
+                   AND adoption.created_at >= memberships.created_at
+              )
+            )`,
+      ).bind(rosterEventId, JSON.stringify(createdMembershipIds), rosterEventId));
     }
 
     for (const row of rows.results) {
@@ -575,10 +615,30 @@ const undoPeopleImport = defineApiRoute(
       Number(results[operation.resultIndex]?.meta?.changes ?? 0) > 0;
     const undone = operations.filter(changed).length;
     attendancesRemoved = attendanceIndex >= 0 ? Number(results[attendanceIndex]?.meta?.changes ?? 0) : 0;
+    const rosterPlacementsRemoved = rosterIndex >= 0 ? Number(results[rosterIndex]?.meta?.changes ?? 0) : 0;
+    const retainedRoster = rosterEventId && createdMembershipIds.length > 0
+      ? await context.env.DB.prepare(
+          `SELECT COUNT(*) AS n FROM memberships
+            WHERE event_id = ? AND role = 'speaker'
+              AND id IN (SELECT value FROM json_each(?))
+              AND (
+                invited_at IS NOT NULL
+                OR EXISTS (
+                  SELECT 1 FROM audit_log adoption
+                   WHERE adoption.event_id = ?
+                     AND adoption.action = 'speaker_roster_linked'
+                     AND adoption.entity_type = 'person'
+                     AND adoption.entity_id = memberships.person_id
+                     AND adoption.created_at >= memberships.created_at
+                )
+              )`,
+        ).bind(rosterEventId, JSON.stringify(createdMembershipIds), rosterEventId).first<{ n: number }>()
+      : null;
     return context.json({
       undone,
       attendances_removed: attendancesRemoved,
-      roster_placements_removed: rosterIndex >= 0 ? Number(results[rosterIndex]?.meta?.changes ?? 0) : 0,
+      roster_placements_removed: rosterPlacementsRemoved,
+      roster_placements_retained: Number(retainedRoster?.n ?? 0),
       skipped: skippedRows.length,
       skipped_rows: skippedRows,
       retained_manifest: true,
