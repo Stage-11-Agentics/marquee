@@ -38,19 +38,20 @@ export default defineConfig({
       "tests/integration/site-alias.test.ts",
     ],
     setupFiles: ["./tests/setup.ts"],
-    // A hang detector, not a speed gate. Under fleet contention a correct test
-    // can legitimately take many seconds; failing it there reports the machine,
-    // not the code. Suite speed is measured by the budget objective in
-    // scripts/checks/run-test.mjs, which warns rather than failing.
-    testTimeout: 20_000,
-    hookTimeout: 20_000,
+    // A hang detector, not a speed gate. Four deliberate Worker files can
+    // contend for one CI runner, so a correct large D1 case may take tens of
+    // seconds; failing it there reports the machine, not the code. Suite speed
+    // is measured by scripts/checks/run-test.mjs, which warns rather than
+    // failing.
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
     maxConcurrency: 8,
     // Vitest 4 moved the old poolOptions knobs to the project level. Run this
-    // project after node, then let three files overlap without starving the
-    // large D1 batch cases; the hosted timestamps prove the overlap.
+    // project after node, then let four files overlap; the hosted timestamps
+    // prove the measured parallelism.
     sequence: { groupOrder: 1 },
     fileParallelism: true,
-    maxWorkers: 3,
+    maxWorkers: 4,
     passWithNoTests: false,
   },
 });
