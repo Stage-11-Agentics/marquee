@@ -575,8 +575,10 @@ describe.sequential("MRQ-16 speaker portal", () => {
       body: JSON.stringify({ name: "Typed Assistant", email: "registered.helper@example.com" }),
     });
     expect(added.status).toBe(200);
-    const addedBody = await added.json<{ helper: { helper_person_id: string; helper_name: string; helper_email: string }; invite?: { magic_link?: string } }>();
-    expect(addedBody.helper).toMatchObject({ helper_person_id: REGISTERED_HELPER_ID, helper_name: "Typed Assistant", helper_email: "registered.helper@example.com" });
+    const addedBody = await added.json<{ helper: { id: string; helper_person_id: string; helper_name: string; helper_email: string }; invite?: { magic_link?: string } }>();
+    expect(addedBody.helper).toMatchObject({ helper_name: "Typed Assistant", helper_email: "registered.helper@example.com" });
+    expect(addedBody.helper.helper_person_id).toBe(addedBody.helper.id);
+    expect(addedBody.helper.helper_person_id).not.toBe(REGISTERED_HELPER_ID);
     expect(JSON.stringify(addedBody)).not.toContain("Private Registry Name");
     expect(addedBody.invite?.magic_link).toBeTruthy();
 
@@ -617,10 +619,24 @@ describe.sequential("MRQ-16 speaker portal", () => {
     expect(audit?.actor_person_id).toBe(REGISTERED_HELPER_ID);
     expect(JSON.parse(audit!.after_json)).toMatchObject({ on_behalf_of_person_id: SPEAKER_ID });
 
-    const removed = await request(`/api/v1/me/helpers/${REGISTERED_HELPER_ID}?eventId=${EVENT_ID}`, { method: "DELETE" });
+    const removed = await request(`/api/v1/me/helpers/${addedBody.helper.helper_person_id}?eventId=${EVENT_ID}`, { method: "DELETE" });
     expect(removed.status).toBe(200);
     const revokedPortal = await request(`/api/v1/me/portal?eventId=${EVENT_ID}`, {}, helperCookie);
     expect([403, 404]).toContain(revokedPortal.status);
+  });
+
+  test("CONTRACT · MRQ-286 · an organizer can add and remove a helper for a speaker", async () => {
+    const added = await request(`/api/v1/events/${EVENT_ID}/speakers/${SPEAKER_ID}/helpers`, {
+      method: "POST",
+      body: JSON.stringify({ name: "Organizer Assistant", email: "organizer.helper@example.com" }),
+    }, ownerCookie);
+    const addedBody = await added.json<{ helper: { id: string; helper_person_id: string; helper_name: string; helper_email: string } }>();
+    expect(added.status).toBe(200);
+    expect(addedBody.helper).toMatchObject({ helper_name: "Organizer Assistant", helper_email: "organizer.helper@example.com" });
+
+    const removed = await request(`/api/v1/events/${EVENT_ID}/speakers/${SPEAKER_ID}/helpers/${addedBody.helper.helper_person_id}`, { method: "DELETE" }, ownerCookie);
+    const removedText = await removed.text();
+    expect(removed.status, removedText).toBe(200);
   });
 
 });

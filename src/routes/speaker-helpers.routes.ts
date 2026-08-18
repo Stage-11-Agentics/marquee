@@ -65,8 +65,12 @@ async function actorPersonId(context: import("hono").Context<ApiEnv>): Promise<s
   return row.created_by;
 }
 
-function publicHelper(helper: SpeakerHelperView) {
-  return helper;
+function publicHelper(helper: SpeakerHelperView): SpeakerHelperView {
+  // Speaker-facing responses need a removable opaque relationship reference,
+  // not the organization person id. The latter distinguishes an existing
+  // person from a newly created one by its shape and becomes an email-
+  // registration oracle. Organizer responses retain the real person id.
+  return { ...helper, helper_person_id: helper.id };
 }
 
 async function queueHelperInvite(
@@ -113,14 +117,15 @@ const listOwnHelpers = defineApiRoute(
   async (context) => {
     const { eventId } = context.req.valid("query");
     const { personId } = await selfSpeaker(context, eventId);
-    return context.json({ helpers: await listSpeakerHelpers(context.env.DB, eventId, [personId]) }, 200);
+    const helpers = await listSpeakerHelpers(context.env.DB, eventId, [personId]);
+    return context.json({ helpers: helpers.map(publicHelper) }, 200);
   },
 );
 
-async function addForSpeaker(context: import("hono").Context<ApiEnv>, eventId: string, speakerPersonId: string, body: z.infer<typeof helperBody>) {
+async function addForSpeaker(context: import("hono").Context<ApiEnv>, eventId: string, speakerPersonId: string, body: z.infer<typeof helperBody>, ownSeat = true) {
   const auth = getAuth(context);
   const actor = await actorPersonId(context);
-  if (auth?.kind === "session" && auth.personId !== speakerPersonId) {
+  if (ownSeat && auth?.kind === "session" && auth.personId !== speakerPersonId) {
     throw ApiError.forbidden("a speaker may add helpers only for their own seat");
   }
   const helper = await addSpeakerHelper(context.env.DB, {
@@ -133,7 +138,7 @@ async function addForSpeaker(context: import("hono").Context<ApiEnv>, eventId: s
     requestId: context.get("requestId") ?? null,
   });
   const invite = await queueHelperInvite(context, helper);
-  return context.json({ helper: publicHelper(helper), invite }, 200);
+  return context.json({ helper: ownSeat ? publicHelper(helper) : helper, invite }, 200);
 }
 
 const addOwnHelper = defineApiRoute(
@@ -187,7 +192,7 @@ const addEventHelper = defineApiRoute(
   },
   async (context) => {
     const { eventId, personId } = context.req.valid("param");
-    return addForSpeaker(context, eventId, personId, context.req.valid("json"));
+    return addForSpeaker(context, eventId, personId, context.req.valid("json"), false);
   },
 );
 
@@ -206,10 +211,16 @@ const removeOwnHelper = defineApiRoute(
   async (context) => {
     const eventId = context.req.valid("query").eventId;
     const { auth, personId } = await selfSpeaker(context, eventId);
+    const relationship = await context.env.DB.prepare(
+      `SELECT helper_person_id
+         FROM speaker_helpers
+        WHERE id = ? AND event_id = ? AND speaker_person_id = ? AND removed_at IS NULL`,
+    ).bind(context.req.valid("param").helperId, eventId, personId).first<{ helper_person_id: string }>();
+    if (!relationship) throw ApiError.notFound("active helper not found");
     const removed = await removeSpeakerHelper(context.env.DB, {
       eventId,
       speakerPersonId: personId,
-      helperPersonId: context.req.valid("param").helperId,
+      helperPersonId: relationship.helper_person_id,
       actorKind: "user",
       actorPersonId: personId,
       requestId: context.get("requestId") ?? null,
