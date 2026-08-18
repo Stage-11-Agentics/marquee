@@ -1233,7 +1233,7 @@ function PortalPage(): JSX.Element {
   };
   // Everything below this line belongs to the speaker seat. A submitter reaches
   // its own surface before any of it is read.
-  const speaker = snapshot?.seat === "submitter" ? null : snapshot ?? null;
+  const speaker = snapshot?.seat === "speaker" ? snapshot : null;
   const activeTasks = speaker?.tasks.filter((task) => task.cancelled_at === null) ?? [];
   const completedTasks = activeTasks.filter((task) => task.status === "done").length;
   const handbook = useMemo(() => speaker?.handbook.markdown ?? "", [speaker?.handbook.markdown]);
