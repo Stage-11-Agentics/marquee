@@ -1111,11 +1111,14 @@ async function portalSnapshot(
   requestedHelperSpeakerId?: string,
   helperView = false,
 ) {
-  const [speakerSeat, submitterSeat, helperScopes] = await Promise.all([
+  const [speakerSeat, submitterSeat, allHelperScopes] = await Promise.all([
     findSpeakerEvent(db, auth, requestedEventId),
     findSubmitterEvent(db, auth, requestedEventId),
-    listHelperScopes(db, auth.personId, requestedEventId, requestedHelperSpeakerId),
+    listHelperScopes(db, auth.personId, requestedEventId),
   ]);
+  const helperScopes = requestedHelperSpeakerId
+    ? allHelperScopes.filter((scope) => scope.speaker_person_id === requestedHelperSpeakerId)
+    : allHelperScopes;
   const seat = resolvePortalSeat({
     hasSpeakerSeat: speakerSeat !== null,
     hasSubmitterSeat: submitterSeat !== null,
@@ -1125,7 +1128,7 @@ async function portalSnapshot(
   if (seat === "helper") {
     const scope = helperScopes[0];
     if (!scope) throw ApiError.notFound("conference not found");
-    return helperSnapshot(db, auth, scope, helperScopes, mediaPublicOrigin, mediaSigningSecret);
+    return helperSnapshot(db, auth, scope, allHelperScopes, mediaPublicOrigin, mediaSigningSecret);
   }
   if (seat === "submitter") {
     if (!submitterSeat) throw ApiError.notFound("conference not found");
