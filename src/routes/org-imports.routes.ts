@@ -497,14 +497,15 @@ const undoPeopleImport = defineApiRoute(
     // change undo semantics and must be treated as a data-model change.
     // Only `speaker_roster_linked` counts: an imported person already exists
     // before Add speaker runs, so the route's `speaker_created` branch cannot be
-    // the adoption of this import-created seat. The membership writer API has
-    // an explicit intent for every caller: people import and Sessionize import
-    // choose their own receipts, the confirmation-status patch chooses the
-    // invited_at signal, and Add speaker plus acceptance choose the claim
-    // ledger. The claim helper emits the audit row beside the upsert, while an
-    // unclassified fourth writer cannot call a raw membership writer through
-    // this module. A future external writer must choose one of these semantics
-    // and add the matching retention regression before it can be safe to undo.
+    // the adoption of this import-created seat. The membership writer API is an
+    // explicit intent boundary: people import and Sessionize import choose
+    // their own receipts and emit no claim, while Add speaker, acceptance, and
+    // the confirmation-status PATCH choose the claim ledger. The status writer
+    // remains a claim even when Pending clears invited_at. The union is
+    // deliberately import | claim, so a future writer must actively choose
+    // import to be silent rather than falling through a non-claim status kind;
+    // it must add the matching retention regression before it can be safe to
+    // undo.
     let rosterIndex = -1;
     if (rosterEventId && createdMembershipIds.length > 0) {
       rosterIndex = statements.length;
