@@ -126,7 +126,12 @@ export function DayOfPage({ eventId }: { eventId: string }): JSX.Element {
     try {
       const body = await apiFetch<{ data: DayOfLinkSummary; url: string }>(
         `/api/v1/events/${encodeURIComponent(eventId)}/day-of/links`,
-        { method: "POST", route: LINKS_ROUTE, body: JSON.stringify({ kind, name }) },
+        {
+          method: "POST",
+          route: LINKS_ROUTE,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ kind, name }),
+        },
       );
       setMinted({ name: body.data.name, url: `${window.location.origin}${body.url}` });
       setVolunteerName("");
@@ -169,6 +174,7 @@ export function DayOfPage({ eventId }: { eventId: string }): JSX.Element {
         {
           method: "POST",
           route: SEND_ROUTE,
+          headers: { "content-type": "application/json" },
           body: JSON.stringify({ selector: { recipient_pairs: pairs, task_state: "open" }, template_key: "task_overdue" }),
         },
       );
