@@ -6,10 +6,11 @@ import { describe, expect, test } from "vitest";
 import { SubmitterPortal, type SubmitterSnapshot, type SubmitterSubmission } from "../../src/ui/portal/PortalPage";
 
 function submission(overrides: Partial<SubmitterSubmission> = {}): SubmitterSubmission {
-  return {
+  const value: SubmitterSubmission = {
     id: "sub_mrq154",
     title: "A proposal with a clear answer",
     status: "submitted",
+    decision: null,
     format: "Stage Talk",
     submitted_at: Date.UTC(2026, 7, 12, 15, 0, 0),
     updated_at: Date.UTC(2026, 7, 12, 15, 0, 0),
@@ -19,6 +20,14 @@ function submission(overrides: Partial<SubmitterSubmission> = {}): SubmitterSubm
     form_slug: "mrq-154-cfp",
     ...overrides,
   };
+  if (
+    value.decision === null &&
+    !Object.prototype.hasOwnProperty.call(overrides, "decision") &&
+    ["accepted", "waitlisted", "rejected"].includes(value.status)
+  ) {
+    value.decision = { status: value.status, decided_at: value.updated_at, feedback_md: null };
+  }
+  return value;
 }
 
 function snapshot(overrides: Partial<SubmitterSnapshot> = {}): SubmitterSnapshot {

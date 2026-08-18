@@ -13,10 +13,11 @@ import { describe, expect, test } from "vitest";
 import { SubmitterPortal, type SubmitterSnapshot, type SubmitterSubmission } from "../../src/ui/portal/PortalPage";
 
 function submission(overrides: Partial<SubmitterSubmission> = {}): SubmitterSubmission {
-  return {
+  const value: SubmitterSubmission = {
     id: "sub-mrq-150",
     title: "Shipping agents that answer the phone",
     status: "submitted",
+    decision: null,
     format: "Stage Talk",
     submitted_at: Date.UTC(2026, 7, 12, 15, 0, 0),
     updated_at: Date.UTC(2026, 7, 12, 15, 0, 0),
@@ -26,6 +27,18 @@ function submission(overrides: Partial<SubmitterSubmission> = {}): SubmitterSubm
     form_slug: "cfp",
     ...overrides,
   };
+  // These older screen contracts describe a decision already visible on the
+  // submitter page. Model that notification explicitly now that raw status is
+  // no longer allowed to bypass the announcement gate. Tests that need the
+  // suppressed state pass `decision: null` deliberately.
+  if (
+    value.decision === null &&
+    !Object.prototype.hasOwnProperty.call(overrides, "decision") &&
+    ["accepted", "waitlisted", "rejected"].includes(value.status)
+  ) {
+    value.decision = { status: value.status, decided_at: value.updated_at, feedback_md: null };
+  }
+  return value;
 }
 
 function snapshot(overrides: Partial<SubmitterSnapshot> = {}): SubmitterSnapshot {
