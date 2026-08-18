@@ -14,6 +14,7 @@ import {
   listSpeakerHelpers,
   normalizeHelperEmail,
   normalizeHelperName,
+  publicSpeakerHelper,
   removeSpeakerHelper,
   speakerIsOnEvent,
   type SpeakerHelperView,
@@ -65,14 +66,6 @@ async function actorPersonId(context: import("hono").Context<ApiEnv>): Promise<s
   return row.created_by;
 }
 
-function publicHelper(helper: SpeakerHelperView): SpeakerHelperView {
-  // Speaker-facing responses need a removable opaque relationship reference,
-  // not the organization person id. The latter distinguishes an existing
-  // person from a newly created one by its shape and becomes an email-
-  // registration oracle. Organizer responses retain the real person id.
-  return { ...helper, helper_person_id: helper.id };
-}
-
 async function queueHelperInvite(
   context: import("hono").Context<ApiEnv>,
   helper: SpeakerHelperView,
@@ -118,7 +111,7 @@ const listOwnHelpers = defineApiRoute(
     const { eventId } = context.req.valid("query");
     const { personId } = await selfSpeaker(context, eventId);
     const helpers = await listSpeakerHelpers(context.env.DB, eventId, [personId]);
-    return context.json({ helpers: helpers.map(publicHelper) }, 200);
+    return context.json({ helpers: helpers.map(publicSpeakerHelper) }, 200);
   },
 );
 
@@ -138,7 +131,7 @@ async function addForSpeaker(context: import("hono").Context<ApiEnv>, eventId: s
     requestId: context.get("requestId") ?? null,
   });
   const invite = await queueHelperInvite(context, helper);
-  return context.json({ helper: ownSeat ? publicHelper(helper) : helper, invite }, 200);
+    return context.json({ helper: ownSeat ? publicSpeakerHelper(helper) : helper, invite }, 200);
 }
 
 const addOwnHelper = defineApiRoute(

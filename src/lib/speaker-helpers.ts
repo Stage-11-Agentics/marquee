@@ -18,6 +18,16 @@ export interface SpeakerHelperView {
   removed_at: number | null;
 }
 
+/**
+ * A speaker may manage the relationship without learning the helper's
+ * organization-person id. The relationship id is stable for this seat and
+ * gives the speaker's UI a safe DELETE handle without exposing registration
+ * identity through the response shape.
+ */
+export function publicSpeakerHelper(helper: SpeakerHelperView): SpeakerHelperView {
+  return { ...helper, helper_person_id: helper.id };
+}
+
 export interface HelperScope {
   event_id: string;
   event_name: string;

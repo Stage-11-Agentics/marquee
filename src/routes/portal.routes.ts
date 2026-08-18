@@ -47,7 +47,7 @@ import { contentHistoryFor } from "../lib/history";
 import { submitterEditability } from "../lib/submission-editing";
 import { PUBLISHED_PARTICIPANT_REFUSAL, requirePublishedConfirmation } from "../lib/publication-guard";
 import { publicSpeakerPathForPerson } from "../lib/public-site";
-import { listHelperScopes, listSpeakerHelpers, resolvePortalSeat } from "../lib/speaker-helpers";
+import { listHelperScopes, listSpeakerHelpers, publicSpeakerHelper, resolvePortalSeat } from "../lib/speaker-helpers";
 import {
   parseSocialLinks,
   personProfilePatchShape,
@@ -1202,7 +1202,7 @@ async function portalSnapshot(
     tasks,
     handbook: { markdown: HANDBOOKS[event.slug] ?? HANDBOOKS.default },
     venue: { pinned_building_count: pinnedBuildingCount },
-    helpers,
+    helpers: helpers.map(publicSpeakerHelper),
     helping: helperScopes
       .filter((scope) => scope.event_id === event.id)
       .map((scope) => ({ speaker_person_id: scope.speaker_person_id, speaker_name: scope.speaker_name, helper_name: scope.helper_name })),
