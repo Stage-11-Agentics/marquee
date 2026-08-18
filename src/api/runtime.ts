@@ -117,8 +117,14 @@ export type ApiVariables = {
    * The assembled document, for the meta routes. A function because assembly
    * completes after registration — the two meta handlers are ordinary route
    * modules discovered by the same glob, not privileged closures.
+   *
+   * It returns a promise because assembly is deferred to the first caller that
+   * actually wants the document, and memoized from then on. Generating it costs
+   * roughly three quarters of the router's construction time, and only these
+   * two routes read it; awaiting it during construction charged that to
+   * whichever ordinary request happened to warm the isolate.
    */
-  apiDocument: () => ApiDocumentBundle;
+  apiDocument: () => Promise<ApiDocumentBundle>;
 };
 
 /**

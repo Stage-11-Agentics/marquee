@@ -44,8 +44,8 @@ const getOpenApiDocument = defineApiRoute(
       ...errorResponses([429, 500]),
     },
   },
-  (context) => {
-    const bundle = context.get("apiDocument")();
+  async (context) => {
+    const bundle = await context.get("apiDocument")();
     context.header("ETag", bundle.etag);
     context.header("Cache-Control", "no-cache");
     return context.json(bundle.document, 200);
@@ -74,8 +74,8 @@ const getApiDocs = defineApiRoute(
       ...errorResponses([429, 500]),
     },
   },
-  (context) => {
-    const bundle = context.get("apiDocument")();
+  async (context) => {
+    const bundle = await context.get("apiDocument")();
     context.header("Cache-Control", "no-cache");
     return context.html(renderDocsShell(bundle));
   },
