@@ -87,6 +87,32 @@ A collaborator works through it, so it is where the work has to live.
   rebases it later is rarely the one who understood it.
   - "Reviewed" means someone other than the author actually read the diff — a review agent
     or a human. Your own confidence is not a review, and neither is a green gate.
+  - **Every agent pushes and comments as the same GitHub account, so no metadata proves a
+    review happened.** `gh pr view --json reviews` is empty on every PR here (GitHub refuses
+    a formal approve or request-changes from the account that owns the PR), and a comment's
+    author is identical for the writer and the reader. So "has this been reviewed?" cannot be
+    answered from GitHub at all — only from the *content* convention: a comment titled
+    **`## Independent review`** that says **"I did not write this diff"** and **names the sha
+    it read**. Verify with that test, never by counting comments:
+
+    ```sh
+    H=$(gh pr view <n> --repo Stage-11-Agentics/marquee --json headRefOid -q .headRefOid)
+    gh pr view <n> --repo Stage-11-Agentics/marquee --json comments \
+      -q "[.comments[] | select((.body|test(\"Independent review|I did not write this diff\")) and (.body|test(\"${H:0:8}\")))] | length"
+    ```
+
+    Zero means unreviewed at that head, whatever anyone reports. Counting comments that merely
+    mention the sha reads an author's own progress note as a verdict — that mistake was made
+    twice on 2026-08-18, once by an agent reporting a "review PASS" that did not exist and once
+    by the sweep believing it.
+  - **A review is pinned to a sha, and a new push unpins it.** PR #333 merged at `18:28:36Z`;
+    the review of its merged head posted at `18:30:07Z` — 91 seconds later — and found the
+    ticket's own harm still reachable. Its two earlier reviews named other shas. So before
+    merging, read the head, then read the review, and check they are the same string.
+    **Freeze the branch at handoff:** declare `FROZEN FOR REVIEW at <sha>` and stop pushing —
+    not a typo fix, not a rebase — until the review lands. Rebase *before* freezing, never
+    after; a rebase is a push. Never force-push a frozen branch, since a reviewer may already
+    hold that sha. One PR moved through eight heads in an hour and burned three reviews.
   - Merge your own PR once that review exists. Waiting for the reviewer to also press the
     button just adds a second round trip.
   - Do not merge on a red gate, on unresolved review comments, or when the PR says it is
