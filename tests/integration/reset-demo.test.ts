@@ -61,6 +61,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   calendar_sequence_ledger: 0,
   outbox_calendar_parts: 0,
   submission_reference_ledger: 1,
+  speaker_helpers: 1,
   speaker_tasks: 358,
   task_templates: 15,
   agenda_items: 27,
@@ -108,7 +109,7 @@ const SEEDED_COUNTS: Record<string, number> = {
   person_list_members: 0,
   person_lists: 0,
   person_events: 2,
-  people: 1109,
+  people: 1110,
   person_aliases: 0,
   person_merges: 0,
   // Org-scoped like people, and swept after them: `people.company_id` points here.
