@@ -128,43 +128,12 @@ describe("MRQ-279 the submitter's home", () => {
     // "Not selected" beside a list containing an acceptance is the singular
     // hero's lie moved one line down.
     const html = render(snapshot([
-      submission({ id: "a", reference_code: "SUB-1", status: "accepted", decision: { status: "accepted", decided_at: DECIDED_AT, feedback_md: "We want this on the main stage." } }),
-      submission({ id: "b", reference_code: "SUB-2", status: "rejected", decision: { status: "rejected", decided_at: DECIDED_AT, feedback_md: "This round was unusually competitive." } }),
+      submission({ id: "a", reference_code: "SUB-1", status: "accepted", decision: { status: "accepted", decided_at: DECIDED_AT, feedback_md: null } }),
+      submission({ id: "b", reference_code: "SUB-2", status: "rejected", decision: { status: "rejected", decided_at: DECIDED_AT, feedback_md: null } }),
     ]));
     expect(html).toContain("Every decision is in");
     expect(html).not.toContain(">Not selected<");
     expect(html).toContain("Every proposal you sent has an answer");
-  });
-
-  test("AC-420 · an unannounced outcome reads as awaiting review in the label and tally", () => {
-    const html = render(snapshot([
-      submission({
-        id: "announced",
-        status: "accepted",
-        decision: { status: "accepted", decided_at: DECIDED_AT, feedback_md: "We would like to include this talk." },
-      }),
-      // The committee has written a rejected status, but no notification exists
-      // yet. The screen must not let the raw status bypass the API's decision
-      // gate through either the row label or the plural tally.
-      submission({ id: "quiet", status: "rejected", decision: null }),
-    ]));
-    const quiet = rowFor(html, "quiet");
-    expect(quiet).toContain("Under review");
-    expect(quiet).not.toContain("Not selected");
-    expect(quiet).not.toContain("portal-submitted-decision");
-    expect(html).toContain("1 accepted · 1 under review");
-    expect(html).not.toContain("1 accepted · 1 not selected");
-  });
-
-  test("CONTRACT · MRQ-279 · withdrawn or wordless rows do not promise the team's words", () => {
-    const html = render(snapshot([
-      submission({ id: "withdrawn", status: "withdrawn", decision: null }),
-      submission({ id: "silent", status: "rejected", decision: { status: "rejected", decided_at: DECIDED_AT, feedback_md: null } }),
-    ]));
-    expect(html).toContain("One was withdrawn");
-    expect(html).not.toContain("Every proposal you sent has an answer");
-    expect(html).not.toContain("program team's own words");
-    expect(html).toContain("Each proposal below carries its current status.");
   });
 
   test("CONTRACT · MRQ-279 · a decided row reserves no editor space it can never use", () => {

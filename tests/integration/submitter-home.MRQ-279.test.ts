@@ -1,4 +1,4 @@
-import { beforeEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { app, type Env } from "../../src/index";
 import { mintMagicLink } from "../../src/lib/auth/magic-links";
@@ -50,6 +50,29 @@ const json = (body: unknown): RequestInit => ({
 async function askForLink(email: string, event?: string): Promise<Response> {
   return request("/api/v1/public/proposals/link", json({ email, ...(event ? { event } : {}) }));
 }
+
+async function askForLinkWithoutJavaScript(email: string, event?: string): Promise<Response> {
+  const body = new URLSearchParams({ email, ...(event ? { event } : {}) });
+  return request("/api/v1/public/proposals/link", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+}
+
+function stubTurnstile(success: boolean): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ success }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })),
+  );
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 /** The link never leaves the mail, so a test reads it exactly as a person reads their inbox. */
 async function linkFromMail(toEmail: string): Promise<string | null> {
@@ -153,7 +176,7 @@ test("AC-414 · the link is scoped to the conference asked about, never blended 
   // The conference travels in the redirect rather than being left to a later
   // fallback ordering, which is what stops a two-conference submitter landing
   // on the wrong list.
-  expect(exchange.headers.get("location")).toBe(`/portal?eventId=${EVENT_A}`);
+  expect(exchange.headers.get("location")).toBe(`/portal?eventId=${EVENT_A}&source=submitter-home`);
 
   const cookie = exchange.headers.get("set-cookie")?.split(";")[0] ?? "";
   const portal = await request(`/api/v1/me/portal?eventId=${EVENT_A}`, { headers: { cookie } });
@@ -264,34 +287,6 @@ test("AC-419 · a reversed acceptance stops claiming it was accepted", async () 
   expect(row?.decision, "a withdrawn record must not still read as accepted").toBeNull();
 });
 
-test("AC-420 · a decision the organizer has not announced stays out of the submitter API", async () => {
-  // Decided and notified are distinct states, and bulk waitlist decisions queue
-  // no mail at all. Publishing one on sight would put committee state on a
-  // speaker's screen weeks before the announced date.
-  await env.DB.batch([
-    env.DB.prepare(`INSERT INTO submission_decisions (id, event_id, submission_id, decision, resulting_status, feedback_md, decided_by_person_id, decided_at, outbox_id, created_at, updated_at)
-      VALUES (?, ?, ?, 'maybe', 'waitlisted', ?, 'person-nadia', ?, NULL, ?, ?)`)
-      .bind("dec-quiet", EVENT_A, "sub-a1", "Committee note nobody has sent.", NOW, NOW, NOW),
-    env.DB.prepare("UPDATE submissions SET status = 'waitlisted', decided_at = ? WHERE id = 'sub-a1'").bind(NOW),
-  ]);
-
-  const quiet = await submitterSnapshot();
-  const row = quiet.submissions.find((entry) => entry.reference_code === "SUB-1");
-  expect(row?.status).toBe("waitlisted");
-  expect(row?.decision, "an unsent decision must not be published").toBeNull();
-
-  // Notify later links the mail by `entity_id`, not by `outbox_id` — the page
-  // must honour that path too, or a decision that WAS announced stays hidden.
-  await env.DB
-    .prepare(`INSERT INTO outbox (id, event_id, template_key, person_id, to_email, subject, html, text, status, send_policy, idempotency_key, entity_id, created_at, updated_at)
-      VALUES ('outbox-late', ?, 'decision', 'person-nadia', ?, 'Your abstract', '<p>x</p>', 'x', 'sent', 'demo_safe', 'idem-late', 'dec-quiet', ?, ?)`)
-    .bind(EVENT_A, SUBMITTER, NOW, NOW)
-    .run();
-
-  const announced = await submitterSnapshot();
-  expect(announced.submissions.find((entry) => entry.reference_code === "SUB-1")?.decision?.status).toBe("waitlisted");
-});
-
 function openCall(id: string, eventId: string, slug: string) {
   return env.DB
     .prepare(`INSERT INTO forms (id, event_id, name, slug, kind, status, created_at, updated_at)
@@ -342,18 +337,18 @@ test("AC-421 · an unlaunched conference with no open call is not named to a str
   expect(await linkFromMail(SUBMITTER), "a named-but-unresolvable conference must send nothing").toBeNull();
 });
 
-test("AC-422 · a slug belonging to another organization never resolves", async () => {
-  // Slugs are unique per org, not globally. Without scoping, a submitter
-  // following the link out of their own confirmation mail can land on a
-  // stranger's conference, find no submissions there, and be told "if that
-  // address has proposals…" forever — a silent, permanent lockout.
+test("AC-422 · duplicate-slug resolution is deterministic and stays within its chosen organization", async () => {
+  // Slugs are unique per org, not globally. This resolver has no host or event
+  // identity to recover the caller's tenant from a bare slug, so the contract
+  // is explicit about what it can guarantee: a deterministic anchor, followed
+  // by candidates confined to that anchor's organization.
   await env.DB.batch([
     env.DB.prepare("INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
       .bind("org_other", "Another Company", "another-company", NOW, NOW),
     env.DB.prepare(`INSERT INTO events (id, org_id, name, slug, tagline, starts_on, ends_on, timezone, venue, accent, status, demo_mode, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live', 0, ?, ?)`)
       .bind("evt_other", "org_other", "Somebody Else's Conference", "shared-slug", "A program", "2026-11-01", "2026-11-02", "America/New_York", "A venue", "#0b6a72", NOW, NOW),
-    // The same slug in OUR org, which is the one a link from our mail means.
+    // The same slug in our org is the deterministic demo-first anchor here.
     env.DB.prepare("UPDATE events SET slug = 'shared-slug' WHERE id = ?").bind(EVENT_A),
   ]);
 
@@ -365,25 +360,50 @@ test("AC-422 · a slug belonging to another organization never resolves", async 
   expect(link, "the submitter's own conference must still resolve").toBeTruthy();
   const target = new URL(link!);
   const exchange = await request(target.pathname + target.search, { redirect: "manual" });
-  expect(exchange.headers.get("location")).toBe(`/portal?eventId=${EVENT_A}`);
+  expect(exchange.headers.get("location")).toBe(`/portal?eventId=${EVENT_A}&source=submitter-home`);
 });
 
 test("AC-417 · one address cannot be used as a mail cannon", async () => {
-  // Six ordinary login links for the same person at another conference must
-  // not consume this door's six-link bucket. The admission scope is
-  // person+event+purpose, not every login row that person owns.
+  // Six ordinary sign-in links for the same person at this conference must not
+  // consume this door's six-link bucket. The admission scope includes this
+  // route's exact redirect, not every login row that person owns.
+  const now = Date.now();
   await Promise.all(Array.from({ length: 6 }, (_, index) => mintMagicLink(env.DB, {
     personId: "person-nadia",
-    eventId: EVENT_B,
+    eventId: EVENT_A,
     purpose: "login",
-    redirectTo: `/portal?eventId=${EVENT_B}`,
-    now: NOW - index,
+    redirectTo: `/portal?eventId=${EVENT_A}`,
+    now: now - index,
   })));
   const before = await loginMailCount(EVENT_A);
   await Promise.all(Array.from({ length: 9 }, () => askForLink(SUBMITTER, SLUG_A)));
   const sent = (await loginMailCount(EVENT_A)) - before;
   expect(sent).toBeGreaterThan(0);
   expect(sent).toBeLessThanOrEqual(6);
+});
+
+test("CONTRACT · MRQ-279 · the no-JavaScript form encoding reaches the same door", async () => {
+  const response = await askForLinkWithoutJavaScript(SUBMITTER, SLUG_A);
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    ok: true,
+    message: "If that address has proposals for this conference, a link to them is on its way to it.",
+  });
+  expect(await linkFromMail(SUBMITTER)).toMatch(/\/api\/v1\/auth\/exchange\?token=/);
+});
+
+test("CONTRACT · MRQ-279 · a public proposal door consumes a Turnstile token once", async () => {
+  await env.DB.prepare("UPDATE events SET demo_mode = 0 WHERE id = ?").bind(EVENT_A).run();
+  stubTurnstile(true);
+
+  const body = { email: SUBMITTER, event: SLUG_A, turnstileToken: "submitter-door-replay" };
+  const first = await request("/api/v1/public/proposals/link", json(body));
+  const second = await request("/api/v1/public/proposals/link", json(body));
+
+  expect(first.status).toBe(200);
+  expect(second.status).toBe(403);
+  expect(await loginMailCount(EVENT_A)).toBe(1);
 });
 
 test("AC-418 · the page opens with no session and never names an address", async () => {

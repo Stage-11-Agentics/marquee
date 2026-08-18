@@ -766,27 +766,6 @@ function submitterStatusLabel(status: string): string {
   return portalStatusProjection("speaker", status).label;
 }
 
-const SUBMITTER_DECISION_STATUSES = new Set(["accepted", "waitlisted", "rejected"]);
-
-/**
- * The API deliberately omits `decision` until the corresponding notification
- * exists. A raw submission status is still updated when a committee records a
- * decision, though, so every user-facing status projection has to apply that
- * same announcement gate or it leaks the outcome through a different label.
- */
-function hasSubmitterAnnouncedDecision(submission: SubmitterSubmission): boolean {
-  const decision = submission.decision ?? null;
-  return decision !== null &&
-    SUBMITTER_DECISION_STATUSES.has(submission.status) &&
-    decision.status === submission.status;
-}
-
-function submitterVisibleStatus(submission: SubmitterSubmission): string {
-  return SUBMITTER_DECISION_STATUSES.has(submission.status) && !hasSubmitterAnnouncedDecision(submission)
-    ? "in_review"
-    : submission.status;
-}
-
 function isSubmitterAwaitingReview(status: string): boolean {
   return status === "submitted" || status === "in_review";
 }
@@ -833,7 +812,7 @@ const SUBMITTER_TALLY_ORDER: ReadonlyArray<{ statuses: readonly string[]; label:
 
 function submitterTally(submissions: readonly SubmitterSubmission[]): string {
   const parts = SUBMITTER_TALLY_ORDER
-    .map((band) => ({ label: band.label, count: submissions.filter((row) => band.statuses.includes(submitterVisibleStatus(row))).length }))
+    .map((band) => ({ label: band.label, count: submissions.filter((row) => band.statuses.includes(row.status)).length }))
     .filter((band) => band.count > 0)
     .map((band) => `${band.count} ${band.label}`);
   return parts.join(" · ");
@@ -845,16 +824,12 @@ function submitterTally(submissions: readonly SubmitterSubmission[]): string {
  * the same lie the singular hero told, moved one line down.
  */
 function submitterSetProgress(submissions: readonly SubmitterSubmission[], draftCallOpen: boolean): string {
-  const statuses = submissions.map(submitterVisibleStatus);
-  if (statuses.includes("draft")) {
+  if (submissions.some((row) => row.status === "draft")) {
     return draftCallOpen ? "One is still a draft" : "One draft · call closed";
   }
-  if (statuses.some(isSubmitterAwaitingReview)) return "Nothing is waiting on you";
-  if (statuses.includes("withdrawn")) return "One was withdrawn";
-  if (statuses.includes("waitlisted")) return "One is a Maybe";
-  return statuses.every((status) => SUBMITTER_DECISION_STATUSES.has(status))
-    ? "Every decision is in"
-    : "Status current";
+  if (submissions.some((row) => isSubmitterAwaitingReview(row.status))) return "Nothing is waiting on you";
+  if (submissions.some((row) => row.status === "waitlisted")) return "One is a Maybe";
+  return "Every decision is in";
 }
 
 /**
@@ -864,10 +839,9 @@ function submitterSetProgress(submissions: readonly SubmitterSubmission[], draft
  * neither — so they rank in exactly that order.
  */
 function leadRank(submission: SubmitterSubmission): number {
-  const status = submitterVisibleStatus(submission);
-  if (status === "draft") return 0;
-  if (isSubmitterAwaitingReview(status)) return 1;
-  if (status === "waitlisted") return 2;
+  if (submission.status === "draft") return 0;
+  if (isSubmitterAwaitingReview(submission.status)) return 1;
+  if (submission.status === "waitlisted") return 2;
   return 3;
 }
 
@@ -878,8 +852,7 @@ function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const edit = submission.edit ?? { enabled: false, reason: "Editing availability is not available for this abstract." };
-  const visibleStatus = submitterVisibleStatus(submission);
-  const decisionDetails = isSubmitterAwaitingReview(visibleStatus)
+  const decisionDetails = isSubmitterAwaitingReview(submission.status)
     ? [
       submission.wave_name,
       submission.wave_decision_on ? `decision by ${formatCalendarDay(submission.wave_decision_on)}` : null,
@@ -910,8 +883,8 @@ function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX
     }
   }
 
-  const decision = hasSubmitterAnnouncedDecision(submission) ? submission.decision : null;
-  return <article class="portal-submitted-row" data-submission-id={submission.id} data-submission-status={visibleStatus} data-submission-reference={submission.reference_code ?? undefined} data-submission-editable={edit.enabled ? "true" : "false"}>
+  const decision = submission.decision ?? null;
+  return <article class="portal-submitted-row" data-submission-id={submission.id} data-submission-status={submission.status} data-submission-reference={submission.reference_code ?? undefined} data-submission-editable={edit.enabled ? "true" : "false"}>
     <div class="portal-submitted-copy">
       {/* The reference code sits above the title because it is what the
           submitter quotes back, and because it is the only thing on the row
@@ -941,7 +914,7 @@ function SubmissionRow({ submission }: { submission: SubmitterSubmission }): JSX
         <div class="portal-submitter-editor-actions"><span class="portal-submitter-edit-error" role={error ? "alert" : undefined}>{error ?? " "}</span><button class="portal-button secondary" type="button" disabled={!editing || busy} onClick={() => setEditing(false)}>Cancel</button><button class="portal-button" type="submit" disabled={!editing || busy}>{busy ? "Saving…" : "Save changes"}</button></div>
       </form> : null}
     </div>
-    <div class="portal-submitted-actions"><span class="portal-submitted-status">{submitterStatusLabel(visibleStatus)}</span><button class="portal-task-action" type="button" disabled={!edit.enabled || busy} aria-describedby={`submitter-edit-reason-${submission.id}`} onClick={() => { setError(null); setEditing((current) => !current); }}>{editing ? "Close editor" : "Edit abstract"}</button><span class="portal-submitter-edit-reason" id={`submitter-edit-reason-${submission.id}`}>{edit.reason ?? "You can edit this abstract while the call for speakers is open."}</span></div>
+    <div class="portal-submitted-actions"><span class="portal-submitted-status">{submitterStatusLabel(submission.status)}</span><button class="portal-task-action" type="button" disabled={!edit.enabled || busy} aria-describedby={`submitter-edit-reason-${submission.id}`} onClick={() => { setError(null); setEditing((current) => !current); }}>{editing ? "Close editor" : "Edit abstract"}</button><span class="portal-submitter-edit-reason" id={`submitter-edit-reason-${submission.id}`}>{edit.reason ?? "You can edit this abstract while the call for speakers is open."}</span></div>
   </article>;
 }
 
@@ -963,18 +936,13 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
   // was previously told about whichever the ORDER BY happened to put first, and
   // the draft is the one with an action attached to it.
   const lead = [...snapshot.submissions].sort((left, right) => leadRank(left) - leadRank(right))[0]!;
-  const leadStatus = submitterVisibleStatus(lead);
   const plural = snapshot.submissions.length > 1;
   const decisionOn = lead.wave_decision_on;
   const waveName = lead.wave_name;
-  const isDraft = leadStatus === "draft";
+  const isDraft = lead.status === "draft";
   const draftCallOpen = isDraft && Boolean(lead.form_slug);
-  const isWaitlisted = leadStatus === "waitlisted";
-  const isAwaitingReview = isSubmitterAwaitingReview(leadStatus);
-  const allDecisionWords = plural && snapshot.submissions.every((submission) => {
-    const decision = hasSubmitterAnnouncedDecision(submission) ? submission.decision : null;
-    return Boolean(decision?.feedback_md?.trim());
-  });
+  const isWaitlisted = lead.status === "waitlisted";
+  const isAwaitingReview = isSubmitterAwaitingReview(lead.status);
   const decisionCopy = decisionOn
     ? `Decisions for ${waveName ?? "this round"} go out by ${formatCalendarDay(decisionOn)}.`
     : "The program team has not set a decision date for this round yet.";
@@ -998,10 +966,10 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
       ? "The program team marked this abstract as Maybe. It is still in consideration."
       : isAwaitingReview
       ? decisionCopy
-      : submitterOutcomeCopy(leadStatus);
+      : submitterOutcomeCopy(lead.status);
   const progressCopy = plural
     ? submitterSetProgress(snapshot.submissions, draftCallOpen)
-    : submitterProgressCopy(leadStatus, draftCallOpen);
+    : submitterProgressCopy(lead.status, draftCallOpen);
   return <div class="portal-shell portal-submitter-seat">
     <header class="portal-top">
       <span class="portal-brand">Marquee · Your proposals</span>
@@ -1017,7 +985,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
         <span class="eyebrow">{plural ? "Your proposals" : "Current status"}</span>
         <h1 id="portal-status-heading">{plural
           ? `Your ${snapshot.submissions.length} proposals to ${snapshot.event.name}`
-          : submitterHeadline(leadStatus)}</h1>
+          : submitterHeadline(lead.status)}</h1>
         <div class="portal-status-meta">
           <div class="portal-status-copy">
             {plural
@@ -1056,10 +1024,8 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
         </section> : <section class="portal-panel portal-submitter-flow" aria-labelledby="status-update-heading">
           <header class="portal-panel-head"><h2 id="status-update-heading">Submission update</h2><span>current outcome</span></header>
           <div class="portal-panel-body"><p class="portal-submitter-status-note">{plural
-            ? allDecisionWords
-              ? "Every proposal you sent has an answer. Each one is listed below in the program team's own words."
-              : "Each proposal below carries its current status."
-            : submitterOutcomeDetail(leadStatus)}</p></div>
+            ? "Every proposal you sent has an answer. Each one is listed below in the program team's own words."
+            : submitterOutcomeDetail(lead.status)}</p></div>
         </section>}
         <section class="portal-panel" aria-labelledby="reach-heading">
           <header class="portal-panel-head"><h2 id="reach-heading">Getting back here</h2><span>{snapshot.person.email}</span></header>

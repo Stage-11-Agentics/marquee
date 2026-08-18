@@ -33,6 +33,7 @@ import { mintMagicLink } from "../lib/auth/magic-links";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 import { loadPublicEvent } from "../lib/public-site";
+import { sha256Hex } from "../lib/auth/random-token";
 import { publicFormIsClosed, publicTurnstileExempt } from "./public-form.shared";
 import { verifyTurnstile } from "../lib/r2/turnstile";
 
@@ -65,8 +66,9 @@ const responseSchema = z.object({ ok: z.literal(true), message: z.string() });
  * bound the damage is low enough to be an outage. The shared `send` bucket is
  * per-IP at 30/60s, which bounds a client but not a mailbox — one caller can
  * point that whole allowance at a single address. The D1 admission bucket is
- * shared with any other `purpose = 'login'` link minted for that same person and
- * event; it is not a global per-address ceiling across every login route.
+ * scoped to this route's exact portal redirect, so the sign-in door and the
+ * demo form's portal link do not consume it; it is not a global per-address
+ * ceiling across every login route.
  *
  * It counts rows in `magic_links` rather than a KV tally, and the count is part
  * of the same D1 INSERT that mints the link. KV is eventually consistent and
@@ -76,6 +78,10 @@ const responseSchema = z.object({ ok: z.literal(true), message: z.string() });
  */
 const LINK_LIMIT = 6;
 const LINK_WINDOW_MS = 3600_000;
+
+function submitterPortalRedirect(eventId: string): string {
+  return `/portal?eventId=${encodeURIComponent(eventId)}&source=submitter-home`;
+}
 
 /**
  * The person this address names at this conference, and only if they actually
@@ -114,14 +120,14 @@ async function submitterAtEvent(
  * this route renders the conference's name on an unauthenticated page. Both facts
  * bite, so the lookup is narrowed twice.
  *
- * **Scoped to the deployment's own organization.** Without it, two orgs both
- * using `cfp-2026` race for the name, and a submitter following the link out of
- * their own confirmation mail can resolve onto the other org's event — where
- * they have no submissions, so they get the generic acknowledgement forever with
- * no mail and no error. A silent permanent lockout is the worst shape a door can
- * have. A named slug supplies the anchor itself, using the public site's
- * deterministic live-first/demo-first ordering; no live event is required just
- * to learn the organization.
+ * **The named slug is an anchor, not tenant proof.** This request carries a
+ * slug, not an event id or host-to-organization binding. When multiple
+ * organizations use that slug, the resolver cannot know which confirmation mail
+ * originated it; it therefore chooses one deterministic live-first/demo-first
+ * anchor and keeps later candidates inside that anchor's organization. The
+ * guarantee is deterministic resolution, not that a bare duplicate slug can
+ * recover a caller's organization. A future host- or event-derived resolver
+ * must supply that missing tenant context.
  *
  * **Live conferences first, and a non-live one only when its call is open.**
  * Every other public surface reads `status = 'live'` (`findLiveEvent`). Matching
@@ -161,9 +167,9 @@ export async function resolveProposalsEvent(
   }
 
   // The named event is the only identity available before the public site has
-  // gone live. Anchor the organization from that slug, then keep all later
-  // candidates inside it; otherwise a duplicate slug in another organization
-  // can become the answer to a link that was mailed by this one.
+  // gone live. Choose a deterministic anchor from that slug, then keep all
+  // later candidates inside its organization; the caller's tenant is not
+  // recoverable from a bare duplicate slug.
   const scope = await database
     .prepare(
       `SELECT org_id FROM events
@@ -203,7 +209,14 @@ const requestProposalsLink = defineApiRoute(
     description:
       "Sends one sign-in link and writes nothing else. The answer is identical whether or not the address has proposals here, so the route can never be used to find out whether somebody submitted. No password and no account: the link lands on the submitter's own page, which lists their proposals and each one's status.",
     tags: ["Public"],
-    request: { body: { content: { "application/json": { schema: requestSchema } } } },
+    request: {
+      body: {
+        content: {
+          "application/json": { schema: requestSchema },
+          "application/x-www-form-urlencoded": { schema: requestSchema },
+        },
+      },
+    },
     // `send` is the bucket that means "this route puts mail in a queue", and it
     // is what stops the door being a mail cannon aimed at a guessed address.
     policy: { auth: { kind: "public" }, rateLimit: { bucket: "send" }, concurrency: "none" },
@@ -213,7 +226,10 @@ const requestProposalsLink = defineApiRoute(
     },
   },
   async (context) => {
-    const body = context.req.valid("json");
+    const contentType = context.req.header("content-type")?.toLowerCase() ?? "";
+    const body = contentType.startsWith("application/x-www-form-urlencoded")
+      ? context.req.valid("form")
+      : context.req.valid("json");
     const now = Date.now();
     const event = await resolveProposalsEvent(context.env.DB, body.event ?? null);
 
@@ -236,6 +252,11 @@ const requestProposalsLink = defineApiRoute(
         if (!turnstile.ok) {
           throw ApiError.forbidden("Complete the security check, then choose Send again.");
         }
+        const tokenKey = `public-form:turnstile:${await sha256Hex(body.turnstileToken ?? body.turnstile_token ?? "")}`;
+        if (await context.env.CACHE.get(tokenKey)) {
+          throw ApiError.forbidden("That security check has already been used. Complete it again, then choose Send.");
+        }
+        await context.env.CACHE.put(tokenKey, "1", { expirationTtl: 300 });
       }
 
       const person = await submitterAtEvent(context.env.DB, event.id, body.email);
@@ -247,7 +268,7 @@ const requestProposalsLink = defineApiRoute(
           personId: person.id,
           eventId: event.id,
           purpose: "login",
-          redirectTo: `/portal?eventId=${encodeURIComponent(event.id)}`,
+          redirectTo: submitterPortalRedirect(event.id),
           now,
           admission: {
             maxRows: LINK_LIMIT,

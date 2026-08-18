@@ -39,7 +39,8 @@ export interface MintedMagicLink {
  * The caller's quota belongs in the INSERT ... SELECT, not in a preceding
  * COUNT query: D1 serializes the write statement, so two requests cannot both
  * pass the same count and then mint over the cap. The admission count is scoped
- * to the person, event, and purpose on the row being minted.
+ * to the person, event, purpose, and redirect target on the row being minted,
+ * so a route-specific door does not consume another login route's allowance.
  */
 export type MagicLinkAdmission = {
   maxRows: number;
@@ -132,7 +133,7 @@ async function mintLinkWithAdmission(
          SELECT ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?
          WHERE (
            SELECT COUNT(*) FROM magic_links
-           WHERE person_id = ? AND event_id = ? AND purpose = ? AND created_at > ?
+           WHERE person_id = ? AND event_id = ? AND purpose = ? AND redirect_to = ? AND created_at > ?
          ) < ?`,
       )
       .bind(
@@ -152,6 +153,7 @@ async function mintLinkWithAdmission(
         input.personId,
         admittedInput.eventId,
         input.purpose,
+        redirectTo,
         admittedInput.admission.createdAfter,
         admittedInput.admission.maxRows,
       )
