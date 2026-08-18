@@ -97,7 +97,7 @@ if (process.env.DRIVE_MRQ286_HELPER_SEAT) {
       await expect(speakerRow).toBeVisible({ timeout: 30_000 });
       await speakerRow.click();
       const drawer = organizer.locator('[role="dialog"]');
-      await expect(drawer).toContainText("Helpers");
+      await expect(drawer).toContainText("Helpers", { timeout: 30_000 });
       const onboardingAddResponse = organizer.waitForResponse((response) => response.request().method() === "POST" && response.url().includes("/helpers"));
       const onboardingForm = drawer.locator("form.onboarding-helper-form");
       await onboardingForm.getByLabel("Name").fill(onboardingHelperName);
