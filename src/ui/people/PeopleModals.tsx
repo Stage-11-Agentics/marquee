@@ -97,10 +97,12 @@ function importPlacementLine(result: PeopleImportResult, event: { name: string }
   return "";
 }
 
-function undoPlacementLine(outcome: PeopleImportUndoResult): string {
+function undoPlacementLine(outcome: PeopleImportUndoResult, rosterScoped: boolean): string {
   const removed = outcome.roster_placements_removed;
   const retained = outcome.roster_placements_retained;
-  if (removed === 0 && retained === 0) return "";
+  if (removed === 0 && retained === 0) {
+    return rosterScoped ? " · no speaker seats were withdrawn or retained — no imported seat remained to undo" : "";
+  }
   const removedCopy = `${removed} speaker ${removed === 1 ? "seat" : "seats"} withdrawn`;
   const retainedCopy = retained > 0
     ? ` · ${retained} retained after a later organizer adoption`
@@ -202,7 +204,7 @@ export function ImportPeopleModal({
       <div class="people-preview-body">
         {undone === null
           ? `${result.created} created · ${result.updated} updated · ${result.skipped} skipped${importPlacementLine(result, event)}. The receipt records overwritten values and remains available until you undo it.`
-          : `${undone} ${undone === 1 ? "person was" : "people were"} restored${undoOutcome?.skipped ? ` · ${undoOutcome.skipped} kept` : ""}${undoOutcome ? undoPlacementLine(undoOutcome) : ""}. The receipt remains available for audit.`}
+          : `${undone} ${undone === 1 ? "person was" : "people were"} restored${undoOutcome?.skipped ? ` · ${undoOutcome.skipped} kept` : ""}${undoOutcome ? undoPlacementLine(undoOutcome, destination === "roster") : ""}. The receipt remains available for audit.`}
       </div>
       {undone !== null && undoOutcome?.skipped_rows.length ? <ul class="people-hint people-import-skips">
         {undoOutcome.skipped_rows.map((skip) => <li key={`${skip.target_id}-${skip.reason}`}>{skip.target_id}: {undoSkipCopy(skip)}</li>)}
