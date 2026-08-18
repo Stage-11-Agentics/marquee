@@ -1,4 +1,5 @@
 import { seed as agenda } from "../../../scripts/seed/agenda.ts";
+import { seed as dayOf } from "../../../scripts/seed/day-of.ts";
 import { seed as acceptedCore } from "../../../scripts/seed/accepted-core.ts";
 import { seed as ugliness } from "../../../scripts/seed/ugliness.ts";
 import { seed as outreach } from "../../../scripts/seed/outreach.ts";
@@ -29,6 +30,7 @@ export const DEMO_SEED_MODULES: readonly SeedModule[] = [
   outreach,
   sponsors,
   fieldLibrary,
+  dayOf,
 ].sort((left, right) =>
   left.order === right.order ? left.name.localeCompare(right.name) : left.order - right.order,
 );

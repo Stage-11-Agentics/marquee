@@ -57,6 +57,8 @@
       "/signin",
       "/login",
       "/sign-in",
+      "/green-room",
+      "/green-room/*",
       "/my-proposals",
       "/my-submissions",
       "/proposals",

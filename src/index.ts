@@ -35,6 +35,7 @@ import { publicAgendaRoutes } from "./routes/public-agenda.route";
 import { embedRoutes } from "./routes/embed.route";
 import { calendarRoutes } from "./routes/calendar.route";
 import { agentFrontDoorRoutes } from "./routes/agent-front-door.route";
+import { greenRoomRoutes } from "./routes/green-room.route";
 import skill from "../SKILL.md?raw";
 import { serveAssetOrNotFound } from "./routes/not-found.route";
 
@@ -213,6 +214,7 @@ app.route("/", publicAgendaRoutes);
 app.route("/", embedRoutes);
 app.route("/", calendarRoutes);
 app.route("/", agentFrontDoorRoutes);
+app.route("/", greenRoomRoutes);
 // Keep the canonical repository skill fetchable by agents; the assets router
 // would otherwise turn this unknown path into the SPA shell.
 app.get("/SKILL.md", () => new Response(skill, {

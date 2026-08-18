@@ -36,6 +36,7 @@ import { OnboardingPage } from "../onboarding/OnboardingPage";
 import { SpeakersPage } from "../speakers/SpeakersPage";
 import { SessionizeImportPage } from "../import/SessionizeImportPage";
 import { FilesPage } from "../files/FilesPage";
+import { DayOfPage } from "../day-of/DayOfPage";
 import { OrgSettingsPage, type OrgTab } from "../org/OrgSettingsPage";
 import { CreateConferencePage } from "../setup/CreateConferencePage";
 import { HandoffPage } from "../setup/HandoffPage";
@@ -328,6 +329,7 @@ export function AppShell({ eventName }: { eventName: string }): JSX.Element {
             : isSpeakers ? <SpeakersPage eventId={eventId} search={location.search} navigate={navigate} />
             : isOnboarding ? <OnboardingPage eventId={eventId} search={location.search} navigate={navigate} />
             : route?.id === "files" ? <FilesPage eventId={eventId} navigate={navigate} />
+            : route?.id === "day-of" ? <DayOfPage eventId={eventId} />
             : isImport ? <SessionizeImportPage eventId={eventId} navigate={navigate} />
             : route?.id === "communications" ? <>
             <PageHeader title={routeName} copy="Templates, rendered previews, and a demo-safe delivery log for every message." />

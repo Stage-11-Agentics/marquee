@@ -1,0 +1,30 @@
+/* The day-of desk: the slides board, and the links the crew holds. */
+.dayof-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.dayof-days { display: flex; gap: 6px; flex-wrap: wrap; }
+.dayof-day { padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--panel); color: var(--ink-soft); font: 400 12px/1 var(--mono); cursor: pointer; }
+.dayof-day.is-current { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
+.dayof-counts { display: flex; gap: 6px; flex-wrap: wrap; }
+/* Fixed width: a count chip must not resize as its number changes. */
+.dayof-count { min-width: 132px; text-align: left; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--panel); color: var(--ink); font: 400 12px/1.2 var(--mono); cursor: pointer; }
+.dayof-count.is-current { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
+.dayof-count strong { font-weight: 600; }
+.dayof-room-filter { min-height: 32px; padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--panel); color: var(--ink); font: 400 12px/1 var(--sans); }
+.dayof-table { width: 100%; border-collapse: collapse; }
+.dayof-table th { text-align: left; font: 500 10.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); padding: 8px; border-bottom: 1px solid var(--line-strong); }
+.dayof-table td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
+.dayof-when { white-space: nowrap; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); }
+.dayof-title { font-weight: 500; }
+.dayof-speakers { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-soft); }
+.dayof-ask { width: 108px; }
+/* The result line holds its height so a send never moves the row below it. */
+.dayof-ask-result { display: block; min-height: 14px; margin-top: 4px; font: 400 11px/1.3 var(--mono); color: var(--ink-soft); }
+.dayof-ask-result.is-error { color: var(--danger-ink); }
+.dayof-links { display: grid; gap: 10px; }
+.dayof-link-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--sunk); }
+.dayof-link-row.is-revoked { opacity: .6; }
+.dayof-link-name { font-weight: 500; }
+.dayof-link-meta { display: block; margin-top: 2px; font: 400 11px/1.4 var(--mono); color: var(--ink-soft); }
+.dayof-mint { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.dayof-mint input { min-height: 34px; padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--panel); color: var(--ink); font: 400 13px/1.4 var(--sans); min-width: 220px; }
+.dayof-minted { margin-top: 10px; padding: 10px; border: 1px solid var(--accent); border-left-width: 3px; border-radius: var(--radius); background: var(--accent-soft); }
+.dayof-minted code { display: block; margin-top: 4px; font: 400 12px/1.5 var(--mono); overflow-wrap: anywhere; color: var(--accent-dark); }
