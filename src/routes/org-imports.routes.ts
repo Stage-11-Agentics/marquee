@@ -166,7 +166,7 @@ const undoResponse = z.object({
   roster_placements_removed: z.number().int().nonnegative()
     .describe("Speaker seats withdrawn at the conference this import placed people on; zero when it placed none."),
   roster_placements_retained: z.number().int().nonnegative()
-    .describe("Speaker seats this import created but retained because a later organizer claim stamped invited_at."),
+    .describe("Speaker seats this import created but retained because a later organizer claim was recorded."),
   skipped: z.number().int().nonnegative(),
   skipped_rows: z.array(z.object({
     target_id: z.string(),
@@ -478,15 +478,37 @@ const undoPeopleImport = defineApiRoute(
     // Scoped by id rather than by person, so it also cannot be widened by a
     // second seat the person acquired afterwards. The event and role are
     // re-asserted as a belt-and-braces guard, not as the selector.
+    //
+    // `invited_at` is only one adoption signal. The default Speakers -> Add
+    // speaker request omits `invited`, and the membership conflict upsert
+    // deliberately leaves that column null. That route does, however, write
+    // `speaker_roster_linked` to the append-only audit log in the same batch.
+    // Treat that event-scoped/person-scoped action as the claim ledger, bounded
+    // by the seat's own `created_at`; a later claim keeps this exact seat. The
+    // audit row is now a correctness dependency: pruning or archiving it would
+    // change undo semantics and must be treated as a data-model change.
+    // Only `speaker_roster_linked` counts: an imported person already exists
+    // before Add speaker runs, so the route's `speaker_created` branch cannot be
+    // the adoption of this import-created seat.
     let rosterIndex = -1;
     if (rosterEventId && createdMembershipIds.length > 0) {
       rosterIndex = statements.length;
       statements.push(context.env.DB.prepare(
         `DELETE FROM memberships
           WHERE event_id = ? AND role = 'speaker'
-            AND invited_at IS NULL
-            AND id IN (SELECT value FROM json_each(?))`,
-      ).bind(rosterEventId, JSON.stringify(createdMembershipIds)));
+            AND id IN (SELECT value FROM json_each(?))
+            AND NOT (
+              invited_at IS NOT NULL
+              OR EXISTS (
+                SELECT 1 FROM audit_log adoption
+                 WHERE adoption.event_id = ?
+                   AND adoption.action = 'speaker_roster_linked'
+                   AND adoption.entity_type = 'person'
+                   AND adoption.entity_id = memberships.person_id
+                   AND adoption.created_at >= memberships.created_at
+              )
+            )`,
+      ).bind(rosterEventId, JSON.stringify(createdMembershipIds), rosterEventId));
     }
 
     for (const row of rows.results) {
@@ -582,9 +604,20 @@ const undoPeopleImport = defineApiRoute(
     const retainedRoster = rosterEventId && createdMembershipIds.length > 0
       ? await context.env.DB.prepare(
           `SELECT COUNT(*) AS n FROM memberships
-            WHERE event_id = ? AND role = 'speaker' AND invited_at IS NOT NULL
-              AND id IN (SELECT value FROM json_each(?))`,
-        ).bind(rosterEventId, JSON.stringify(createdMembershipIds)).first<{ n: number }>()
+            WHERE event_id = ? AND role = 'speaker'
+              AND id IN (SELECT value FROM json_each(?))
+              AND (
+                invited_at IS NOT NULL
+                OR EXISTS (
+                  SELECT 1 FROM audit_log adoption
+                   WHERE adoption.event_id = ?
+                     AND adoption.action = 'speaker_roster_linked'
+                     AND adoption.entity_type = 'person'
+                     AND adoption.entity_id = memberships.person_id
+                     AND adoption.created_at >= memberships.created_at
+                )
+              )`,
+        ).bind(rosterEventId, JSON.stringify(createdMembershipIds), rosterEventId).first<{ n: number }>()
       : null;
     return context.json({
       undone,

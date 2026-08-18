@@ -342,7 +342,7 @@ describe.sequential("MRQ-167 org people import receipt", () => {
 
     const undone = await post(`/api/v1/org/imports/${result.import_id}/undo`, {});
     expect(undone.status).toBe(200);
-    expect(await undone.json()).toMatchObject({ roster_placements_removed: 1 });
+    expect(await undone.json()).toMatchObject({ roster_placements_removed: 1, roster_placements_retained: 0 });
 
     // The seat this import created is gone.
     expect(await seatFor(newcomer!.id)).toBeNull();
@@ -355,52 +355,69 @@ describe.sequential("MRQ-167 org people import receipt", () => {
   });
 
   test("CONTRACT · MRQ-281 · undo retains a seat adopted by Add speaker, and the current portal still resolves it", async () => {
+    const adoptedEmail = "adopted-by-organizer@mrq281.test";
     const csv = [
       "Full Name,Email,Company,Job Title",
-      "Priya Raman,PRIYA@mrq167.test,Latticework Systems,Principal Engineer",
+      `Imported Adoptee,${adoptedEmail},Latticework Systems,Principal Engineer`,
     ].join("\n");
     const response = await post("/api/v1/org/imports", { csv, filename: "adopted-speaker.csv", event: "mrq-167-import", roster: true });
     expect(response.status).toBe(202);
     const result = await response.json() as { import_id: string; roster_placements: number };
     expect(result.roster_placements).toBe(1);
 
+    const importedPerson = await env.DB.prepare(
+      "SELECT id FROM people WHERE email = ?",
+    ).bind(adoptedEmail).first<{ id: string }>();
+    expect(importedPerson).not.toBeNull();
     const importedSeat = await env.DB.prepare(
-      "SELECT id, invited_at FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
-    ).bind(EVENT_ID, SPEAKER_ID).first<{ id: string; invited_at: number | null }>();
+      "SELECT id, invited_at, created_at FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
+    ).bind(EVENT_ID, importedPerson!.id).first<{ id: string; invited_at: number | null; created_at: number }>();
     expect(importedSeat).toMatchObject({ invited_at: null });
 
-    // This is the organizer's later claim: the API returns 201 against the
-    // imported row and records the invitation on that same row.
+    // This is the default Speakers -> Add speaker flow: it omits `invited`, so
+    // the membership row stays un-stamped. The audit action is the later-claim
+    // ledger; putting provenance on the conflict-upserted membership would be
+    // fragile because every future writer would have to preserve it. The
+    // imported person already exists, so this explicitly exercises the
+    // `speaker_roster_linked` branch rather than `speaker_created`.
     const adopted = await post(`/api/v1/events/${EVENT_ID}/speakers`, {
-      name: "Priya Raman",
-      email: "priya@mrq167.test",
-      invited: true,
+      name: "Imported Adoptee",
+      email: adoptedEmail,
     });
     expect(adopted.status).toBe(201);
     expect((await adopted.json() as { speaker: { is_member: boolean } }).speaker.is_member).toBe(true);
 
     const adoptedSeat = await env.DB.prepare(
       "SELECT id, invited_at FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
-    ).bind(EVENT_ID, SPEAKER_ID).first<{ id: string; invited_at: number | null }>();
+    ).bind(EVENT_ID, importedPerson!.id).first<{ id: string; invited_at: number | null }>();
     expect(adoptedSeat?.id).toBe(importedSeat?.id);
-    expect(adoptedSeat?.invited_at).toEqual(expect.any(Number));
+    expect(adoptedSeat?.invited_at).toBeNull();
+    const adoptionAudit = await env.DB.prepare(
+      `SELECT action, created_at FROM audit_log
+        WHERE event_id = ? AND entity_type = 'person' AND entity_id = ?
+          AND action = 'speaker_roster_linked'
+        ORDER BY created_at DESC, id DESC LIMIT 1`,
+    ).bind(EVENT_ID, importedPerson!.id).first<{ action: string; created_at: number }>();
+    expect(adoptionAudit?.action).toBe("speaker_roster_linked");
+    expect(adoptionAudit?.created_at).toBeGreaterThanOrEqual(importedSeat!.created_at);
 
     const undone = await post(`/api/v1/org/imports/${result.import_id}/undo`, {});
     expect(undone.status).toBe(200);
     expect(await undone.json()).toMatchObject({
-      undone: 1,
+      undone: 0,
       roster_placements_removed: 0,
       roster_placements_retained: 1,
+      skipped: 1,
       retained_manifest: true,
     });
     expect(await env.DB.prepare(
       "SELECT id, invited_at FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
-    ).bind(EVENT_ID, SPEAKER_ID).first()).toMatchObject({ id: importedSeat?.id, invited_at: expect.any(Number) });
+    ).bind(EVENT_ID, importedPerson!.id).first()).toMatchObject({ id: importedSeat?.id, invited_at: null });
 
     // Exercise the current speaker sign-in door, then the current `/me` portal
     // resolver. A row count alone would miss the user-facing consequence.
     const link = await mintPortalMagicLink(env.DB, {
-      personId: SPEAKER_ID,
+      personId: importedPerson!.id,
       eventId: EVENT_ID,
       redirectTo: "/portal",
       now: Date.now(),
@@ -412,6 +429,6 @@ describe.sequential("MRQ-167 org people import receipt", () => {
 
     const portal = await request(`/api/v1/me/portal?eventId=${EVENT_ID}`, {}, sessionCookie ?? "");
     expect(portal.status).toBe(200);
-    expect(await portal.json()).toMatchObject({ seat: "speaker", event: { id: EVENT_ID }, person: { id: SPEAKER_ID } });
+    expect(await portal.json()).toMatchObject({ seat: "speaker", event: { id: EVENT_ID }, person: { id: importedPerson!.id } });
   });
 });
