@@ -440,6 +440,96 @@ describe.sequential("MRQ-167 org people import receipt", () => {
     expect(await portal.json()).toMatchObject({ seat: "speaker", event: { id: EVENT_ID }, person: { id: importedPerson!.id } });
   });
 
+  test("CONTRACT · MRQ-281 · every organizer status PATCH claims an imported seat, including pending", async () => {
+    const statuses = ["pending", "invited", "confirmed", "declined"] as const;
+    for (const [index, status] of statuses.entries()) {
+      const email = `status-adoptee-${status}@mrq281.test`;
+      const csv = [
+        "Full Name,Email,Company,Job Title",
+        `Status Adoptee ${status},${email},Latticework Systems,Principal Engineer`,
+      ].join("\n");
+      const imported = await post("/api/v1/org/imports", {
+        csv,
+        filename: `status-adoptee-${index}.csv`,
+        event: "mrq-167-import",
+        roster: true,
+      });
+      expect(imported.status).toBe(202);
+      const importResult = await imported.json() as { import_id: string; roster_placements: number };
+      expect(importResult.roster_placements).toBe(1);
+
+      const importedPerson = await env.DB.prepare("SELECT id FROM people WHERE email = ?").bind(email).first<{ id: string }>();
+      expect(importedPerson).not.toBeNull();
+      const importedSeat = await env.DB.prepare(
+        "SELECT id, created_at FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
+      ).bind(EVENT_ID, importedPerson!.id).first<{ id: string; created_at: number }>();
+      expect(importedSeat).not.toBeNull();
+
+      // Drive the production route, rather than synthesizing a membership or
+      // audit row. Pending is the edge that clears invited_at and used to emit
+      // no retention signal; the other three values must keep the same claim
+      // contract even though they also stamp invited_at.
+      const patched = await request(`/api/v1/events/${EVENT_ID}/speakers/${importedPerson!.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirmation_status: status }),
+      });
+      expect(patched.status).toBe(200);
+      expect(await patched.json()).toMatchObject({ speaker: { id: importedPerson!.id, status } });
+
+      const membership = await env.DB.prepare(
+        "SELECT id, confirmation_status, invited_at FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
+      ).bind(EVENT_ID, importedPerson!.id).first<{ id: string; confirmation_status: string; invited_at: number | null }>();
+      expect(membership).toMatchObject({
+        id: importedSeat!.id,
+        confirmation_status: status === "invited" ? "pending" : status,
+      });
+      if (status === "pending") expect(membership?.invited_at).toBeNull();
+      else expect(membership?.invited_at).not.toBeNull();
+
+      const claim = await env.DB.prepare(
+        `SELECT action, created_at, after_json FROM audit_log
+          WHERE event_id = ? AND entity_type = 'person' AND entity_id = ?
+            AND action = 'speaker_roster_linked'
+          ORDER BY created_at DESC, id DESC LIMIT 1`,
+      ).bind(EVENT_ID, importedPerson!.id).first<{ action: string; created_at: number; after_json: string }>();
+      expect(claim).toMatchObject({ action: "speaker_roster_linked" });
+      expect(claim!.created_at).toBeGreaterThanOrEqual(importedSeat!.created_at);
+      expect(JSON.parse(claim!.after_json)).toMatchObject({ source: "organizer_status", role: "speaker" });
+
+      const undone = await post(`/api/v1/org/imports/${importResult.import_id}/undo`, {});
+      expect(undone.status).toBe(200);
+      expect(await undone.json()).toMatchObject({
+        undone: 0,
+        roster_placements_removed: 0,
+        roster_placements_retained: 1,
+        skipped: 1,
+        retained_manifest: true,
+      });
+      expect(await env.DB.prepare(
+        "SELECT id FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
+      ).bind(EVENT_ID, importedPerson!.id).first()).toEqual({ id: importedSeat!.id });
+
+      if (status === "pending") {
+        // This is the user-facing consequence: the same current portal that
+        // the import undo gates must still resolve the retained seat.
+        const link = await mintPortalMagicLink(env.DB, {
+          personId: importedPerson!.id,
+          eventId: EVENT_ID,
+          redirectTo: "/portal",
+          now: Date.now(),
+        });
+        const exchanged = await request(`/api/v1/auth/exchange?token=${encodeURIComponent(link.token)}`, { redirect: "manual" }, "");
+        expect(exchanged.status).toBe(302);
+        const sessionCookie = exchanged.headers.get("set-cookie")?.split(";", 1)[0];
+        expect(sessionCookie).toMatch(/^mq_session=/);
+        const portal = await request(`/api/v1/me/portal?eventId=${EVENT_ID}`, {}, sessionCookie ?? "");
+        expect(portal.status).toBe(200);
+        expect(await portal.json()).toMatchObject({ seat: "speaker", event: { id: EVENT_ID }, person: { id: importedPerson!.id } });
+      }
+    }
+  });
+
   test("CONTRACT · MRQ-281 · undo retains a seat adopted by the acceptance cascade", async () => {
     const acceptedEmail = "accepted-by-cascade@mrq281.test";
     const submissionId = "sub_mrq281_accepted";

@@ -417,7 +417,7 @@ const patchSpeaker = defineApiRoute(
         ...speakerMembershipStatements(
           context.env.DB,
           { orgId: event.org_id, eventId, personId, role: seatRole, now },
-          { kind: "status", source: "organizer_status" },
+          { kind: "claim", source: "organizer_status", action: "speaker_roster_linked" },
         ),
         context.env.DB
           .prepare(

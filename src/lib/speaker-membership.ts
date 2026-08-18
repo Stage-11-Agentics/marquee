@@ -13,18 +13,20 @@
  *   - the people roster import, which owns its created-row receipt,
  *   - the Sessionize speakers import, which reconciles every speaker row even
  *     when the person's fields do not change, and
- *   - the organizer's confirmation-status patch, whose `invited_at` update is
- *     its retention signal.
+ *   - the organizer's confirmation-status patch, which is an organizer claim
+ *     even when setting Pending clears `invited_at`.
  *
  * The membership writer below requires every caller to declare its intent.
- * Organizer and acceptance claims return the membership upsert and their
- * `speaker_roster_linked` audit row together, so the caller can put both in
- * one batch. The people and Sessionize imports are deliberately the exception:
- * their receipts own the rows they create, and an import must not claim that
- * it adopted its own seat. A confirmation-status writer declares the
- * `invited_at` signal it stamps in the same operation. A fourth writer cannot
- * add an unclassified raw upsert through this module; it must choose one of
- * these three semantics and make that choice reviewable at the call site.
+ * Organizer Add speaker, acceptance, and confirmation-status claims return the
+ * membership upsert and their `speaker_roster_linked` audit row together, so
+ * the caller can put both in one batch. A status change is a claim even when it
+ * clears `invited_at`: touching the seat is evidence that an organizer knows
+ * it exists, and undo must not silently discard it. The people and Sessionize
+ * imports are deliberately the exception: their receipts own the rows they
+ * create, and an import must not claim that it adopted its own seat. A fourth
+ * writer cannot add an unclassified raw upsert through this module; it must
+ * choose import or claim semantics and make that choice reviewable at the call
+ * site.
  *
  * Duplicates are absorbed by the constraint, not by a read-then-write check:
  * `uq_memberships_event` already covers `(org_id, event_id, person_id, role)`
@@ -88,17 +90,23 @@ export interface SpeakerMembershipAuditActor {
 }
 
 type SpeakerMembershipLedger =
+  /**
+   * Import writers choose this because their receipt, not an adoption audit,
+   * records which membership ids they may undo. An import must never claim its
+   * own seat, or a later undo would retain everything it created.
+   */
   | {
       kind: "import";
       source: "people_import" | "sessionize_import";
     }
-  | {
-      kind: "status";
-      source: "organizer_status";
-    }
+  /**
+   * Any organizer or acceptance path that adopts or deliberately touches a
+   * seat chooses claim. `organizer_status` must use speaker_roster_linked even
+   * for Pending, because that path clears invited_at and has no other signal.
+   */
   | {
       kind: "claim";
-      source: "organizer_add" | "acceptance_cascade";
+      source: "organizer_add" | "acceptance_cascade" | "organizer_status";
       action: "speaker_roster_linked" | "speaker_created";
       actor?: SpeakerMembershipAuditActor;
       before?: unknown;
@@ -138,12 +146,11 @@ function membershipUpsertStatement(db: D1Database, input: SpeakerMembershipInput
  * Build the membership write with an explicit ownership/claim decision.
  *
  * This is intentionally the only exported membership writer. Import paths
- * choose `kind: \"import\"` and rely on their own receipts; the organizer
- * Add speaker and acceptance paths choose `kind: \"claim\"` and receive the
- * adoption audit row beside the upsert; confirmation-status writes choose
- * `kind: \"status\"` because their `invited_at` update is the retention
- * signal. Keeping the choice in this function prevents a new caller from
- * copying the upsert and silently omitting the ledger.
+ * choose `kind: \"import\"` and rely on their own receipts; the organizer Add
+ * speaker, acceptance, and confirmation-status paths choose `kind: \"claim\"`
+ * and receive the adoption audit row beside the upsert. Keeping the choice in
+ * this function prevents a new caller from copying the upsert and silently
+ * omitting the ledger.
  */
 export function speakerMembershipStatements(
   db: D1Database,
