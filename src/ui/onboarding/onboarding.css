@@ -141,6 +141,11 @@
 .onboarding-context-row > div { display: grid; gap: 3px; }
 .onboarding-context-row strong, .onboarding-message-row strong { font-size: 12px; }
 .onboarding-context-row span, .onboarding-message-row span { color: var(--muted); font: 10px/1.35 var(--mono); }
+.onboarding-helper-section .onboarding-context-row { align-items: center; grid-template-columns: minmax(0, 1fr) auto; }
+.onboarding-helper-form { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+.onboarding-helper-form label { color: var(--muted); display: grid; font: 10px/1.2 var(--mono); gap: 5px; }
+.onboarding-helper-form input { background: var(--paper); border: 1px solid var(--line-strong); color: var(--ink); font: 12px/1.3 var(--sans); min-width: 0; padding: 7px 8px; }
+.onboarding-helper-form button { align-self: end; grid-column: 1 / -1; justify-self: start; }
 .onboarding-message-row { border-top: 1px solid var(--line); display: grid; gap: 7px; padding: 9px 0; }
 .onboarding-message-row:first-child { border-top: 0; padding-top: 0; }
 .onboarding-message-row > div { display: grid; gap: 3px; }

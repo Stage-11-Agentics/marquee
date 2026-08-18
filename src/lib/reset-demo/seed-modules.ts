@@ -6,6 +6,7 @@ import { seed as evaluations } from "../../../scripts/seed/evaluations.ts";
 import { seed as event } from "../../../scripts/seed/event.ts";
 import { seed as fieldLibrary } from "../../../scripts/seed/field-library.ts";
 import { FROZEN_NOW } from "../../../scripts/seed/event.ts";
+import { seed as helpers } from "../../../scripts/seed/helpers.ts";
 import { seed as pool } from "../../../scripts/seed/pool.ts";
 import { seed as sponsors } from "../../../scripts/seed/sponsors.ts";
 import { seed as submissionContent } from "../../../scripts/seed/submission-content.ts";
@@ -19,6 +20,7 @@ import { makeContext, type SeedModule, type SeedRow } from "../../../scripts/see
 export const DEMO_SEED_MODULES: readonly SeedModule[] = [
   event,
   acceptedCore,
+  helpers,
   pool,
   evaluations,
   submissionContent,

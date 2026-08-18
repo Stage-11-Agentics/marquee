@@ -115,6 +115,7 @@ const SIMPLE_MOVES: ReadonlyArray<{ table: string; columns: string[] }> = [
   { table: "comparisons", columns: ["reviewer_person_id"] },
   { table: "round_promotions", columns: ["promoted_by"] },
   { table: "speaker_tasks", columns: ["person_id", "completed_by_person_id"] },
+  { table: "speaker_helpers", columns: ["added_by"] },
   { table: "file_comments", columns: ["author_person_id"] },
   { table: "person_events", columns: ["person_id", "actor_person_id"] },
   { table: "person_lists", columns: ["created_by"] },
@@ -132,6 +133,8 @@ const COLLISION_MOVES: ReadonlyArray<{
   { table: "participations", column: "person_id", key: (row) => `${row.submission_id}|${row.role}` },
   { table: "committee_members", column: "person_id", key: (row) => String(row.committee_id) },
   { table: "reviewer_track_scopes", column: "person_id", key: (row) => `${row.event_id}|${row.track_id}` },
+  { table: "speaker_helpers", column: "speaker_person_id", key: (row) => `${row.event_id}|${row.helper_person_id}` },
+  { table: "speaker_helpers", column: "helper_person_id", key: (row) => `${row.event_id}|${row.speaker_person_id}` },
   { table: "round_assignments", column: "reviewer_person_id", key: (row) => `${row.round_id}|${row.submission_id}` },
   { table: "evaluations", column: "reviewer_person_id", key: (row) => `${row.round_id}|${row.submission_id}` },
   { table: "event_attendances", column: "person_id", key: (row) => `${row.event_id}|${row.source}` },
@@ -270,11 +273,14 @@ async function conferenceCount(db: D1Database, personId: string): Promise<number
        SELECT task.event_id FROM speaker_tasks task
        WHERE task.person_id = ? OR task.completed_by_person_id = ?
        UNION ALL
+       SELECT event_id FROM speaker_helpers
+       WHERE speaker_person_id = ? OR helper_person_id = ? OR added_by = ?
+       UNION ALL
        SELECT sponsorship.event_id FROM sponsorship_contacts contact
        JOIN sponsorships sponsorship ON sponsorship.id = contact.sponsorship_id
        WHERE contact.person_id = ?
      )`,
-  ).bind(personId, personId, personId, personId, personId, personId).first<{ total: number }>();
+  ).bind(personId, personId, personId, personId, personId, personId, personId, personId, personId).first<{ total: number }>();
   return Number(row?.total ?? 0);
 }
 
@@ -284,8 +290,9 @@ async function eventScope(db: D1Database, personId: string): Promise<string[]> {
      UNION SELECT submission.event_id FROM participations participation JOIN submissions submission ON submission.id = participation.submission_id WHERE participation.person_id = ?
      UNION SELECT event_id FROM submissions WHERE submitter_person_id = ?
      UNION SELECT event_id FROM speaker_tasks WHERE person_id = ?
+     UNION SELECT event_id FROM speaker_helpers WHERE speaker_person_id = ? OR helper_person_id = ? OR added_by = ?
      UNION SELECT sponsorship.event_id FROM sponsorship_contacts contact JOIN sponsorships sponsorship ON sponsorship.id = contact.sponsorship_id WHERE contact.person_id = ?`,
-  ).bind(personId, personId, personId, personId, personId).all<{ event_id: string }>();
+  ).bind(personId, personId, personId, personId, personId, personId, personId, personId).all<{ event_id: string }>();
   return rows.results.map((row) => row.event_id).filter(Boolean).sort();
 }
 
@@ -996,6 +1003,7 @@ function personDeleteGuardPredicate(): string {
     "NOT EXISTS (SELECT 1 FROM comparisons WHERE comparisons.reviewer_person_id = people.id)",
     "NOT EXISTS (SELECT 1 FROM round_promotions WHERE round_promotions.promoted_by = people.id)",
     "NOT EXISTS (SELECT 1 FROM speaker_tasks WHERE speaker_tasks.person_id = people.id OR speaker_tasks.completed_by_person_id = people.id)",
+    "NOT EXISTS (SELECT 1 FROM speaker_helpers WHERE speaker_helpers.speaker_person_id = people.id OR speaker_helpers.helper_person_id = people.id OR speaker_helpers.added_by = people.id)",
     "NOT EXISTS (SELECT 1 FROM calendar_invites WHERE calendar_invites.person_id = people.id)",
     "NOT EXISTS (SELECT 1 FROM audit_log WHERE audit_log.actor_person_id = people.id OR (audit_log.entity_type = 'person' AND audit_log.entity_id = people.id))",
     "NOT EXISTS (SELECT 1 FROM file_comments WHERE file_comments.author_person_id = people.id)",
