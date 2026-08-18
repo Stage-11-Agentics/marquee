@@ -14,6 +14,7 @@ const ORG_ID = "org_mrq235";
 const EVENT_ID = "evt_mrq235";
 const SURVIVOR_ID = "person_mrq235_survivor";
 const RETIRED_ID = "person_mrq235_retired";
+const HELPER_ID = "person_mrq235_helper";
 const ACTOR: PersonMergeActor = { actorKind: "user", actorPersonId: SURVIVOR_ID, requestId: "req_mrq235" };
 
 function person(
@@ -78,6 +79,15 @@ async function seedFixture(): Promise<void> {
       doNotContact: 1,
       createdAt: NOW + 1,
     }),
+    person(HELPER_ID, "helper@mrq235.test", "Helper Person", {
+      title: null,
+      company: null,
+      bio: null,
+      socialLinks: JSON.stringify([]),
+      customFields: JSON.stringify({}),
+      doNotContact: 0,
+      createdAt: NOW + 2,
+    }),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'speaker', ?, ?)")
       .bind("membership_mrq235_survivor", ORG_ID, EVENT_ID, SURVIVOR_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, event_id, person_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'speaker', ?, ?)")
@@ -125,6 +135,12 @@ async function seedFixture(): Promise<void> {
       .bind("credential_mrq235", ORG_ID, NOW, RETIRED_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, 'speaker', 0, ?, ?)")
       .bind("participation_mrq235", "submission_mrq235", RETIRED_ID, NOW, NOW),
+    env.DB.prepare(`INSERT INTO speaker_helpers
+      (id, event_id, speaker_person_id, helper_person_id, helper_name, added_by, added_at, removed_at)
+      VALUES
+        ('speaker_helper_mrq235_speaker', ?, ?, ?, 'Logistics Helper', ?, ?, NULL),
+        ('speaker_helper_mrq235_helper', ?, ?, ?, 'Logistics Helper', ?, ?, NULL)`)
+      .bind(EVENT_ID, RETIRED_ID, HELPER_ID, SURVIVOR_ID, NOW, EVENT_ID, HELPER_ID, RETIRED_ID, SURVIVOR_ID, NOW),
   ]);
 }
 
@@ -137,6 +153,10 @@ test("AC-384 · MRQ-235 · preview and execute retain identity continuity across
   expect(preview.fields.find((field) => field.field === "bio")).toMatchObject({ result: "Retained biography", source: "retired" });
   expect(preview.fields.find((field) => field.field === "social_links")).toMatchObject({ source: "union" });
   expect(preview.collisions.some((collision) => collision.table === "memberships" && collision.outcome === "deduped")).toBe(true);
+  // Membership and both sides of the helper relationship overlap on one
+  // conference. The bounded per-source reads must retain UNION's DISTINCT
+  // event scope while seeing speaker_person_id, helper_person_id, and added_by.
+  expect(preview.event_scope).toEqual([EVENT_ID]);
   expect(preview.summary.references).toMatchObject({
     auth_sessions: 1,
     magic_links: 1,
@@ -145,6 +165,7 @@ test("AC-384 · MRQ-235 · preview and execute retain identity continuity across
     audit_log: 1,
     mirror_outbox: 1,
     mirror_credentials: 1,
+    speaker_helpers: 2,
   });
 
   const receipt = await executePersonMerge(env.DB, ORG_ID, { ...input, idempotencyKey: "5d9b5c62-a79b-4a9e-8f99-235000000001" }, ACTOR, NOW + 10);
