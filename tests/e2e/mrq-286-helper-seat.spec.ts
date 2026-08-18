@@ -16,8 +16,13 @@ if (process.env.DRIVE_MRQ286_HELPER_SEAT) {
     const baseURL = process.env.MARQUEE_E2E_URL;
     if (!baseURL) throw new Error("MARQUEE_E2E_URL is required for the MRQ-286 browser drive");
 
-    const helperName = `Jordan Helper ${Date.now()}`;
-    const helperEmail = `mrq286-${Date.now()}@example.com`;
+    const runId = Date.now();
+    const helperName = `Jordan Portal ${runId}`;
+    const helperEmail = `mrq286-portal-${runId}@example.com`;
+    const recordHelperName = `Morgan SpeakerRecord ${runId}`;
+    const recordHelperEmail = `mrq286-record-${runId}@example.com`;
+    const onboardingHelperName = `Riley Onboarding ${runId}`;
+    const onboardingHelperEmail = `mrq286-onboarding-${runId}@example.com`;
     const speakerContext = await browser.newContext({ baseURL });
     const helperContext = await browser.newContext({ baseURL });
     const organizerContext = await browser.newContext({ baseURL });
@@ -59,20 +64,76 @@ if (process.env.DRIVE_MRQ286_HELPER_SEAT) {
       const organizerLogin = await organizerContext.request.post("/api/v1/auth/demo", { data: { role: "organizer" } });
       expect(organizerLogin.ok()).toBe(true);
       const organizer = await organizerContext.newPage();
+
+      // The organizer's SpeakerRecord is a separate write door from the
+      // speaker portal. Capture the demo invite from the real form response so
+      // the helper signs in through the organizer-created seat below.
+      await organizer.goto(`/roster?eventId=${encodeURIComponent(EVENT_ID)}`);
+      await expect(organizer.getByRole("heading", { name: "Speakers" })).toBeVisible({ timeout: 30_000 });
+      const rosterSpeaker = organizer.locator("button.speaker-link").filter({ hasText: "Aarush Selvan" }).first();
+      await expect(rosterSpeaker).toBeVisible({ timeout: 30_000 });
+      await rosterSpeaker.click();
+      const record = organizer.locator("aside.speaker-record");
+      await expect(record.getByRole("heading", { name: "Aarush Selvan" })).toBeVisible({ timeout: 30_000 });
+      const recordAddResponse = organizer.waitForResponse((response) => response.request().method() === "POST" && response.url().includes(`/api/v1/events/${EVENT_ID}/speakers/`) && response.url().endsWith("/helpers"));
+      const recordForm = record.locator("form.speaker-helper-form");
+      await recordForm.getByLabel("Name").fill(recordHelperName);
+      await recordForm.getByLabel("Email").fill(recordHelperEmail);
+      await recordForm.getByRole("button", { name: "Add helper" }).click();
+      const recordResponse = await recordAddResponse;
+      expect(recordResponse.ok()).toBe(true);
+      const recordPayload = await recordResponse.json() as { invite?: { magic_link?: string }; helper?: { helper_name: string; helper_email: string } };
+      expect(recordPayload.helper).toMatchObject({ helper_name: recordHelperName, helper_email: recordHelperEmail });
+      expect(recordPayload.invite?.magic_link).toContain("/api/v1/auth/exchange?token=");
+      await expect(record).toContainText(recordHelperName);
+      const recordHelperLink = recordPayload.invite?.magic_link;
+      if (!recordHelperLink) throw new Error("demo SpeakerRecord helper invite did not return a magic link");
+
+      // The second organizer door is the onboarding chase drawer. It must be a
+      // real UI write as well, not merely a direct API assertion.
       await organizer.goto(`/onboarding?eventId=${encodeURIComponent(EVENT_ID)}`);
       const speakerRow = organizer.locator("button.onboarding-speaker-link").filter({ hasText: "Aarush Selvan" }).first();
       await expect(speakerRow).toBeVisible({ timeout: 30_000 });
       await speakerRow.click();
       const drawer = organizer.locator('[role="dialog"]');
       await expect(drawer).toContainText("Helpers");
-      await expect(drawer).toContainText(helperName);
-      await expect(drawer).toContainText(helperEmail);
+      const onboardingAddResponse = organizer.waitForResponse((response) => response.request().method() === "POST" && response.url().includes("/helpers"));
+      const onboardingForm = drawer.locator("form.onboarding-helper-form");
+      await onboardingForm.getByLabel("Name").fill(onboardingHelperName);
+      await onboardingForm.getByLabel("Email").fill(onboardingHelperEmail);
+      await onboardingForm.getByRole("button", { name: "Add helper" }).click();
+      const onboardingResponse = await onboardingAddResponse;
+      expect(onboardingResponse.ok()).toBe(true);
+      await expect(drawer).toContainText(onboardingHelperName);
+      await expect(drawer).toContainText(onboardingHelperEmail);
 
-      const helperItem = speaker.locator(".portal-helper-list li").filter({ hasText: helperName });
-      await helperItem.getByRole("button", { name: "Remove" }).click();
-      await expect(helperItem).toHaveCount(0);
-      await helper.reload();
-      await expect(helper.getByText("You have no speaker record at this conference.")).toBeVisible({ timeout: 30_000 });
+      // Sign in using the seat created from SpeakerRecord, and verify the
+      // helper view is scoped before the speaker revokes that same seat.
+      const organizerHelper = await helperContext.newPage();
+      await organizerHelper.goto(recordHelperLink);
+      await expect(organizerHelper.getByRole("heading", { name: "You help Aarush Selvan" })).toBeVisible();
+      await expect(organizerHelper.getByRole("heading", { name: "Work for Aarush Selvan" })).toBeVisible();
+      const organizerHelperText = await organizerHelper.locator("body").innerText();
+      expect(organizerHelperText).not.toContain("You’re doing research all the time");
+      expect(organizerHelperText).not.toContain("Prior to kicking off Deep Research");
+
+      // The speaker revokes the organizer-created relationship from their own
+      // portal. The helper's already-open session must lose the seat too.
+      await speaker.goto(`/portal?eventId=${encodeURIComponent(EVENT_ID)}`);
+      const recordHelperItem = speaker.locator(".portal-helper-list li").filter({ hasText: recordHelperName });
+      await expect(recordHelperItem).toBeVisible({ timeout: 30_000 });
+      await recordHelperItem.getByRole("button", { name: "Remove" }).click();
+      await expect(recordHelperItem).toHaveCount(0);
+      await organizerHelper.reload();
+      await expect(organizerHelper.getByText("You have no speaker record at this conference.")).toBeVisible({ timeout: 30_000 });
+
+      // Clean up the two other seats created during this browser proof.
+      const onboardingHelperItem = drawer.locator(".onboarding-context-row").filter({ hasText: onboardingHelperName });
+      await onboardingHelperItem.getByRole("button", { name: "Remove" }).click();
+      await expect(drawer).not.toContainText(onboardingHelperName);
+      const portalHelperItem = speaker.locator(".portal-helper-list li").filter({ hasText: helperName });
+      await portalHelperItem.getByRole("button", { name: "Remove" }).click();
+      await expect(portalHelperItem).toHaveCount(0);
     } finally {
       await Promise.all([speakerContext.close(), helperContext.close(), organizerContext.close()]);
     }
