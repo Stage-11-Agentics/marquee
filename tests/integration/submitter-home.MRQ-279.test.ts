@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { h } from "preact";
+import { renderToString } from "preact-render-to-string";
 
 import { app, type Env } from "../../src/index";
 import { mintMagicLink } from "../../src/lib/auth/magic-links";
+import { resolveProposalsEvent } from "../../src/routes/public-proposals.routes";
+import { SubmitterPortal, type SubmitterSnapshot } from "../../src/ui/portal/PortalPage";
 import { applyMigrations, env } from "./apply-migrations";
 
 /**
@@ -186,6 +190,23 @@ test("AC-414 · the link is scoped to the conference asked about, never blended 
   expect(snapshot.submissions.map((row) => row.reference_code).sort()).toEqual(["SUB-1", "SUB-2"]);
 });
 
+test("CONTRACT · MRQ-279 · the portal's own proposal-door button keeps its conference", async () => {
+  // Read the link from the actual rendered portal and follow it. A hand-built
+  // `/my-proposals?event=...` request would not catch the portal dropping the
+  // slug before the browser ever reaches the door.
+  const portalHtml = await submitterPortalHtml();
+  const href = /<a[^>]*href="([^"]+)"[^>]*>Email me a link to my proposals<\/a>/.exec(portalHtml)?.[1];
+  if (!href) throw new Error("the submitter portal must render its proposal-door link");
+
+  const doorUrl = new URL(href, "https://marquee.test");
+  expect(doorUrl.pathname).toBe("/my-proposals");
+  expect(doorUrl.searchParams.get("event")).toBe(SLUG_A);
+
+  const door = await request(doorUrl.pathname + doorUrl.search);
+  expect(door.status).toBe(200);
+  expect(await door.text()).toContain("Atlas Conference 2026");
+});
+
 /** Sign in as the submitter and read their own page, the way the mail does. */
 async function submitterSnapshot(): Promise<{
   submissions: Array<{
@@ -203,6 +224,20 @@ async function submitterSnapshot(): Promise<{
   const portal = await request(`/api/v1/me/portal?eventId=${EVENT_A}`, { headers: { cookie } });
   expect(portal.status).toBe(200);
   return portal.json();
+}
+
+/** Render the same submitter screen the browser mounts, including its links. */
+async function submitterPortalHtml(): Promise<string> {
+  await askForLink(SUBMITTER, SLUG_A);
+  const link = await linkFromMail(SUBMITTER);
+  expect(link, "the door must have mailed a link").toBeTruthy();
+  const target = new URL(link!);
+  const exchange = await request(target.pathname + target.search, { redirect: "manual" });
+  const cookie = exchange.headers.get("set-cookie")?.split(";")[0] ?? "";
+  const portal = await request(`/api/v1/me/portal?eventId=${EVENT_A}`, { headers: { cookie } });
+  expect(portal.status).toBe(200);
+  const snapshot = await portal.json<SubmitterSnapshot>();
+  return renderToString(h(SubmitterPortal, { snapshot, onSignOut: () => undefined }));
 }
 
 /** An announced decision: the row plus the outbox row that carries it. */
@@ -341,7 +376,12 @@ test("AC-421 · an unlaunched conference with no open call is not named to a str
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ email: SUBMITTER, event: eventField }).toString(),
   });
-  expect(response.status).toBe(200);
+  expect(response.status).toBe(404);
+  const body = await response.json<{ error: { code: string; message: string } }>();
+  expect(body.error).toEqual({
+    code: "not_found",
+    message: "That conference is not available for proposal links. Check the event link and try again.",
+  });
   expect(await linkFromMail(SUBMITTER), "a named-but-unresolvable conference must send nothing").toBeNull();
 });
 
@@ -369,6 +409,16 @@ test("AC-422 · duplicate-slug resolution is deterministic and stays within its 
   const target = new URL(link!);
   const exchange = await request(target.pathname + target.search, { redirect: "manual" });
   expect(exchange.headers.get("location")).toBe(`/portal?eventId=${EVENT_A}&source=submitter-home`);
+
+  // A deterministic anchor must also be usable. If the demo event wins merely
+  // because it is demo-mode, an open call with the same slug in another org is
+  // hidden behind an unusable candidate.
+  await env.DB.batch([
+    env.DB.prepare("UPDATE events SET status = 'draft' WHERE id IN (?, ?)").bind(EVENT_A, "evt_other"),
+    openCall("form-other", "evt_other", "cfp-other"),
+  ]);
+  const usable = await resolveProposalsEvent(env.DB, "shared-slug");
+  expect(usable?.id).toBe("evt_other");
 });
 
 test("AC-417 · one address cannot be used as a mail cannon", async () => {

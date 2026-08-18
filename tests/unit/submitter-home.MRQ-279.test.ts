@@ -152,10 +152,16 @@ describe("MRQ-279 the submitter's home", () => {
 
   test("CONTRACT · MRQ-279 · the way back is the submitter's own door and needs no password", () => {
     const html = render(snapshot([submission()]));
-    expect(html).toContain('href="/my-proposals"');
+    expect(html).toContain('href="/my-proposals?event=aie-ny-2026"');
     expect(html).toContain("There is no password");
     // The organizer's page is not an answer to somebody who never had an account.
     expect(html).not.toContain("/signin");
+  });
+
+  test("CONTRACT · MRQ-279 · the proposal door is script-only, never a raw JSON landing page", () => {
+    const html = renderMyProposals("");
+    expect(html).not.toContain('method="post"');
+    expect(html).not.toContain('action="/api/v1/public/proposals/link"');
   });
 
   test("CONTRACT · MRQ-279 · a blocked Turnstile script leaves a visible instruction", () => {

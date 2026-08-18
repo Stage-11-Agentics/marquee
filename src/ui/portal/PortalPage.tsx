@@ -1032,7 +1032,7 @@ function SubmitterPortal({ snapshot, onSignOut, viewingAsSpeaker = false }: { sn
           <div class="portal-panel-body">
             <p class="portal-empty">Bookmark this page. There is no password — if the link expires, ask for a new one with <strong>{snapshot.person.email}</strong> and you will land right back here.</p>
             <div class="portal-seat-actions">
-              <a class="portal-button secondary" href="/my-proposals">Email me a link to my proposals</a>
+              <a class="portal-button secondary" href={`/my-proposals?event=${encodeURIComponent(snapshot.event.slug)}`}>Email me a link to my proposals</a>
               {openForm ? <a class="portal-button secondary" href={`/f/${encodeURIComponent(openForm)}`}>Open the call for speakers</a> : null}
             </div>
           </div>

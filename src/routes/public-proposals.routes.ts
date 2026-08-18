@@ -38,11 +38,15 @@ import { publicFormIsClosed, publicTurnstileExempt } from "./public-form.shared"
 import { verifyTurnstile } from "../lib/r2/turnstile";
 
 /**
- * The one sentence this route ever says. It names the conference — which the
+ * The success sentence this route says. It names the conference — which the
  * caller already chose — and asserts nothing whatever about the address.
  */
 export const PROPOSALS_LINK_ACKNOWLEDGEMENT =
   "If that address has proposals for this conference, a link to them is on its way to it.";
+
+/** A failed event lookup is a fact about the request, not about the address. */
+export const PROPOSALS_EVENT_UNAVAILABLE =
+  "That conference is not available for proposal links. Check the event link and try again.";
 
 const requestSchema = z.object({
   // A shape check, not an existence check: refusing "not-an-address" says
@@ -157,6 +161,22 @@ async function hasOpenPublicForm(database: D1Database, eventId: string, now: num
   return forms.results.some((form) => !publicFormIsClosed(form, now));
 }
 
+/**
+ * One Turnstile decision for both halves of the door: the server only asks for
+ * a token when the page can mount the widget with the same configured key.
+ * An absent site key is an intentionally un-gated deployment, and a demo event
+ * remains exempt for the same reason as the public form.
+ */
+export async function resolveProposalsTurnstileSiteKey(
+  database: D1Database,
+  eventId: string,
+  configuredSiteKey: string | null | undefined,
+): Promise<string> {
+  const siteKey = configuredSiteKey?.trim() ?? "";
+  if (!siteKey || await publicTurnstileExempt(database, eventId)) return "";
+  return siteKey;
+}
+
 export async function resolveProposalsEvent(
   database: D1Database,
   slug: string | null | undefined,
@@ -167,18 +187,31 @@ export async function resolveProposalsEvent(
   }
 
   // The named event is the only identity available before the public site has
-  // gone live. Choose a deterministic anchor from that slug, then keep all
-  // later candidates inside its organization; the caller's tenant is not
-  // recoverable from a bare duplicate slug.
+  // gone live. Choose a deterministic *eligible* anchor from that slug, then
+  // keep all later candidates inside its organization; the caller's tenant is
+  // not recoverable from a bare duplicate slug.
+  const now = Date.now();
   const scope = await database
     .prepare(
-      `SELECT org_id FROM events
-        WHERE slug = ?
-        ORDER BY CASE WHEN status = 'live' THEN 0 ELSE 1 END,
-                 demo_mode DESC, created_at ASC, id ASC
+      `SELECT candidate_event.org_id FROM events candidate_event
+        WHERE candidate_event.slug = ?
+          AND (
+            candidate_event.status = 'live'
+            OR EXISTS (
+              SELECT 1 FROM forms public_form
+               WHERE public_form.event_id = candidate_event.id
+                 AND public_form.status = 'open'
+                 AND (public_form.opens_at IS NULL OR public_form.opens_at <= ?)
+                 AND (public_form.closes_at IS NULL OR public_form.closes_at > ?)
+            )
+          )
+        ORDER BY CASE WHEN candidate_event.status = 'live' THEN 0 ELSE 1 END,
+                 candidate_event.demo_mode DESC,
+                 candidate_event.created_at ASC,
+                 candidate_event.id ASC
         LIMIT 1`,
     )
-    .bind(slug)
+    .bind(slug, now, now)
     .first<{ org_id: string }>();
   if (!scope) return null;
 
@@ -191,7 +224,6 @@ export async function resolveProposalsEvent(
     )
     .bind(slug, scope.org_id)
     .all<ProposalEventCandidate>();
-  const now = Date.now();
   for (const named of candidates.results) {
     if (named.status === "live" || await hasOpenPublicForm(database, named.id, now)) {
       return { id: named.id, name: named.name, slug: named.slug };
@@ -222,7 +254,7 @@ const requestProposalsLink = defineApiRoute(
     policy: { auth: { kind: "public" }, rateLimit: { bucket: "send" }, concurrency: "none" },
     responses: {
       200: jsonResponse(responseSchema, "The request was accepted."),
-      ...errorResponses([400, 403, 422, 429, 500]),
+      ...errorResponses([400, 403, 404, 422, 429, 500]),
     },
   },
   async (context) => {
@@ -233,72 +265,75 @@ const requestProposalsLink = defineApiRoute(
     const now = Date.now();
     const event = await resolveProposalsEvent(context.env.DB, body.event ?? null);
 
-    // Every branch below falls through to the same acknowledgement. Nothing may
-    // differ by a byte on whether the conference exists, whether the address is
-    // known, or whether a link was minted just now.
-    if (event) {
-      // The same exemption the public call for speakers takes, for the same
-      // reason: a demo conference is driven by walkthroughs and tests with no
-      // human to solve a challenge, and gating it would make the demo the one
-      // place the product cannot be seen working.
-      if (!(await publicTurnstileExempt(context.env.DB, event.id))) {
-        const turnstile = await verifyTurnstile({
-          secretKey: (context.env as unknown as { TURNSTILE_SECRET_KEY: string }).TURNSTILE_SECRET_KEY,
-          token: body.turnstileToken ?? body.turnstile_token,
-          remoteIp: context.req.header("cf-connecting-ip"),
-        });
-        // The one refusal that is not the generic answer, and it says nothing
-        // about the address: a failed challenge is a fact about this request.
-        if (!turnstile.ok) {
-          throw ApiError.forbidden("Complete the security check, then choose Send again.");
-        }
-        const tokenKey = `public-form:turnstile:${await sha256Hex(body.turnstileToken ?? body.turnstile_token ?? "")}`;
-        if (await context.env.CACHE.get(tokenKey)) {
-          throw ApiError.forbidden("That security check has already been used. Complete it again, then choose Send.");
-        }
-        await context.env.CACHE.put(tokenKey, "1", { expirationTtl: 300 });
-      }
+    if (!event) throw ApiError.notFound(PROPOSALS_EVENT_UNAVAILABLE);
 
-      const person = await submitterAtEvent(context.env.DB, event.id, body.email);
-      if (person) {
-        // The conference is named in the redirect rather than left to a later
-        // fallback ordering, so a submitter at two conferences lands on the one
-        // they asked about.
-        const link = await mintMagicLink(context.env.DB, {
-          personId: person.id,
-          eventId: event.id,
-          purpose: "login",
-          redirectTo: submitterPortalRedirect(event.id),
-          now,
-          admission: {
-            maxRows: LINK_LIMIT,
-            createdAfter: now - LINK_WINDOW_MS,
-          },
+    // The same exemption the public call for speakers takes, for the same
+    // reason: a demo conference is driven by walkthroughs and tests with no
+    // human to solve a challenge, and gating it would make the demo the one
+    // place the product cannot be seen working. The shared helper also keeps
+    // an absent site key from demanding a token the page could not mount.
+    const turnstileSiteKey = await resolveProposalsTurnstileSiteKey(
+      context.env.DB,
+      event.id,
+      (context.env as unknown as { TURNSTILE_SITE_KEY?: string }).TURNSTILE_SITE_KEY,
+    );
+    if (turnstileSiteKey) {
+      const turnstile = await verifyTurnstile({
+        secretKey: (context.env as unknown as { TURNSTILE_SECRET_KEY: string }).TURNSTILE_SECRET_KEY,
+        token: body.turnstileToken ?? body.turnstile_token,
+        remoteIp: context.req.header("cf-connecting-ip"),
+      });
+      // The one refusal that is not the generic answer, and it says nothing
+      // about the address: a failed challenge is a fact about this request.
+      if (!turnstile.ok) {
+        throw ApiError.forbidden("Complete the security check, then choose Send again.");
+      }
+      const tokenKey = `public-form:turnstile:${await sha256Hex(body.turnstileToken ?? body.turnstile_token ?? "")}`;
+      if (await context.env.CACHE.get(tokenKey)) {
+        throw ApiError.forbidden("That security check has already been used. Complete it again, then choose Send.");
+      }
+      await context.env.CACHE.put(tokenKey, "1", { expirationTtl: 300 });
+    }
+
+    const person = await submitterAtEvent(context.env.DB, event.id, body.email);
+    if (person) {
+      // The conference is named in the redirect rather than left to a later
+      // fallback ordering, so a submitter at two conferences lands on the one
+      // they asked about.
+      const link = await mintMagicLink(context.env.DB, {
+        personId: person.id,
+        eventId: event.id,
+        purpose: "login",
+        redirectTo: submitterPortalRedirect(event.id),
+        now,
+        admission: {
+          maxRows: LINK_LIMIT,
+          createdAfter: now - LINK_WINDOW_MS,
+        },
+      });
+      if (link) {
+        const origin = new URL(context.req.url).origin;
+        const mail = renderProposalsLinkMail({
+          eventName: event.name,
+          link: `${origin}/api/v1/auth/exchange?token=${encodeURIComponent(link.token)}`,
         });
-        if (link) {
-          const origin = new URL(context.req.url).origin;
-          const mail = renderProposalsLinkMail({
-            eventName: event.name,
-            link: `${origin}/api/v1/auth/exchange?token=${link.token}`,
-          });
-          const outboxId = await enqueueAuthMail(context.env.DB, {
-            eventId: event.id,
-            personId: person.id,
-            entityId: IDEMPOTENCY_REGISTRY.authLink(link.id),
-            // The address on the RECORD we matched, never the string the caller
-            // typed. Matching is case-insensitive, so the two differ in ordinary
-            // use — and an outbox row is not the place for caller-controlled text
-            // in a recipient field. This is what the sign-in door does too.
-            toEmail: person.email,
-            templateKey: "magic_link_login",
-            ...mail,
-          });
-          // Writing the outbox row is not sending: the consumer only ever acts on
-          // an explicit queue message. Without this the mail sits in D1 forever
-          // and the endpoint still answers 200 — a submitter waiting on a link
-          // that was never going to arrive.
-          await enqueueMailMessage(context.env.MAIL_QUEUE, outboxId);
-        }
+        const outboxId = await enqueueAuthMail(context.env.DB, {
+          eventId: event.id,
+          personId: person.id,
+          entityId: IDEMPOTENCY_REGISTRY.authLink(link.id),
+          // The address on the RECORD we matched, never the string the caller
+          // typed. Matching is case-insensitive, so the two differ in ordinary
+          // use — and an outbox row is not the place for caller-controlled text
+          // in a recipient field. This is what the sign-in door does too.
+          toEmail: person.email,
+          templateKey: "magic_link_login",
+          ...mail,
+        });
+        // Writing the outbox row is not sending: the consumer only ever acts on
+        // an explicit queue message. Without this the mail sits in D1 forever
+        // and the endpoint still answers 200 — a submitter waiting on a link
+        // that was never going to arrive.
+        await enqueueMailMessage(context.env.MAIL_QUEUE, outboxId);
       }
     }
 

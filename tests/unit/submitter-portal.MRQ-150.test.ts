@@ -77,7 +77,7 @@ describe("MRQ-150 the submitter's empty state", () => {
   // the assertion now names the link that is actually there.
   test("CONTRACT · MRQ-150 · every next action is a real link, so the screen is not a cul-de-sac", () => {
     const html = render(snapshot());
-    expect(html).toContain('href="/my-proposals"');
+    expect(html).toContain('href="/my-proposals?event=aie-ny-2026"');
     expect(html).toContain('href="/f/cfp"');
     expect(html).toContain('href="/agenda"');
     expect(html).toContain('href="/"');
@@ -88,7 +88,7 @@ describe("MRQ-150 the submitter's empty state", () => {
     // must simply not appear rather than link somewhere that refuses the reader.
     const html = render(snapshot({ submissions: [submission({ form_slug: null })] }));
     expect(html).not.toContain("Open the call for speakers");
-    expect(html).toContain('href="/my-proposals"');
+    expect(html).toContain('href="/my-proposals?event=aie-ny-2026"');
   });
 
   test("CONTRACT · MRQ-150 · a closed draft does not promise that it can be submitted now", () => {

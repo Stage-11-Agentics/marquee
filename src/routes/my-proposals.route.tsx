@@ -6,8 +6,11 @@ import { renderToString } from "preact-render-to-string";
 import type { Env } from "../index";
 import { ICON_LINKS } from "../lib/head-icons";
 import { errorFields, loggerForEnv } from "../lib/observability/log";
-import { publicTurnstileExempt } from "./public-form.shared";
-import { PROPOSALS_LINK_ACKNOWLEDGEMENT, resolveProposalsEvent } from "./public-proposals.routes";
+import {
+  PROPOSALS_LINK_ACKNOWLEDGEMENT,
+  resolveProposalsEvent,
+  resolveProposalsTurnstileSiteKey,
+} from "./public-proposals.routes";
 
 /**
  * The submitter's front door.
@@ -34,7 +37,7 @@ export interface MyProposalsPageState {
   event: { name: string; slug: string } | null;
   /** Preserve an explicit URL slug through the form even when it does not resolve. */
   requestedEventSlug: string | null;
-  /** Empty when the conference is exempt (demo mode); the page then mounts no widget. */
+  /** Empty when the conference is exempt or no site key is configured. */
   turnstileSiteKey: string;
 }
 
@@ -49,7 +52,7 @@ function MyProposalsBody({ state }: { state: MyProposalsPageState }): JSX.Elemen
         <strong> No password and no account.</strong> Give the address you submitted with and a
         link arrives by email.
       </p>
-      <form class="proposals-form" id="proposals-form" method="post" action="/api/v1/public/proposals/link">
+      <form class="proposals-form" id="proposals-form">
         <input type="hidden" name="event" value={state.requestedEventSlug ?? state.event?.slug ?? ""} />
         <label class="proposals-field" for="proposals-email">
           <span>The email you submitted with</span>
@@ -115,7 +118,7 @@ const PROPOSALS_STYLES = `
 .proposals-field { display: grid; gap: 6px; font-size: 12px; }
 .proposals-field input { min-height: 38px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--sunk); color: var(--ink); font: 400 13px/1.4 var(--sans); }
 .proposals-security { color: var(--ink-soft); font: 400 11px/1.4 var(--mono); min-height: 0; }
-.proposals-security:not(:empty) { min-height: 42px; }
+.proposals-security:not(:empty) { min-height: 65px; }
 [data-proposals-security-copy] { display: block; padding: 10px 0; }
 .proposals-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .proposals-status { min-height: 30px; flex: 1; color: var(--ink-soft); font: 400 11px/1.4 var(--mono); }
@@ -243,18 +246,21 @@ export async function readMyProposalsState(
     const live = await resolveProposalsEvent(context.env.DB, requested);
     if (live) {
       event = { name: live.name, slug: live.slug };
-      turnstileSiteKey = (await publicTurnstileExempt(context.env.DB, live.id))
-        ? ""
-        : (context.env as unknown as { TURNSTILE_SITE_KEY?: string }).TURNSTILE_SITE_KEY ?? "";
+      turnstileSiteKey = await resolveProposalsTurnstileSiteKey(
+        context.env.DB,
+        live.id,
+        (context.env as unknown as { TURNSTILE_SITE_KEY?: string }).TURNSTILE_SITE_KEY,
+      );
     }
   } catch (error) {
-    // A page that cannot read its own preconditions still has to open: the form
-    // asks for an address rather than asserting anything about the instance, so
-    // it is the state that is safe to be wrong about.
+    // A page that cannot read the event or its security precondition must fail
+    // visibly. Rendering a no-widget page while the POST route still demands a
+    // token creates an impossible retry loop.
     loggerForEnv(context.env).emit("worker_error", "error", {
       source: "myProposalsPage",
       ...errorFields(error),
     });
+    throw error;
   }
   return { event, requestedEventSlug: requested, turnstileSiteKey };
 }
