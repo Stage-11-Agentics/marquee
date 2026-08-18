@@ -146,7 +146,6 @@ async function seed(): Promise<void> {
 }
 
 beforeEach(seed);
-
 test("CONTRACT · MRQ-284 · every tool names an operation the live route registry actually serves", async () => {
   const { entries } = await createApiRouter(apiManifest);
   const registered = new Set(entries.map((entry) => entry.operationId));
@@ -154,8 +153,7 @@ test("CONTRACT · MRQ-284 · every tool names an operation the live route regist
     expect(registered.has(tool.operationId), `${tool.name} -> ${tool.operationId}`).toBe(true);
   }
 });
-
-test("CONTRACT · MRQ-284 acceptance 1 · initialize answers a stock client with a version, capabilities and instructions", async () => {
+test("CONTRACT · MRQ-284 acceptance 1 · the transport: initialize, ping, notifications, bounded batches, and POST only", async () => {
   const answer = await rpc("initialize", {
     protocolVersion: "2025-06-18",
     capabilities: {},
@@ -168,9 +166,7 @@ test("CONTRACT · MRQ-284 acceptance 1 · initialize answers a stock client with
   });
   expect(String(answer.result?.instructions)).toContain("Authorization: Bearer");
   expect((await rpc("ping")).result).toEqual({});
-});
 
-test("CONTRACT · MRQ-284 acceptance 1 · a notification is answered with 202 and no body, and a batch answers in order", async () => {
   const notification = await post({ jsonrpc: "2.0", method: "notifications/initialized" });
   expect(notification.status).toBe(202);
   expect(await notification.text()).toBe("");
@@ -182,15 +178,35 @@ test("CONTRACT · MRQ-284 acceptance 1 · a notification is answered with 202 an
   ]);
   const answers = await batch.json<RpcResponse[]>();
   expect(answers.map((answer) => answer.id)).toEqual(["a", "b"]);
-});
 
-test("CONTRACT · MRQ-284 acceptance 2 · signed out, tools/list is exactly the public tier", async () => {
-  expect(await listToolNames()).toEqual(
-    ["agenda", "cfp_form", "session", "speaker", "star_session", "submit_proposal"],
+  const oversized = await post(
+    Array.from({ length: 40 }, (_unused, index) => ({ jsonrpc: "2.0", id: index, method: "ping" })),
   );
-});
+  expect(oversized.status).toBe(400);
+  expect((await oversized.json<RpcResponse>()).error?.message).toContain("at most");
 
-test("CONTRACT · MRQ-284 acceptance 2 · a token widens the set to what its grants and seat already allow, and no further", async () => {
+  const mixed = await post([
+    { jsonrpc: "2.0", id: "good", method: "ping" },
+    { jsonrpc: "2.0", id: "bad", method: "tools/call", params: "oops" },
+  ]);
+  const mixedAnswers = await mixed.json<RpcResponse[]>();
+  expect(mixedAnswers.map((answer) => answer.id)).toEqual(["good", "bad"]);
+  expect(mixedAnswers[0].error).toBeUndefined();
+  expect(mixedAnswers[1].error?.code).toBe(-32602);
+
+  const streamed = await SELF.fetch(`${ORIGIN}/mcp`);
+  expect(streamed.status).toBe(405);
+  expect(streamed.headers.get("allow")).toBe("POST");
+
+  const unreadable = await SELF.fetch(`${ORIGIN}/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{not json",
+  });
+  expect(unreadable.status).toBe(400);
+  expect((await unreadable.json<RpcResponse>()).error?.code).toBe(-32700);
+});
+test("CONTRACT · MRQ-284 acceptance 2 · the two tiers, and what a credential does and does not add", async () => {
   const agentTools = await listToolNames(AGENT_TOKEN);
   // A reviewer seat: the review tools arrive, the organizer's do not.
   expect(agentTools).toContain("review_queue");
@@ -211,8 +227,15 @@ test("CONTRACT · MRQ-284 acceptance 2 · a token widens the set to what its gra
   expect(ownerTools).toContain("send_reminder");
   expect(ownerTools).toContain("publish_sessions");
   expect(ownerTools.length).toBeGreaterThan(agentTools.length);
-});
 
+  expect(await listToolNames()).toEqual(
+    ["agenda", "cfp_form", "session", "speaker", "star_session", "submit_proposal"],
+  );
+
+  const response = await post({ jsonrpc: "2.0", id: 1, method: "tools/list" }, "mq_not_a_real_token");
+  expect(response.status).toBe(401);
+  expect((await response.json<RpcResponse>()).error?.message).toContain("not valid");
+});
 test("CONTRACT · MRQ-284 acceptance 2 · a token restricted to one conference is refused on another in the API's own words", async () => {
   // The tool IS on this connection — the seat holds it on its own conference.
   // The refusal therefore comes from the pipeline, on the conference asked for.
@@ -233,13 +256,6 @@ test("CONTRACT · MRQ-284 acceptance 2 · a token restricted to one conference i
   const body = await rest.json<{ error: { code: string; message: string } }>();
   expect(sentence).toContain(body.error.message);
 });
-
-test("CONTRACT · MRQ-284 acceptance 2 · an invalid bearer is a 401, not a silent downgrade to the public tier", async () => {
-  const response = await post({ jsonrpc: "2.0", id: 1, method: "tools/list" }, "mq_not_a_real_token");
-  expect(response.status).toBe(401);
-  expect((await response.json<RpcResponse>()).error?.message).toContain("not valid");
-});
-
 test("CONTRACT · MRQ-284 acceptance 1 · a public read runs through the same handler as the public page", async () => {
   const result = await call("cfp_form", { slug: "mcp-cfp" });
   expect(result.isError).toBeUndefined();
@@ -249,7 +265,6 @@ test("CONTRACT · MRQ-284 acceptance 1 · a public read runs through the same ha
     .toEqual(["title", "speaker_name", "speaker_email"]);
   expect(result.structuredContent).toBeDefined();
 });
-
 test("CONTRACT · MRQ-284 acceptance 3 · a proposal sent over MCP is the same row the web form writes", async () => {
   const viaTool = await call("submit_proposal", {
     slug: "mcp-cfp",
@@ -283,7 +298,6 @@ test("CONTRACT · MRQ-284 acceptance 3 · a proposal sent over MCP is the same r
   ).first<{ n: number }>();
   expect(mail?.n).toBe(2);
 });
-
 test("CONTRACT · MRQ-284 acceptance 3 · the CAPTCHA the public form demands is demanded of an agent too, in the same words", async () => {
   const body = {
     email: "guarded@mcp.example",
@@ -301,7 +315,6 @@ test("CONTRACT · MRQ-284 acceptance 3 · the CAPTCHA the public form demands is
   expect(viaTool.isError).toBe(true);
   expect(viaTool.content[0].text).toContain(formRefusal);
 });
-
 test("CONTRACT · MRQ-284 acceptance 4 · an agent seat's evaluation lands as an agent review, beside the human number and never inside it", async () => {
   const written = await call("record_evaluation", {
     event_id: EVENT,
@@ -369,7 +382,6 @@ test("CONTRACT · MRQ-284 acceptance 4 · an agent seat's evaluation lands as an
   const ordered = payloadOf(await call("list_submissions", { event_id: EVENT, sort: "agent_score" }, OWNER_TOKEN)).data as Array<{ id: string }>;
   expect(ordered[0].id).toBe(SECOND_SUBMISSION);
 });
-
 test("CONTRACT · MRQ-284 acceptance 4 · abstaining over MCP is recorded as an abstention rather than a low score", async () => {
   const result = await call("abstain", {
     event_id: EVENT,
@@ -384,7 +396,6 @@ test("CONTRACT · MRQ-284 acceptance 4 · abstaining over MCP is recorded as an 
   expect(stored?.abstained).toBe(1);
   expect(stored?.score).toBeNull();
 });
-
 test("CONTRACT · MRQ-284 acceptance 5 · apply_decisions needs the plan's own fingerprint and ETag, and refuses a stale plan", async () => {
   const plan = await call("decision_plan", {
     event_id: EVENT,
@@ -428,8 +439,7 @@ test("CONTRACT · MRQ-284 acceptance 5 · apply_decisions needs the plan's own f
   }, OWNER_TOKEN);
   expect(replayed.isError).toBe(true);
 });
-
-test("CONTRACT · MRQ-284 · a tool this connection cannot reach reads as absent, never as withheld", async () => {
+test("CONTRACT · MRQ-284 · every refusal shape: concealed, actionable, and never a moved target", async () => {
   const hidden = await call("apply_decisions", {
     event_id: EVENT,
     action: "accept",
@@ -451,12 +461,10 @@ test("CONTRACT · MRQ-284 · a tool this connection cannot reach reads as absent
   const anonymous = await call("apply_decisions", { zzz: 1 });
   expect(anonymous.content[0].text).not.toContain("plan_fingerprint");
   expect(anonymous.content[0].text).not.toContain("does not take");
-});
 
-test("CONTRACT · MRQ-284 · a misspelled tool and a bad argument are refusals a caller can act on, not protocol faults", async () => {
-  const misspelled = await call("list_submisions", {});
-  expect(misspelled.isError).toBe(true);
-  expect(misspelled.content[0].text).toContain("tools/list");
+  const unknownName = await call("list_submisions", {});
+  expect(unknownName.isError).toBe(true);
+  expect(unknownName.content[0].text).toContain("tools/list");
 
   const missing = await call("session", {});
   expect(missing.isError).toBe(true);
@@ -469,23 +477,7 @@ test("CONTRACT · MRQ-284 · a misspelled tool and a bad argument are refusals a
   // An unknown METHOD, by contrast, is a real protocol fault.
   const badMethod = await rpc("tools/execute", {});
   expect(badMethod.error?.code).toBe(-32601);
-});
 
-test("CONTRACT · MRQ-284 · the endpoint speaks JSON over POST and says so to anything else", async () => {
-  const streamed = await SELF.fetch(`${ORIGIN}/mcp`);
-  expect(streamed.status).toBe(405);
-  expect(streamed.headers.get("allow")).toBe("POST");
-
-  const unreadable = await SELF.fetch(`${ORIGIN}/mcp`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: "{not json",
-  });
-  expect(unreadable.status).toBe(400);
-  expect((await unreadable.json<RpcResponse>()).error?.code).toBe(-32700);
-});
-
-test("CONTRACT · MRQ-284 · a path parameter cannot move the call onto a different operation", async () => {
   // `encodeURIComponent` leaves `.` alone and the URL parser removes dot
   // segments, so `..` here would have been served by getSubmissionRecord — the
   // organizer's UNBLINDED record — while the tier check had been evaluated
@@ -502,24 +494,6 @@ test("CONTRACT · MRQ-284 · a path parameter cannot move the call onto a differ
   const slashed = await call("submission", { event_id: EVENT, submission_id: `${SUBMISSION}/timeline` }, OWNER_TOKEN);
   expect(slashed.isError).toBe(true);
 });
-
-test("CONTRACT · MRQ-284 · a batch is bounded, and one bad member costs only itself", async () => {
-  const oversized = await post(
-    Array.from({ length: 40 }, (_unused, index) => ({ jsonrpc: "2.0", id: index, method: "ping" })),
-  );
-  expect(oversized.status).toBe(400);
-  expect((await oversized.json<RpcResponse>()).error?.message).toContain("at most");
-
-  const mixed = await post([
-    { jsonrpc: "2.0", id: "good", method: "ping" },
-    { jsonrpc: "2.0", id: "bad", method: "tools/call", params: "oops" },
-  ]);
-  const answers = await mixed.json<RpcResponse[]>();
-  expect(answers.map((answer) => answer.id)).toEqual(["good", "bad"]);
-  expect(answers[0].error).toBeUndefined();
-  expect(answers[1].error?.code).toBe(-32602);
-});
-
 test("CONTRACT · MRQ-284 · every tool this connection lists can be called without an argument-mapping fault", async () => {
   // The gap this closes is the one that shipped two dead tools: a façade does no
   // schema validation of its own, so a body-field typo — or a tool whose handler
