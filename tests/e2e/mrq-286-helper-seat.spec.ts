@@ -25,6 +25,7 @@ if (process.env.DRIVE_MRQ286_HELPER_SEAT) {
     const onboardingHelperEmail = `mrq286-onboarding-${runId}@example.com`;
     const speakerContext = await browser.newContext({ baseURL });
     const helperContext = await browser.newContext({ baseURL });
+    const organizerHelperContext = await browser.newContext({ baseURL });
     const organizerContext = await browser.newContext({ baseURL });
     try {
       const speakerLogin = await speakerContext.request.post("/api/v1/auth/demo", { data: { role: "speaker" } });
@@ -109,7 +110,7 @@ if (process.env.DRIVE_MRQ286_HELPER_SEAT) {
 
       // Sign in using the seat created from SpeakerRecord, and verify the
       // helper view is scoped before the speaker revokes that same seat.
-      const organizerHelper = await helperContext.newPage();
+      const organizerHelper = await organizerHelperContext.newPage();
       await organizerHelper.goto(recordHelperLink);
       await expect(organizerHelper.getByRole("heading", { name: "You help Aarush Selvan" })).toBeVisible();
       await expect(organizerHelper.getByRole("heading", { name: "Work for Aarush Selvan" })).toBeVisible();
@@ -135,7 +136,7 @@ if (process.env.DRIVE_MRQ286_HELPER_SEAT) {
       await portalHelperItem.getByRole("button", { name: "Remove" }).click();
       await expect(portalHelperItem).toHaveCount(0);
     } finally {
-      await Promise.all([speakerContext.close(), helperContext.close(), organizerContext.close()]);
+      await Promise.all([speakerContext.close(), helperContext.close(), organizerHelperContext.close(), organizerContext.close()]);
     }
   });
 }
