@@ -5,6 +5,7 @@
 import { beforeAll, describe, expect, test } from "vitest";
 
 import { app, type Env } from "../../../src/index";
+import { reconcileTaskSet } from "../../../src/jobs/cascade/decisions";
 import { createSession } from "../../../src/lib/auth/auth-sessions";
 import { mintPortalMagicLink } from "../../../src/lib/auth/magic-links";
 import { applyMigrations, env } from "../apply-migrations";
@@ -430,5 +431,74 @@ describe.sequential("MRQ-167 org people import receipt", () => {
     const portal = await request(`/api/v1/me/portal?eventId=${EVENT_ID}`, {}, sessionCookie ?? "");
     expect(portal.status).toBe(200);
     expect(await portal.json()).toMatchObject({ seat: "speaker", event: { id: EVENT_ID }, person: { id: importedPerson!.id } });
+  });
+
+  test("CONTRACT · MRQ-281 · undo retains a seat adopted by the acceptance cascade", async () => {
+    const acceptedEmail = "accepted-by-cascade@mrq281.test";
+    const submissionId = "sub_mrq281_accepted";
+    const csv = [
+      "Full Name,Email,Company,Job Title",
+      `Accepted Adoptee,${acceptedEmail},Latticework Systems,Principal Engineer`,
+    ].join("\n");
+    const response = await post("/api/v1/org/imports", { csv, filename: "accepted-speaker.csv", event: "mrq-167-import", roster: true });
+    expect(response.status).toBe(202);
+    const result = await response.json() as { import_id: string; roster_placements: number };
+    expect(result.roster_placements).toBe(1);
+
+    const importedPerson = await env.DB.prepare("SELECT id FROM people WHERE email = ?")
+      .bind(acceptedEmail)
+      .first<{ id: string }>();
+    const importedSeat = await env.DB.prepare(
+      "SELECT id, created_at, invited_at FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
+    ).bind(EVENT_ID, importedPerson!.id).first<{ id: string; created_at: number; invited_at: number | null }>();
+    expect(importedSeat).toMatchObject({ invited_at: null });
+
+    const acceptanceNow = importedSeat!.created_at + 1;
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO submissions (id, event_id, kind, title, status, origin, submitter_person_id, created_at, updated_at)
+         VALUES (?, ?, 'session', 'Accepted by cascade', 'accepted', 'admin', ?, ?, ?)`,
+      ).bind(submissionId, EVENT_ID, importedPerson!.id, acceptanceNow, acceptanceNow),
+      env.DB.prepare(
+        `INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at)
+         VALUES ('part_mrq281_accepted', ?, ?, 'speaker', 0, 'pending', ?, ?)`,
+      ).bind(submissionId, importedPerson!.id, acceptanceNow, acceptanceNow),
+    ]);
+
+    // This is the production acceptance reconciler, not a direct membership
+    // write. Its membership upsert and claim ledger must share one batch so an
+    // accepted speaker cannot become invisible to import undo.
+    await reconcileTaskSet(env.DB, EVENT_ID, [submissionId], acceptanceNow, {
+      kind: "user",
+      personId: OWNER_ID,
+      requestId: null,
+    });
+
+    const acceptanceAudit = await env.DB.prepare(
+      `SELECT action, created_at, after_json FROM audit_log
+        WHERE event_id = ? AND entity_type = 'person' AND entity_id = ?
+          AND action = 'speaker_roster_linked'
+        ORDER BY created_at DESC, id DESC LIMIT 1`,
+    ).bind(EVENT_ID, importedPerson!.id).first<{ action: string; created_at: number; after_json: string }>();
+    expect(acceptanceAudit).toMatchObject({ action: "speaker_roster_linked", created_at: acceptanceNow });
+    expect(JSON.parse(acceptanceAudit?.after_json ?? "{}")).toMatchObject({ source: "acceptance_cascade", role: "speaker" });
+
+    const acceptedSeat = await env.DB.prepare(
+      "SELECT id, invited_at FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
+    ).bind(EVENT_ID, importedPerson!.id).first<{ id: string; invited_at: number | null }>();
+    expect(acceptedSeat).toEqual({ id: importedSeat!.id, invited_at: null });
+
+    const undone = await post(`/api/v1/org/imports/${result.import_id}/undo`, {});
+    expect(undone.status).toBe(200);
+    expect(await undone.json()).toMatchObject({
+      undone: 0,
+      roster_placements_removed: 0,
+      roster_placements_retained: 1,
+      skipped: 1,
+      retained_manifest: true,
+    });
+    expect(await env.DB.prepare(
+      "SELECT id FROM memberships WHERE event_id = ? AND person_id = ? AND role = 'speaker'",
+    ).bind(EVENT_ID, importedPerson!.id).first()).toEqual({ id: importedSeat!.id });
   });
 });

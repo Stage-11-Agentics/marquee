@@ -483,13 +483,18 @@ const undoPeopleImport = defineApiRoute(
     // speaker request omits `invited`, and the membership conflict upsert
     // deliberately leaves that column null. That route does, however, write
     // `speaker_roster_linked` to the append-only audit log in the same batch.
-    // Treat that event-scoped/person-scoped action as the claim ledger, bounded
-    // by the seat's own `created_at`; a later claim keeps this exact seat. The
+    // The acceptance cascade is the other runtime writer of this shared row; it
+    // now writes the same ledger action beside its membership upsert. Treat
+    // that event-scoped/person-scoped action as the claim ledger, bounded by
+    // the seat's own `created_at`; a later claim keeps this exact seat. The
     // audit row is now a correctness dependency: pruning or archiving it would
     // change undo semantics and must be treated as a data-model change.
     // Only `speaker_roster_linked` counts: an imported person already exists
     // before Add speaker runs, so the route's `speaker_created` branch cannot be
-    // the adoption of this import-created seat.
+    // the adoption of this import-created seat. The three membership writers
+    // are centralized in speaker-membership.ts; a fourth writer must choose the
+    // import receipt or the claim helper rather than silently bypassing the
+    // ledger.
     let rosterIndex = -1;
     if (rosterEventId && createdMembershipIds.length > 0) {
       rosterIndex = statements.length;

@@ -1,18 +1,26 @@
 /**
  * The runtime bridge from "this person speaks here" to `memberships`.
  *
- * `memberships(role='speaker')` had exactly one writer in this codebase — the
- * demo reseeder — and four readers that matter: the onboarding board's person
- * list, **speaker portal sign-in** (a runtime-created speaker could not reach
- * their own portal at all), headshot ownership on the upload read path, and the
- * bulk-comms speaker audience. A roster derived only from participations would
- * have papered over the gap and left the other three broken, so the row is
- * written where a person becomes a speaker of this conference:
+ * `memberships(role='speaker')` is shared by three runtime writers and four
+ * readers that matter: the onboarding board's person list, **speaker portal
+ * sign-in** (a runtime-created speaker could not reach their own portal at all),
+ * headshot ownership on the upload read path, and the bulk-comms speaker
+ * audience. A roster derived only from participations would have papered over
+ * the gap and left the other three broken, so the row is written where a person
+ * becomes a speaker of this conference:
  *
  *   - an organizer adding them to the roster,
  *   - the acceptance boundary, where the cascade already mints their tasks,
  *   - and the Sessionize speakers import, which reconciles every speaker row
  *     into the event even when the person's fields do not change.
+ *
+ * The first two are claims on an imported seat and emit the
+ * `speaker_roster_linked` audit ledger entry in the same batch as their
+ * membership upsert. The import is deliberately the exception: its receipt
+ * records the row it created, and it must not claim that it adopted its own
+ * seat. Any fourth writer must use one of these two explicit paths; a raw
+ * membership upsert without either its import receipt or claim ledger is an
+ * incomplete writer, not a new provenance mechanism.
  *
  * Duplicates are absorbed by the constraint, not by a read-then-write check:
  * `uq_memberships_event` already covers `(org_id, event_id, person_id, role)`
@@ -32,6 +40,8 @@
  * roster is an organizer act and wants its own control.
  */
 import { newUlid } from "../api/ids";
+import { auditStatement } from "./audit";
+import type { AuditActorKind } from "../db/schema";
 import { roleInSql, WORK_HOLDING_PARTICIPATION_ROLES } from "./participants";
 import { ON_STAGE_MEMBERSHIP_ROLES } from "./roster-source";
 
@@ -67,6 +77,12 @@ export interface SpeakerMembershipInput {
   id?: string;
 }
 
+export interface SpeakerMembershipAuditActor {
+  kind: AuditActorKind;
+  personId: string | null;
+  requestId: string | null;
+}
+
 /** The on-stage seat vocabulary `memberships.role` accepts (migration 0028). */
 export type MembershipSeatRole = (typeof ON_STAGE_MEMBERSHIP_ROLES)[number];
 
@@ -96,6 +112,27 @@ export function speakerMembershipStatement(db: D1Database, input: SpeakerMembers
     );
 }
 
+function speakerRosterLinkedAuditStatement(
+  db: D1Database,
+  input: SpeakerMembershipInput,
+  actor: SpeakerMembershipAuditActor | undefined,
+): D1PreparedStatement {
+  return auditStatement(db, {
+    eventId: input.eventId,
+    actorKind: actor?.kind ?? "system",
+    actorPersonId: actor?.personId ?? null,
+    action: "speaker_roster_linked",
+    entityType: "person",
+    entityId: input.personId,
+    after: {
+      source: "acceptance_cascade",
+      role: input.role ?? "speaker",
+    },
+    now: input.now,
+    requestId: actor?.requestId ?? null,
+  });
+}
+
 /**
  * Bridge every on-stage participant of the given accepted submissions into the
  * event's membership list. Called from the acceptance cascade, where the
@@ -115,6 +152,7 @@ export async function acceptedSpeakerMembershipStatements(
   eventId: string,
   submissionIds: readonly string[],
   now: number,
+  actor?: SpeakerMembershipAuditActor,
 ): Promise<D1PreparedStatement[]> {
   const ids = [...new Set(submissionIds)];
   if (ids.length === 0) return [];
@@ -153,9 +191,13 @@ export async function acceptedSpeakerMembershipStatements(
     )
     .bind(eventId, JSON.stringify(ids))
     .all<{ person_id: string; role: MembershipSeatRole }>();
-  return people.results.map((row) =>
-    speakerMembershipStatement(db, { orgId: event.org_id, eventId, personId: row.person_id, role: row.role, now }),
-  );
+  return people.results.flatMap((row) => {
+    const input = { orgId: event.org_id, eventId, personId: row.person_id, role: row.role, now };
+    return [
+      speakerMembershipStatement(db, input),
+      speakerRosterLinkedAuditStatement(db, input, actor),
+    ];
+  });
 }
 
 /**

@@ -380,9 +380,9 @@ export async function reconcileTaskSet(
   // Acceptance is where the conference commits to a person, so it is where the
   // person becomes a speaker *of this event* — the membership row the roster,
   // the portal sign-in, headshot ownership, and the comms audience all read.
-  // Before this, the only writer of `memberships` was the demo reseeder, and
-  // every speaker the product created at runtime was invisible to all four.
-  const memberships = await acceptedSpeakerMembershipStatements(db, eventId, submissionIds, now);
+  // This writer emits its adoption ledger beside the membership upsert; import
+  // undo relies on the two statements remaining in the same batch.
+  const memberships = await acceptedSpeakerMembershipStatements(db, eventId, submissionIds, now, actor);
   if (memberships.length > 0) await db.batch(memberships);
   const idsJson = JSON.stringify([...new Set(submissionIds)]);
   const candidates = await db
