@@ -249,7 +249,7 @@ describe("machine-surface smoke contracts", () => {
     expect(await health.json()).toMatchObject({ service: "marquee", status: "ok", build: expect.any(String) });
   });
 
-  test("CONTRACT · MRQ-234 · the notification predicate agrees on divergence fixtures and valid controls", async () => {
+  test("AC-379 · MRQ-234 · the notification predicate agrees on divergence fixtures and valid controls", async () => {
     const values = [
       "a b@c.d",
       "@x.",

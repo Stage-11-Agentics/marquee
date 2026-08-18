@@ -848,7 +848,7 @@ not promote an untested claim.
 | AC-376 | PD | `auto` | `tests/integration/calendar-batch.MRQ-233.test.ts`: bounded projection and invalid-recipient ordering are explicit, and an all-blocked batch fails closed. |
 | AC-377 | PD | `auto` | `tests/integration/calendar-batch.MRQ-233.test.ts`: materiality debt, idempotency, CAS sequence claims, duplicate admission, and same-owner/provider resumption are covered. |
 | AC-378 | PD | `auto` | `tests/integration/calendar-batch.MRQ-233.test.ts`: newest resolver precedence and every mixed-grain, missing-part, unknown-template, and corrupt-material path fail closed. |
-| AC-379 | PD | `auto` | `tests/integration/api/decision-plan.MRQ-234.test.ts` and `tests/unit/decision-plan.MRQ-234.test.ts`: pure eligibility, four-row shape, SQL parity, feedback/email validity, and advisory no-mail behavior are asserted. |
+| AC-379 | PD | `auto` | `tests/integration/api/meta.test.ts` and `tests/unit/decision-plan.MRQ-234.test.ts`: pure eligibility, four-row shape, SQL parity, feedback/email validity, and advisory no-mail behavior are asserted. |
 | AC-380 | PD | `auto` | `tests/e2e/mrq-234-decision-plan.spec.ts` and `tests/integration/api/decision-plan.routes.MRQ-234.test.ts`: bulk/single/Notify plan shape and render parity are exercised. |
 | AC-381 | PD | `auto` | `tests/integration/api/decision-plan.routes.MRQ-234.test.ts`: changed-email and missing-precondition refusals are authored 409/400 responses, and zero-effect apply is 409. |
 | AC-382 | PD | `auto` | `tests/integration/api/decision-plan.routes.MRQ-234.test.ts`: no fabricated mail is produced and mixed apply preserves per-record post-send failure. |
