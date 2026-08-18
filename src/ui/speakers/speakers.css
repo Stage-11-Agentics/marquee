@@ -100,6 +100,10 @@
 
 .speaker-section { display: grid; gap: 10px; }
 .speaker-section h3 { color: var(--muted); font: 600 9px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.speaker-section-heading { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
+.speaker-section-heading > div { display: grid; gap: 6px; min-width: 0; }
+.speaker-helper-count { color: var(--muted); flex: 0 0 auto; font: 10px/1.2 var(--mono); white-space: nowrap; }
+.speaker-helper-form { align-items: end; border-top: 1px solid var(--line); display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; padding-top: 10px; }
 .speaker-note { color: var(--muted); font: 10px/1.5 var(--mono); }
 .speaker-files-summary { display: grid; gap: 4px; min-height: 34px; }
 .speaker-files-summary .speaker-note { align-items: baseline; display: flex; gap: 12px; justify-content: space-between; min-height: 15px; }

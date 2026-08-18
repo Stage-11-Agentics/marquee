@@ -20,6 +20,14 @@ const STATUS_LABELS: Record<SpeakerStatus, string> = {
   declined: "Declined",
 };
 
+interface SpeakerHelper {
+  id: string;
+  helper_person_id: string;
+  helper_name: string;
+  helper_email: string;
+  removed_at: number | null;
+}
+
 /**
  * Named logistics rows, plus free notes. SPK-15 is a rider: an organizer needs
  * somewhere to put "arrives the 11th, vegetarian, aisle seat" and needs it to
@@ -120,6 +128,12 @@ export function SpeakerRecord({
   const [headshotPreview, setHeadshotPreview] = useState<string | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [helpers, setHelpers] = useState<SpeakerHelper[]>([]);
+  const [helperState, setHelperState] = useState<"loading" | "ready" | "error">("loading");
+  const [helperName, setHelperName] = useState("");
+  const [helperEmail, setHelperEmail] = useState("");
+  const [helperBusy, setHelperBusy] = useState(false);
+  const [helperError, setHelperError] = useState<string | null>(null);
 
   useEffect(() => () => {
     if (headshotPreview) URL.revokeObjectURL(headshotPreview);
@@ -151,6 +165,77 @@ export function SpeakerRecord({
       });
     return () => controller.abort();
   }, [eventId, personId]);
+
+  const readHelpers = async (signal?: AbortSignal) => {
+    try {
+      setHelperState("loading");
+      const result = await apiFetch<{ helpers: SpeakerHelper[] }>(
+        `/api/v1/events/${encodeURIComponent(eventId)}/speakers/${encodeURIComponent(personId)}/helpers`,
+        { route: "/api/v1/events/{eventId}/speakers/{personId}/helpers", signal },
+      );
+      if (!signal?.aborted) {
+        setHelpers(result.helpers.filter((helper) => helper.removed_at === null));
+        setHelperState("ready");
+      }
+    } catch (caught: unknown) {
+      if (!signal?.aborted) {
+        setHelperState("error");
+        setHelperError(errorSummary(caught));
+      }
+    }
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setHelperError(null);
+    void readHelpers(controller.signal);
+    return () => controller.abort();
+  }, [eventId, personId]);
+
+  const addHelper = async (event: JSX.TargetedEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (helperBusy) return;
+    setHelperBusy(true);
+    setHelperError(null);
+    try {
+      await apiFetch(
+        `/api/v1/events/${encodeURIComponent(eventId)}/speakers/${encodeURIComponent(personId)}/helpers`,
+        {
+          route: "/api/v1/events/{eventId}/speakers/{personId}/helpers",
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: helperName, email: helperEmail }),
+        },
+      );
+      setHelperName("");
+      setHelperEmail("");
+      await readHelpers();
+    } catch (caught: unknown) {
+      setHelperError(errorSummary(caught));
+    } finally {
+      setHelperBusy(false);
+    }
+  };
+
+  const removeHelper = async (helper: SpeakerHelper) => {
+    if (helperBusy) return;
+    setHelperBusy(true);
+    setHelperError(null);
+    try {
+      await apiFetch(
+        `/api/v1/events/${encodeURIComponent(eventId)}/speakers/${encodeURIComponent(personId)}/helpers/${encodeURIComponent(helper.helper_person_id)}`,
+        {
+          route: "/api/v1/events/{eventId}/speakers/{personId}/helpers/{helperId}",
+          method: "DELETE",
+        },
+      );
+      await readHelpers();
+    } catch (caught: unknown) {
+      setHelperError(errorSummary(caught));
+    } finally {
+      setHelperBusy(false);
+    }
+  };
 
   const chooseHeadshot = (event: JSX.TargetedEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0] ?? null;
@@ -305,6 +390,31 @@ export function SpeakerRecord({
             </div>
             <Chip tone={chipTone(session.confirmation_status)}>{STATUS_LABELS[session.confirmation_status]}</Chip>
           </div>)}</div>}
+      </section>
+
+      <section class="speaker-section speaker-helper-section">
+        <div class="speaker-section-heading">
+          <div>
+            <h3>Helpers</h3>
+            <p class="speaker-note">Helpers can see this speaker’s tasks and logistics only. The name shown is the name you entered, not the private speaker record.</p>
+          </div>
+          <span class="speaker-helper-count">{helperState === "loading" ? "Reading…" : `${helpers.length} active`}</span>
+        </div>
+        {helpers.length > 0
+          ? <div class="speaker-list">{helpers.map((helper) => <div class="speaker-list-row" key={helper.id}>
+            <div>
+              <strong>{helper.helper_name}</strong>
+              <span>{helper.helper_email}</span>
+            </div>
+            <Button small onClick={() => void removeHelper(helper)} disabled={helperBusy}>Remove</Button>
+          </div>)}</div>
+          : <p class="speaker-empty-line">{helperState === "error" ? "Helpers could not be read." : "No active helpers."}</p>}
+        <form class="speaker-helper-form" onSubmit={addHelper}>
+          <label class="speaker-field">Name<input required value={helperName} onInput={(event) => setHelperName((event.currentTarget as HTMLInputElement).value)} placeholder="Name they use" /></label>
+          <label class="speaker-field">Email<input required type="email" value={helperEmail} onInput={(event) => setHelperEmail((event.currentTarget as HTMLInputElement).value)} placeholder="helper@example.com" /></label>
+          <Button small variant="primary" type="submit" disabled={helperBusy}>{helperBusy ? "Saving…" : "Add helper"}</Button>
+        </form>
+        {helperError ? <div class="speaker-inline-error" role="alert">{helperError}</div> : null}
       </section>
 
       <section class="speaker-section">
