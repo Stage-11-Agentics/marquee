@@ -47,7 +47,10 @@ async function submitProposal(page: Page, title: string, tag: string) {
 
 test.describe.configure({ timeout: 300_000 });
 
-test("CONTRACT · MRQ-279 two proposals, one person, one page", async ({ page }) => {
+// This is an artifact-producing, write-heavy drive. Keep it opt-in so the
+// ordinary E2E suite can never submit proposals to its configured base URL.
+const DRIVE_SUBMITTER_HOME = process.env.DRIVE_SUBMITTER_HOME;
+if (DRIVE_SUBMITTER_HOME) test("CONTRACT · MRQ-279 two proposals, one person, one page", async ({ page }) => {
 
   await submitProposal(page, "Taming 40-Minute CI: Incremental Builds at Monorepo Scale", "01-submitted-first");
   await submitProposal(page, "Your AI Pair Programmer Needs a Code Review Budget", "02-submitted-second");

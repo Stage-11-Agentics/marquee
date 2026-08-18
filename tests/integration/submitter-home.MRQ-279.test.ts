@@ -329,11 +329,19 @@ test("AC-421 · an unlaunched conference with no open call is not named to a str
   // ask for.
   expect(html).not.toContain("Borealis Conference 2026");
   expect(html).toContain("this conference");
+  const eventField = /<input[^>]*name="event"[^>]*value="([^"]*)"/.exec(html)?.[1];
+  if (eventField === undefined) throw new Error("the page form must preserve the requested slug");
+  expect(eventField).toBe(SLUG_A);
 
-  // The mailing path is stricter. Naming a conference that does not resolve
-  // must NOT quietly mail a link to a different one — this person has proposals
-  // at Borealis too, so the wrong answer would arrive looking entirely correct.
-  await askForLink(SUBMITTER, SLUG_A);
+  // Submit the rendered form, rather than calling the JSON API with a
+  // separately supplied slug. A missing hidden value would fall back to the
+  // live conference and mail the wrong portal to this person.
+  const response = await request("/api/v1/public/proposals/link", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ email: SUBMITTER, event: eventField }).toString(),
+  });
+  expect(response.status).toBe(200);
   expect(await linkFromMail(SUBMITTER), "a named-but-unresolvable conference must send nothing").toBeNull();
 });
 

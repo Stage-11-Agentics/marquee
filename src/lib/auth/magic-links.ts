@@ -180,7 +180,13 @@ async function mintLinkWithAdmission(
         now,
       );
   const result = await insert.run();
-  if (admittedInput && Number(result.meta.changes ?? 0) !== 1) return null;
+  if (admittedInput) {
+    const changes = result.meta.changes;
+    if (changes === undefined || changes === null) {
+      throw new Error("magic link quota admission did not report inserted row count");
+    }
+    if (Number(changes) !== 1) return null;
+  }
   return { id, token, redirectTo };
 }
 

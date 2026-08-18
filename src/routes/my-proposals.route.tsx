@@ -32,6 +32,8 @@ import { PROPOSALS_LINK_ACKNOWLEDGEMENT, resolveProposalsEvent } from "./public-
 export interface MyProposalsPageState {
   /** Null when this deployment has no live conference yet; the form still opens. */
   event: { name: string; slug: string } | null;
+  /** Preserve an explicit URL slug through the form even when it does not resolve. */
+  requestedEventSlug: string | null;
   /** Empty when the conference is exempt (demo mode); the page then mounts no widget. */
   turnstileSiteKey: string;
 }
@@ -48,7 +50,7 @@ function MyProposalsBody({ state }: { state: MyProposalsPageState }): JSX.Elemen
         link arrives by email.
       </p>
       <form class="proposals-form" id="proposals-form" method="post" action="/api/v1/public/proposals/link">
-        <input type="hidden" name="event" value={state.event?.slug ?? ""} />
+        <input type="hidden" name="event" value={state.requestedEventSlug ?? state.event?.slug ?? ""} />
         <label class="proposals-field" for="proposals-email">
           <span>The email you submitted with</span>
           <input
@@ -132,6 +134,14 @@ const PROPOSALS_SCRIPT = `
   const siteKey = holder ? holder.getAttribute("data-sitekey") : "";
   let token = "";
   let widget = null;
+  // The server consumes a token before minting and queueing the mail. Reset it
+  // after every request so a post-verification failure can be retried in place.
+  const resetTurnstile = () => {
+    token = "";
+    if (widget !== null && window.turnstile && typeof window.turnstile.reset === "function") {
+      try { window.turnstile.reset(widget); } catch (error) { /* the next send re-challenges */ }
+    }
+  };
 
   // An exempt conference sends no site key and mounts nothing: the page must
   // not pay for a third-party script it has no use for.
@@ -178,15 +188,10 @@ const PROPOSALS_SCRIPT = `
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error((body && body.error && body.error.message) || "That could not be sent. Try again.");
       if (status) status.textContent = (body && body.message) || ${JSON.stringify(PROPOSALS_LINK_ACKNOWLEDGEMENT)};
-      // A Turnstile token is single-use server-side, so a second send with the
-      // same one is a 403 nobody can get past. Reset the widget, not the page.
-      if (widget !== null && window.turnstile && typeof window.turnstile.reset === "function") {
-        token = "";
-        try { window.turnstile.reset(widget); } catch (error) { /* the next send re-challenges */ }
-      }
     } catch (error) {
       if (status) { status.classList.add("is-error"); status.textContent = error instanceof Error ? error.message : "That could not be sent. Try again."; }
     } finally {
+      resetTurnstile();
       submit.removeAttribute("aria-busy");
       submit.disabled = false;
     }
@@ -251,7 +256,7 @@ export async function readMyProposalsState(
       ...errorFields(error),
     });
   }
-  return { event, turnstileSiteKey };
+  return { event, requestedEventSlug: requested, turnstileSiteKey };
 }
 
 export const myProposalsRoutes = new Hono<{ Bindings: Env }>();

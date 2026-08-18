@@ -52,6 +52,7 @@ function renderMyProposals(turnstileSiteKey: string): string {
   return renderToString(h(MyProposalsPage, {
     state: {
       event: { name: "AI Engineer New York 2026", slug: "aie-ny-2026" },
+      requestedEventSlug: "aie-ny-2026",
       turnstileSiteKey,
     },
   }));
