@@ -56,6 +56,8 @@ export const MAGIC_LINK_PURPOSES = [
  * carry a null `person_id` — enforced in the schema by 0009's CHECK.
  */
 export const PERSONLESS_MAGIC_LINK_PURPOSES = ["claim", "org_invite"] as const;
+/** What a day-of link may do: read the run of show, or read it and mark arrivals. */
+export const DAY_OF_LINK_KINDS = ["green_room", "checkin"] as const;
 export const FORM_KINDS = ["abstract", "session"] as const;
 export const FORM_STATUSES = ["draft", "open", "closed"] as const;
 export const FORM_FIELD_TYPES = [
@@ -149,6 +151,7 @@ export const AUDIT_ACTOR_KINDS = ["user", "api_token", "system", "airtable"] as 
 export type EventStatus = (typeof EVENT_STATUSES)[number];
 export type MembershipRole = (typeof MEMBERSHIP_ROLES)[number];
 export type MagicLinkPurpose = (typeof MAGIC_LINK_PURPOSES)[number];
+export type DayOfLinkKind = (typeof DAY_OF_LINK_KINDS)[number];
 export type FormKind = (typeof FORM_KINDS)[number];
 export type FormStatus = (typeof FORM_STATUSES)[number];
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
@@ -806,6 +809,43 @@ export interface AgendaItemRow extends MutableRecord {
   track_id: Id | null;
 }
 
+/**
+ * A day-of credential: event-scoped, named, held by nobody.
+ *
+ * `kind` is the authority, and the two are a ladder rather than a pair of
+ * unrelated flags — a check-in link reads everything a green-room link reads
+ * and may additionally mark a speaker arrived.
+ */
+export interface DayOfLinkRow extends MutableRecord {
+  event_id: Id;
+  kind: DayOfLinkKind;
+  /** The organizer's own words: "Sam, front door". Shown beside every mark it makes. */
+  name: string;
+  /** SHA-256 hex. The raw token exists once, in the response that minted it. */
+  token_hash: string;
+  /** Null for a link minted by seed data or by a credential with no person behind it. */
+  created_by_person_id: Id | null;
+  last_used_at: EpochMilliseconds | null;
+  revoked_at: EpochMilliseconds | null;
+}
+
+/**
+ * One speaker, arrived, for one session.
+ *
+ * The grain is the product: a person is not "here today", they are here for
+ * the 10:40 in Broadway, and the panel beside them may still be missing two.
+ */
+export interface CheckinRow extends MutableRecord {
+  event_id: Id;
+  agenda_item_id: Id;
+  person_id: Id;
+  /** Null when an organizer marked it themselves, or if the link row is later deleted. */
+  link_id: Id | null;
+  /** The link's name, or the organizer's, copied at the moment of the mark. */
+  marked_by_name: string;
+  marked_at: EpochMilliseconds;
+}
+
 export interface TaskTemplateRow extends MutableRecord {
   /** JSON array of participation roles this template is assigned to. */
   applies_to_roles: JsonText;
@@ -1147,6 +1187,8 @@ export const CORE_TABLE_NAMES = [
   "person_aliases",
   "memberships",
   "model_usage_events",
+  "day_of_links",
+  "checkins",
   "auth_sessions",
   "magic_links",
   "api_tokens",
@@ -1268,6 +1310,8 @@ export const CORE_TABLES = {
   magic_links: "magic_links",
   memberships: "memberships",
   model_usage_events: "model_usage_events",
+  day_of_links: "day_of_links",
+  checkins: "checkins",
   mirror_credentials: "mirror_credentials",
   mirror_outbox: "mirror_outbox",
   mirror_state: "mirror_state",
@@ -1349,6 +1393,8 @@ export interface CoreTableRows {
   magic_links: MagicLinkRow;
   memberships: MembershipRow;
   model_usage_events: ModelUsageEventRow;
+  day_of_links: DayOfLinkRow;
+  checkins: CheckinRow;
   mirror_credentials: MirrorCredentialRow;
   mirror_outbox: MirrorOutboxRow;
   mirror_state: MirrorStateRow;
@@ -1441,6 +1487,8 @@ interface CoreDefaultColumns {
   magic_links: never;
   memberships: "confirmation_status";
   model_usage_events: never;
+  day_of_links: never;
+  checkins: never;
   mirror_credentials: never;
   mirror_outbox: "attempts";
   mirror_state: "local_row_count" | "remote_row_count";
@@ -1560,6 +1608,8 @@ export type EvaluationInsert = CoreInsert<"evaluations">;
 export type ComparisonInsert = CoreInsert<"comparisons">;
 export type RoundPromotionInsert = CoreInsert<"round_promotions">;
 export type AgendaItemInsert = CoreInsert<"agenda_items">;
+export type DayOfLinkInsert = CoreInsert<"day_of_links">;
+export type CheckinInsert = CoreInsert<"checkins">;
 export type TaskTemplateInsert = CoreInsert<"task_templates">;
 export type SpeakerTaskInsert = CoreInsert<"speaker_tasks">;
 export type CalendarInviteInsert = CoreInsert<"calendar_invites">;

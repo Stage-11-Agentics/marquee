@@ -65,6 +65,13 @@ const SEEDED_COUNTS: Record<string, number> = {
   speaker_tasks: 358,
   task_templates: 15,
   agenda_items: 27,
+  // Day one opens with arrivals already marked on three of its sessions — one of
+  // them only partially, so the green room reads "1 of 2 here" rather than a
+  // wall of green (MRQ-285).
+  checkins: 5,
+  // The green-room link and one named check-in link, both seeded so the day-of
+  // surfaces can be opened without minting anything.
+  day_of_links: 2,
   embeds: 0,
   // Attendee-created, never seeded: a fresh demo has nobody's schedule in it,
   // nobody's stars, and nobody's email attached to either.
@@ -114,7 +121,9 @@ const SEEDED_COUNTS: Record<string, number> = {
   person_merges: 0,
   // Org-scoped like people, and swept after them: `people.company_id` points here.
   companies: 2,
-  attachments: 40,
+  // 40, plus the one deck seeded against a day-one file task so the slides
+  // board opens with something in as well as something owed (MRQ-285).
+  attachments: 41,
   event_settings: 0,
   mirror_credentials: 0,
   mirror_outbox: 0,

@@ -126,6 +126,10 @@ export const routeTable: readonly RouteDefinition[] = [
   // "Files" verbatim: this is the noun an organizer reaches for when they want
   // the deck, and renaming it to something cleverer only makes it unfindable.
   { id: "files", path: "/files", label: "Files", icon: "", group: "speaker-ops", sidebar: true },
+  // The desk for the morning of the show: the slides board in run order, and
+  // the links the crew holds. The green room itself is a server-rendered page
+  // reached from here, because it is opened on a phone with no session.
+  { id: "day-of", path: "/day-of", label: "Day of", icon: "", group: "speaker-ops", sidebar: true },
   // The people-facing page carries its own chrome, so the sidebar hands it a
   // real browser navigation rather than a client-side push. Its group says
   // whose follow-ups these are, so the label no longer has to.

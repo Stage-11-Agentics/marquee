@@ -49,6 +49,10 @@ export const WIPE_ORDER = [
   "speaker_helpers",
   "speaker_tasks",
   "task_templates",
+  // Arrivals point at both an agenda item and the link that recorded them, so
+  // they go before either.
+  "checkins",
+  "day_of_links",
   "agenda_items",
   "embeds",
   // MRQ-208. Claims reference schedules and people, attendances reference
@@ -298,6 +302,14 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   },
   task_templates: {
     sql: `DELETE FROM task_templates WHERE event_id IN (${ORG_EVENTS})`,
+    bindings: ORG,
+  },
+  checkins: {
+    sql: `DELETE FROM checkins WHERE event_id IN (${ORG_EVENTS})`,
+    bindings: ORG,
+  },
+  day_of_links: {
+    sql: `DELETE FROM day_of_links WHERE event_id IN (${ORG_EVENTS})`,
     bindings: ORG,
   },
   agenda_items: {

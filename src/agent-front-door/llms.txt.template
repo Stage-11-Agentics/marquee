@@ -24,6 +24,14 @@ Marquee has no OAuth step, CAPTCHA, email verification, or shared passcode in it
 
 `POST /mcp` answers stateless JSON-RPC 2.0 (Streamable HTTP; no SSE, no OAuth). It is a façade over the same API: every tool call re-enters the handler, guard, rate limit, and refusal the REST route already uses, so a credential can never do more through MCP than through the API. No `Authorization` header is the public tier — the published program, one session, one speaker, what the call for proposals asks, and sending a proposal. `Authorization: Bearer mq_…` widens the tool set to what that token's grants, seat, and conference restriction allow; a few of the signed tools check the seat when they are called rather than when they are listed, and refuse in the handler's own words. Mint a token at `/org/tokens`; the connect block is on `/agents`.
 
+## The day of the show
+
+Three surfaces exist for the morning the conference actually runs, and all three are the same API. `GET /api/v1/events/{eventId}/run-of-show` returns one conference-local day joined the way a person holding a radio needs it: every room with something on it, each session in start order with its speakers, who has been marked arrived and by whom, the state of that session's deck, and the room's AV notes. `GET …/slides-board` re-cuts the same snapshot by deliverable, one row per session, with counts taken before the state filter so a count always matches the set that clicking it produces.
+
+Arrival is per **(session, person)** — a panel of four is four facts, and "here today" is not one of them. `POST …/agenda-items/{itemId}/arrivals` records one; the matching `DELETE` takes it back; marking twice changes nothing and records nothing.
+
+Those two writes are the only routes in Marquee that accept a **day-of link** instead of a seat. An organizer mints a named link at `POST …/day-of/links` — `checkin` for a volunteer who may mark speakers in, `green_room` for anyone who only needs to look — and the holder presents it in an `x-marquee-day-of-key` header, or simply opens `/green-room/k/{token}` with no account at all. The token is returned once. Revoking kills every copy of that URL at once, and minting a `green_room` link rotates the previous one. A revoked, wrong, or other-conference link is answered as not-found, and it is inert on every other route in the product.
+
 ## Machine index
 
 {{MACHINE_INDEX}}

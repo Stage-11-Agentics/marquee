@@ -618,6 +618,48 @@ async function execute(command, arguments_, options, flags, client) {
       query: { state, ...(task ? { task_type: task } : {}), ...(search ? { q: search } : {}) },
     });
   }
+  if (root === "day-of") {
+    if (verb === "run-of-show" || verb === "slides") {
+      const day = option(options, "--day");
+      const state = option(options, "--state") ?? "all";
+      if (verb === "slides" && !["all", "received", "missing", "overdue"].includes(state)) {
+        usageError("--state must be all, received, missing, or overdue");
+      }
+      const room = option(options, "--room");
+      const path = verb === "run-of-show" ? "run-of-show" : "slides-board";
+      return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/${path}`, {
+        query: {
+          ...(day ? { day } : {}),
+          ...(verb === "slides" ? { state, ...(room ? { room_id: room } : {}) } : {}),
+        },
+      });
+    }
+    if (verb === "links") {
+      return client.get(`/api/v1/events/${encodeURIComponent(eventId)}/day-of/links`);
+    }
+    if (verb === "link") {
+      const name = option(options, "--name");
+      if (!name) usageError("day-of link requires --name");
+      const kind = option(options, "--kind") ?? "checkin";
+      if (!["checkin", "green_room"].includes(kind)) usageError("--kind must be checkin or green_room");
+      return client.post(`/api/v1/events/${encodeURIComponent(eventId)}/day-of/links`, { kind, name });
+    }
+    if (verb === "revoke") {
+      const linkId = arguments_[1];
+      if (!linkId) usageError(`${command.usage} requires a link ID`);
+      return client.remove(`/api/v1/events/${encodeURIComponent(eventId)}/day-of/links/${encodeURIComponent(linkId)}`);
+    }
+  }
+  if (root === "checkin") {
+    const sessionId = arguments_[1];
+    if (!sessionId) usageError(`${command.usage} requires a session ID`);
+    const personId = option(options, "--person");
+    if (!personId) usageError(`${command.usage} requires --person`);
+    const base = `/api/v1/events/${encodeURIComponent(eventId)}/agenda-items/${encodeURIComponent(sessionId)}/arrivals`;
+    return verb === "mark"
+      ? client.post(base, { person_id: personId })
+      : client.remove(`${base}/${encodeURIComponent(personId)}`);
+  }
   if (root === "remind") {
     const selector = reminderSelector(requireFilters(command, options, REMINDER_FILTER_KEYS));
     const template = option(options, "--template");

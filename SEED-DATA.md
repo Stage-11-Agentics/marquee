@@ -100,6 +100,28 @@ declined — plus a pending co-speaker role, so the agenda's derived
 `has_declined_participant` flag is true and the submission record can show all
 three response states.
 
+## The day of the show
+
+Day one of the seeded conference carries the state a green room is for. Three of
+its sessions have arrivals already marked — one of them only partially, so the
+board reads "1 of 2 here" rather than a wall of green — and one file task has a
+deck against it, so the slides board opens with something in and something owed
+rather than with a single flat answer.
+
+Two day-of links are seeded so the surfaces can be opened without minting
+anything, and both are deliberately guessable **because the demo conference
+contains no real data**:
+
+| Link | Kind | Opens |
+|---|---|---|
+| `Green room` | `green_room` | `/green-room/k/demo-green-room` — looks only |
+| `Sam, front door` | `checkin` | `/green-room/k/demo-front-door` — may mark speakers in |
+
+A real conference's links are 32 random characters and are shown once; these two
+exist so a reader can see the surface a volunteer sees. Rotating the green-room
+link from the Day-of desk revokes `demo-green-room` along with every other copy,
+which is the correct behaviour and means a reseed is what brings it back.
+
 ## Notice
 
 This seed is **derived from the publicly published AI Engineer Summit February

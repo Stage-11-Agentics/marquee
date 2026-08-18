@@ -51,6 +51,13 @@ The command registry is:
 - `node cli/marquee.mjs helpers remove <event-id> <speaker-person-id> <helper-person-id>`
 - `node cli/marquee.mjs tasks list <event-id> --overdue`
 - `node cli/marquee.mjs files list <event-id> --state <name>`
+- `node cli/marquee.mjs day-of run-of-show <event-id> --day <YYYY-MM-DD>`
+- `node cli/marquee.mjs day-of slides <event-id> --day <YYYY-MM-DD> --state <name>`
+- `node cli/marquee.mjs day-of links <event-id>`
+- `node cli/marquee.mjs day-of link <event-id> --name <text> --kind <kind>`
+- `node cli/marquee.mjs day-of revoke <event-id> <link-id>`
+- `node cli/marquee.mjs checkin mark <event-id> <session-id> --person <person-id>`
+- `node cli/marquee.mjs checkin clear <event-id> <session-id> --person <person-id>`
 - `node cli/marquee.mjs remind <event-id> --filter <key=value> (--template <key> | --subject <s> --body <b>)`
 - `node cli/marquee.mjs diagnose`
 - `node cli/marquee.mjs logs --tail`
