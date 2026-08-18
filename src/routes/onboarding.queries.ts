@@ -2,6 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import type { ListEnvelope } from "../api/list";
 import { executeListPage, parsePagination } from "../api/pagination";
+import { listArrivalsForPerson, type DayOfArrival } from "../lib/day-of/checkins";
 import { localParts } from "../lib/event-time";
 import { listVersionsFor, listVersionsForOwners, type FileVersionList } from "../lib/files/versions";
 import { isTaskDueWithinDays, isTaskOverdue, taskDaysOverdue } from "../lib/task-due";
@@ -771,6 +772,15 @@ export interface OnboardingSpeakerDetail {
   last_contact: number | null;
   /** See `OnboardingRow.portal_invitable`. */
   portal_invitable: boolean;
+  /**
+   * Where this person has been marked arrived, session by session (MRQ-285).
+   *
+   * The chase drawer is where an organizer already asks "what is the state of
+   * this speaker", and on a show day that question includes whether anybody has
+   * seen them. It stays per-session rather than collapsing to a flag: a speaker
+   * can be in the building for the 10:40 and still owe the panel at 15:00.
+   */
+  arrivals: DayOfArrival[];
   messages: Array<{
     id: string;
     template_key: string;
@@ -810,11 +820,12 @@ export async function getOnboardingSpeaker(
               person.headshot_attachment_id`,
   ).bind(eventId, eventId, eventId, personId, eventId, eventId, eventId).first<SpeakerBaseRow>();
   if (!person) return null;
-  const [templates, taskRows, sessions, profileFiles] = await Promise.all([
+  const [templates, taskRows, sessions, profileFiles, arrivals] = await Promise.all([
     listTemplates(db, eventId),
     listTasks(db, eventId, [personId]),
     listSessions(db, eventId, [personId]),
     listVersionsFor(db, "person_headshot", personId, mediaPublicOrigin, mediaSigningSecret, now),
+    listArrivalsForPerson(db, eventId, personId),
   ]);
   const taskFileLists = await listVersionsForOwners(
     db,
@@ -853,6 +864,7 @@ export async function getOnboardingSpeaker(
     tasks,
     last_contact: person.last_contact === null ? null : Number(person.last_contact),
     portal_invitable: person.portal_invitable === 1,
+    arrivals,
     messages: messages.results,
     files: {
       profile: profileFiles,

@@ -157,12 +157,28 @@ export async function readArrival(
   return row ?? null;
 }
 
-/** Every arrival recorded for one person at one conference, newest first. */
+export interface DayOfArrival {
+  agenda_item_id: string;
+  session_title: string;
+  starts_at: number;
+  room_name: string;
+  marked_at: number;
+  marked_by_name: string;
+}
+
+/**
+ * Every arrival recorded for one person at one conference, in schedule order.
+ *
+ * The green room asks "who is here for this session"; the speaker's own record
+ * asks the transpose — "where has this person been seen" — and both are the same
+ * rows read from the other end. Ordering by the schedule rather than by when the
+ * mark was made is what makes it read as an itinerary.
+ */
 export async function listArrivalsForPerson(
   db: D1Database,
   eventId: Id,
   personId: Id,
-): Promise<{ agenda_item_id: string; session_title: string; starts_at: number; room_name: string; marked_at: number; marked_by_name: string }[]> {
+): Promise<DayOfArrival[]> {
   const rows = await db
     .prepare(
       `SELECT checkin.agenda_item_id, checkin.marked_at, checkin.marked_by_name,
@@ -176,6 +192,6 @@ export async function listArrivalsForPerson(
         ORDER BY item.starts_at ASC, item.id ASC`,
     )
     .bind(eventId, personId)
-    .all<{ agenda_item_id: string; session_title: string; starts_at: number; room_name: string; marked_at: number; marked_by_name: string }>();
+    .all<DayOfArrival>();
   return rows.results;
 }

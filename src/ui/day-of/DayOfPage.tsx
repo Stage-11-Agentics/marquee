@@ -53,9 +53,17 @@ function clock(value: number, timezone: string): string {
   return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone }).format(new Date(value));
 }
 
-function stamp(value: number | null): string {
+/**
+ * When a link was last opened, as a whole phrase.
+ *
+ * A link nobody has opened yet has no "last used", so the phrase carries its own
+ * preposition rather than being glued behind one — "last used not used yet" is
+ * the sentence that comes out otherwise.
+ */
+function lastUsed(value: number | null): string {
   if (value === null) return "not used yet";
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
+  const when = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
+  return `last used ${when}`;
 }
 
 type BoardState =
@@ -314,7 +322,7 @@ export function DayOfPage({ eventId }: { eventId: string }): JSX.Element {
             <span class="dayof-link-name">{greenRoomLink ? greenRoomLink.name : "No green-room link yet"}</span>
             <span class="dayof-link-meta">
               {greenRoomLink
-                ? `Looks only · last used ${stamp(greenRoomLink.last_used_at)}`
+                ? `Looks only · ${lastUsed(greenRoomLink.last_used_at)}`
                 : "Make one and share it with the crew — it opens the run of show and nothing else."}
             </span>
           </div>
@@ -331,7 +339,7 @@ export function DayOfPage({ eventId }: { eventId: string }): JSX.Element {
           <div key={link.id} class="dayof-link-row">
             <div>
               <span class="dayof-link-name">{link.name}</span>
-              <span class="dayof-link-meta">Marks speakers in · last used {stamp(link.last_used_at)}</span>
+              <span class="dayof-link-meta">Marks speakers in · {lastUsed(link.last_used_at)}</span>
             </div>
             <Button small variant="danger" disabled={busy === link.id} onClick={() => void revoke(link)}>Revoke</Button>
           </div>

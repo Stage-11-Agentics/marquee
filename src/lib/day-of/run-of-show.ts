@@ -432,10 +432,19 @@ export async function readRunOfShow(
     }
   }
 
+  // "On now" and "Up next" are claims about the wall clock, so they are only
+  // made on the day the wall clock is actually on. Reading Tuesday's schedule on
+  // Monday would otherwise put "Up next" on Tuesday's first session in every
+  // room — every one of them true by the arithmetic and none of them true in the
+  // building.
+  const isToday = calendarDateInTimezone(now, event.timezone) === day;
+
   const roomList: RunOfShowRoom[] = rooms.results.map((room) => {
     const roomSessions = sessionsByRoom.get(room.id) ?? [];
-    const current = roomSessions.find((session) => session.starts_at <= now && now < session.ends_at) ?? null;
-    const next = roomSessions.find((session) => session.starts_at > now) ?? null;
+    const current = isToday
+      ? roomSessions.find((session) => session.starts_at <= now && now < session.ends_at) ?? null
+      : null;
+    const next = isToday ? roomSessions.find((session) => session.starts_at > now) ?? null : null;
     return {
       id: room.id,
       name: room.name,
@@ -453,7 +462,7 @@ export async function readRunOfShow(
     event,
     day,
     days: conferenceDays(event.starts_on, event.ends_on),
-    is_today: calendarDateInTimezone(now, event.timezone) === day,
+    is_today: isToday,
     generated_at: now,
     // A room with nothing on it today is not part of the run of show; the crew
     // scrolling a phone should reach the end of the real day, not a list of

@@ -53,10 +53,18 @@ async function assetShell(assets: Fetcher | undefined, request: Request): Promis
  */
 const GREEN_ROOM_SCRIPT = `
 (() => {
-  const shell = document.querySelector("[data-green-room]");
-  if (!shell) return;
-  const eventId = shell.getAttribute("data-event");
-  const key = shell.getAttribute("data-key") || "";
+  // The conference and the key live on the page container this route injects,
+  // NOT on the run-of-show markup inside it — the credential is a property of
+  // the door that was opened, not of the schedule being shown through it.
+  const page = document.querySelector('[data-marquee-page="green-room"]');
+  const shell = page && page.querySelector("[data-green-room]");
+  if (!page || !shell) return;
+  const eventId = page.getAttribute("data-event");
+  const key = page.getAttribute("data-key") || "";
+  // Without a conference there is no request worth sending. Refusing here means
+  // a markup change that loses the attribute shows as a dead button, rather than
+  // as a page that quietly asks the API about an event called "null".
+  if (!eventId) return;
   const status = shell.querySelector("[data-status]");
   const say = (message, bad) => {
     if (!status) return;

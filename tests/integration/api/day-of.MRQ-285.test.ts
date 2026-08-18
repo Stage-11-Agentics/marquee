@@ -1,9 +1,10 @@
 import { beforeEach, expect, test } from "vitest";
 
 import { app, type Env } from "../../../src/index";
+import { listArrivalsForPerson } from "../../../src/lib/day-of/checkins";
 import { canMarkArrivals, resolveDayOfLink } from "../../../src/lib/day-of/links";
 import { zonedStart } from "../../../src/lib/event-time";
-import type { RunOfShow } from "../../../src/lib/day-of/run-of-show";
+import { readRunOfShow, readRunOfShowEvent, type RunOfShow } from "../../../src/lib/day-of/run-of-show";
 import { applyMigrations, env } from "../apply-migrations";
 
 /**
@@ -379,4 +380,57 @@ test("CONTRACT · MRQ-285 — the slides board counts what it filters, and a dec
 
   const otherRoom = await board(`&room_id=${MERCER}`);
   expect(otherRoom.rows).toHaveLength(0);
+});
+
+test("CONTRACT · MRQ-285 — \"on now\" and \"up next\" are claims about the wall clock, made only on the day it is", async () => {
+  const event = (await readRunOfShowEvent(env.DB, EVENT_ID))!;
+  const duringPanel = zonedStart(DAY_ONE, "09:20", TZ);
+
+  const live = await readRunOfShow(env.DB, event, { day: DAY_ONE, now: duringPanel });
+  const broadway = live.rooms.find((room) => room.id === BROADWAY)!;
+  expect(live.is_today).toBe(true);
+  expect(broadway.current_session_id).toBe(PANEL_ITEM);
+  // The next thing in this room is the coffee break, because the run of show is
+  // what happens in the room and not only what a speaker stands up for.
+  expect(broadway.next_session_id).toBe(BREAK_ITEM);
+
+  // Between two sessions there is nothing on, and the next one is still named.
+  const inTheGap = await readRunOfShow(env.DB, event, { day: DAY_ONE, now: zonedStart(DAY_ONE, "10:05", TZ) });
+  const gapRoom = inTheGap.rooms.find((room) => room.id === BROADWAY)!;
+  expect(gapRoom.current_session_id).toBeNull();
+  expect(gapRoom.next_session_id).toBe(BREAK_ITEM);
+
+  // Reading tomorrow's schedule today makes no claim about now: otherwise every
+  // room would put "up next" on its first session, each true by the arithmetic
+  // and none of them true in the building.
+  const tomorrow = await readRunOfShow(env.DB, event, { day: DAY_TWO, now: duringPanel });
+  expect(tomorrow.is_today).toBe(false);
+  expect(tomorrow.rooms.every((room) => room.current_session_id === null && room.next_session_id === null)).toBe(true);
+
+  // Same day, but read months before the show: still no marker.
+  const wellBefore = await readRunOfShow(env.DB, event, { day: DAY_ONE, now: duringPanel - 60 * DAY });
+  expect(wellBefore.is_today).toBe(false);
+  expect(wellBefore.rooms.every((room) => room.next_session_id === null)).toBe(true);
+  // The schedule itself is unchanged — only the "now" markers are withheld.
+  expect(wellBefore.rooms.find((room) => room.id === BROADWAY)!.sessions).toHaveLength(3);
+});
+
+test("CONTRACT · MRQ-285 — the speaker's own record reads the same marks back as an itinerary", async () => {
+  const link = await mint("checkin", "Sam, front door");
+  // Priya is on the 09:00 panel and the 10:40 talk. Marked into both, in the
+  // order a stage manager would not have chosen.
+  await call(`/api/v1/events/${EVENT_ID}/agenda-items/${TALK_ITEM}/arrivals`, { key: link.token, body: { person_id: PRIYA } });
+  await call(`/api/v1/events/${EVENT_ID}/agenda-items/${PANEL_ITEM}/arrivals`, { key: link.token, body: { person_id: PRIYA } });
+
+  const itinerary = await listArrivalsForPerson(env.DB, EVENT_ID, PRIYA);
+  // Schedule order, not marking order: this reads as a day, not as a log.
+  expect(itinerary.map((entry) => entry.agenda_item_id)).toEqual([PANEL_ITEM, TALK_ITEM]);
+  expect(itinerary[0]!.session_title).toBe("Panel: What Broke in Production");
+  expect(itinerary[0]!.room_name).toBe("Broadway");
+  expect(itinerary.every((entry) => entry.marked_by_name === "Sam, front door")).toBe(true);
+
+  // Somebody with no marks has an empty day, not a missing one.
+  expect(await listArrivalsForPerson(env.DB, EVENT_ID, OMAR)).toEqual([]);
+  // And the list is scoped to the conference asked about.
+  expect(await listArrivalsForPerson(env.DB, OTHER_EVENT_ID, PRIYA)).toEqual([]);
 });
