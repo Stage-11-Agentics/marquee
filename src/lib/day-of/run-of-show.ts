@@ -18,7 +18,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import { calendarDateInTimezone, conferenceDays, type ConferenceDay } from "../conference-dates";
-import { participantListSql } from "../participants";
+import { isOnStageRole, participantListSql } from "../participants";
 import { zonedStart } from "../event-time";
 import { isTaskOverdue } from "../task-due";
 
@@ -63,6 +63,20 @@ export interface RunOfShowSpeaker {
   arrived_at: number | null;
   /** The link's name, or the organizer's — whoever said this person is here. */
   marked_by_name: string | null;
+  /**
+   * This person declined the invitation.
+   *
+   * They stay on the card rather than vanishing from it, because the agenda
+   * still has them scheduled and a crew that cannot see the refusal will stand
+   * in the wings waiting for somebody who said no weeks ago. While unmarked
+   * they are outside the expected count, for the same reason: "2 of 3 here"
+   * must mean one person is still missing, not that one is never coming.
+   *
+   * A mark overrides it. Somebody who declined in July and walked in at 08:40
+   * is here, whatever the RSVP says, so the moment they are marked they rejoin
+   * the count — the newer fact is the one standing in the room.
+   */
+  declined: boolean;
 }
 
 export interface RunOfShowSession {
@@ -75,7 +89,10 @@ export interface RunOfShowSession {
   /** Breaks are on the run of show and own no speakers, slides, or arrivals. */
   is_break: boolean;
   speakers: RunOfShowSpeaker[];
+  /** Out of `expected_count`, which excludes anyone who declined. */
   arrived_count: number;
+  /** The people the room is actually waiting on — `speakers` minus the declined. */
+  expected_count: number;
   slides: SessionSlides;
 }
 
@@ -136,6 +153,7 @@ interface SpeakerJson {
   person_id: string;
   name: string;
   role: string;
+  confirmation_status: string | null;
   custom_fields: string | null;
 }
 
@@ -292,6 +310,10 @@ export async function readRunOfShow(
   const day = requested ?? defaultRunOfShowDay(event, now);
   const window = dayWindow(day, event.timezone);
 
+  // `program` keeps every participation, including the coordinator who merely
+  // submitted on someone's behalf — right for a record page, wrong for a room.
+  // The narrowing to who actually stands up happens in TS below, against the
+  // same predicate the write path uses, so the two cannot drift apart.
   const speakers = participantListSql({
     submissionId: "item.submission_id",
     audience: "program",
@@ -299,6 +321,7 @@ export async function readRunOfShow(
       person_id: "speaker.id",
       name: "speaker.name",
       role: "participation.role",
+      confirmation_status: "participation.confirmation_status",
       custom_fields: "speaker.custom_fields",
     },
   });
@@ -393,7 +416,11 @@ export async function readRunOfShow(
   for (const row of sessions.results) {
     const isBreak = row.kind === "break";
     const parsed = isBreak ? [] : (JSON.parse(row.speakers_json) as SpeakerJson[]);
-    const speakerList: RunOfShowSpeaker[] = parsed.map((speaker) => {
+    // Only the people who stand up, and by the same predicate `speaksAtSession`
+    // enforces on the write. A row the page draws must be a row the crew can
+    // act on: a "Mark in" button that always answers not-found is a dead end on
+    // the one surface where nobody has time to wonder why.
+    const speakerList: RunOfShowSpeaker[] = parsed.filter((speaker) => isOnStageRole(speaker.role)).map((speaker) => {
       const arrival = arrivals.get(`${row.id}:${speaker.person_id}`) ?? null;
       return {
         person_id: speaker.person_id,
@@ -402,8 +429,12 @@ export async function readRunOfShow(
         phone: phoneFromCustomFields(speaker.custom_fields ?? null),
         arrived_at: arrival?.marked_at ?? null,
         marked_by_name: arrival?.marked_by_name ?? null,
+        declined: speaker.confirmation_status === "declined",
       };
     });
+    // Expected = everyone who has not declined, plus anyone who declined and
+    // turned up anyway. A mark is evidence; an RSVP is a memory.
+    const expected = speakerList.filter((speaker) => !speaker.declined || speaker.arrived_at !== null);
     const slides = isBreak || row.submission_id === null
       ? slidesFor([], event.timezone, now)
       : slidesFor(tasksBySubmission.get(row.submission_id) ?? [], event.timezone, now);
@@ -416,7 +447,8 @@ export async function readRunOfShow(
       ends_at: row.starts_at + row.duration_min * 60_000,
       is_break: isBreak,
       speakers: speakerList,
-      arrived_count: speakerList.filter((speaker) => speaker.arrived_at !== null).length,
+      arrived_count: expected.filter((speaker) => speaker.arrived_at !== null).length,
+      expected_count: expected.length,
       slides,
     };
     const list = sessionsByRoom.get(row.room_id) ?? [];
@@ -424,7 +456,7 @@ export async function readRunOfShow(
     sessionsByRoom.set(row.room_id, list);
     if (!isBreak) {
       counts.sessions += 1;
-      counts.speakers += speakerList.length;
+      counts.speakers += expected.length;
       counts.arrived += session.arrived_count;
       if (slides.state === "received") counts.slides_received += 1;
       if (slides.state === "missing" || slides.state === "overdue" || slides.state === "done_without_file") {

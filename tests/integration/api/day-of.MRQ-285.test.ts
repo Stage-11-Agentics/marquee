@@ -1,10 +1,11 @@
 import { beforeEach, expect, test } from "vitest";
 
 import { app, type Env } from "../../../src/index";
-import { listArrivalsForPerson } from "../../../src/lib/day-of/checkins";
+import { listArrivalsForPerson, speaksAtSession } from "../../../src/lib/day-of/checkins";
 import { canMarkArrivals, resolveDayOfLink } from "../../../src/lib/day-of/links";
 import { zonedStart } from "../../../src/lib/event-time";
 import { readRunOfShow, readRunOfShowEvent, type RunOfShow } from "../../../src/lib/day-of/run-of-show";
+import { mintToken, sha256Hex } from "../../../src/lib/auth/random-token";
 import { applyMigrations, env } from "../apply-migrations";
 
 /**
@@ -42,6 +43,10 @@ const PRIYA = "per_mrq285_priya";
 const MARCUS = "per_mrq285_marcus";
 const NINA = "per_mrq285_nina";
 const OMAR = "per_mrq285_omar";
+/** Sent the abstract in on a speaker's behalf, and does not stand up. */
+const COORDINATOR = "per_mrq285_coordinator";
+/** A co-speaker on the panel who said no weeks ago. */
+const DECLINER = "per_mrq285_decliner";
 const PANELISTS = [PRIYA, MARCUS, NINA, OMAR] as const;
 
 const ORGANIZER_SESSION = "sess_mrq285_organizer";
@@ -74,13 +79,32 @@ function runtimeEnv(): Env {
 interface Call {
   session?: string;
   key?: string;
+  /** A raw `mq_…` bearer, for the agent-shaped half of every authority question. */
+  bearer?: string;
   method?: string;
   body?: unknown;
+}
+
+/**
+ * A scoped API token created by the organizer, holding exactly these grants.
+ *
+ * Its memberships come from its creator, so this is the shape that matters: an
+ * owner's own agent, narrowed to what it may do. The narrowing is the whole
+ * point of the credential and therefore the whole thing worth testing.
+ */
+async function issueToken(id: string, permissions: string[]): Promise<string> {
+  const raw = `mq_${mintToken()}`;
+  await env.DB.prepare(
+    `INSERT INTO api_tokens (id, org_id, event_id, name, token_hash, prefix, scopes, created_by, created_at, updated_at)
+     VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(id, ORG_ID, id, await sha256Hex(raw), raw.slice(0, 7), JSON.stringify({ permissions, event_ids: [] }), ORGANIZER, NOW, NOW).run();
+  return raw;
 }
 
 async function call(path: string, options: Call = {}): Promise<Response> {
   const headers = new Headers();
   if (options.session) headers.set("cookie", `mq_session=${options.session}`);
+  if (options.bearer) headers.set("authorization", `Bearer ${options.bearer}`);
   if (options.key) headers.set("x-marquee-day-of-key", options.key);
   if (options.body !== undefined) headers.set("content-type", "application/json");
   return app.request(`${ORIGIN}${path}`, {
@@ -138,6 +162,8 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'marcus@example.com', 'Marcus Okafor', '[]', 0, ?, ?)").bind(MARCUS, ORG_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'nina@example.com', 'Nina Bak', '[]', 0, ?, ?)").bind(NINA, ORG_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'omar@example.com', 'Omar Haddad', '[]', 0, ?, ?)").bind(OMAR, ORG_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'dana@example.com', 'Dana Whitfield', '[]', 0, ?, ?)").bind(COORDINATOR, ORG_ID, NOW, NOW),
+    env.DB.prepare("INSERT INTO people (id, org_id, email, name, social_links, is_demo, created_at, updated_at) VALUES (?, ?, 'tomas@example.com', 'Tomas Iversen', '[]', 0, ?, ?)").bind(DECLINER, ORG_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('mem_mrq285_owner', ?, ?, ?, 'owner', ?, ?)").bind(ORG_ID, ORGANIZER, EVENT_ID, NOW, NOW),
     env.DB.prepare("INSERT INTO memberships (id, org_id, person_id, event_id, role, created_at, updated_at) VALUES ('mem_mrq285_speaker', ?, ?, ?, 'speaker', ?, ?)").bind(ORG_ID, PRIYA, EVENT_ID, NOW, NOW),
     // clock-check: allow — auth_sessions.expires_at is a credential TTL compared as an instant, not an event-local calendar date
@@ -158,6 +184,11 @@ beforeEach(async () => {
       .prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .bind(`part_mrq285_panel_${index}`, PANEL_SUBMISSION, person, index === 0 ? "moderator" : "speaker", index, NOW, NOW)),
     env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_mrq285_talk', ?, ?, 'speaker', 0, ?, ?)").bind(TALK_SUBMISSION, PRIYA, NOW, NOW),
+    // A coordinator who sent the abstract in on the speaker's behalf. A
+    // first-class flow, and not somebody who stands up in the room.
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, created_at, updated_at) VALUES ('part_mrq285_coordinator', ?, ?, 'submitter', 1, ?, ?)").bind(TALK_SUBMISSION, COORDINATOR, NOW, NOW),
+    // And a co-speaker on the panel who declined weeks ago.
+    env.DB.prepare("INSERT INTO participations (id, submission_id, person_id, role, position, confirmation_status, created_at, updated_at) VALUES ('part_mrq285_declined', ?, ?, 'co_speaker', 4, 'declined', ?, ?)").bind(PANEL_SUBMISSION, DECLINER, NOW, NOW),
     env.DB.prepare("INSERT INTO agenda_items (id, event_id, submission_id, kind, title, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at) VALUES (?, ?, ?, 'session', NULL, ?, 60, ?, NULL, 1, ?, ?)")
       .bind(PANEL_ITEM, EVENT_ID, PANEL_SUBMISSION, panelStart, BROADWAY, NOW, NOW),
     env.DB.prepare("INSERT INTO agenda_items (id, event_id, submission_id, kind, title, starts_at, duration_min, room_id, track_id, is_published, created_at, updated_at) VALUES (?, ?, NULL, 'break', 'Coffee', ?, 30, ?, NULL, 1, ?, ?)")
@@ -236,7 +267,10 @@ test("CONTRACT · MRQ-285 — arrival is one speaker on one session, so a panel 
   const link = await mint("checkin", "Sam, front door");
 
   const before = panel(await runOfShow());
-  expect(before.speakers).toHaveLength(4);
+  // Five people are drawn on the card and four of them are expected: the fifth
+  // declined, is shown as such, and is not part of the denominator.
+  expect(before.speakers).toHaveLength(5);
+  expect(before.expected_count).toBe(4);
   expect(before.arrived_count).toBe(0);
 
   const marked = await call(`/api/v1/events/${EVENT_ID}/agenda-items/${PANEL_ITEM}/arrivals`, { key: link.token, body: { person_id: NINA } });
@@ -433,4 +467,105 @@ test("CONTRACT · MRQ-285 — the speaker's own record reads the same marks back
   expect(await listArrivalsForPerson(env.DB, EVENT_ID, OMAR)).toEqual([]);
   // And the list is scoped to the conference asked about.
   expect(await listArrivalsForPerson(env.DB, OTHER_EVENT_ID, PRIYA)).toEqual([]);
+});
+
+test("CONTRACT · MRQ-285 — the green room draws only people the crew can act on", async () => {
+  const link = await mint("checkin", "Sam, front door");
+  const snapshot = await runOfShow();
+  const room = snapshot.rooms.find((candidate) => candidate.id === BROADWAY)!;
+  const talk = room.sessions.find((session) => session.id === TALK_ITEM)!;
+
+  // The coordinator who submitted the abstract is not on the card. She is on
+  // the record page — that is the record's job — but the green room answers a
+  // question about the room, and a "Mark in" button that always answers
+  // not-found is a dead end on the one surface with no time to spare.
+  expect(talk.speakers.map((speaker) => speaker.person_id)).toEqual([PRIYA]);
+  expect(await speaksAtSession(env.DB, { eventId: EVENT_ID, agendaItemId: TALK_ITEM, personId: COORDINATOR })).toBe(false);
+
+  // The set the page draws and the set the write accepts are the same set. This
+  // is the assertion that keeps them from drifting apart again.
+  for (const session of room.sessions.filter((candidate) => !candidate.is_break)) {
+    for (const speaker of session.speakers) {
+      expect(
+        await speaksAtSession(env.DB, { eventId: EVENT_ID, agendaItemId: session.id, personId: speaker.person_id }),
+        `${session.id} draws ${speaker.person_id} but the write would refuse them`,
+      ).toBe(true);
+    }
+  }
+
+  // A refusal is shown rather than hidden — the crew must not stand in the wings
+  // waiting for somebody who said no — but while unmarked it is not counted,
+  // because "3 of 4 here" would otherwise mean the room is one short forever.
+  const panelCard = room.sessions.find((session) => session.id === PANEL_ITEM)!;
+  expect(panelCard.speakers.find((speaker) => speaker.person_id === DECLINER)?.declined).toBe(true);
+  expect(panelCard.speakers).toHaveLength(5);
+  expect(panelCard.expected_count).toBe(4);
+
+  await call(`/api/v1/events/${EVENT_ID}/agenda-items/${PANEL_ITEM}/arrivals`, { key: link.token, body: { person_id: PRIYA } });
+  const marked = (await runOfShow()).rooms.find((candidate) => candidate.id === BROADWAY)!
+    .sessions.find((session) => session.id === PANEL_ITEM)!;
+  expect(marked.arrived_count).toBe(1);
+  expect(marked.expected_count).toBe(4);
+
+  // Somebody who declined in July and walked in at 08:40 is here. The mark is
+  // evidence and the RSVP is a memory, so marking them rejoins the count rather
+  // than producing a card that shows a person standing there and does not count
+  // them — and taking the mark back puts them back outside it.
+  await call(`/api/v1/events/${EVENT_ID}/agenda-items/${PANEL_ITEM}/arrivals`, { key: link.token, body: { person_id: DECLINER } });
+  const turnedUp = (await runOfShow()).rooms.find((candidate) => candidate.id === BROADWAY)!
+    .sessions.find((session) => session.id === PANEL_ITEM)!;
+  expect(turnedUp.expected_count).toBe(5);
+  expect(turnedUp.arrived_count).toBe(2);
+  expect(turnedUp.speakers.find((speaker) => speaker.person_id === DECLINER)?.declined).toBe(true);
+
+  await call(`/api/v1/events/${EVENT_ID}/agenda-items/${PANEL_ITEM}/arrivals/${DECLINER}`, { key: link.token, method: "DELETE" });
+  const goneAgain = (await runOfShow()).rooms.find((candidate) => candidate.id === BROADWAY)!
+    .sessions.find((session) => session.id === PANEL_ITEM)!;
+  expect(goneAgain.expected_count).toBe(4);
+  expect(goneAgain.arrived_count).toBe(1);
+});
+
+test("CONTRACT · MRQ-285 — a read-only token cannot mint a credential that writes, nor take the crew's link down", async () => {
+  const readOnly = await issueToken("tok_mrq285_read", ["program:read"]);
+  const writer = await issueToken("tok_mrq285_write", ["program:read", "program:write"]);
+  const crewLink = await mint("checkin", "Sam, front door");
+  const shareLink = await mint("green_room", "Green room");
+
+  // The read-only token is a real, working credential — it reads the day.
+  const read = await call(`/api/v1/events/${EVENT_ID}/run-of-show?day=${DAY_ONE}`, { bearer: readOnly });
+  expect(read.status).toBe(200);
+  // And it cannot record an arrival directly. That refusal is the measure of
+  // this credential's authority, and everything below has to agree with it.
+  const direct = await call(`/api/v1/events/${EVENT_ID}/agenda-items/${PANEL_ITEM}/arrivals`, { bearer: readOnly, body: { person_id: NINA } });
+  expect(direct.status).toBe(403);
+
+  // So it must not be able to ISSUE something that writes. Minting is the
+  // escalation route: a link is a credential, and a credential that can do what
+  // its issuer cannot is not a narrower authority, it is a laundering step.
+  const minted = await call(`/api/v1/events/${EVENT_ID}/day-of/links`, { bearer: readOnly, body: { kind: "checkin", name: "self-issued" } });
+  expect(minted.status).toBe(403);
+
+  // Nor destroy one. On a show morning this is the sharper end: rotating the
+  // green-room link kills every copy of the URL the crew is holding, and a
+  // read-only credential must not be able to do that at 08:40.
+  const rotated = await call(`/api/v1/events/${EVENT_ID}/day-of/links`, { bearer: readOnly, body: { kind: "green_room", name: "Green room" } });
+  expect(rotated.status).toBe(403);
+  const revoked = await call(`/api/v1/events/${EVENT_ID}/day-of/links/${crewLink.id}`, { bearer: readOnly, method: "DELETE" });
+  expect(revoked.status).toBe(403);
+  // The refusals were refusals, not slow failures: both links still open.
+  expect(await resolveDayOfLink(env.DB, crewLink.token)).not.toBeNull();
+  expect(await resolveDayOfLink(env.DB, shareLink.token)).not.toBeNull();
+  expect(await auditRows("day_of_link_revoked")).toHaveLength(0);
+
+  // The listing is administration too, so it is held to the same line.
+  expect((await call(`/api/v1/events/${EVENT_ID}/day-of/links`, { bearer: readOnly })).status).toBe(403);
+
+  // An agent that holds program:write is the organizer's own hand, and works.
+  const allowed = await call(`/api/v1/events/${EVENT_ID}/day-of/links`, { bearer: writer, body: { kind: "checkin", name: "Agent, side door" } });
+  expect(allowed.status, await allowed.clone().text()).toBe(201);
+  const issued = await allowed.json() as { data: { id: string }; url: string };
+  expect((await resolveDayOfLink(env.DB, issued.url.split("/").at(-1)!))?.id).toBe(issued.data.id);
+  // And the mint is attributed to the token, not to nobody.
+  const created = await auditRows("day_of_link_created");
+  expect(created.at(-1)!.actor_kind).toBe("api_token");
 });

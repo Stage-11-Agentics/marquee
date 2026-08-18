@@ -24,7 +24,7 @@ import type { Context } from "hono";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
-import { DAY_OF_LINK_KINDS } from "../db/schema";
+import { DAY_OF_LINK_KINDS, type DayOfLinkRow } from "../db/schema";
 import { auditStatement } from "../lib/audit";
 import { getAuth } from "../lib/auth/auth-middleware";
 import { authHasRole, tokenHasGrant } from "../lib/auth/scope-resolution";
@@ -38,7 +38,7 @@ import {
   canMarkArrivals,
   dayOfLinkPath,
   listDayOfLinks,
-  mintDayOfLink,
+  prepareDayOfLink,
   resolveDayOfLink,
   revokeAllDayOfLinksStatement,
   revokeDayOfLinkStatement,
@@ -103,14 +103,32 @@ async function requireEvent(context: Context<ApiEnv>, eventId: string) {
 }
 
 /**
- * Day-of administration is an ops act: minting a credential that opens the
- * whole run of show, and killing one. A speaker's own seat does not reach it.
+ * Day-of administration is issuing and destroying credentials, not reading a
+ * schedule — so it is gated as a write even though its own route reads like
+ * administration.
+ *
+ * The explicit `program:write` demand on a token is the load-bearing line, and
+ * it is not redundant with the role check above it. `authHasRole(auth, "ops")`
+ * on a *token* bottoms out at `program:read` (see `minimumGrantByRole` in
+ * `scope-resolution.ts`), which is exactly right for the ops surfaces that read.
+ * Here it would mean a **read-only token could mint a link that writes** — and
+ * worse, could rotate the green-room link and take every copy of the crew's URL
+ * down at 08:40 with no way back. A credential that cannot record an arrival
+ * directly must not be able to issue something that can.
+ *
+ * Tokens are allowed at all, rather than refused outright the way
+ * `requireTokenAdmin` refuses them for API-token management, because an
+ * organizer's own agent minting the morning's links is the product working as
+ * intended. It just has to hold the grant that says so.
  */
 function requireDayOfAdmin(context: Context<ApiEnv>, eventId: string) {
   const auth = getAuth(context);
   if (!auth) throw ApiError.unauthenticated();
   if (!authHasRole(auth, "ops", eventId)) {
     throw ApiError.forbidden("day-of links require an ops role at this conference");
+  }
+  if (auth.kind === "token" && !tokenHasGrant(auth, "program:write", eventId)) {
+    throw ApiError.forbidden("minting or revoking a day-of link requires the program:write grant");
   }
   return auth;
 }
@@ -254,37 +272,49 @@ const createLink = defineApiRoute(
     const now = Date.now();
     const actorPersonId = auth.kind === "session" ? auth.personId : auth.actingPersonId;
     const requestId = context.get("requestId") ?? null;
-    // Rotation is the whole point of the share link, so it happens before the
-    // mint and in the same breath: an organizer who rotates has to be able to
-    // say the old URL is dead, and a mint that leaves its predecessor alive has
-    // revoked nothing.
-    if (body.kind === "green_room") {
-      await context.env.DB.batch([
-        auditStatement(context.env.DB, {
-          eventId,
-          actorKind: auth.kind === "session" ? "user" : "api_token",
-          actorPersonId,
-          action: "day_of_link_rotated",
-          entityType: "day_of_link",
-          entityId: eventId,
-          after: { kind: body.kind, name: body.name },
-          now,
-          requestId,
-        }),
-        revokeAllDayOfLinksStatement(context.env.DB, { eventId, kind: "green_room", now }),
-      ]);
-    }
-    const minted = await mintDayOfLink(context.env.DB, {
+    const actorKind = auth.kind === "session" ? "user" : "api_token";
+    // What a rotation destroyed is the part an incident needs, and it is only
+    // knowable before the revoke runs: afterwards every one of these rows looks
+    // the same as one revoked last week.
+    const superseded = body.kind === "green_room"
+      ? (await listDayOfLinks(context.env.DB, eventId))
+        .filter((link) => link.kind === "green_room" && link.revoked_at === null)
+        .map((link) => ({ id: link.id, name: link.name }))
+      : [];
+    const minted = await prepareDayOfLink(context.env.DB, {
       eventId,
       kind: body.kind,
       name: body.name,
       createdByPersonId: actorPersonId,
       now,
     });
+    // Rotation is the whole point of the share link, and it lands in the SAME
+    // batch as the mint that replaces it. An organizer who rotates has to be
+    // able to say the old URL is dead — and a revoke that commits without its
+    // replacement leaves the conference with no live link and an audit trail
+    // claiming it was rotated, which is the one outcome this route must not
+    // produce.
     await context.env.DB.batch([
+      ...(body.kind === "green_room"
+        ? [
+          auditStatement(context.env.DB, {
+            eventId,
+            actorKind,
+            actorPersonId,
+            action: "day_of_link_rotated",
+            entityType: "day_of_link",
+            entityId: eventId,
+            before: { revoked: superseded },
+            after: { kind: body.kind, name: body.name, replaced: superseded.length },
+            now,
+            requestId,
+          }),
+          revokeAllDayOfLinksStatement(context.env.DB, { eventId, kind: "green_room", now }),
+        ]
+        : []),
       auditStatement(context.env.DB, {
         eventId,
-        actorKind: auth.kind === "session" ? "user" : "api_token",
+        actorKind,
         actorPersonId,
         action: "day_of_link_created",
         entityType: "day_of_link",
@@ -293,6 +323,7 @@ const createLink = defineApiRoute(
         now,
         requestId,
       }),
+      minted.insert,
     ]);
     return context.json(
       { data: summarizeDayOfLink(minted.row), url: dayOfLinkPath(minted.token) },
@@ -319,7 +350,7 @@ const revokeLink = defineApiRoute(
     const existing = await context.env.DB
       .prepare("SELECT * FROM day_of_links WHERE id = ? AND event_id = ?")
       .bind(linkId, eventId)
-      .first<import("../db/schema").DayOfLinkRow>();
+      .first<DayOfLinkRow>();
     if (!existing) throw ApiError.notFound("day-of link not found");
     const now = Date.now();
     if (existing.revoked_at === null) {
@@ -341,7 +372,7 @@ const revokeLink = defineApiRoute(
     const revoked = await context.env.DB
       .prepare("SELECT * FROM day_of_links WHERE id = ?")
       .bind(linkId)
-      .first<import("../db/schema").DayOfLinkRow>();
+      .first<DayOfLinkRow>();
     if (!revoked) throw new Error("revoked_day_of_link_disappeared");
     return context.json({ data: summarizeDayOfLink(revoked) }, 200);
   },

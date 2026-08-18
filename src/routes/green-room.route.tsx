@@ -10,6 +10,7 @@ import { errorFields, loggerForEnv } from "../lib/observability/log";
 import { resolveAuth } from "../lib/auth/auth-middleware";
 import { authHasRole } from "../lib/auth/scope-resolution";
 import { canMarkArrivals, resolveDayOfLink, touchDayOfLinkStatement } from "../lib/day-of/links";
+import { calendarDateInTimezone } from "../lib/conference-dates";
 import { readRunOfShow, readRunOfShowEvent, type RunOfShowEvent } from "../lib/day-of/run-of-show";
 import { GREEN_ROOM_STYLES, GreenRoomPage } from "../ui/day-of/GreenRoom";
 import { renderNotFoundDocument } from "./not-found.route";
@@ -61,6 +62,7 @@ const GREEN_ROOM_SCRIPT = `
   if (!page || !shell) return;
   const eventId = page.getAttribute("data-event");
   const key = page.getAttribute("data-key") || "";
+  const timeZone = page.getAttribute("data-timezone") || undefined;
   // Without a conference there is no request worth sending. Refusing here means
   // a markup change that loses the attribute shows as a dead button, rather than
   // as a page that quietly asks the API about an event called "null".
@@ -73,13 +75,17 @@ const GREEN_ROOM_SCRIPT = `
   };
   const arrivedTotal = shell.querySelector("[data-count-arrived]");
 
+  // The denominator is who the room is waiting on, so it excludes anyone who
+  // declined — the same rule the server-rendered count follows. Counting every
+  // drawn row instead would make a session carrying a refusal read as
+  // permanently one short.
   const recount = (card) => {
-    const rows = card.querySelectorAll(".gr-speaker");
-    const here = card.querySelectorAll(".gr-speaker.is-here").length;
+    const expected = card.querySelectorAll(".gr-speaker:not(.is-declined)");
+    const here = card.querySelectorAll(".gr-speaker:not(.is-declined).is-here").length;
     const label = card.querySelector("[data-arrived-count]");
-    if (label && rows.length > 0) label.textContent = here + " of " + rows.length + " here";
+    if (label && expected.length > 0) label.textContent = here + " of " + expected.length + " here";
     if (arrivedTotal) {
-      const allHere = shell.querySelectorAll(".gr-speaker.is-here").length;
+      const allHere = shell.querySelectorAll(".gr-speaker:not(.is-declined).is-here").length;
       const parts = arrivedTotal.textContent.split(" of ");
       if (parts.length === 2) arrivedTotal.textContent = allHere + " of " + parts[1];
     }
@@ -114,11 +120,16 @@ const GREEN_ROOM_SCRIPT = `
       button.setAttribute("aria-pressed", nowHere ? "true" : "false");
       button.textContent = nowHere ? "Here" : "Mark in";
       row.classList.toggle("is-here", nowHere);
+      // Someone who declined and then walked in is here, so the mark returns
+      // them to the expected count; taking it back removes them again.
+      if (row.getAttribute("data-declined") === "true") row.classList.toggle("is-declined", !nowHere);
       const stamp = row.querySelector("[data-stamp]");
       if (stamp) {
         stamp.textContent = nowHere
-          ? "Here · " + (data.marked_by_name || "an organizer") + " · " + new Date(data.arrived_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-          : (stamp.getAttribute("data-phone") || "Not marked in yet");
+          ? "Here · " + (data.marked_by_name || "an organizer") + " · " + new Date(data.arrived_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: timeZone })
+          : row.getAttribute("data-declined") === "true"
+            ? "Declined — not expected"
+            : (stamp.getAttribute("data-phone") || "Not marked in yet");
       }
       recount(card);
       say(nowHere ? "Marked in." : "Mark removed.", false);
@@ -137,6 +148,8 @@ interface GreenRoomView {
   canMark: boolean;
   markerName: string | null;
   basePath: string;
+  /** Query the day switcher and refresh must carry — the organizer door's conference. */
+  carry?: Readonly<Record<string, string>>;
   key: string | null;
 }
 
@@ -152,6 +165,7 @@ async function renderGreenRoom(
     <GreenRoomPage
       runOfShow={runOfShow}
       basePath={view.basePath}
+      carry={view.carry}
       canMark={view.canMark}
       markerName={view.markerName}
     />,
@@ -160,6 +174,10 @@ async function renderGreenRoom(
     'id="app"',
     'data-marquee-page="green-room"',
     `data-event="${escapeAttribute(view.event.id)}"`,
+    // The stamp a tap writes must read the same as the one a refresh renders,
+    // and the server renders in the conference's zone — a remote organizer's
+    // laptop is in a different one.
+    `data-timezone="${escapeAttribute(view.event.timezone)}"`,
     view.key === null ? "" : `data-key="${escapeAttribute(view.key)}"`,
   ].filter((entry) => entry.length > 0).join(" ");
   const shell = await assetShell(context.env.ASSETS, context.req.raw);
@@ -189,7 +207,7 @@ async function organizerEvent(
   db: D1Database,
   orgId: string,
   requested: string | null,
-  today: string,
+  now: number,
 ): Promise<RunOfShowEvent | null> {
   if (requested) {
     const row = await db
@@ -201,20 +219,31 @@ async function organizerEvent(
       .first<RunOfShowEvent>();
     return row ?? null;
   }
-  const row = await db
-    .prepare(
-      `SELECT id, name, slug, timezone, starts_on, ends_on FROM events
-        WHERE org_id = ?
-        ORDER BY CASE WHEN ? BETWEEN starts_on AND ends_on THEN 0
-                      WHEN starts_on > ? THEN 1
-                      ELSE 2 END ASC,
-                 CASE WHEN starts_on > ? THEN starts_on ELSE '' END ASC,
-                 ends_on DESC
-        LIMIT 1`,
-    )
-    .bind(orgId, today, today, today)
-    .first<RunOfShowEvent>();
-  return row ?? null;
+  // Ordered in TS rather than SQL because "is this one running today" is a
+  // question in the CONFERENCE's timezone, and each row carries its own. A
+  // single date bound into the query would ask about all of them in one zone,
+  // which is wrong for every conference but the one that happens to match — and
+  // near midnight it is wrong for that one too.
+  const rows = await db
+    .prepare("SELECT id, name, slug, timezone, starts_on, ends_on FROM events WHERE org_id = ?")
+    .bind(orgId)
+    .all<RunOfShowEvent>();
+  const ranked = rows.results
+    .map((event) => {
+      const today = calendarDateInTimezone(now, event.timezone);
+      const rank = today >= event.starts_on && today <= event.ends_on ? 0 : event.starts_on > today ? 1 : 2;
+      return { event, rank, today };
+    })
+    // Running now, then the next one to open (soonest first), then the most
+    // recent that has finished — the order somebody asking this on a show
+    // morning means by "the green room".
+    .sort((left, right) =>
+      left.rank - right.rank
+      || (left.rank === 1
+        ? left.event.starts_on.localeCompare(right.event.starts_on)
+        : right.event.ends_on.localeCompare(left.event.ends_on))
+      || left.event.id.localeCompare(right.event.id));
+  return ranked[0]?.event ?? null;
 }
 
 export const greenRoomRoutes = new Hono<{ Bindings: Env }>();
@@ -225,12 +254,12 @@ greenRoomRoutes.get("/green-room", async (context) => {
   if (!auth) {
     return context.redirect(`/signin?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
   }
-  const today = new Date().toISOString().slice(0, 10);
+  const requestedEvent = url.searchParams.get("event")?.slice(0, 200) ?? null;
   const event = await organizerEvent(
     context.env.DB,
     auth.orgId,
-    url.searchParams.get("event")?.slice(0, 200) ?? null,
-    today,
+    requestedEvent,
+    Date.now(),
   );
   if (!event || !authHasRole(auth, "ops", event.id)) {
     return renderNotFoundDocument(await assetShell(context.env.ASSETS, context.req.raw));
@@ -243,6 +272,9 @@ greenRoomRoutes.get("/green-room", async (context) => {
     canMark: true,
     markerName: name,
     basePath: "/green-room",
+    // The conference travels with every day chip and the refresh, so a switch
+    // of day is never also a switch of conference.
+    carry: { event: event.id },
     key: null,
   });
 });

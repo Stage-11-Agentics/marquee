@@ -183,7 +183,12 @@ export function DayOfPage({ eventId }: { eventId: string }): JSX.Element {
           method: "POST",
           route: SEND_ROUTE,
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ selector: { recipient_pairs: pairs, task_state: "open" }, template_key: "task_overdue" }),
+          // No `task_state` filter: `pairs` is already exactly the set the button
+          // counted. Narrowing to open tasks on top of it would silently drop a
+          // deliverable the speaker marked done and never uploaded — the one
+          // state this board goes out of its way to name — so the button would
+          // promise "Ask 1" and report "0 queued".
+          body: JSON.stringify({ selector: { recipient_pairs: pairs }, template_key: "task_overdue" }),
         },
       );
       setAsked((current) => ({
@@ -209,7 +214,10 @@ export function DayOfPage({ eventId }: { eventId: string }): JSX.Element {
     <PageHeader
       title="Day of"
       copy="Every session in the order it runs, whether its slides are in, and the links the crew holds."
-      actions={<a class="button" href="/green-room" target="_blank" rel="noreferrer">Open the green room</a>}
+      // Naming the conference is not optional: `/green-room` bare falls back to
+      // whichever of the org's conferences is running or next, which is a
+      // different one whenever an organizer is working ahead.
+      actions={<a class="button" href={`/green-room?event=${encodeURIComponent(eventId)}`} target="_blank" rel="noreferrer">Open the green room</a>}
     />
 
     {board.kind === "error" ? (

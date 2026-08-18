@@ -101,6 +101,28 @@ function run(ctx: SeedContext): void {
     });
   }
 
+  // A phone number for the morning's speakers, so the green room's `tel:` link
+  // is a thing a reader can see rather than a capability only a test knows
+  // about. Written onto the people rows the earlier seeders already added
+  // rather than as new rows, because a person here is one org-scoped record and
+  // re-adding it would mean restating every column this module does not own.
+  //
+  // The numbers are in the 555-01xx block reserved for fiction, and they are
+  // stated in a custom field rather than a column because there is no
+  // `people.phone`: a conference that collects numbers keeps them under
+  // whatever it calls them, which is exactly what the green room reads by
+  // meaning.
+  const peopleById = new Map(rowsOf(ctx, "people").map((person) => [String(person.id), person]));
+  const morningSpeakers = [...new Set(dayOne.slice(0, 3).flatMap((item) =>
+    speakersBySubmission.get(String(item.submission_id)) ?? []))];
+  morningSpeakers.forEach((personId, index) => {
+    const person = peopleById.get(personId);
+    if (!person || person.custom_fields) return;
+    person.custom_fields = JSON.stringify({
+      "Mobile phone": `+1 (212) 555-01${String(index + 10).padStart(2, "0")}`,
+    });
+  });
+
   // The first two sessions are fully in; the third has one of its people here
   // and one still out, which is the state the per-session grain exists to show.
   const markedAt = DAY_ONE_START + 22 * 60_000;

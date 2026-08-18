@@ -12,6 +12,16 @@
  * of show. `checkin` reads it and may mark a speaker arrived — nothing else,
  * ever: authority here is a ladder of exactly two rungs, and no route outside
  * `day-of.routes.ts` accepts one of these tokens at all.
+ *
+ * **These links do not expire, and that is deliberate.** A link is live until
+ * somebody revokes or rotates it, which means a green-room URL left in a group
+ * chat keeps showing the run of show — including the speakers' mobile numbers —
+ * until an organizer ends it. A TTL was considered and rejected: the failure it
+ * would cause is a crew phone going dark mid-show, at the one hour of the year
+ * when nobody can stop to re-issue a credential, and a link that dies on its own
+ * teaches an organizer that revocation is automatic when it is not. Revocation
+ * is instant, total across every copy, and readable from a list on the Day-of
+ * desk; ending the links is a step of packing up, like collecting the radios.
  */
 import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
 
@@ -39,10 +49,18 @@ export function dayOfLinkPath(token: string): string {
   return `/green-room/k/${token}`;
 }
 
-export async function mintDayOfLink(
+/**
+ * Build the row and the statement that stores it, without running either.
+ *
+ * Separate from the write because a rotation is *revoke-then-mint*, and those
+ * two have to land together: a failure between them would leave a conference
+ * with no live share link and an audit trail claiming it had been rotated. One
+ * `batch()` makes the pair atomic, so the caller composes rather than sequences.
+ */
+export async function prepareDayOfLink(
   db: D1Database,
   input: MintDayOfLinkInput,
-): Promise<MintedDayOfLink> {
+): Promise<MintedDayOfLink & { insert: D1PreparedStatement }> {
   const id = newUlid(input.now);
   const token = mintToken();
   const row: DayOfLinkRow = {
@@ -57,14 +75,23 @@ export async function mintDayOfLink(
     created_at: input.now,
     updated_at: input.now,
   };
-  await db
+  const insert = db
     .prepare(
       `INSERT INTO day_of_links
         (id, event_id, kind, name, token_hash, created_by_person_id, last_used_at, revoked_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`,
     )
-    .bind(id, input.eventId, input.kind, input.name, row.token_hash, input.createdByPersonId, input.now, input.now)
-    .run();
+    .bind(id, input.eventId, input.kind, input.name, row.token_hash, input.createdByPersonId, input.now, input.now);
+  return { id, token, row, insert };
+}
+
+/** Mint and store one link, for callers with nothing to compose it with. */
+export async function mintDayOfLink(
+  db: D1Database,
+  input: MintDayOfLinkInput,
+): Promise<MintedDayOfLink> {
+  const { id, token, row, insert } = await prepareDayOfLink(db, input);
+  await insert.run();
   return { id, token, row };
 }
 

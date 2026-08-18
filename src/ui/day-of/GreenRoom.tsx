@@ -23,6 +23,14 @@ export interface GreenRoomProps {
   runOfShow: RunOfShow;
   /** The holder's own path, so the day switcher and refresh stay inside their door. */
   basePath: string;
+  /**
+   * Query the day switcher and refresh must carry forward.
+   *
+   * The organizer door names its conference here. Dropping it would make a day
+   * chip a jump to whichever conference the bare path resolves to — the same
+   * defect as an unscoped link, just one click further in.
+   */
+  carry?: Readonly<Record<string, string>>;
   canMark: boolean;
   /** The name every mark this viewer makes will be stamped with. */
   markerName: string | null;
@@ -74,7 +82,8 @@ function SpeakerRow({
   const arrived = speaker.arrived_at !== null;
   return (
     <li
-      class={`gr-speaker${arrived ? " is-here" : ""}`}
+      class={`gr-speaker${arrived ? " is-here" : ""}${speaker.declined && !arrived ? " is-declined" : ""}`}
+      data-declined={speaker.declined ? "true" : undefined}
       data-session={session.id}
       data-person={speaker.person_id}
     >
@@ -85,9 +94,11 @@ function SpeakerRow({
         <span class="gr-speaker-stamp" data-stamp data-phone={speaker.phone ?? ""}>
           {arrived
             ? `Here · ${speaker.marked_by_name ?? "an organizer"} · ${clockLabel(speaker.arrived_at!, timezone)}`
-            : speaker.phone
-              ? speaker.phone
-              : "Not marked in yet"}
+            : speaker.declined
+              ? "Declined — not expected"
+              : speaker.phone
+                ? speaker.phone
+                : "Not marked in yet"}
         </span>
       </div>
       <div class="gr-speaker-actions">
@@ -105,7 +116,7 @@ function SpeakerRow({
             {arrived ? "Here" : "Mark in"}
           </button>
         ) : (
-          <span class={`gr-flag${arrived ? " is-here" : ""}`} aria-hidden="true">{arrived ? "Here" : "—"}</span>
+          <span class={`gr-flag${arrived ? " is-here" : ""}`} aria-hidden="true">{arrived ? "Here" : speaker.declined ? "No" : "—"}</span>
         )}
       </div>
     </li>
@@ -143,7 +154,9 @@ function SessionCard({
             <span class="gr-arrived tabular" data-arrived-count>
               {speakers.length === 0
                 ? "Speaker to be announced"
-                : `${session.arrived_count} of ${speakers.length} here`}
+                : session.expected_count === 0
+                  ? "Everyone on this session declined"
+                  : `${session.arrived_count} of ${session.expected_count} here`}
             </span>
           </div>
           {speakers.length > 0 ? (
@@ -203,9 +216,13 @@ function RoomSection({
   );
 }
 
-export function GreenRoomPage({ runOfShow, basePath, canMark, markerName }: GreenRoomProps): JSX.Element {
+export function GreenRoomPage({ runOfShow, basePath, canMark, markerName, carry }: GreenRoomProps): JSX.Element {
   const { event, counts } = runOfShow;
   const timezone = event.timezone;
+  const dayHref = (day: string): string => {
+    const query = new URLSearchParams({ ...(carry ?? {}), day });
+    return `${basePath}?${query.toString()}`;
+  };
   return (
     <div class="gr-shell" data-green-room data-day={runOfShow.day}>
       <header class="gr-top">
@@ -223,7 +240,7 @@ export function GreenRoomPage({ runOfShow, basePath, canMark, markerName }: Gree
               <a
                 key={day.id}
                 class={`gr-day-chip${day.id === runOfShow.day ? " is-current" : ""}`}
-                href={`${basePath}?day=${day.id}`}
+                href={dayHref(day.id)}
                 aria-current={day.id === runOfShow.day ? "page" : undefined}
               >
                 {day.label}
@@ -257,7 +274,7 @@ export function GreenRoomPage({ runOfShow, basePath, canMark, markerName }: Gree
       </main>
       <footer class="gr-foot">
         <span class="gr-status" role="status" aria-live="polite" data-status></span>
-        <a class="gr-refresh" href={`${basePath}?day=${runOfShow.day}`}>Refresh</a>
+        <a class="gr-refresh" href={dayHref(runOfShow.day)}>Refresh</a>
       </footer>
     </div>
   );
@@ -296,6 +313,9 @@ export const GREEN_ROOM_STYLES = `
 .gr-session { padding: 12px; border-top: 1px solid var(--line); }
 .gr-session:first-child { border-top: 0; }
 .gr-session.is-now { background: var(--accent-soft); }
+/* Present but not awaited: legible, and visibly not part of the count. */
+.gr-speaker.is-declined { opacity: .62; }
+.gr-speaker.is-declined .gr-speaker-stamp { font-style: italic; }
 .gr-session-head { display: grid; gap: 4px; }
 .gr-session-when { display: flex; align-items: center; gap: 8px; }
 .gr-live, .gr-next { font: 500 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; padding: 4px 6px; border-radius: var(--radius); }
