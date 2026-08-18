@@ -156,7 +156,7 @@ async function seedCompletedOtherPersonTask(demoMode: 0 | 1): Promise<void> {
     env.DB.prepare(`INSERT INTO task_templates
       (id, event_id, name, kind, description, due_at, due_offset_days, form_id, file_config, position, auto_assign, created_at, updated_at)
       VALUES (?, ?, 'Another person task', 'acknowledge', 'A task completed by somebody else.', ?, NULL, NULL, NULL, 0, 0, ?, ?)`)
-      .bind("template_mrq235_completed_elsewhere", COMPLETED_ELSEWHERE_EVENT_ID, NOW + 86_400_000, NOW, NOW),
+      .bind("template_mrq235_completed_elsewhere", COMPLETED_ELSEWHERE_EVENT_ID, Date.now() + 3 * 86_400_000, NOW, NOW),
     // SURVIVOR_ID is the only person reference in this event: the task belongs
     // to HELPER_ID, while its completed_by_person_id records the other actor.
     env.DB.prepare(`INSERT INTO speaker_tasks
@@ -168,7 +168,7 @@ async function seedCompletedOtherPersonTask(demoMode: 0 | 1): Promise<void> {
         COMPLETED_ELSEWHERE_EVENT_ID,
         HELPER_ID,
         "template_mrq235_completed_elsewhere",
-        NOW + 86_400_000,
+        Date.now() + 3 * 86_400_000,
         NOW,
         JSON.stringify({ acknowledged: true }),
         NOW,
