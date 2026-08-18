@@ -18,7 +18,9 @@ test("CONTRACT · MRQ-203 · the sidebar reproduces the ruled group structure", 
     // and sits above Settings for the same reason every other row does.
     ["organization", ["Home", "People CRM", "Outreach", "Agents", "Settings"]],
     ["conference", ["Program pipeline", "Program board", "Abstracts & sessions", "Agenda", "Speakers"]],
-    ["speaker-ops", ["Onboarding", "Tasks", "Communications", "Files", "Follow-ups"]],
+    // "Day of" sits after Files because that is the order the work happens in:
+    // the decks come in for weeks, and then there is a morning (MRQ-285).
+    ["speaker-ops", ["Onboarding", "Tasks", "Communications", "Files", "Day of", "Follow-ups"]],
     ["cfp", ["Forms", "Evaluation", "Reviewer"]],
     ["public-links", ["Announce", "Conference site", "Speaker portal", "Embeds"]],
     ["settings", ["Settings"]],

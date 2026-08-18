@@ -75,6 +75,7 @@ const REGISTER_CHROME: Partial<Record<ThemeId, RegisterChrome>> = {
       tasks: "tasks",
       communications: "comms",
       files: "files",
+      "day-of": "day of",
       "delivery-health": "follow-ups",
       forms: "forms",
       evaluation: "evaluation",
