@@ -5,6 +5,8 @@ import { createApiRouter } from "./api/router";
 import { setSessionCookie } from "./lib/cookies";
 import { runUploadOrphanSweep } from "./lib/r2/orphan-sweep";
 import { apiManifest } from "./routes/_manifest";
+import { handleMcpRequest, MCP_PATH } from "./mcp/server";
+import { resolveAuth } from "./lib/auth/auth-middleware";
 import { createCredentialResolver } from "./lib/auth/credential-resolver";
 import { MIRROR_RECONCILE_MESSAGE_TYPE, runResetJob } from "./lib/reset-demo/reset-consumer";
 import { RESET_DEMO_MESSAGE_TYPE } from "./routes/admin-ops.routes";
@@ -224,11 +226,89 @@ app.get("/SKILL.md", () => new Response(skill, {
 // than awaited at module scope.
 let apiApp: Promise<Awaited<ReturnType<typeof createApiRouter>>> | undefined;
 
-app.all("/api/*", async (context) => {
+function assembledApi(): Promise<Awaited<ReturnType<typeof createApiRouter>>> {
   apiApp ??= createApiRouter(apiManifest, {
     credentialResolver: createCredentialResolver(),
   });
-  const { app: api } = await apiApp;
+  return apiApp;
+}
+
+/**
+ * The MCP endpoint is a façade over the API app assembled just below, and it
+ * shares that one instance on purpose: every tool call re-enters the shipped
+ * pipeline as an ordinary sub-request, so scope, rate limits, CAS, idempotency,
+ * audit and the error envelope are the API's, not a second implementation's.
+ *
+ * Bearer only, deliberately. The credential is resolved from `Authorization`
+ * and the cookie is neither read here nor forwarded: a cross-site POST carrying
+ * a browser's session cookie must not be able to act through this door, and
+ * declining to look is a stronger guarantee than any check that could be got
+ * wrong later.
+ */
+app.post(MCP_PATH, async (context) => {
+  const requestId = resolveRequestId(context.req.raw);
+  const authorization = context.req.header("authorization");
+  const instrumented = instrumentBindings(context.env, requestId);
+  const { app: api, entries } = await assembledApi();
+
+  let principal: Principal = { kind: "anonymous" };
+  if (authorization !== undefined) {
+    const auth = await resolveAuth(context);
+    if (!auth) {
+      return context.json(
+        {
+          jsonrpc: "2.0",
+          id: null,
+          error: {
+            code: -32600,
+            message: "the bearer token presented is not valid on this deployment",
+            data: { request_id: requestId },
+          },
+        },
+        401,
+      );
+    }
+    principal = auth;
+  }
+
+  const forwardedHeaders: Record<string, string> = {};
+  // The rate limiter keys an anonymous caller on their address; forwarding what
+  // the edge saw keeps the public tier in the same bucket as the public form.
+  for (const header of ["cf-connecting-ip", "x-forwarded-for", "user-agent"]) {
+    const value = context.req.header(header);
+    if (value !== undefined) forwardedHeaders[header] = value;
+  }
+
+  return handleMcpRequest(context.req.raw, {
+    entries,
+    callApi: async (subRequest) => api.fetch(subRequest, instrumented),
+    principal,
+    origin: new URL(context.req.url).origin,
+    ...(authorization === undefined ? {} : { authorization }),
+    forwardedHeaders,
+    requestId,
+  });
+});
+
+// SSE is a non-goal, and a client that opens the stream should learn that from
+// the transport rather than from a hang.
+app.get(MCP_PATH, (context) => {
+  context.header("Allow", "POST");
+  return context.json(
+    {
+      jsonrpc: "2.0",
+      id: null,
+      error: {
+        code: -32600,
+        message: "this MCP server speaks JSON over POST /mcp; it opens no SSE stream",
+      },
+    },
+    405,
+  );
+});
+
+app.all("/api/*", async (context) => {
+  const { app: api } = await assembledApi();
   // The bindings are instrumented HERE, before the API app sees them, because
   // this is the last point at which one object can be handed to every handler.
   // A per-request copy carries a metered D1 and correlated queues; the real env

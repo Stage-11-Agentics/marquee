@@ -27,6 +27,26 @@ The command registry is:
 
 ${commandLines()}
 
+## Model Context Protocol
+
+This instance also answers MCP at \`POST /mcp\` — stateless JSON-RPC 2.0 over Streamable HTTP; no SSE, no OAuth, bearer only. It is a façade over the same API these commands call: every tool re-enters the handler, guard, rate limit, and refusal sentence the REST route uses, so a credential can never do more through MCP than it can here.
+
+\`\`\`json
+{
+  "mcpServers": {
+    "marquee": {
+      "type": "http",
+      "url": "https://<your-instance>/mcp",
+      "headers": { "Authorization": "Bearer mq_YOUR_TOKEN" }
+    }
+  }
+}
+\`\`\`
+
+With no \`Authorization\` header the connection serves the public tier: the published Agenda, one Session, one speaker, the questions the public form asks, and sending an Abstract to it — exactly what a signed-out browser reaches. With a scoped token the tool set widens to what that token's grants, seat, and conference restriction already allow, and no further. Call \`tools/list\` on the connection you actually have rather than assuming a set; the listing is what that credential reaches, and every tool description names its preconditions and what a refusal means.
+
+Two habits the descriptions repeat, because they are the ones that matter: run \`comms_audience\` before \`send_reminder\`, and treat the fingerprint \`decision_plan\` returns as a human's confirmation — show that plan to a person before calling \`apply_decisions\`.
+
 ## Set up a new instance
 
 This chapter is for a fresh deployment: an empty Cloudflare account and a cloned repository. If \`MARQUEE_URL\` and \`MARQUEE_TOKEN\` already work, skip to Seed. Setup is conversational — three questions belong to the operator, so ask them before acting rather than guessing: which domain, whether to seed the demo conference alongside, and whether a Resend API key exists yet.

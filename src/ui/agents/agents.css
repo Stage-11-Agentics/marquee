@@ -20,6 +20,7 @@
 .agents-connect-body p { margin: 0; }
 
 /* The paste-ready prompt, quoted. The prototype's `.message-preview`. */
+.agents-code { font-family: var(--mono); margin: 0; overflow-x: auto; white-space: pre; }
 .agents-quote { background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: 12px; line-height: 1.55; margin: 0; padding: 14px; }
 
 /* The three canonical machine doors and the generated context shortcut: dark
