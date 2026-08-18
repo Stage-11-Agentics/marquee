@@ -237,3 +237,20 @@ test("AC-386 · MRQ-235 · alias continuity flattens across a chained merge and 
   await expect(undoPersonMerge(env.DB, ORG_ID, first.merge_id, ACTOR, NOW + 30)).rejects.toMatchObject({ code: "undo_blocked" });
   expect(await env.DB.prepare("SELECT status, undo_reason FROM person_merges WHERE id = ?").bind(first.merge_id).first()).toEqual({ status: "undo_blocked", undo_reason: "survivor_remerged" });
 });
+
+test("CONTRACT · MRQ-286 · merging a helper into the speaker they help cannot create a self-reference", async () => {
+  const merge = await executePersonMerge(
+    env.DB,
+    ORG_ID,
+    { firstPersonId: HELPER_ID, secondPersonId: RETIRED_ID, survivorPersonId: HELPER_ID, idempotencyKey: "5d9b5c62-a79b-4a9e-8f99-235000000005" },
+    { ...ACTOR, actorPersonId: HELPER_ID },
+    NOW + 10,
+  );
+
+  // The two seeded rows point both directions between the selected helper and
+  // retired speaker. Execution must complete cleanly; the migration CHECK is
+  // the last line of defence, not the expected merge outcome.
+  expect(merge.status).toBe("clean");
+  expect(await env.DB.prepare("SELECT id FROM speaker_helpers WHERE speaker_person_id = helper_person_id").first()).toBeNull();
+  expect(await env.DB.prepare("SELECT id FROM people WHERE id = ?").bind(RETIRED_ID).first()).toBeNull();
+});

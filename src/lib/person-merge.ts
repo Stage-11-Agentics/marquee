@@ -355,6 +355,16 @@ async function processCollisionMoves(
       }
       const after = clone(row);
       after[move.column] = survivorId;
+      if (move.table === "speaker_helpers" && after.speaker_person_id === after.helper_person_id) {
+        // A relationship between the two identities collapses into an
+        // impossible self-seat when either side is re-pointed. Drop it as a
+        // deduped reference so the migration CHECK remains unreachable and
+        // undo can restore the original row from this receipt.
+        operations.push(operation(`DELETE FROM ${move.table} WHERE id = ?`, row.id));
+        addMovement(movements, move.table, row, null, "deduped", "helper relationship collapsed into a self-reference during merge");
+        collisions.push({ table: move.table, key, kept_id: null, retired_id: String(row.id), outcome: "deduped", reason: "self helper relationship cannot survive identity merge" });
+        continue;
+      }
       operations.push(operation(`UPDATE ${move.table} SET ${move.column} = ? WHERE id = ?`, survivorId, row.id));
       addMovement(movements, move.table, row, after, "moved", `retired-only row (${key})`);
       collisions.push({ table: move.table, key, kept_id: null, retired_id: String(row.id), outcome: "moved", reason: "retired-only row moved" });
