@@ -1104,15 +1104,119 @@ function NoSeatNotice(): JSX.Element {
   </div>;
 }
 
+function SpeakerHelpersPanel({
+  eventId,
+  helpers,
+  onRefresh,
+}: {
+  eventId: string;
+  helpers: PortalSnapshot["helpers"];
+  onRefresh: () => Promise<void>;
+}): JSX.Element {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const add = async (event: Event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await requestJson(`/api/v1/me/helpers?eventId=${encodeURIComponent(eventId)}`, {
+        method: "POST",
+        body: JSON.stringify({ name, email }),
+      });
+      setName("");
+      setEmail("");
+      setMessage("Invite queued. They can open the helper portal from the link in their email.");
+      await onRefresh();
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (helperPersonId: string) => {
+    setRemoving(helperPersonId);
+    setError(null);
+    setMessage(null);
+    try {
+      await requestJson(`/api/v1/me/helpers/${encodeURIComponent(helperPersonId)}?eventId=${encodeURIComponent(eventId)}`, { method: "DELETE" });
+      setMessage("Helper removed. Their access to this conference is closed.");
+      await onRefresh();
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setRemoving(null);
+    }
+  };
+  return <section class="portal-panel portal-helper-panel" aria-labelledby="helpers-heading">
+    <header class="portal-panel-head"><h2 id="helpers-heading">Your helpers</h2><span>{helpers.length} active</span></header>
+    <div class="portal-panel-body">
+      <p class="portal-helper-scope">A helper can see your session logistics and complete your speaker tasks. They cannot see your talk content, profile, decisions, or standing.</p>
+      {helpers.length > 0 ? <ul class="portal-helper-list">{helpers.map((helper) => <li key={helper.id}><div><strong>{helper.helper_name}</strong><span>{helper.helper_email}</span></div><button class="portal-button secondary" type="button" disabled={removing === helper.helper_person_id} onClick={() => void remove(helper.helper_person_id)}>{removing === helper.helper_person_id ? "Removing…" : "Remove"}</button></li>)}</ul> : <p class="portal-empty">No helper has access to this conference yet.</p>}
+      <form class="portal-helper-form" onSubmit={add}>
+        <div class="portal-field"><label for="helper-name">Name</label><input id="helper-name" required value={name} onInput={(event) => setName((event.currentTarget as HTMLInputElement).value)} placeholder="What should we call them?" /></div>
+        <div class="portal-field"><label for="helper-email">Email</label><input id="helper-email" required type="email" value={email} onInput={(event) => setEmail((event.currentTarget as HTMLInputElement).value)} placeholder="helper@example.com" /></div>
+        <div class="portal-payload-actions"><span class="portal-payload-error" aria-live="polite">{error ?? message ?? ""}</span><button class="portal-button" type="submit" disabled={busy}>{busy ? "Inviting…" : "Invite helper"}</button></div>
+      </form>
+    </div>
+  </section>;
+}
+
+function HelpingPanel({ eventId, helping }: { eventId: string; helping: PortalSnapshot["helping"] }): JSX.Element | null {
+  if (helping.length === 0) return null;
+  return <section class="portal-panel portal-helping-panel" aria-labelledby="helping-heading">
+    <header class="portal-panel-head"><h2 id="helping-heading">You help</h2><span>separate helper access</span></header>
+    <div class="portal-panel-body"><p class="portal-helper-scope">You also have a helper seat for another speaker. Open it to see only the logistics and tasks they shared with you.</p><ul class="portal-helper-list">{helping.map((item) => <li key={item.speaker_person_id}><div><strong>You help {item.speaker_name}</strong><span>{item.helper_name}</span></div><a class="portal-button secondary" href={`/portal?eventId=${encodeURIComponent(eventId)}&helperSpeakerId=${encodeURIComponent(item.speaker_person_id)}&helperView=1`}>Open helper view</a></li>)}</ul></div>
+  </section>;
+}
+
+function HelperTasksPanel({ snapshot, onRefresh }: { snapshot: HelperSnapshot; onRefresh: () => Promise<void> }): JSX.Element {
+  const activeTasks = snapshot.tasks.filter((task) => task.cancelled_at === null);
+  const doneCount = activeTasks.filter((task) => task.status === "done").length;
+  return <section class="portal-panel" aria-labelledby="helper-tasks-heading">
+    <header class="portal-panel-head"><h2 id="helper-tasks-heading">Work for {snapshot.helper.speaker.name}</h2><span>{doneCount}/{activeTasks.length} complete</span></header>
+    <div class="portal-panel-body"><p class="portal-helper-scope">Complete the speaker's requested logistics here. Your name is recorded on every task you finish for them.</p><div class="portal-task-list">{activeTasks.length === 0 ? <div class="portal-empty">No tasks are assigned for this speaker right now.</div> : activeTasks.map((task) => <TaskRow
+      key={task.id}
+      task={task}
+      ownerLabel={`for ${snapshot.helper.speaker.name}`}
+      renderSurface={(current) => <GenericTaskSurface task={current} onComplete={onRefresh} />}
+      renderPayloadExtras={(current) => current.kind === "file" ? <FileComments taskId={current.id} attachmentId={current.payload.attachment_id ?? null} /> : null}
+    />)}</div></div>
+  </section>;
+}
+
+function HelperPortal({ snapshot, onSignOut, onRefresh }: { snapshot: HelperSnapshot; onSignOut: () => void; onRefresh: () => Promise<void> }): JSX.Element {
+  const switches = snapshot.helper.speakers.length > 1
+    ? snapshot.helper.speakers.map((speaker) => <a class="portal-button secondary" href={`/portal?eventId=${encodeURIComponent(snapshot.event.id)}&helperSpeakerId=${encodeURIComponent(speaker.id)}&helperView=1`} key={speaker.id}>{speaker.id === snapshot.helper.speaker.id ? `Helping ${speaker.name}` : `Switch to ${speaker.name}`}</a>)
+    : null;
+  return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Helper portal</span><button type="button" onClick={onSignOut}>Sign out</button></header><main class="portal-main">
+    <section class="portal-status-hero" aria-labelledby="helper-heading"><span class="eyebrow">Helper seat</span><h1 id="helper-heading">You help {snapshot.helper.speaker.name}</h1><div class="portal-status-copy">{snapshot.event.name} · logistics and speaker tasks only</div>{switches ? <nav class="portal-seat-actions" aria-label="Speakers you help">{switches}</nav> : null}</section>
+    <div class="portal-welcome"><div><h2>Welcome, {snapshot.person.name}</h2><p>You are helping {snapshot.helper.speaker.name} at {snapshot.event.name}.</p></div><div class="portal-progress"><strong>{snapshot.submissions.length}</strong><span class="portal-progress-label">session{snapshot.submissions.length === 1 ? "" : "s"}</span><span class="portal-progress-note">titles, times, and arrival details</span></div></div>
+    <div class="portal-grid"><HelperTasksPanel snapshot={snapshot} onRefresh={onRefresh} /><section class="portal-panel portal-talks" aria-labelledby="helper-sessions-heading"><header class="portal-panel-head"><h2 id="helper-sessions-heading">Sessions</h2><span>{snapshot.submissions.length}</span></header><div class="portal-panel-body">{snapshot.submissions.length === 0 ? <p class="portal-empty">No scheduled sessions are attached yet.</p> : snapshot.submissions.map((submission) => <article class="portal-talk" key={submission.id}><h3>{submission.title}</h3>{submission.slot ? <ArrivalCard slot={submission.slot} timezone={snapshot.event.timezone} helper /> : <p class="portal-empty">The time and room will appear when this session is placed.</p>}</article>)}</div></section></div>
+    <section class="portal-panel" aria-labelledby="helper-boundary-heading"><header class="portal-panel-head"><h2 id="helper-boundary-heading">Your access</h2><span>event-scoped</span></header><div class="portal-panel-body"><p class="portal-helper-scope">This seat does not include the speaker's talk words, profile, standing, decisions, or other speakers. Removing you from the speaker's helper list closes this conference access.</p></div></section>
+  </main></div>;
+}
+
 function PortalPage(): JSX.Element {
   const query = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const viewingAsSpeaker = query?.get("viewing_as") === "speaker";
   const requestedEventId = query?.get("eventId");
+  const helperSpeakerId = query?.get("helperSpeakerId");
+  const helperView = query?.get("helperView") === "1";
   const [snapshot, setSnapshot] = useState<AnyPortalSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiFailure | null>(null);
   const refresh = async () => {
-    const path = requestedEventId ? `/api/v1/me/portal?eventId=${encodeURIComponent(requestedEventId)}` : "/api/v1/me/portal";
+    const params = new URLSearchParams();
+    if (requestedEventId) params.set("eventId", requestedEventId);
+    if (helperSpeakerId) params.set("helperSpeakerId", helperSpeakerId);
+    if (helperView) params.set("helperView", "1");
+    const path = params.toString() ? `/api/v1/me/portal?${params.toString()}` : "/api/v1/me/portal";
     try { setLoading(true); setError(null); const next = await requestJson<AnyPortalSnapshot>(path); setSnapshot(next); }
     catch (caught) { setError(caught as ApiFailure); } finally { setLoading(false); }
   };
@@ -1137,8 +1241,9 @@ function PortalPage(): JSX.Element {
   if (error && !snapshot && error.status === 404) return <NoSeatNotice />;
   if (error && !snapshot) return <div class="portal-shell"><div class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span></div><main class="portal-main"><div class="portal-error"><div><strong>We could not load your portal.</strong><p>{error.message}</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
   if (snapshot && snapshot.seat === "submitter") return <SubmitterPortal snapshot={snapshot} onSignOut={() => void signOut()} viewingAsSpeaker={viewingAsSpeaker} />;
+  if (snapshot && snapshot.seat === "helper") return <HelperPortal snapshot={snapshot} onSignOut={() => void signOut()} onRefresh={refresh} />;
   if (!speaker) return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><a href="/">Return to conference</a></header><main class="portal-main"><div class="portal-error"><div><strong>No portal data is available.</strong><p>Try loading the speaker workspace again.</p><button class="portal-button" type="button" onClick={() => void refresh()}>Try again</button></div></div></main></div>;
-  return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><button type="button" onClick={() => void signOut()}>Sign out</button></header><main class="portal-main">{viewingAsSpeaker ? <ViewingAsBanner /> : null}{speaker.submissions.length === 0 ? <section class="portal-status-hero" aria-labelledby="portal-status-heading"><span class="eyebrow">Current status</span><h1 id="portal-status-heading">Speaker portal</h1><div class="portal-status-copy">Your conference submissions and speaker tasks will appear here.</div><a class="portal-button secondary" href="/">Return to conference</a></section> : speaker.submissions.map((submission, index) => <StatusHero key={submission.id} submission={submission} index={index} timezone={speaker.event.timezone} onRefresh={refresh} />)}<div class="portal-welcome"><div><h2>Welcome back, {speaker.person.name}</h2><p>{speaker.event.name} · your speaker workspace</p></div><div class={`portal-progress${activeTasks.length > completedTasks ? " needs-action" : " is-complete"}`}><strong>{completedTasks} of {activeTasks.length}</strong><span class="portal-progress-label">tasks complete</span><span class="portal-progress-note">{activeTasks.length > completedTasks ? `${activeTasks.length - completedTasks} still need${activeTasks.length - completedTasks === 1 ? "s" : ""} you` : "nothing is waiting on you"}</span></div></div><div class="portal-grid"><TasksPanel eventId={speaker.event.id} tasks={speaker.tasks} submissions={speaker.submissions} person={speaker.person} onRefresh={refresh} /><ProfileEditor eventId={speaker.event.id} person={speaker.person} platforms={speaker.event.social_platforms ?? [...SOCIAL_PLATFORM_IDS]} onSaved={refresh} /></div><AnnounceYourTalk event={speaker.event} submissions={speaker.submissions} /><section class="portal-panel portal-talks" aria-labelledby="talks-heading"><header class="portal-panel-head"><h2 id="talks-heading">Your talks</h2><span>{speaker.submissions.length} record{speaker.submissions.length === 1 ? "" : "s"}</span></header><div class="portal-panel-body">{speaker.submissions.length === 0 ? <div class="portal-empty">No submissions are attached to this speaker record. The conference team will attach one when it is ready.</div> : speaker.submissions.map((submission) => <TalkCard key={submission.id} submission={submission} onSaved={refresh} />)}</div></section>{speaker.submissions.some((submission) => submission.decision_feedback) ? <section class="portal-panel portal-talks" aria-labelledby="feedback-heading"><header class="portal-panel-head"><h2 id="feedback-heading">Conference update</h2><span>latest note</span></header><div class="portal-panel-body">{speaker.submissions.filter((submission) => submission.decision_feedback).map((submission) => <div class="portal-feedback" key={submission.id}><h3>{submission.title}</h3><p>{submission.decision_feedback?.markdown}</p></div>)}</div></section> : null}<section class="portal-panel portal-handbook" aria-labelledby="handbook-heading"><header class="portal-panel-head"><h2 id="handbook-heading">Speaker handbook</h2><span>{speaker.event.name}</span></header><div class="portal-panel-body"><Markdown markdown={handbook} /></div></section></main></div>;
+  return <div class="portal-shell"><header class="portal-top"><span class="portal-brand">Marquee · Speaker portal</span><button type="button" onClick={() => void signOut()}>Sign out</button></header><main class="portal-main">{viewingAsSpeaker ? <ViewingAsBanner /> : null}{speaker.submissions.length === 0 ? <section class="portal-status-hero" aria-labelledby="portal-status-heading"><span class="eyebrow">Current status</span><h1 id="portal-status-heading">Speaker portal</h1><div class="portal-status-copy">Your conference submissions and speaker tasks will appear here.</div><a class="portal-button secondary" href="/">Return to conference</a></section> : speaker.submissions.map((submission, index) => <StatusHero key={submission.id} submission={submission} index={index} timezone={speaker.event.timezone} onRefresh={refresh} />)}<div class="portal-welcome"><div><h2>Welcome back, {speaker.person.name}</h2><p>{speaker.event.name} · your speaker workspace</p></div><div class={`portal-progress${activeTasks.length > completedTasks ? " needs-action" : " is-complete"}`}><strong>{completedTasks} of {activeTasks.length}</strong><span class="portal-progress-label">tasks complete</span><span class="portal-progress-note">{activeTasks.length > completedTasks ? `${activeTasks.length - completedTasks} still need${activeTasks.length - completedTasks === 1 ? "s" : ""} you` : "nothing is waiting on you"}</span></div></div><div class="portal-grid"><TasksPanel eventId={speaker.event.id} tasks={speaker.tasks} submissions={speaker.submissions} person={speaker.person} onRefresh={refresh} /><ProfileEditor eventId={speaker.event.id} person={speaker.person} platforms={speaker.event.social_platforms ?? [...SOCIAL_PLATFORM_IDS]} onSaved={refresh} /></div><SpeakerHelpersPanel eventId={speaker.event.id} helpers={speaker.helpers} onRefresh={refresh} /><HelpingPanel eventId={speaker.event.id} helping={speaker.helping} /><AnnounceYourTalk event={speaker.event} submissions={speaker.submissions} /><section class="portal-panel portal-talks" aria-labelledby="talks-heading"><header class="portal-panel-head"><h2 id="talks-heading">Your talks</h2><span>{speaker.submissions.length} record{speaker.submissions.length === 1 ? "" : "s"}</span></header><div class="portal-panel-body">{speaker.submissions.length === 0 ? <div class="portal-empty">No submissions are attached to this speaker record. The conference team will attach one when it is ready.</div> : speaker.submissions.map((submission) => <TalkCard key={submission.id} submission={submission} onSaved={refresh} />)}</div></section>{speaker.submissions.some((submission) => submission.decision_feedback) ? <section class="portal-panel portal-talks" aria-labelledby="feedback-heading"><header class="portal-panel-head"><h2 id="feedback-heading">Conference update</h2><span>latest note</span></header><div class="portal-panel-body">{speaker.submissions.filter((submission) => submission.decision_feedback).map((submission) => <div class="portal-feedback" key={submission.id}><h3>{submission.title}</h3><p>{submission.decision_feedback?.markdown}</p></div>)}</div></section> : null}<section class="portal-panel portal-handbook" aria-labelledby="handbook-heading"><header class="portal-panel-head"><h2 id="handbook-heading">Speaker handbook</h2><span>{speaker.event.name}</span></header><div class="portal-panel-body"><Markdown markdown={handbook} /></div></section></main></div>;
 }
 
 export { NoSeatNotice, PortalPage, SubmitterPortal };
