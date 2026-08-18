@@ -134,6 +134,7 @@ export interface PeopleImportUndoResult {
   undone: number;
   attendances_removed: number;
   roster_placements_removed: number;
+  roster_placements_retained: number;
   skipped: number;
   skipped_rows: Array<{
     target_id: string;

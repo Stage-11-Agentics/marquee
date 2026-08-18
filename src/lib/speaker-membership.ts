@@ -53,14 +53,16 @@ export interface SpeakerMembershipInput {
   /**
    * The id to give the row IF this statement inserts one.
    *
-   * A caller that has to be able to reverse exactly its own writes — the people
-   * import's undo — needs to know which seats it created, and the upsert below
-   * cannot tell an insert from a match after the fact. Supplying the id means
-   * the caller already holds it: if the insert lands, the id names the row it
-   * made; if the seat already existed, the conflict keeps the ORIGINAL row's id
-   * and the caller's id names nothing, so a delete against it is a harmless
-   * no-op. That failure direction is the point — a reversal can under-delete,
-   * never over-delete.
+   * A caller that has to reverse exactly its own writes — the people import's
+   * undo — needs to know which seats it created, and the upsert below cannot
+   * tell an insert from a match after the fact. Supplying the id means the
+   * caller already holds it: if the insert lands, the id names the row it made;
+   * if the seat already existed, the conflict keeps the ORIGINAL row's id and
+   * the caller's id names nothing, so an id-scoped delete cannot reach a
+   * different membership row. The id records which row the import created; it
+   * does not make that row permanently owned by the import. A later organizer
+   * claim can adopt the same row, so an undo must still check the row's current
+   * intent before deleting it.
    */
   id?: string;
 }

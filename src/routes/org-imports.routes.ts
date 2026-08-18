@@ -165,6 +165,8 @@ const undoResponse = z.object({
     .describe("Attendance rows withdrawn at the conference this import named; zero when it named none."),
   roster_placements_removed: z.number().int().nonnegative()
     .describe("Speaker seats withdrawn at the conference this import placed people on; zero when it placed none."),
+  roster_placements_retained: z.number().int().nonnegative()
+    .describe("Speaker seats this import created but retained because a later organizer claim stamped invited_at."),
   skipped: z.number().int().nonnegative(),
   skipped_rows: z.array(z.object({
     target_id: z.string(),
@@ -390,7 +392,7 @@ const undoPeopleImport = defineApiRoute(
     ).bind(importId, access.orgId).first<{ id: string; status: string; undone_at: number | null; mapping: string | null }>();
     if (!imported) throw ApiError.notFound("people import not found");
     if (imported.undone_at !== null || imported.status === "undone") {
-      return context.json({ undone: 0, attendances_removed: 0, roster_placements_removed: 0, skipped: 0, skipped_rows: [], retained_manifest: true }, 200);
+      return context.json({ undone: 0, attendances_removed: 0, roster_placements_removed: 0, roster_placements_retained: 0, skipped: 0, skipped_rows: [], retained_manifest: true }, 200);
     }
 
     const rows = await context.env.DB.prepare(
@@ -482,6 +484,7 @@ const undoPeopleImport = defineApiRoute(
       statements.push(context.env.DB.prepare(
         `DELETE FROM memberships
           WHERE event_id = ? AND role = 'speaker'
+            AND invited_at IS NULL
             AND id IN (SELECT value FROM json_each(?))`,
       ).bind(rosterEventId, JSON.stringify(createdMembershipIds)));
     }
@@ -575,10 +578,19 @@ const undoPeopleImport = defineApiRoute(
       Number(results[operation.resultIndex]?.meta?.changes ?? 0) > 0;
     const undone = operations.filter(changed).length;
     attendancesRemoved = attendanceIndex >= 0 ? Number(results[attendanceIndex]?.meta?.changes ?? 0) : 0;
+    const rosterPlacementsRemoved = rosterIndex >= 0 ? Number(results[rosterIndex]?.meta?.changes ?? 0) : 0;
+    const retainedRoster = rosterEventId && createdMembershipIds.length > 0
+      ? await context.env.DB.prepare(
+          `SELECT COUNT(*) AS n FROM memberships
+            WHERE event_id = ? AND role = 'speaker' AND invited_at IS NOT NULL
+              AND id IN (SELECT value FROM json_each(?))`,
+        ).bind(rosterEventId, JSON.stringify(createdMembershipIds)).first<{ n: number }>()
+      : null;
     return context.json({
       undone,
       attendances_removed: attendancesRemoved,
-      roster_placements_removed: rosterIndex >= 0 ? Number(results[rosterIndex]?.meta?.changes ?? 0) : 0,
+      roster_placements_removed: rosterPlacementsRemoved,
+      roster_placements_retained: Number(retainedRoster?.n ?? 0),
       skipped: skippedRows.length,
       skipped_rows: skippedRows,
       retained_manifest: true,
