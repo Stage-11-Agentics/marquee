@@ -38,7 +38,8 @@ export interface MintedMagicLink {
  *
  * The caller's quota belongs in the INSERT ... SELECT, not in a preceding
  * COUNT query: D1 serializes the write statement, so two requests cannot both
- * pass the same count and then mint over the cap.
+ * pass the same count and then mint over the cap. The admission count is scoped
+ * to the person, event, and purpose on the row being minted.
  */
 export type MagicLinkAdmission = {
   maxRows: number;
@@ -65,8 +66,12 @@ type MintMagicLinkInput = {
   invite?: { role: MembershipRole; eventId: Id | null; orgId: Id };
   /** The speakable second credential (ruling O4). Stored hashed; the raw value is the caller's to return once. */
   shortCode?: string;
-  /** An optional atomic quota applied to rows for this person and purpose. */
-  admission?: MagicLinkAdmission;
+};
+
+/** An atomic quota is a distinct input shape because it can return no row. */
+type AdmittedMintMagicLinkInput = MintMagicLinkInput & {
+  eventId: Id;
+  admission: MagicLinkAdmission;
 };
 
 /**
@@ -95,7 +100,7 @@ async function mintLink(
 
 async function mintLinkWithAdmission(
   db: D1Database,
-  input: MintMagicLinkInput,
+  input: MintMagicLinkInput | AdmittedMintMagicLinkInput,
 ): Promise<MintedMagicLink | null> {
   const now = input.now ?? Date.now();
   const redirectTo = input.redirectTo ?? "/";
@@ -117,7 +122,8 @@ async function mintLinkWithAdmission(
   if (input.shortCode !== undefined && codeHash === null) {
     throw new Error("magic link short code is not a well-formed code");
   }
-  const insert = input.admission
+  const admittedInput = "admission" in input ? input : null;
+  const insert = admittedInput
     ? db
       .prepare(
         `INSERT INTO magic_links
@@ -126,7 +132,7 @@ async function mintLinkWithAdmission(
          SELECT ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?
          WHERE (
            SELECT COUNT(*) FROM magic_links
-           WHERE person_id = ? AND purpose = ? AND created_at > ?
+           WHERE person_id = ? AND event_id = ? AND purpose = ? AND created_at > ?
          ) < ?`,
       )
       .bind(
@@ -144,9 +150,10 @@ async function mintLinkWithAdmission(
         now,
         now,
         input.personId,
+        admittedInput.eventId,
         input.purpose,
-        input.admission.createdAfter,
-        input.admission.maxRows,
+        admittedInput.admission.createdAfter,
+        admittedInput.admission.maxRows,
       )
     : db
       .prepare(
@@ -171,21 +178,21 @@ async function mintLinkWithAdmission(
         now,
       );
   const result = await insert.run();
-  if (input.admission && Number(result.meta.changes ?? 0) !== 1) return null;
+  if (admittedInput && Number(result.meta.changes ?? 0) !== 1) return null;
   return { id, token, redirectTo };
 }
 
 /** The ordinary mint is non-null; an admitted mint returns null when its quota is full. */
 export function mintMagicLink(
   db: D1Database,
-  input: MintMagicLinkInput & { admission: MagicLinkAdmission },
+  input: AdmittedMintMagicLinkInput,
 ): Promise<MintedMagicLink | null>;
 export function mintMagicLink(db: D1Database, input: MintMagicLinkInput): Promise<MintedMagicLink>;
 export function mintMagicLink(
   db: D1Database,
-  input: MintMagicLinkInput,
+  input: MintMagicLinkInput | AdmittedMintMagicLinkInput,
 ): Promise<MintedMagicLink | null> {
-  return input.admission ? mintLinkWithAdmission(db, input) : mintLink(db, input);
+  return "admission" in input ? mintLinkWithAdmission(db, input) : mintLink(db, input);
 }
 
 /** Organizer-only speaker invitations share the auth token writer without adding another route-local writer. */

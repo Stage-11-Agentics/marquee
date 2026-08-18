@@ -1,6 +1,7 @@
 import { beforeEach, expect, test } from "vitest";
 
 import { app, type Env } from "../../src/index";
+import { mintMagicLink } from "../../src/lib/auth/magic-links";
 import { applyMigrations, env } from "./apply-migrations";
 
 /**
@@ -59,9 +60,10 @@ async function linkFromMail(toEmail: string): Promise<string | null> {
   return /https?:\/\/\S+/.exec(mail?.text ?? "")?.[0] ?? null;
 }
 
-async function loginMailCount(): Promise<number> {
+async function loginMailCount(eventId: string): Promise<number> {
   const row = await env.DB
-    .prepare("SELECT COUNT(*) AS n FROM outbox WHERE template_key = 'magic_link_login'")
+    .prepare("SELECT COUNT(*) AS n FROM outbox WHERE template_key = 'magic_link_login' AND event_id = ?")
+    .bind(eventId)
     .first<{ n: number }>();
   return Number(row?.n ?? 0);
 }
@@ -262,7 +264,7 @@ test("AC-419 · a reversed acceptance stops claiming it was accepted", async () 
   expect(row?.decision, "a withdrawn record must not still read as accepted").toBeNull();
 });
 
-test("AC-420 · a decision the organizer has not announced stays off the submitter's page", async () => {
+test("AC-420 · a decision the organizer has not announced stays out of the submitter API", async () => {
   // Decided and notified are distinct states, and bulk waitlist decisions queue
   // no mail at all. Publishing one on sight would put committee state on a
   // speaker's screen weeks before the announced date.
@@ -301,11 +303,20 @@ test("AC-416 · a conference whose call is open has a door before its site goes 
   // The real pre-launch case: the CFP is collecting, the event site is not up
   // yet, and the person who just submitted still needs to ask where it stands.
   await env.DB.batch([
-    env.DB.prepare("UPDATE events SET status = 'draft' WHERE id = ?").bind(EVENT_A),
+    env.DB.prepare("UPDATE events SET status = 'draft' WHERE id IN (?, ?)").bind(EVENT_A, EVENT_B),
     openCall("form-a", EVENT_A, "cfp"),
   ]);
+  const live = await env.DB.prepare("SELECT COUNT(*) AS n FROM events WHERE status = 'live'").first<{ n: number }>();
+  expect(Number(live?.n ?? 0), "the pre-launch fixture must have no live event to anchor").toBe(0);
   await askForLink(SUBMITTER, SLUG_A);
   expect(await linkFromMail(SUBMITTER)).toMatch(/\/api\/v1\/auth\/exchange\?token=/);
+
+  // `status = 'open'` is not enough to keep a public form alive after its
+  // closing instant. The resolver must use the shared public-form predicate.
+  await env.DB.prepare("UPDATE forms SET closes_at = ? WHERE id = 'form-a'").bind(Date.now() - 3 * 24 * 60 * 60_000).run();
+  const before = await loginMailCount(EVENT_A);
+  await askForLink(SUBMITTER, SLUG_A);
+  expect(await loginMailCount(EVENT_A)).toBe(before);
 });
 
 test("AC-421 · an unlaunched conference with no open call is not named to a stranger, and is not silently swapped", async () => {
@@ -358,9 +369,19 @@ test("AC-422 · a slug belonging to another organization never resolves", async 
 });
 
 test("AC-417 · one address cannot be used as a mail cannon", async () => {
-  const before = await loginMailCount();
+  // Six ordinary login links for the same person at another conference must
+  // not consume this door's six-link bucket. The admission scope is
+  // person+event+purpose, not every login row that person owns.
+  await Promise.all(Array.from({ length: 6 }, (_, index) => mintMagicLink(env.DB, {
+    personId: "person-nadia",
+    eventId: EVENT_B,
+    purpose: "login",
+    redirectTo: `/portal?eventId=${EVENT_B}`,
+    now: NOW - index,
+  })));
+  const before = await loginMailCount(EVENT_A);
   await Promise.all(Array.from({ length: 9 }, () => askForLink(SUBMITTER, SLUG_A)));
-  const sent = (await loginMailCount()) - before;
+  const sent = (await loginMailCount(EVENT_A)) - before;
   expect(sent).toBeGreaterThan(0);
   expect(sent).toBeLessThanOrEqual(6);
 });

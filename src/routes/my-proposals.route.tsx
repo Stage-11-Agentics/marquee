@@ -60,7 +60,9 @@ function MyProposalsBody({ state }: { state: MyProposalsPageState }): JSX.Elemen
             required
           />
         </label>
-        <div class="proposals-security" data-proposals-turnstile data-sitekey={state.turnstileSiteKey}></div>
+        <div class="proposals-security" data-proposals-turnstile data-sitekey={state.turnstileSiteKey}>
+          {state.turnstileSiteKey ? <span data-proposals-security-copy>Complete the security check before sending.</span> : null}
+        </div>
         <div class="proposals-actions">
           {/* The status line holds its height whether or not it has anything to
               say, so the button never moves under the pointer mid-submit. The
@@ -110,7 +112,9 @@ const PROPOSALS_STYLES = `
 .proposals-form { display: grid; gap: 16px; }
 .proposals-field { display: grid; gap: 6px; font-size: 12px; }
 .proposals-field input { min-height: 38px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--sunk); color: var(--ink); font: 400 13px/1.4 var(--sans); }
-.proposals-security:empty { display: none; }
+.proposals-security { color: var(--ink-soft); font: 400 11px/1.4 var(--mono); min-height: 0; }
+.proposals-security:not(:empty) { min-height: 42px; }
+.proposals-security-copy { display: block; padding: 10px 0; }
 .proposals-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .proposals-status { min-height: 30px; flex: 1; color: var(--ink-soft); font: 400 11px/1.4 var(--mono); }
 .proposals-status.is-error { color: var(--danger); }
@@ -141,6 +145,7 @@ const PROPOSALS_SCRIPT = `
           "expired-callback": () => { token = ""; },
           "error-callback": () => { token = ""; }
         }) || null;
+        holder.querySelector("[data-proposals-security-copy]")?.remove();
       } catch (error) { /* the send still tries; the server is the gate */ }
     };
     if (window.turnstile) render();

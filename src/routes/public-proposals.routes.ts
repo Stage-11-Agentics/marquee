@@ -27,12 +27,13 @@ import { z } from "@hono/zod-openapi";
 import { ApiError } from "../api/errors";
 import { defineApiRoute, errorResponses, jsonResponse } from "../api/route";
 import type { ApiEnv } from "../api/runtime";
+import type { FormRow } from "../db/schema";
 import { enqueueAuthMail, renderProposalsLinkMail } from "../lib/auth/auth-mail";
 import { mintMagicLink } from "../lib/auth/magic-links";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
 import { loadPublicEvent } from "../lib/public-site";
-import { publicTurnstileExempt } from "./public-form.shared";
+import { publicFormIsClosed, publicTurnstileExempt } from "./public-form.shared";
 import { verifyTurnstile } from "../lib/r2/turnstile";
 
 /**
@@ -56,13 +57,16 @@ const requestSchema = z.object({
 const responseSchema = z.object({ ok: z.literal(true), message: z.string() });
 
 /**
- * Six mails an hour to one mailbox — counted in D1, against the links themselves.
+ * Six door links an hour for one person at one conference — counted in D1,
+ * against the links themselves.
  *
- * Keyed on the PERSON, not the IP, for the reason the attendee claim spells out
- * at length: a conference is one NAT, so an IP ceiling low enough to bound the
- * damage is low enough to be an outage. The shared `send` bucket is per-IP at
- * 30/60s, which bounds a client but not a mailbox — one caller can point that
- * whole allowance at a single address.
+ * Keyed on the PERSON and EVENT, not the IP, for the reason the attendee claim
+ * spells out at length: a conference is one NAT, so an IP ceiling low enough to
+ * bound the damage is low enough to be an outage. The shared `send` bucket is
+ * per-IP at 30/60s, which bounds a client but not a mailbox — one caller can
+ * point that whole allowance at a single address. The D1 admission bucket is
+ * shared with any other `purpose = 'login'` link minted for that same person and
+ * event; it is not a global per-address ceiling across every login route.
  *
  * It counts rows in `magic_links` rather than a KV tally, and the count is part
  * of the same D1 INSERT that mints the link. KV is eventually consistent and
@@ -96,6 +100,7 @@ async function submitterAtEvent(
            ON submission.id = participation.submission_id AND submission.event_id = ?
          JOIN events event ON event.id = submission.event_id AND event.org_id = person.org_id
         WHERE lower(person.email) = ?
+        ORDER BY person.id ASC
         LIMIT 1`,
     )
     .bind(eventId, email.trim().toLowerCase())
@@ -114,7 +119,9 @@ async function submitterAtEvent(
  * their own confirmation mail can resolve onto the other org's event — where
  * they have no submissions, so they get the generic acknowledgement forever with
  * no mail and no error. A silent permanent lockout is the worst shape a door can
- * have. The organization is the one the public site itself resolves to.
+ * have. A named slug supplies the anchor itself, using the public site's
+ * deterministic live-first/demo-first ordering; no live event is required just
+ * to learn the organization.
  *
  * **Live conferences first, and a non-live one only when its call is open.**
  * Every other public surface reads `status = 'live'` (`findLiveEvent`). Matching
@@ -122,51 +129,69 @@ async function submitterAtEvent(
  * to anyone. But a call for speakers routinely opens months before the event site
  * goes live, and that submitter still needs this door — so a non-live conference
  * resolves only when it has an open public form, which is a surface that already
- * publishes the conference's name to the world.
+ * publishes the conference's name to the world. The form window is evaluated by
+ * `publicFormIsClosed`, so a stale `status = 'open'` row cannot keep the event
+ * public after its close time.
  */
+type ProposalEventCandidate = {
+  id: string;
+  org_id: string;
+  name: string;
+  slug: string;
+  status: string;
+  demo_mode: number;
+  created_at: number;
+};
+
+async function hasOpenPublicForm(database: D1Database, eventId: string, now: number): Promise<boolean> {
+  const forms = await database
+    .prepare("SELECT status, opens_at, closes_at FROM forms WHERE event_id = ?")
+    .bind(eventId)
+    .all<Pick<FormRow, "status" | "opens_at" | "closes_at">>();
+  return forms.results.some((form) => !publicFormIsClosed(form, now));
+}
+
 export async function resolveProposalsEvent(
   database: D1Database,
   slug: string | null | undefined,
 ): Promise<{ id: string; name: string; slug: string } | null> {
-  const live = await loadPublicEvent(database, null);
-
-  if (slug) {
-    // A named event is only safe to resolve when the public-site resolver can
-    // establish this deployment's organization. Without that anchor, an open
-    // form in any tenant would become an unauthenticated cross-org oracle.
-    if (!live) return null;
-    const scope = await database
-      .prepare("SELECT org_id FROM events WHERE id = ? LIMIT 1")
-      .bind(live.id)
-      .first<{ org_id: string }>();
-    if (!scope) return null;
-    const named = await database
-      .prepare(
-        `SELECT id, name, slug FROM events
-          WHERE slug = ? AND org_id = ?
-            AND (
-              status = 'live'
-              OR EXISTS (
-                SELECT 1 FROM forms
-                 WHERE forms.event_id = events.id
-                   AND forms.status = 'open'
-              )
-            )
-          -- Deterministic on a tie, and the same ordering the public site uses.
-          ORDER BY CASE WHEN status = 'live' THEN 0 ELSE 1 END, demo_mode DESC, created_at ASC, id ASC
-          LIMIT 1`,
-      )
-      .bind(slug, scope.org_id)
-      .first<{ id: string; name: string; slug: string }>();
-    // A NAMED conference that does not resolve returns nothing rather than
-    // falling back to the live one. The fallback exists for a caller who named
-    // no conference; applying it here would answer "where do my Atlas proposals
-    // stand" with a link to Borealis — and on an instance where the person has
-    // submissions at both, that link works, which makes the wrong answer look
-    // like the right one.
-    return named ?? null;
+  if (!slug) {
+    const live = await loadPublicEvent(database, null);
+    return live ? { id: live.id, name: live.name, slug: live.slug } : null;
   }
-  return live ? { id: live.id, name: live.name, slug: live.slug } : null;
+
+  // The named event is the only identity available before the public site has
+  // gone live. Anchor the organization from that slug, then keep all later
+  // candidates inside it; otherwise a duplicate slug in another organization
+  // can become the answer to a link that was mailed by this one.
+  const scope = await database
+    .prepare(
+      `SELECT org_id FROM events
+        WHERE slug = ?
+        ORDER BY CASE WHEN status = 'live' THEN 0 ELSE 1 END,
+                 demo_mode DESC, created_at ASC, id ASC
+        LIMIT 1`,
+    )
+    .bind(slug)
+    .first<{ org_id: string }>();
+  if (!scope) return null;
+
+  const candidates = await database
+    .prepare(
+      `SELECT id, org_id, name, slug, status, demo_mode, created_at FROM events
+        WHERE slug = ? AND org_id = ?
+        ORDER BY CASE WHEN status = 'live' THEN 0 ELSE 1 END,
+                 demo_mode DESC, created_at ASC, id ASC`,
+    )
+    .bind(slug, scope.org_id)
+    .all<ProposalEventCandidate>();
+  const now = Date.now();
+  for (const named of candidates.results) {
+    if (named.status === "live" || await hasOpenPublicForm(database, named.id, now)) {
+      return { id: named.id, name: named.name, slug: named.slug };
+    }
+  }
+  return null;
 }
 
 const requestProposalsLink = defineApiRoute(
