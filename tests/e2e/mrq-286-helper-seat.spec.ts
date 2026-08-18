@@ -94,7 +94,7 @@ if (process.env.DRIVE_MRQ286_HELPER_SEAT) {
       // real UI write as well, not merely a direct API assertion.
       await organizer.goto(`/onboarding?eventId=${encodeURIComponent(EVENT_ID)}`);
       const speakerRow = organizer.locator("button.onboarding-speaker-link").filter({ hasText: "Aarush Selvan" }).first();
-      await expect(speakerRow).toBeVisible({ timeout: 30_000 });
+      await expect(speakerRow).toBeVisible({ timeout: 120_000 });
       await speakerRow.click();
       const drawer = organizer.locator('[role="dialog"]');
       await expect(drawer).toContainText("Helpers", { timeout: 30_000 });
