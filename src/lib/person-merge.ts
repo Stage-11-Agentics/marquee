@@ -258,42 +258,47 @@ async function rowsFor(db: D1Database, table: string, where: string, ...bindings
   return rows.results;
 }
 
-async function conferenceCount(db: D1Database, personId: string): Promise<number> {
-  const row = await db.prepare(
-    `SELECT COUNT(DISTINCT event_id) AS total FROM (
-       SELECT event_id FROM memberships WHERE person_id = ? AND event_id IS NOT NULL
-       UNION ALL
-       SELECT submission.event_id FROM participations participation
-       JOIN submissions submission ON submission.id = participation.submission_id
-       WHERE participation.person_id = ?
-       UNION ALL
-       SELECT submission.event_id FROM submissions submission
-       WHERE submission.submitter_person_id = ?
-       UNION ALL
-       SELECT task.event_id FROM speaker_tasks task
-       WHERE task.person_id = ? OR task.completed_by_person_id = ?
-       UNION ALL
-       SELECT event_id FROM speaker_helpers
-       WHERE speaker_person_id = ? OR helper_person_id = ? OR added_by = ?
-       UNION ALL
-       SELECT sponsorship.event_id FROM sponsorship_contacts contact
-       JOIN sponsorships sponsorship ON sponsorship.id = contact.sponsorship_id
-       WHERE contact.person_id = ?
-     )`,
-  ).bind(personId, personId, personId, personId, personId, personId, personId, personId, personId).first<{ total: number }>();
-  return Number(row?.total ?? 0);
-}
+type EventScopeQuery = {
+  sql: string;
+  bindings: (personId: string) => readonly unknown[];
+};
+
+// Keep each source query independent. A single UNION here used to make the
+// SQL statement grow with every new person-referencing table and eventually
+// hit SQLite's compound-SELECT term limit. D1 can execute these bounded
+// queries concurrently; the set union belongs in application code instead.
+const EVENT_SCOPE_QUERIES: readonly EventScopeQuery[] = [
+  {
+    sql: "SELECT event_id FROM memberships WHERE person_id = ? AND event_id IS NOT NULL",
+    bindings: (personId) => [personId],
+  },
+  {
+    sql: "SELECT submission.event_id FROM participations participation JOIN submissions submission ON submission.id = participation.submission_id WHERE participation.person_id = ?",
+    bindings: (personId) => [personId],
+  },
+  {
+    sql: "SELECT event_id FROM submissions WHERE submitter_person_id = ?",
+    bindings: (personId) => [personId],
+  },
+  {
+    sql: "SELECT event_id FROM speaker_tasks WHERE person_id = ? OR completed_by_person_id = ?",
+    bindings: (personId) => [personId, personId],
+  },
+  {
+    sql: "SELECT event_id FROM speaker_helpers WHERE speaker_person_id = ? OR helper_person_id = ? OR added_by = ?",
+    bindings: (personId) => [personId, personId, personId],
+  },
+  {
+    sql: "SELECT sponsorship.event_id FROM sponsorship_contacts contact JOIN sponsorships sponsorship ON sponsorship.id = contact.sponsorship_id WHERE contact.person_id = ?",
+    bindings: (personId) => [personId],
+  },
+];
 
 async function eventScope(db: D1Database, personId: string): Promise<string[]> {
-  const rows = await db.prepare(
-    `SELECT event_id FROM memberships WHERE person_id = ? AND event_id IS NOT NULL
-     UNION SELECT submission.event_id FROM participations participation JOIN submissions submission ON submission.id = participation.submission_id WHERE participation.person_id = ?
-     UNION SELECT event_id FROM submissions WHERE submitter_person_id = ?
-     UNION SELECT event_id FROM speaker_tasks WHERE person_id = ?
-     UNION SELECT event_id FROM speaker_helpers WHERE speaker_person_id = ? OR helper_person_id = ? OR added_by = ?
-     UNION SELECT sponsorship.event_id FROM sponsorship_contacts contact JOIN sponsorships sponsorship ON sponsorship.id = contact.sponsorship_id WHERE contact.person_id = ?`,
-  ).bind(personId, personId, personId, personId, personId, personId, personId, personId).all<{ event_id: string }>();
-  return rows.results.map((row) => row.event_id).filter(Boolean).sort();
+  const results = await Promise.all(EVENT_SCOPE_QUERIES.map(({ sql, bindings }) =>
+    db.prepare(sql).bind(...bindings(personId)).all<{ event_id: string }>(),
+  ));
+  return [...new Set(results.flatMap((result) => result.results.map((row) => row.event_id).filter(Boolean)))].sort();
 }
 
 function isPersonId(value: unknown, id: string): boolean {
@@ -737,8 +742,8 @@ async function buildPlan(
   const first = await person(db, orgId, input.firstPersonId);
   const second = await person(db, orgId, input.secondPersonId);
   if (first.kind !== second.kind) throw new PersonMergeError("invalid_merge", "People of different kinds cannot be merged", { first_kind: first.kind, second_kind: second.kind });
-  const [firstCount, secondCount] = await Promise.all([conferenceCount(db, first.id), conferenceCount(db, second.id)]);
-  const defaultSurvivorId = firstCount >= secondCount ? first.id : second.id;
+  const [firstEventIds, secondEventIds] = await Promise.all([eventScope(db, first.id), eventScope(db, second.id)]);
+  const defaultSurvivorId = firstEventIds.length >= secondEventIds.length ? first.id : second.id;
   const survivorId = input.survivorPersonId ?? defaultSurvivorId;
   if (survivorId !== first.id && survivorId !== second.id) throw new PersonMergeError("invalid_merge", "The survivor must be one of the selected people");
   const survivorBefore = survivorId === first.id ? first : second;
@@ -834,10 +839,8 @@ async function buildPlan(
   }
 
   const syntheticEvents = await appendAnnotationReassertions(db, orgId, survivorId, retired.id, now, movements, operations);
-  const [eventIds, mergeId] = await Promise.all([
-    eventScope(db, first.id),
-    Promise.resolve(newUlid(now)),
-  ]);
+  const eventIds = firstEventIds;
+  const mergeId = newUlid(now);
   const activityId = newUlid(now);
   const summary = summaryFor(movements, aliasChanges, collisions);
   const continuity = first.email === second.email
