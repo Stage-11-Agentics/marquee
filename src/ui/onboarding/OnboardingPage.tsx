@@ -61,6 +61,14 @@ interface PortalInviteResponse {
   skipped: Array<{ person_id: string; name: string; reason: string }>;
 }
 
+interface SpeakerHelper {
+  id: string;
+  helper_person_id: string;
+  helper_name: string;
+  helper_email: string;
+  removed_at: number | null;
+}
+
 /**
  * Why this person cannot be sent a speaker-portal invitation, or null.
  *
@@ -160,6 +168,12 @@ function reminderSubmission(row: OnboardingRow): string | null {
 function SpeakerDrawer({ eventId, personId, onClose }: { eventId: string; personId: string; onClose: () => void }): JSX.Element {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; detail: OnboardingSpeakerDetail }>({ kind: "loading" });
   const [inviteState, setInviteState] = useState<{ kind: "idle" | "sending" } | { kind: "success"; result: PortalInviteResponse } | { kind: "error"; message: string }>({ kind: "idle" });
+  const [helpers, setHelpers] = useState<SpeakerHelper[]>([]);
+  const [helperState, setHelperState] = useState<"loading" | "ready" | "error">("loading");
+  const [helperName, setHelperName] = useState("");
+  const [helperEmail, setHelperEmail] = useState("");
+  const [helperBusy, setHelperBusy] = useState(false);
+  const [helperError, setHelperError] = useState<string | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     setState({ kind: "loading" });
@@ -168,6 +182,57 @@ function SpeakerDrawer({ eventId, personId, onClose }: { eventId: string; person
       .catch((error: unknown) => { if (!controller.signal.aborted) setState({ kind: "error", message: errorSummary(error) }); });
     return () => controller.abort();
   }, [eventId, personId]);
+
+  const readHelpers = async (signal?: AbortSignal) => {
+    try {
+      setHelperState("loading");
+      const result = await requestJson<{ helpers: SpeakerHelper[] }>(`/api/v1/events/${encodeURIComponent(eventId)}/speakers/${encodeURIComponent(personId)}/helpers`, "/api/v1/events/{eventId}/speakers/{personId}/helpers", { signal });
+      if (!signal?.aborted) {
+        setHelpers(result.helpers.filter((helper) => helper.removed_at === null));
+        setHelperState("ready");
+      }
+    } catch (error: unknown) {
+      if (!signal?.aborted) setHelperState("error");
+    }
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void readHelpers(controller.signal);
+    return () => controller.abort();
+  }, [eventId, personId]);
+
+  const addHelper = async (event: Event) => {
+    event.preventDefault();
+    setHelperBusy(true);
+    setHelperError(null);
+    try {
+      await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/speakers/${encodeURIComponent(personId)}/helpers`, "/api/v1/events/{eventId}/speakers/{personId}/helpers", {
+        method: "POST",
+        body: JSON.stringify({ name: helperName, email: helperEmail }),
+      });
+      setHelperName("");
+      setHelperEmail("");
+      await readHelpers();
+    } catch (error: unknown) {
+      setHelperError(errorSummary(error));
+    } finally {
+      setHelperBusy(false);
+    }
+  };
+
+  const removeHelper = async (helper: SpeakerHelper) => {
+    setHelperBusy(true);
+    setHelperError(null);
+    try {
+      await requestJson(`/api/v1/events/${encodeURIComponent(eventId)}/speakers/${encodeURIComponent(personId)}/helpers/${encodeURIComponent(helper.helper_person_id)}`, "/api/v1/events/{eventId}/speakers/{personId}/helpers/{helperId}", { method: "DELETE" });
+      await readHelpers();
+    } catch (error: unknown) {
+      setHelperError(errorSummary(error));
+    } finally {
+      setHelperBusy(false);
+    }
+  };
 
   const invite = async () => {
     setInviteState({ kind: "sending" });
@@ -192,6 +257,7 @@ function SpeakerDrawer({ eventId, personId, onClose }: { eventId: string; person
       <section class="onboarding-drawer-section"><h3>Tasks</h3><div class="onboarding-context-list">{state.detail.tasks.map((task) => <div class="onboarding-context-row" key={`${task.template_id}-${task.task_id ?? "unassigned"}`}><span class={`onboarding-glyph state-${task.state}`} aria-label={task.state}>{task.glyph}</span><div><strong>{task.title}</strong><span>{task.state} · due {task.due_at === null ? "—" : formatDueDate(task.due_at)}</span></div></div>)}</div></section>
       <section class="onboarding-drawer-section" aria-labelledby="speaker-files-heading"><h3 id="speaker-files-heading">Files</h3><div class="onboarding-file-groups"><div class="onboarding-file-group"><strong>Profile headshot</strong><FileVersions list={state.detail.files.profile} emptyCopy="No headshot uploaded yet." /></div>{state.detail.files.tasks.map((task) => <div class="onboarding-file-group" key={task.task_id}><strong>{task.title}</strong><FileVersions list={task.list} emptyCopy="No file uploaded yet." /></div>)}</div></section>
       <section class="onboarding-drawer-section"><h3>Sessions</h3><div class="onboarding-context-list">{state.detail.sessions.length === 0 ? <p>—</p> : state.detail.sessions.map((session) => <div class="onboarding-context-row" key={session.id}><span class="onboarding-context-mark">◌</span><div><strong>{session.title}</strong><span>{session.tracks.map((track) => track.name).join(" · ") || "No track"}{session.agenda ? ` · ${formatDateTime(session.agenda.starts_at)} · ${session.agenda.room ?? "No room"}` : " · not scheduled"}</span></div></div>)}</div></section>
+      <section class="onboarding-drawer-section onboarding-helper-section"><div class="onboarding-invite-heading"><div><h3>Helpers</h3><p>Active helpers see logistics and tasks only; the name shown here is the name you gave them.</p></div><span>{helperState === "loading" ? "Reading…" : `${helpers.length} active`}</span></div>{helpers.length > 0 ? <div class="onboarding-context-list">{helpers.map((helper) => <div class="onboarding-context-row" key={helper.id}><div><strong>{helper.helper_name}</strong><span>{helper.helper_email}</span></div><Button small onClick={() => void removeHelper(helper)} disabled={helperBusy}>Remove</Button></div>)}</div> : <p>No active helpers.</p>}<form class="onboarding-helper-form" onSubmit={addHelper}><label>Name<input required value={helperName} onInput={(event) => setHelperName((event.currentTarget as HTMLInputElement).value)} placeholder="Name they use" /></label><label>Email<input required type="email" value={helperEmail} onInput={(event) => setHelperEmail((event.currentTarget as HTMLInputElement).value)} placeholder="helper@example.com" /></label><Button small variant="primary" type="submit" disabled={helperBusy}>{helperBusy ? "Saving…" : "Add helper"}</Button></form>{helperError ? <div class="onboarding-inline-error" role="alert">{helperError}</div> : null}</section>
       <section class="onboarding-drawer-section"><h3>Message history</h3><div class="onboarding-context-list">{state.detail.messages.length === 0 ? <p>Nothing sent yet.</p> : state.detail.messages.map((message) => <div class="onboarding-message-row" key={message.id}><div><strong>{message.subject}</strong><span>{formatDateTime(message.created_at)} · {message.to_email}</span></div><Chip tone={message.status === "sent" ? "success" : message.status === "suppressed" ? "warning" : ""}>{message.status === "suppressed" ? "demo-safe" : message.status}</Chip><p>{message.text}</p></div>)}</div></section>
       <section class="onboarding-drawer-section onboarding-invite-section"><div class="onboarding-invite-heading"><div><h3>Portal access</h3><p>{state.detail.portal_invitable ? "Send a speaker portal invitation valid for 15 days; it can be opened again during that window." : NO_PORTAL_SEAT}</p></div><Button small variant="primary" onClick={() => void invite()} disabled={inviteState.kind === "sending" || !state.detail.portal_invitable}>{inviteState.kind === "sending" ? "Queueing…" : "Invite to portal"}</Button></div>{inviteState.kind === "success" ? <div class="onboarding-invite-result" aria-live="polite"><strong>{inviteState.result.message}</strong>{inviteState.result.invites.map((item) => item.magic_link ? <a href={item.magic_link} key={item.outbox_id}>Open {item.name}'s portal link</a> : <span key={item.outbox_id}>Outbox row {item.outbox_id} recorded; delivery remains provider-controlled.</span>)}</div> : null}{inviteState.kind === "error" ? <div class="onboarding-inline-error" role="alert">Invitation failed: {inviteState.message}</div> : null}</section>
     </div> : null}

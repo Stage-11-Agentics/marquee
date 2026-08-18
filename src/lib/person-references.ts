@@ -30,6 +30,7 @@ export const PERSON_REFERENCE_CHECKS = [
   { label: "round_promotions", table: "round_promotions", columns: ["promoted_by"], predicate: "EXISTS (SELECT 1 FROM round_promotions WHERE round_promotions.promoted_by = PERSON_ID)" },
   { label: "speaker_tasks", table: "speaker_tasks", columns: ["person_id"], predicate: "EXISTS (SELECT 1 FROM speaker_tasks WHERE speaker_tasks.person_id = PERSON_ID)" },
   { label: "speaker_tasks.completed_by_person_id", table: "speaker_tasks", columns: ["completed_by_person_id"], predicate: "EXISTS (SELECT 1 FROM speaker_tasks WHERE speaker_tasks.completed_by_person_id = PERSON_ID)" },
+  { label: "speaker_helpers", table: "speaker_helpers", columns: ["speaker_person_id", "helper_person_id", "added_by"], predicate: "EXISTS (SELECT 1 FROM speaker_helpers WHERE speaker_helpers.speaker_person_id = PERSON_ID OR speaker_helpers.helper_person_id = PERSON_ID OR speaker_helpers.added_by = PERSON_ID)" },
   { label: "calendar_invites", table: "calendar_invites", columns: ["person_id"], predicate: "EXISTS (SELECT 1 FROM calendar_invites WHERE calendar_invites.person_id = PERSON_ID)" },
   { label: "audit_log", table: "audit_log", columns: ["actor_person_id"], predicate: "EXISTS (SELECT 1 FROM audit_log WHERE audit_log.actor_person_id = PERSON_ID)" },
   { label: "file_comments", table: "file_comments", columns: ["author_person_id"], predicate: "EXISTS (SELECT 1 FROM file_comments WHERE file_comments.author_person_id = PERSON_ID)" },

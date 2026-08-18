@@ -115,6 +115,7 @@ const SIMPLE_MOVES: ReadonlyArray<{ table: string; columns: string[] }> = [
   { table: "comparisons", columns: ["reviewer_person_id"] },
   { table: "round_promotions", columns: ["promoted_by"] },
   { table: "speaker_tasks", columns: ["person_id", "completed_by_person_id"] },
+  { table: "speaker_helpers", columns: ["added_by"] },
   { table: "file_comments", columns: ["author_person_id"] },
   { table: "person_events", columns: ["person_id", "actor_person_id"] },
   { table: "person_lists", columns: ["created_by"] },
@@ -132,6 +133,8 @@ const COLLISION_MOVES: ReadonlyArray<{
   { table: "participations", column: "person_id", key: (row) => `${row.submission_id}|${row.role}` },
   { table: "committee_members", column: "person_id", key: (row) => String(row.committee_id) },
   { table: "reviewer_track_scopes", column: "person_id", key: (row) => `${row.event_id}|${row.track_id}` },
+  { table: "speaker_helpers", column: "speaker_person_id", key: (row) => `${row.event_id}|${row.helper_person_id}` },
+  { table: "speaker_helpers", column: "helper_person_id", key: (row) => `${row.event_id}|${row.speaker_person_id}` },
   { table: "round_assignments", column: "reviewer_person_id", key: (row) => `${row.round_id}|${row.submission_id}` },
   { table: "evaluations", column: "reviewer_person_id", key: (row) => `${row.round_id}|${row.submission_id}` },
   { table: "event_attendances", column: "person_id", key: (row) => `${row.event_id}|${row.source}` },
@@ -255,38 +258,47 @@ async function rowsFor(db: D1Database, table: string, where: string, ...bindings
   return rows.results;
 }
 
-async function conferenceCount(db: D1Database, personId: string): Promise<number> {
-  const row = await db.prepare(
-    `SELECT COUNT(DISTINCT event_id) AS total FROM (
-       SELECT event_id FROM memberships WHERE person_id = ? AND event_id IS NOT NULL
-       UNION ALL
-       SELECT submission.event_id FROM participations participation
-       JOIN submissions submission ON submission.id = participation.submission_id
-       WHERE participation.person_id = ?
-       UNION ALL
-       SELECT submission.event_id FROM submissions submission
-       WHERE submission.submitter_person_id = ?
-       UNION ALL
-       SELECT task.event_id FROM speaker_tasks task
-       WHERE task.person_id = ? OR task.completed_by_person_id = ?
-       UNION ALL
-       SELECT sponsorship.event_id FROM sponsorship_contacts contact
-       JOIN sponsorships sponsorship ON sponsorship.id = contact.sponsorship_id
-       WHERE contact.person_id = ?
-     )`,
-  ).bind(personId, personId, personId, personId, personId, personId).first<{ total: number }>();
-  return Number(row?.total ?? 0);
-}
+type EventScopeQuery = {
+  sql: string;
+  bindings: (personId: string) => readonly unknown[];
+};
+
+// Keep each source query independent. A single UNION here used to make the
+// SQL statement grow with every new person-referencing table and eventually
+// hit SQLite's compound-SELECT term limit. D1 can execute these bounded
+// queries concurrently; the set union belongs in application code instead.
+const EVENT_SCOPE_QUERIES: readonly EventScopeQuery[] = [
+  {
+    sql: "SELECT event_id FROM memberships WHERE person_id = ? AND event_id IS NOT NULL",
+    bindings: (personId) => [personId],
+  },
+  {
+    sql: "SELECT submission.event_id FROM participations participation JOIN submissions submission ON submission.id = participation.submission_id WHERE participation.person_id = ?",
+    bindings: (personId) => [personId],
+  },
+  {
+    sql: "SELECT event_id FROM submissions WHERE submitter_person_id = ?",
+    bindings: (personId) => [personId],
+  },
+  {
+    sql: "SELECT event_id FROM speaker_tasks WHERE person_id = ? OR completed_by_person_id = ?",
+    bindings: (personId) => [personId, personId],
+  },
+  {
+    sql: "SELECT event_id FROM speaker_helpers WHERE speaker_person_id = ? OR helper_person_id = ? OR added_by = ?",
+    bindings: (personId) => [personId, personId, personId],
+  },
+  {
+    sql: "SELECT sponsorship.event_id FROM sponsorship_contacts contact JOIN sponsorships sponsorship ON sponsorship.id = contact.sponsorship_id WHERE contact.person_id = ?",
+    bindings: (personId) => [personId],
+  },
+];
 
 async function eventScope(db: D1Database, personId: string): Promise<string[]> {
-  const rows = await db.prepare(
-    `SELECT event_id FROM memberships WHERE person_id = ? AND event_id IS NOT NULL
-     UNION SELECT submission.event_id FROM participations participation JOIN submissions submission ON submission.id = participation.submission_id WHERE participation.person_id = ?
-     UNION SELECT event_id FROM submissions WHERE submitter_person_id = ?
-     UNION SELECT event_id FROM speaker_tasks WHERE person_id = ?
-     UNION SELECT sponsorship.event_id FROM sponsorship_contacts contact JOIN sponsorships sponsorship ON sponsorship.id = contact.sponsorship_id WHERE contact.person_id = ?`,
-  ).bind(personId, personId, personId, personId, personId).all<{ event_id: string }>();
-  return rows.results.map((row) => row.event_id).filter(Boolean).sort();
+  const results = await Promise.all(EVENT_SCOPE_QUERIES.map(({ sql, bindings }) =>
+    db.prepare(sql).bind(...bindings(personId)).all<{ event_id: string }>(),
+  ));
+  return [...new Set(results.flatMap((result) => result.results.map((row) => row.event_id).filter(Boolean)))].sort();
 }
 
 function isPersonId(value: unknown, id: string): boolean {
@@ -343,6 +355,16 @@ async function processCollisionMoves(
       }
       const after = clone(row);
       after[move.column] = survivorId;
+      if (move.table === "speaker_helpers" && after.speaker_person_id === after.helper_person_id) {
+        // A relationship between the two identities collapses into an
+        // impossible self-seat when either side is re-pointed. Drop it as a
+        // deduped reference so the migration CHECK remains unreachable and
+        // undo can restore the original row from this receipt.
+        operations.push(operation(`DELETE FROM ${move.table} WHERE id = ?`, row.id));
+        addMovement(movements, move.table, row, null, "deduped", "helper relationship collapsed into a self-reference during merge");
+        collisions.push({ table: move.table, key, kept_id: null, retired_id: String(row.id), outcome: "deduped", reason: "self helper relationship cannot survive identity merge" });
+        continue;
+      }
       operations.push(operation(`UPDATE ${move.table} SET ${move.column} = ? WHERE id = ?`, survivorId, row.id));
       addMovement(movements, move.table, row, after, "moved", `retired-only row (${key})`);
       collisions.push({ table: move.table, key, kept_id: null, retired_id: String(row.id), outcome: "moved", reason: "retired-only row moved" });
@@ -730,8 +752,8 @@ async function buildPlan(
   const first = await person(db, orgId, input.firstPersonId);
   const second = await person(db, orgId, input.secondPersonId);
   if (first.kind !== second.kind) throw new PersonMergeError("invalid_merge", "People of different kinds cannot be merged", { first_kind: first.kind, second_kind: second.kind });
-  const [firstCount, secondCount] = await Promise.all([conferenceCount(db, first.id), conferenceCount(db, second.id)]);
-  const defaultSurvivorId = firstCount >= secondCount ? first.id : second.id;
+  const [firstEventIds, secondEventIds] = await Promise.all([eventScope(db, first.id), eventScope(db, second.id)]);
+  const defaultSurvivorId = firstEventIds.length >= secondEventIds.length ? first.id : second.id;
   const survivorId = input.survivorPersonId ?? defaultSurvivorId;
   if (survivorId !== first.id && survivorId !== second.id) throw new PersonMergeError("invalid_merge", "The survivor must be one of the selected people");
   const survivorBefore = survivorId === first.id ? first : second;
@@ -827,10 +849,8 @@ async function buildPlan(
   }
 
   const syntheticEvents = await appendAnnotationReassertions(db, orgId, survivorId, retired.id, now, movements, operations);
-  const [eventIds, mergeId] = await Promise.all([
-    eventScope(db, first.id),
-    Promise.resolve(newUlid(now)),
-  ]);
+  const eventIds = firstEventIds;
+  const mergeId = newUlid(now);
   const activityId = newUlid(now);
   const summary = summaryFor(movements, aliasChanges, collisions);
   const continuity = first.email === second.email
@@ -996,6 +1016,7 @@ function personDeleteGuardPredicate(): string {
     "NOT EXISTS (SELECT 1 FROM comparisons WHERE comparisons.reviewer_person_id = people.id)",
     "NOT EXISTS (SELECT 1 FROM round_promotions WHERE round_promotions.promoted_by = people.id)",
     "NOT EXISTS (SELECT 1 FROM speaker_tasks WHERE speaker_tasks.person_id = people.id OR speaker_tasks.completed_by_person_id = people.id)",
+    "NOT EXISTS (SELECT 1 FROM speaker_helpers WHERE speaker_helpers.speaker_person_id = people.id OR speaker_helpers.helper_person_id = people.id OR speaker_helpers.added_by = people.id)",
     "NOT EXISTS (SELECT 1 FROM calendar_invites WHERE calendar_invites.person_id = people.id)",
     "NOT EXISTS (SELECT 1 FROM audit_log WHERE audit_log.actor_person_id = people.id OR (audit_log.entity_type = 'person' AND audit_log.entity_id = people.id))",
     "NOT EXISTS (SELECT 1 FROM file_comments WHERE file_comments.author_person_id = people.id)",

@@ -297,7 +297,9 @@ export function TaskRow({ task, renderSurface, renderPayloadExtras, ownerLabel, 
   // Attribution, once the work is done and we know who did it. It replaces the
   // owner label rather than sitting beside it: the useful fact about a finished
   // deliverable is who finished it, not who it was handed to.
-  const attribution = done && task.completed_by ? `completed by ${task.completed_by.name}` : null;
+  const attribution = done && task.completed_by
+    ? `completed by ${task.completed_by.name}${ownerLabel ? ` ${ownerLabel}` : ""}`
+    : null;
   return <article class={`portal-task-row is-${state} ${expanded ? "is-expanded" : ""}`} id={`deliverable-${task.id}`}>
     <span class={`portal-task-mark ${state}`} aria-label={flagCopy}>{done ? "✓" : task.overdue ? "!" : "●"}</span>
     <div>

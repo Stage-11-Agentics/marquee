@@ -46,6 +46,7 @@ export const WIPE_ORDER = [
   "calendar_cancellations",
   "calendar_invites",
   "calendar_sequence_ledger",
+  "speaker_helpers",
   "speaker_tasks",
   "task_templates",
   "agenda_items",
@@ -285,6 +286,10 @@ const DELETE_PLANS: Record<WipeTable, DeletePlan | null> = {
   },
   calendar_cancellations: {
     sql: `DELETE FROM calendar_cancellations WHERE event_id IN (${ORG_EVENTS})`,
+    bindings: ORG,
+  },
+  speaker_helpers: {
+    sql: `DELETE FROM speaker_helpers WHERE event_id IN (${ORG_EVENTS})`,
     bindings: ORG,
   },
   speaker_tasks: {

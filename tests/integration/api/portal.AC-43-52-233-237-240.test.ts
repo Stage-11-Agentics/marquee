@@ -13,6 +13,7 @@ const ORIGIN = "https://marquee.stage11.dev";
 const EVENT_ID = DEMO_EVENT_ID;
 const SPEAKER_ID = DEMO_SPEAKER_PERSON_ID;
 const OTHER_PERSON_ID = "per_portal_other";
+const REGISTERED_HELPER_ID = "per_portal_helper";
 const OWNER_ID = "per_demo_organizer";
 const FORM_ID = "form-portal";
 const SUBMISSION_ID = "sub-portal-talk";
@@ -163,6 +164,10 @@ async function seedFixture(): Promise<void> {
        VALUES ('attachment-portal-headshot', ?, 'person_headshot', ?, 'uploads/portal/headshot.png', 'robin-headshot.png', 'image/png', 12, 'ready', 'headshot-etag', ?, ?)`,
     ).bind(EVENT_ID, SPEAKER_ID, NOW, NOW),
     env.DB.prepare("UPDATE people SET headshot_attachment_id = 'attachment-portal-headshot' WHERE id = ?").bind(SPEAKER_ID),
+    env.DB.prepare(
+      `INSERT INTO people (id, org_id, email, name, is_demo, last_write_source, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 0, 'marquee', ?, ?)`,
+    ).bind(REGISTERED_HELPER_ID, DEMO_ORGANIZATION_ID, "registered.helper@example.com", "Private Registry Name", NOW, NOW),
   ]);
 
   const speakerSession = await createSession(env.DB, { personId: SPEAKER_ID, roleHint: "speaker", userAgent: "portal-test", now: NOW });
@@ -558,6 +563,88 @@ describe.sequential("MRQ-16 speaker portal", () => {
     const other = await portal(otherSpeakerCookie);
     expect(other.response.status).toBe(200);
     expect(JSON.stringify(other.body)).toContain("Other Speaker Secret");
+  });
+
+  test("CONTRACT · MRQ-286 · a helper gets a scoped magic-link portal, task attribution, and revocation", async () => {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE speaker_tasks SET status = 'open', completed_at = NULL, completed_by_person_id = NULL, response_json = NULL, attachment_id = NULL, cancelled_at = NULL WHERE id IN ('task-portal-ack', 'task-portal-file', 'task-portal-form')"),
+      env.DB.prepare("UPDATE forms SET status = 'open', closes_at = ? WHERE id = ?").bind(NOW + 3 * DAY_MS, FORM_ID),
+    ]);
+    const added = await request(`/api/v1/me/helpers?eventId=${EVENT_ID}`, {
+      method: "POST",
+      body: JSON.stringify({ name: "Typed Assistant", email: "registered.helper@example.com" }),
+    });
+    expect(added.status).toBe(200);
+    const addedBody = await added.json<{ helper: { id: string; helper_person_id: string; helper_name: string; helper_email: string }; invite?: { magic_link?: string } }>();
+    expect(addedBody.helper).toMatchObject({ helper_name: "Typed Assistant", helper_email: "registered.helper@example.com" });
+    expect(addedBody.helper.helper_person_id).toBe(addedBody.helper.id);
+    expect(addedBody.helper.helper_person_id).not.toBe(REGISTERED_HELPER_ID);
+    expect(JSON.stringify(addedBody)).not.toContain("Private Registry Name");
+    expect(addedBody.invite?.magic_link).toBeTruthy();
+
+    const inviteUrl = new URL(addedBody.invite!.magic_link!);
+    const exchanged = await request(`${inviteUrl.pathname}${inviteUrl.search}`, { redirect: "manual" }, "");
+    expect(exchanged.status).toBe(302);
+    const helperCookie = exchanged.headers.get("set-cookie")?.split(";", 1)[0] ?? "";
+    expect(helperCookie).toMatch(/^mq_session=/);
+
+    const helperPortal = await request(`/api/v1/me/portal?eventId=${EVENT_ID}`, {}, helperCookie);
+    expect(helperPortal.status).toBe(200);
+    const helperBody = await helperPortal.json<{ seat: string; person: { name: string }; submissions: Array<{ title: string; slot: unknown }>; tasks: Array<{ id: string; kind: string }> }>();
+    expect(helperBody).toMatchObject({ seat: "helper", person: { name: "Typed Assistant" } });
+    expect(helperBody.tasks.map((task) => task.kind)).toEqual(expect.arrayContaining(["acknowledge", "form", "file"]));
+    expect(JSON.stringify(helperBody)).not.toContain("Updated description");
+    expect(JSON.stringify(helperBody)).not.toContain("Other speaker private task");
+
+    const profileWrite = await request("/api/v1/me/profile", { method: "PATCH", body: JSON.stringify({ bio: "helper must not edit speaker profile" }) }, helperCookie);
+    expect([403, 404]).toContain(profileWrite.status);
+    const talkWrite = await request(`/api/v1/me/submissions/${SUBMISSION_ID}/talk`, { method: "PATCH", body: JSON.stringify({ title: "helper must not edit talk" }) }, helperCookie);
+    expect([403, 404]).toContain(talkWrite.status);
+    const otherTask = await request("/api/v1/me/tasks/task-portal-other/complete", { method: "POST", body: JSON.stringify({ acknowledged: true }) }, helperCookie);
+    expect([403, 404]).toContain(otherTask.status);
+
+    const uploaded = await request("/api/v1/me/tasks/task-portal-file/complete", { method: "POST", body: JSON.stringify({ attachment_id: "attachment-portal-file" }) }, helperCookie);
+    expect(uploaded.status).toBe(200);
+    const form = await request("/api/v1/me/tasks/task-portal-form/complete", { method: "POST", body: JSON.stringify({ answers: { needs_details: "no" } }) }, helperCookie);
+    expect(form.status).toBe(200);
+
+    const completed = await request("/api/v1/me/tasks/task-portal-ack/complete", { method: "POST", body: JSON.stringify({ acknowledged: true }) }, helperCookie);
+    const completedText = await completed.text();
+    expect(completed.status, completedText).toBe(200);
+    const task = await env.DB.prepare("SELECT completed_by_person_id FROM speaker_tasks WHERE id = 'task-portal-ack'").first<{ completed_by_person_id: string }>();
+    expect(task?.completed_by_person_id).toBe(REGISTERED_HELPER_ID);
+    const speakerAfter = await portal();
+    expect(speakerAfter.body.tasks.find((item: { id: string }) => item.id === "task-portal-ack").completed_by).toMatchObject({ name: "Typed Assistant" });
+    const visibleHelper = speakerAfter.body.helpers.find((item: { helper_name: string }) => item.helper_name === "Typed Assistant");
+    expect(visibleHelper).toMatchObject({ helper_person_id: addedBody.helper.id });
+    expect(visibleHelper.helper_person_id).not.toBe(REGISTERED_HELPER_ID);
+    const audit = await env.DB.prepare("SELECT actor_person_id, after_json FROM audit_log WHERE action = 'speaker_task.completed' AND entity_id = 'task-portal-ack' ORDER BY created_at DESC LIMIT 1").first<{ actor_person_id: string; after_json: string }>();
+    expect(audit?.actor_person_id).toBe(REGISTERED_HELPER_ID);
+    expect(JSON.parse(audit!.after_json)).toMatchObject({ on_behalf_of_person_id: SPEAKER_ID });
+
+    const removed = await request(`/api/v1/me/helpers/${addedBody.helper.helper_person_id}?eventId=${EVENT_ID}`, { method: "DELETE" });
+    expect(removed.status).toBe(200);
+    const revokedWrite = await request("/api/v1/me/tasks/task-portal-ack/complete", {
+      method: "POST",
+      body: JSON.stringify({ acknowledged: true }),
+    }, helperCookie);
+    expect([403, 404]).toContain(revokedWrite.status);
+    const revokedPortal = await request(`/api/v1/me/portal?eventId=${EVENT_ID}`, {}, helperCookie);
+    expect([403, 404]).toContain(revokedPortal.status);
+  });
+
+  test("CONTRACT · MRQ-286 · an organizer can add and remove a helper for a speaker", async () => {
+    const added = await request(`/api/v1/events/${EVENT_ID}/speakers/${SPEAKER_ID}/helpers`, {
+      method: "POST",
+      body: JSON.stringify({ name: "Organizer Assistant", email: "organizer.helper@example.com" }),
+    }, ownerCookie);
+    const addedBody = await added.json<{ helper: { id: string; helper_person_id: string; helper_name: string; helper_email: string } }>();
+    expect(added.status).toBe(200);
+    expect(addedBody.helper).toMatchObject({ helper_name: "Organizer Assistant", helper_email: "organizer.helper@example.com" });
+
+    const removed = await request(`/api/v1/events/${EVENT_ID}/speakers/${SPEAKER_ID}/helpers/${addedBody.helper.helper_person_id}`, { method: "DELETE" }, ownerCookie);
+    const removedText = await removed.text();
+    expect(removed.status, removedText).toBe(200);
   });
 
 });
