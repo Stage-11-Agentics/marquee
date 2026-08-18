@@ -13,6 +13,8 @@
  * separate transaction from the change it describes is worse than no audit row,
  * because it reads as authoritative while being able to disagree with reality.
  */
+import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
+
 import { newUlid } from "../api/ids";
 import type { AuditActorKind } from "../db/schema";
 

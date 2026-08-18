@@ -13,6 +13,8 @@
  * ever: authority here is a ladder of exactly two rungs, and no route outside
  * `day-of.routes.ts` accepts one of these tokens at all.
  */
+import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
+
 import { newUlid } from "../../api/ids";
 import type { DayOfLinkKind, DayOfLinkRow, Id } from "../../db/schema";
 import { mintToken, sha256Hex } from "../auth/random-token";

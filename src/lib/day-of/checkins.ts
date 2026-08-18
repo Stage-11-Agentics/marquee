@@ -13,6 +13,8 @@
  * nothing either. A retry that logs a second arrival is a log that disagrees
  * with reality.
  */
+import type { D1Database } from "@cloudflare/workers-types";
+
 import { newUlid } from "../../api/ids";
 import type { AuditActorKind, CheckinRow, Id } from "../../db/schema";
 import { auditStatementFromSelect } from "../audit";

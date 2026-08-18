@@ -34,7 +34,7 @@ function noonPacific(date: string): number {
   return Date.parse(`${date}T19:00:00Z`);
 }
 
-test("the surface opens on the conference's own today, and on day one when the show is not running", () => {
+test("CONTRACT · MRQ-285 — the surface opens on the conference's own today, and on day one when the show is not running", () => {
   expect(defaultRunOfShowDay(EVENT, noonPacific("2027-05-13"))).toBe("2027-05-13");
   // Months early and a year late both land on a day that has something on it.
   // An empty Tuesday in March reads as broken rather than as early.
@@ -46,7 +46,7 @@ test("the surface opens on the conference's own today, and on day one when the s
   expect(isRunOfShowDay(EVENT, "2027-05-15")).toBe(false);
 });
 
-test("a phone number is found by meaning, and a name without one gets no dead link", () => {
+test("CONTRACT · MRQ-285 — a phone number is found by meaning, and a name without one gets no dead link", () => {
   expect(phoneFromCustomFields(JSON.stringify({ "Mobile phone": "+1 (415) 555-0142" }))).toBe("+1 (415) 555-0142");
   expect(phoneFromCustomFields(JSON.stringify({ cell: "415-555-0142" }))).toBe("415-555-0142");
   expect(phoneFromCustomFields(JSON.stringify({ "Contact Phone": 4155550142 }))).toBe("4155550142");
@@ -58,7 +58,7 @@ test("a phone number is found by meaning, and a name without one gets no dead li
   expect(phoneFromCustomFields(JSON.stringify(["+1 415 555 0142"]))).toBeNull();
 });
 
-test("tel: keeps the digits and a leading plus, and nothing a dialer would choke on", () => {
+test("CONTRACT · MRQ-285 — tel: keeps the digits and a leading plus, and nothing a dialer would choke on", () => {
   expect(telHref("+1 (415) 555-0142")).toBe("tel:+14155550142");
   expect(telHref("415.555.0142 ext 3")).toBe("tel:41555501423");
   expect(telHref("+44 20 7946 0018")).toBe("tel:+442079460018");
@@ -111,7 +111,7 @@ function snapshot(): RunOfShow {
   };
 }
 
-test("a count on a chip always matches the set that clicking it produces", () => {
+test("CONTRACT · MRQ-285 — a count on a chip always matches the set that clicking it produces", () => {
   const all = slidesBoard(snapshot());
   // The break is not a row: it owes nothing, so nobody chases it.
   expect(all.rows.map((row) => row.session_id)).toEqual(["early", "middling", "late", "finished", "unasked"]);

@@ -15,6 +15,8 @@
  * today"; they are here for the 10:40 in Broadway, and the panel beside them
  * may still be missing two.
  */
+import type { D1Database } from "@cloudflare/workers-types";
+
 import { calendarDateInTimezone, conferenceDays, type ConferenceDay } from "../conference-dates";
 import { participantListSql } from "../participants";
 import { zonedStart } from "../event-time";
