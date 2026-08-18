@@ -568,7 +568,7 @@ describe.sequential("MRQ-16 speaker portal", () => {
   test("MRQ-286 · a helper gets a scoped magic-link portal, task attribution, and revocation", async () => {
     await env.DB.batch([
       env.DB.prepare("UPDATE speaker_tasks SET status = 'open', completed_at = NULL, completed_by_person_id = NULL, response_json = NULL, attachment_id = NULL, cancelled_at = NULL WHERE id IN ('task-portal-ack', 'task-portal-file', 'task-portal-form')"),
-      env.DB.prepare("UPDATE forms SET status = 'open', closes_at = ? WHERE id = ?").bind(NOW + DAY_MS, FORM_ID),
+      env.DB.prepare("UPDATE forms SET status = 'open', closes_at = ? WHERE id = ?").bind(NOW + 3 * DAY_MS, FORM_ID),
     ]);
     const added = await request(`/api/v1/me/helpers?eventId=${EVENT_ID}`, {
       method: "POST",
