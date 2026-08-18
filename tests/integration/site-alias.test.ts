@@ -1,7 +1,6 @@
 import { expect, test } from "vitest";
 
 import { app, type Env } from "../../src/index";
-import { env } from "./apply-migrations";
 
 /**
  * "The conference site" is published as /site, and the app shell's router has
@@ -12,9 +11,10 @@ import { env } from "./apply-migrations";
  */
 const SHELL = `<!doctype html><html><head><title>Marquee</title></head><body><div id="app"></div></body></html>`;
 const assets = { fetch: async () => new Response(SHELL, { headers: { "content-type": "text/html" } }) } as unknown as Fetcher;
+const testEnv = { ASSETS: assets } as unknown as Env;
 
 async function request(path: string): Promise<Response> {
-  return app.request(path, {}, { ...env, ASSETS: assets } as unknown as Env);
+  return app.request(path, {}, testEnv);
 }
 
 test("CONTRACT · /site is answered by the Worker, not the app shell", async () => {

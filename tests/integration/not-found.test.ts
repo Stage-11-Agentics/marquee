@@ -1,7 +1,6 @@
 import { expect, test } from "vitest";
 
 import { app, type Env } from "../../src/index";
-import { env } from "./apply-migrations";
 import { routeTable } from "../../src/ui/shell/route-table";
 
 /**
@@ -26,8 +25,10 @@ const assets = {
       : new Response("Not Found", { status: 404 }),
 } as unknown as Fetcher;
 
+const testEnv = { ASSETS: assets } as unknown as Env;
+
 async function request(path: string): Promise<Response> {
-  return app.request(path, {}, { ...env, ASSETS: assets } as unknown as Env);
+  return app.request(path, {}, testEnv);
 }
 
 /**

@@ -17,6 +17,7 @@ import { validate } from "@scalar/openapi-parser";
 import { beforeEach, describe, expect, test } from "vitest";
 
 import { createApiRouter } from "../../../src/api/router";
+import { emailValiditySql, isValidEmail } from "../../../src/lib/email-validity";
 import { apiManifest } from "../../../src/routes/_manifest";
 import { sha256Hex } from "../../../src/lib/auth/random-token";
 import { MCP_TOOLS } from "../../../src/mcp/tools";
@@ -185,6 +186,157 @@ test("CONTRACT · MRQ-150 · the document's concurrency claim matches the routes
   expect(description).toContain("agenda items");
   expect(description).toContain("If-Match");
   expect(normalizedDescription).toContain("decision applies can also report per-record transition drift with `422`");
+});
+
+describe("machine-surface smoke contracts", () => {
+  test("AC-105 · auth and admin operations are present in the served OpenAPI manifest", async () => {
+    const expectedOperations = [
+      ["post", "/api/v1/auth/demo"],
+      ["post", "/api/v1/auth/magic-link"],
+      ["get", "/api/v1/auth/exchange"],
+      ["post", "/api/v1/auth/logout"],
+      ["get", "/api/v1/auth/me"],
+      ["post", "/api/v1/admin/reset-demo"],
+      ["get", "/api/v1/admin/reset-demo/{jobId}"],
+      ["get", "/api/v1/org/tokens"],
+      ["post", "/api/v1/org/tokens"],
+      ["delete", "/api/v1/org/tokens/{tokenId}"],
+    ] as const;
+    const response = await SELF.fetch(`${ORIGIN}/api/openapi.json`);
+    expect(response.status).toBe(200);
+
+    const document = await response.json<{
+      paths: Record<string, Record<string, { operationId?: string }> | undefined>;
+    }>();
+    for (const [method, path] of expectedOperations) {
+      expect(document.paths[path]?.[method]?.operationId, `${method.toUpperCase()} ${path}`).toBeTruthy();
+    }
+  });
+
+  test("CONTRACT · an unmatched API path returns the one error envelope with a request id", async () => {
+    const response = await SELF.fetch(`${ORIGIN}/api/v1/nothing-here`);
+    expect(response.status).toBe(404);
+    const body = await response.json<{ error: { code: string; message: string }; request_id: string }>();
+    expect(body.error.code).toBe("not_found");
+    expect(typeof body.error.message).toBe("string");
+    expect(body.request_id.length).toBeGreaterThan(0);
+    expect(response.headers.get("x-request-id")).toBe(body.request_id);
+    // 404 conceals: it never names what would have been there.
+    expect(JSON.stringify(body)).not.toMatch(/stack|sqlite|SELECT |binding/i);
+  });
+
+  test("CONTRACT · every API response carries the standard rate-limit headers", async () => {
+    const response = await SELF.fetch(`${ORIGIN}/api/openapi.json`);
+    expect(response.headers.get("ratelimit-limit")).toMatch(/^\d+$/);
+    expect(response.headers.get("ratelimit-remaining")).toMatch(/^\d+$/);
+    expect(response.headers.get("ratelimit-reset")).toMatch(/^\d+$/);
+    // Retry-After is only for an actual 429.
+    expect(response.headers.get("retry-after")).toBeNull();
+  });
+
+  test("CONTRACT · a client-supplied request id is never trusted", async () => {
+    const response = await SELF.fetch(`${ORIGIN}/api/v1/nothing-here`, {
+      headers: { "x-request-id": "attacker-chosen-id" },
+    });
+    expect(response.headers.get("x-request-id")).not.toBe("attacker-chosen-id");
+  });
+
+  test("CONTRACT · the app's non-API routes are unaffected by the API mount", async () => {
+    const health = await SELF.fetch(`${ORIGIN}/health`);
+    expect(health.status).toBe(200);
+    // `/health` stays a cheap liveness probe; it gained only the build stamp, so
+    // "which version answered?" is a curl rather than a guess.
+    expect(await health.json()).toMatchObject({ service: "marquee", status: "ok", build: expect.any(String) });
+  });
+
+  test("CONTRACT · MRQ-234 · the notification predicate agrees on divergence fixtures and valid controls", async () => {
+    const values = [
+      "a b@c.d",
+      "@x.",
+      "a@x.",
+      "ada@example.test",
+      " Ada@example.test ",
+    ];
+    const rows = await env.DB
+      .prepare(`
+        SELECT value AS email, CASE WHEN ${emailValiditySql("value")} THEN 1 ELSE 0 END AS valid
+        FROM json_each(?)
+        ORDER BY key ASC
+      `)
+      .bind(JSON.stringify(values))
+      .all<{ email: string; valid: number }>();
+
+    expect(rows.results.map((row) => Boolean(row.valid))).toEqual(values.map(isValidEmail));
+    expect(rows.results).toEqual([
+      { email: "a b@c.d", valid: 0 },
+      { email: "@x.", valid: 0 },
+      { email: "a@x.", valid: 0 },
+      { email: "ada@example.test", valid: 1 },
+      { email: " Ada@example.test ", valid: 1 },
+    ]);
+  });
+
+  describe("telemetry", () => {
+    const beacon = (body: unknown) => SELF.fetch(`${ORIGIN}/api/v1/telemetry/client-errors`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const validReport = {
+      kind: "boundary",
+      message: "Cannot read properties of undefined (reading 'pipeline')",
+      stack: "    at DashboardContents (dashboard.tsx:1:1)",
+      route: "/dashboard",
+      build: "abc123def456",
+      session: "0123456789abcdef",
+      occurrences: 3,
+    };
+
+    test("CONTRACT · a well-formed browser report is accepted and not persisted", async () => {
+      const response = await beacon(validReport);
+      expect(response.status).toBe(202);
+      expect(await response.json()).toEqual({ recorded: true });
+    });
+
+    test("CONTRACT · the beacon caps every free-text field", async () => {
+      const oversize = await beacon({ ...validReport, message: "x".repeat(5_000) });
+      expect(oversize.status).toBe(400);
+      const envelope = await oversize.json<{ error: { code: string }; request_id: string }>();
+      expect(envelope.error.code).toBe("malformed_request");
+      // Even a rejected beacon is correlated.
+      expect(envelope.request_id.length).toBeGreaterThan(0);
+
+      expect((await beacon({ ...validReport, stack: "y".repeat(9_000) })).status).toBe(400);
+      expect((await beacon({ ...validReport, route: "z".repeat(500) })).status).toBe(400);
+      expect((await beacon({ ...validReport, occurrences: 10 ** 9 })).status).toBe(400);
+    });
+
+    test("CONTRACT · an unknown report kind is refused rather than logged blind", async () => {
+      expect((await beacon({ ...validReport, kind: "exfiltrate" })).status).toBe(400);
+      expect((await beacon({})).status).toBe(400);
+    });
+
+    test("CONTRACT · Web Vitals ride the same endpoint under their own shape", async () => {
+      const response = await beacon({
+        kind: "web_vital",
+        metric: "LCP",
+        value: 1_842,
+        rating: "good",
+        route: "/dashboard",
+        build: "abc123def456",
+        session: "0123456789abcdef",
+      });
+      expect(response.status).toBe(202);
+      expect((await beacon({ kind: "web_vital", metric: "MADE_UP", value: 1, rating: "good", route: "/", build: "b", session: "s" })).status).toBe(400);
+    });
+
+    test("CONTRACT · deep diagnostics never answer an anonymous caller", async () => {
+      const response = await SELF.fetch(`${ORIGIN}/api/v1/telemetry/diagnostics`);
+      expect(response.status).toBe(401);
+      const envelope = await response.json<{ error: { code: string } }>();
+      expect(envelope.error.code).toBe("unauthenticated");
+    });
+  });
 });
 
 describe("mcp", () => {

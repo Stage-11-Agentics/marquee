@@ -10,7 +10,14 @@ export default defineConfig({
   oxc: { jsx: { runtime: "automatic", importSource: "preact" } },
   test: {
     name: "node",
-    include: ["tests/unit/**/*.test.ts"],
+    // The two route-contract files below inject their only binding (ASSETS)
+    // themselves and are deliberately Worker-free; all other integration
+    // tests either use cloudflare:test, SELF, or a real D1 fixture.
+    include: [
+      "tests/unit/**/*.test.ts",
+      "tests/integration/not-found.test.ts",
+      "tests/integration/site-alias.test.ts",
+    ],
     exclude: ["tests/unit/r2/uploads-routes.test.ts"],
     setupFiles: ["./tests/setup.ts"],
     environment: "node",
