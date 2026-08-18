@@ -884,6 +884,44 @@ not promote an untested claim.
 
 ---
 
+### 2.16 The submitter's own home — AC-412–AC-422 *(AC-420 struck; Amendment 33, 2026-08-17)*
+
+**Outside the Wednesday terminal gate, on the same terms as §2.4–§2.15.** Not
+folded into the live in-scope count or tier arithmetic. MRQ-279 owns the whole
+band; `tests/ac-claims/MRQ-279.json` is its manifest. The two criteria worth
+naming for what they refuse rather than what they add are **AC-412** and
+**AC-413**: a door that answered a known address differently, or that wrote
+anything before the mailed link was opened, would turn "where do my proposals
+stand" into a way of asking that question about somebody else.
+
+| AC | Tier | Tag | How verified |
+|---|---|---|---|
+| AC-412 | PD | `auto` | `tests/integration/submitter-home.MRQ-279.test.ts`: a submitter and a stranger receive byte-identical responses, and only the submitter's address is mailed. |
+| AC-413 | PD | `auto` | `tests/integration/submitter-home.MRQ-279.test.ts`: asking for a link sets no cookie and leaves `people`, `participations` and `auth_sessions` counts unchanged. |
+| AC-414 | PD | `auto` | `tests/integration/submitter-home.MRQ-279.test.ts`: the exchange redirects to the asked-about conference and the seat lists that conference's proposals alone, for a person who submitted to two. |
+| AC-415 | PD | `auto` | `tests/integration/submitter-home.MRQ-279.test.ts`: every row carries its reference code; a twice-decided record reports the decision that stands, with the organizer's own feedback; an undecided one reports none. |
+| AC-416 | PD | `auto` | `tests/integration/submitter-home.MRQ-279.test.ts`: a conference whose call is open still has a door before its site goes live. |
+| AC-417 | PD | `auto` | `tests/integration/submitter-home.MRQ-279.test.ts`: nine requests for one address produce at most six mails. |
+| AC-418 | PD | `auto` | `tests/integration/submitter-home.MRQ-279.test.ts`: the page serves with no session, names the conference, names no address, and is `no-store`. |
+| AC-419 | PD | `auto` | `tests/integration/submitter-home.MRQ-279.test.ts`: an acceptance reversed through the real `writeAcceptanceReversal` cascade stops being reported as accepted, even though it remains the newest `submission_decisions` row. |
+| AC-421 | PD | `auto` | `tests/integration/submitter-home.MRQ-279.test.ts`: an unlaunched conference with no open call is neither named on the page nor silently swapped for the live one on the mailing path. |
+| AC-422 | PD | `auto` | `tests/integration/submitter-home.MRQ-279.test.ts`: duplicate-slug resolution uses deterministic live/demo/creation ordering and keeps candidates inside the selected organization. |
+
+**AC-419–AC-422 were minted at review, not at consolidation**, because the review
+found real defects rather than missing evidence. **AC-420 is struck**: the schema
+has no durable announcement signal, and outbox linkage is absent for seeded,
+mirrored, and waitlisted decisions. Its correct migration-backed replacement is
+tracked in **MRQ-283**, outside this PR. The surviving review criteria are worth
+naming for what they refuse. **AC-419**: a reversal is deliberately *not* a
+decision row — the CHECK forbids `withdrawn` — so "the newest decision row"
+reported an acceptance that had been taken back, and the first version of AC-415
+missed it by simulating the reversal as a second row instead of driving the
+cascade.
+
+The next shared AC pointer after this band is **AC-423**.
+
+---
+
 ## 3. Felt checkpoints
 
 Four in-scope ACs are judgements no assertion settles. Each is a scheduled human-use session with an explicit trigger, an explicit method, and a recorded verdict. A checkpoint that has not run is not a pass.

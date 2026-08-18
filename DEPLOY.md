@@ -159,6 +159,14 @@ is granted with nowhere to land and no error naming the cause.
 **Verify by build hash, not by the page loading.** The old build serves a perfectly healthy
 200. `/health` carries the commit; that is the only honest check.
 
+**Say it out loud when a PR touches `wrangler.jsonc`, in the PR body and to whoever owns
+deploys.** The reader cannot tell a benign edit from a blocking one without opening the diff,
+and the two live in the same file: a `run_worker_first` path costs nothing, while a name added
+to `secrets.required` refuses somebody else's deploy hours later with no clue why. Naming the
+file is cheap; the deploy owner then checks the one thing that matters — `diff` the `secrets`
+block against the deployed sha — instead of discovering the file changed at all. (MRQ-279
+touched it benignly and did not say so; the deploy owner caught it. No harm that time.)
+
 **A new name in `wrangler.jsonc`'s `secrets.required` blocks the next deploy, whoever runs
 it.** Adding a name there is free at merge time — no test covers it, CI stays green, and the
 PR that added it looks finished. The bill arrives when someone else runs `wrangler deploy` and
@@ -250,11 +258,80 @@ that is correct in production. Pass the var on the dev command instead, and
 delete `.dev.vars` before running the gate.
 
 **Exercising a real file upload locally needs `LOCAL_UPLOAD_SHIM:1` *and*
-`UPLOAD_TOKEN_SECRET` on the same line**, or signing 500s:
+`UPLOAD_TOKEN_SECRET`**, or signing 500s.
+
+**`--var` is a `wrangler dev` flag, and Vite 8 rejects it** — `npx vite dev --var …`
+dies immediately with `CACError: Unknown option --var`. That is a fact about
+`--var`, not about the Vite path, and the two recipes below both work. Pick by
+which cost you would rather pay.
+
+**`.dev.vars` and the shell environment are not additive. If `.dev.vars` exists it
+is the source, and exported variables are discarded silently.** This is the whole
+trap, and neither half of it announces itself. Measured on the Vite path by
+`Set-Cookie` on `POST /api/v1/auth/demo`, changing one thing at a time
+(2026-08-17, MRQ-279; reproduced independently in two worktrees):
+
+| `.dev.vars` | `INSECURE_LOCAL_COOKIES` exported | result |
+|---|---|---|
+| absent | no | `Secure` **present** — flag off, as configured |
+| absent | yes | `Secure` absent — **the export works** |
+| present, without the flag | yes | `Secure` **present** — **the export is ignored, with no warning** |
+| present, with the flag | — | `Secure` absent — works |
+
+So both of these are true, and which one applies depends on a file you may not
+remember creating:
+
+- **`.dev.vars` exists** (the normal state — you copied `.dev.vars.example` for
+  the Turnstile and upload values): put the dev-only flags **in that file**.
+  Exporting them does nothing.
+- **No `.dev.vars` at all**: exporting them works.
+
+The failure mode is the one worth fearing: no error, no warning, a `Secure`
+cookie, and then every authenticated click 401s **in the browser only** while
+`curl` sails through. It is the same shape as `.dev.vars` breaking
+`auth-demo.test.ts`, arriving from the other direction — and the two conspire,
+because the moment you add the flag to `.dev.vars` to fix the browser you have
+armed the test failure, and the moment you delete `.dev.vars` for the gate you
+have disarmed the browser fix. **Check which state you are in before believing
+either.** `wrangler dev --var` sidesteps the question entirely, which is the
+argument for Recipe B.
+
+**Recipe A — `npm run dev`, with `.dev.vars`.** Add the flags you need to
+`.dev.vars` and use the ordinary dev server. This carries **all three**, uploads
+included: two real headshot uploads through the public CFP completed this way in
+Chromium. Vite's plugin persists to `.wrangler/state`, so migrate and seed *that*
+directory or every API read 500s on an empty database.
 
 ```sh
-npx vite dev --var INSECURE_LOCAL_COOKIES:1 --var LOCAL_UPLOAD_SHIM:1 --var UPLOAD_TOKEN_SECRET:<any-local-value>
+printf 'INSECURE_LOCAL_COOKIES=1\nLOCAL_UPLOAD_SHIM=1\n' >> .dev.vars
+CI=1 npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+npm run seed -- --persist-to .wrangler/state
+npm run dev
 ```
+
+The cost is the one this section already warns about, and it is real: **`npm test`
+reads `.dev.vars` too**, and with `INSECURE_LOCAL_COOKIES=1` in it,
+`auth-demo.test.ts`'s cookie-policy contract fails on a cookie that is correct in
+production (verified). **Delete `.dev.vars` before running the gate.**
+
+**Recipe B — `wrangler dev`, flags on the command line.** Keeps the flags out of
+`.dev.vars`, so the gate is never poisoned by them:
+
+```sh
+npm run build
+cp .dev.vars dist/marquee/.dev.vars
+CI=1 npx wrangler d1 migrations apply DB --local --persist-to .wrangler/marquee-local
+npm run seed -- --persist-to .wrangler/marquee-local
+npx wrangler dev --config dist/marquee/wrangler.json --local \
+  --persist-to .wrangler/marquee-local --local-protocol http --port 8787 \
+  --var INSECURE_LOCAL_COOKIES:1 --var LOCAL_UPLOAD_SHIM:1
+```
+
+`UPLOAD_TOKEN_SECRET` still comes from `.dev.vars` (copy `.dev.vars.example`),
+which is why the copy into `dist/marquee/` is on the list: **Wrangler reads
+`.dev.vars` from beside the config file, not from the repository root.** Recipe B
+also rebuilds, so it serves the real bundle rather than Vite's dev transform —
+which is what you want when the thing under test is a server-rendered page.
 
 Without it, no local browser can complete any flow with a required upload — the
 public CFP's headshot most of all. Two agents in one night concluded that

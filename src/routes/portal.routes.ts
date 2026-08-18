@@ -894,7 +894,35 @@ type SubmitterSubmissionRow = {
   form_status: string | null;
   form_opens_at: number | null;
   form_closes_at: number | null;
+  reference_code: string | null;
+  decision_status: string | null;
+  decision_at: number | null;
+  decision_feedback: string | null;
 };
+
+/**
+ * What the decision is, said the way the decision mail already says it.
+ *
+ * A reversal is deliberately not a decision row: `submission_decisions` CHECKs
+ * `resulting_status IN ('accepted','waitlisted','rejected')`, and
+ * `writeAcceptanceReversal` inserts one only when the reversal outcome is
+ * `rejected`. So reversing an acceptance with the default `withdrawn` outcome
+ * leaves the acceptance as the newest row while the record moves on, and a
+ * dashboard reading "the newest row" tells a speaker their talk was accepted
+ * next to a status that says Withdrawn. When the two disagree, the record's
+ * status is what happened and the decision row is history.
+ * `feedback_md` is the organizer's own note when they wrote one; it is passed
+ * through untouched rather than summarised.
+ */
+function submitterDecision(row: SubmitterSubmissionRow) {
+  if (row.decision_status === null || row.decision_at === null) return null;
+  if (row.decision_status !== row.status) return null;
+  return {
+    status: row.decision_status,
+    decided_at: row.decision_at,
+    feedback_md: row.decision_feedback,
+  };
+}
 
 /**
  * What the portal owes a person who submitted an abstract and holds no speaker
@@ -914,13 +942,23 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
       // `speaker` (SPEC §10: the two are the same person until two addresses
       // ship) — so a join here would show every abstract twice.
       `SELECT s.id, s.title, s.abstract AS description, s.status, s.submitted_at, s.updated_at,
+         s.reference_code,
          format.name AS format_name, wave.name AS wave_name, wave.decision_on AS wave_decision_on,
          form.slug AS form_slug, form.status AS form_status, form.opens_at AS form_opens_at, form.closes_at AS form_closes_at,
+         decision.resulting_status AS decision_status, decision.decided_at AS decision_at,
+         decision.feedback_md AS decision_feedback,
          (SELECT p.role FROM participations p
            WHERE p.submission_id = s.id AND p.person_id = ?
            ORDER BY CASE p.role WHEN 'submitter' THEN 0 ELSE 1 END, p.position ASC, p.id ASC
            LIMIT 1) AS participation_role
        FROM submissions s
+       -- The latest decision only. A record that was decided, reversed and
+       -- decided again must show the one that stands, and submission_decisions
+       -- keeps every round of that.
+       LEFT JOIN submission_decisions decision
+         ON decision.id = (SELECT d.id FROM submission_decisions d
+                            WHERE d.submission_id = s.id
+                            ORDER BY d.decided_at DESC, d.id DESC LIMIT 1)
        LEFT JOIN formats format ON format.id = s.format_id AND format.event_id = s.event_id
        LEFT JOIN waves wave ON wave.id = s.wave_id AND wave.event_id = s.event_id
        LEFT JOIN forms form ON form.id = s.form_id AND form.event_id = s.event_id
@@ -962,6 +1000,11 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
       title: row.title,
       description: row.description,
       status: row.status,
+      // The name the submitter and the organizer both use for this proposal.
+      // Without it a person holding three proposals has nothing to quote in a
+      // mail about one of them.
+      reference_code: row.reference_code,
+      decision: submitterDecision(row),
       format: row.format_name,
       submitted_at: row.submitted_at,
       updated_at: row.updated_at,

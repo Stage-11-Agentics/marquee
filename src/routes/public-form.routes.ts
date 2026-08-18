@@ -1258,6 +1258,11 @@ async function handlePublicSubmission(
   await assertRoutingPoolAllowedForTracks(context.env.DB, base.form.event_id, routing.trackIds, routing);
 
   const confirmationUrl = `${publicOrigin(context.req.url)}/f/${encodeURIComponent(slug)}?resume=${encodeURIComponent(rawResumeToken)}`;
+  // The other half of the confirmation mail: the resume link above names ONE
+  // abstract, and a person who sends three ends up holding three unrelated
+  // links. This one is about the person, and it is the same address however
+  // many they send.
+  const proposalsUrl = `${publicOrigin(context.req.url)}/my-proposals?event=${encodeURIComponent(event.slug)}`;
   let referenceCode = existing?.reference_code ?? null;
   // The first two moments of MRQ-211's submission timeline. Everything that
   // happens to a record afterwards — decided, reversed, mailed — already writes
@@ -1421,8 +1426,8 @@ async function handlePublicSubmission(
       templateKey: confirmationTemplateKey,
       data: { "submission.title": title, "submission.reference_code": referenceCode, "speaker.first_name": (answerText(projected.projected.answers, "speaker_name") ?? "there").split(/\s+/)[0] ?? "there" },
       subject: `Abstract ${referenceCode} received — ${title}`,
-      text: `Abstract ${referenceCode} received — ${title}.\n\nReview your conference abstract here: ${confirmationUrl}`,
-      html: `<p>Abstract <strong>${escapeHtml(referenceCode)}</strong> received — <strong>${escapeHtml(title)}</strong>.</p><p><a href="${confirmationUrl}">Review your conference abstract</a></p>`,
+      text: `Abstract ${referenceCode} received — ${title}.\n\nReview your conference abstract here: ${confirmationUrl}\n\nSee every proposal you have sent to ${event.name}, and where each one stands: ${proposalsUrl}`,
+      html: `<p>Abstract <strong>${escapeHtml(referenceCode)}</strong> received — <strong>${escapeHtml(title)}</strong>.</p><p><a href="${confirmationUrl}">Review your conference abstract</a></p><p><a href="${proposalsUrl}">See every proposal you have sent to ${escapeHtml(event.name)}</a></p>`,
       now,
     });
     await enqueueMailMessage(context.env.MAIL_QUEUE, confirmation.id);
