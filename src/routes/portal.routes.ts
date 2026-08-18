@@ -1069,8 +1069,9 @@ async function helperSnapshot(
     primaryBuildingFor(db, event.id),
     pinnedBuildingCountFor(db, event.id),
   ]);
-  const sessions = submissionRows.map(arrivalSessionFor);
-  for (const row of submissionRows) {
+  const sessionRows = submissionRows.filter((row) => row.status === "accepted");
+  const sessions = sessionRows.map(arrivalSessionFor);
+  for (const row of sessionRows) {
     row.arrival = arrivalForSession({
       current: arrivalSessionFor(row),
       previousSessions: sessions,
@@ -1079,7 +1080,7 @@ async function helperSnapshot(
     });
   }
   const showBuildingComparison = showsBuildingComparisonCount(pinnedBuildingCount);
-  const sessionViews = submissionRows.map((row) => {
+  const sessionViews = sessionRows.map((row) => {
     const full = submissionView(event, row, showBuildingComparison);
     return { id: full.id, title: full.title, slot: full.slot };
   });
