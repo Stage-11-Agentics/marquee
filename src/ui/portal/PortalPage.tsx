@@ -132,6 +132,8 @@ type HelperSnapshot = {
   venue: { pinned_building_count: number };
 };
 
+type HelperInviteResponse = { invite?: { magic_link?: string } };
+
 type SubmitterSubmission = {
   id: string;
   title: string;
@@ -1119,18 +1121,21 @@ function SpeakerHelpersPanel({
   const [removing, setRemoving] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
   const add = async (event: Event) => {
     event.preventDefault();
     setBusy(true);
     setError(null);
     setMessage(null);
+    setInviteLink(null);
     try {
-      await requestJson(`/api/v1/me/helpers?eventId=${encodeURIComponent(eventId)}`, {
+      const result = await requestJson<HelperInviteResponse>(`/api/v1/me/helpers?eventId=${encodeURIComponent(eventId)}`, {
         method: "POST",
         body: JSON.stringify({ name, email }),
       });
       setName("");
       setEmail("");
+      setInviteLink(result.invite?.magic_link ?? null);
       setMessage("Invite queued. They can open the helper portal from the link in their email.");
       await onRefresh();
     } catch (caught) {
@@ -1163,6 +1168,7 @@ function SpeakerHelpersPanel({
         <div class="portal-field"><label for="helper-email">Email</label><input id="helper-email" required type="email" value={email} onInput={(event) => setEmail((event.currentTarget as HTMLInputElement).value)} placeholder="helper@example.com" /></div>
         <div class="portal-payload-actions"><span class="portal-payload-error" aria-live="polite">{error ?? message ?? ""}</span><button class="portal-button" type="submit" disabled={busy}>{busy ? "Inviting…" : "Invite helper"}</button></div>
       </form>
+      {inviteLink ? <a class="portal-button secondary portal-helper-link" href={inviteLink}>Open helper portal link</a> : null}
     </div>
   </section>;
 }

@@ -8,12 +8,14 @@ import { enqueueAuthMail, renderPortalInviteMail } from "../lib/auth/auth-mail";
 import { mintPortalMagicLink } from "../lib/auth/magic-links";
 import { enqueueMailMessage } from "../jobs/mail/consumer";
 import { IDEMPOTENCY_REGISTRY } from "../jobs/mail/idempotency";
+import { tokenHasGrant } from "../lib/auth/scope-resolution";
 import {
   addSpeakerHelper,
   listSpeakerHelpers,
   normalizeHelperEmail,
   normalizeHelperName,
   removeSpeakerHelper,
+  speakerIsOnEvent,
   type SpeakerHelperView,
 } from "../lib/speaker-helpers";
 
@@ -40,10 +42,17 @@ const helperSchema = z.object({
 const helperResponseSchema = z.object({ helper: helperSchema, invite: z.object({ outbox_id: z.string(), magic_link: z.string().optional() }).optional() });
 const helperListSchema = z.object({ helpers: z.array(helperSchema) });
 
-function sessionPersonId(context: import("hono").Context<ApiEnv>): string {
+async function selfSpeaker(context: import("hono").Context<ApiEnv>, eventId: string): Promise<{ auth: NonNullable<ReturnType<typeof getAuth>>; personId: string }> {
   const auth = getAuth(context);
-  if (!auth || auth.kind !== "session") throw ApiError.forbidden("helper changes require a browser session");
-  return auth.personId;
+  if (!auth) throw ApiError.unauthenticated();
+  const personId = auth.kind === "session" ? auth.personId : await actorPersonId(context);
+  if (auth.kind === "token" && !tokenHasGrant(auth, "speaker:write", eventId)) {
+    throw ApiError.forbidden("this credential lacks the required grant: speaker:write");
+  }
+  if (!await speakerIsOnEvent(context.env.DB, eventId, personId)) {
+    throw ApiError.notFound("speaker not found at this conference");
+  }
+  return { auth, personId };
 }
 
 async function actorPersonId(context: import("hono").Context<ApiEnv>): Promise<string> {
@@ -102,8 +111,8 @@ const listOwnHelpers = defineApiRoute(
     responses: { 200: jsonResponse(helperListSchema, "Speaker helpers"), ...errorResponses([401, 403, 404, 429, 500]) },
   },
   async (context) => {
-    const personId = sessionPersonId(context);
     const { eventId } = context.req.valid("query");
+    const { personId } = await selfSpeaker(context, eventId);
     return context.json({ helpers: await listSpeakerHelpers(context.env.DB, eventId, [personId]) }, 200);
   },
 );
@@ -140,7 +149,7 @@ const addOwnHelper = defineApiRoute(
     responses: { 200: jsonResponse(helperResponseSchema, "Helper invited"), ...errorResponses([400, 401, 403, 404, 409, 422, 429, 500]) },
   },
   async (context) => {
-    const personId = sessionPersonId(context);
+    const { personId } = await selfSpeaker(context, context.req.valid("query").eventId);
     return addForSpeaker(context, context.req.valid("query").eventId, personId, context.req.valid("json"));
   },
 );
@@ -195,17 +204,16 @@ const removeOwnHelper = defineApiRoute(
     responses: { 200: jsonResponse(z.object({ helper: helperSchema }), "Helper removed"), ...errorResponses([401, 403, 404, 409, 429, 500]) },
   },
   async (context) => {
-    const personId = sessionPersonId(context);
-    const auth = getAuth(context);
+    const eventId = context.req.valid("query").eventId;
+    const { auth, personId } = await selfSpeaker(context, eventId);
     const removed = await removeSpeakerHelper(context.env.DB, {
-      eventId: context.req.valid("query").eventId,
+      eventId,
       speakerPersonId: personId,
       helperPersonId: context.req.valid("param").helperId,
       actorKind: "user",
       actorPersonId: personId,
       requestId: context.get("requestId") ?? null,
     });
-    void auth;
     return context.json({ helper: removed }, 200);
   },
 );

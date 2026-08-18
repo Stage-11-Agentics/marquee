@@ -109,6 +109,10 @@ async function eventAndSpeaker(
   ).bind(speakerPersonId, eventId).first<{ id: string; org_id: string; demo_mode: number }>();
 }
 
+export async function speakerIsOnEvent(db: D1Database, eventId: string, speakerPersonId: string): Promise<boolean> {
+  return (await eventAndSpeaker(db, eventId, speakerPersonId)) !== null;
+}
+
 const HELPER_VIEW_COLUMNS = `
   helper.id, helper.event_id, helper.speaker_person_id,
   speaker.name AS speaker_name, helper.helper_person_id, helper.helper_name,
