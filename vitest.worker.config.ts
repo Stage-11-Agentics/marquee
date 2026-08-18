@@ -30,14 +30,28 @@ export default defineConfig({
     // a D1 schema here. Worker-free unit tests run in vitest.node.config.ts so
     // they do not pay for a Miniflare isolate per file.
     include: ["tests/integration/**/*.test.ts", "tests/unit/r2/uploads-routes.test.ts"],
+    // These route tests call the Hono app with a minimal ASSETS binding and do
+    // not need cloudflare:test, D1, R2, or SELF. Keep the boundary explicit so
+    // a future integration glob cannot silently put them back on Miniflare.
+    exclude: [
+      "tests/integration/not-found.test.ts",
+      "tests/integration/site-alias.test.ts",
+    ],
     setupFiles: ["./tests/setup.ts"],
-    // A hang detector, not a speed gate. Under fleet contention a correct test
-    // can legitimately take many seconds; failing it there reports the machine,
-    // not the code. Suite speed is measured by the budget objective in
-    // scripts/checks/run-test.mjs, which warns rather than failing.
-    testTimeout: 20_000,
-    hookTimeout: 20_000,
+    // A hang detector, not a speed gate. Four deliberate Worker files can
+    // contend for one CI runner, so a correct large D1 case may take tens of
+    // seconds; failing it there reports the machine, not the code. Suite speed
+    // is measured by scripts/checks/run-test.mjs, which warns rather than
+    // failing.
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
     maxConcurrency: 8,
+    // Vitest 4 moved the old poolOptions knobs to the project level. Run this
+    // project after node, then let four files overlap; the hosted timestamps
+    // prove the measured parallelism.
+    sequence: { groupOrder: 1 },
+    fileParallelism: true,
+    maxWorkers: 4,
     passWithNoTests: false,
   },
 });

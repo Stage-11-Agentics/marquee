@@ -10,7 +10,14 @@ export default defineConfig({
   oxc: { jsx: { runtime: "automatic", importSource: "preact" } },
   test: {
     name: "node",
-    include: ["tests/unit/**/*.test.ts"],
+    // The two route-contract files below inject their only binding (ASSETS)
+    // themselves and are deliberately Worker-free; all other integration
+    // tests either use cloudflare:test, SELF, or a real D1 fixture.
+    include: [
+      "tests/unit/**/*.test.ts",
+      "tests/integration/not-found.test.ts",
+      "tests/integration/site-alias.test.ts",
+    ],
     exclude: ["tests/unit/r2/uploads-routes.test.ts"],
     setupFiles: ["./tests/setup.ts"],
     environment: "node",
@@ -21,6 +28,11 @@ export default defineConfig({
     testTimeout: 20_000,
     hookTimeout: 20_000,
     maxConcurrency: 8,
+    // Run the inexpensive node project before the more expensive Worker
+    // project, whose separate group can use the runner's four CPUs fully.
+    sequence: { groupOrder: 0 },
+    fileParallelism: true,
+    maxWorkers: 2,
     passWithNoTests: false,
   },
 });

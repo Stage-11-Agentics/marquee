@@ -2,5 +2,5 @@
   "ticket": "MRQ-73",
   "owns": [],
   "exercises": [],
-  "notes": "MRQ-73 owns no acceptance criterion. Observability appears nowhere in the requirements register: it is the layer that makes every other criterion diagnosable when it fails, not a criterion of its own. Its guarantees are held by contract tests instead — the field allowlist (tests/unit/observability-log.test.ts), the correlation between the envelope, the X-Request-Id header and the log lines (tests/unit/api/observability-correlation.test.ts), and the beacon's caps and the diagnostics probe's authentication (tests/integration/api/telemetry.test.ts)."
+  "notes": "MRQ-73 owns no acceptance criterion. Observability appears nowhere in the requirements register: it is the layer that makes every other criterion diagnosable when it fails, not a criterion of its own. Its guarantees are held by contract tests instead — the field allowlist (tests/unit/observability-log.test.ts), the correlation between the envelope, the X-Request-Id header and the log lines (tests/unit/api/observability-correlation.test.ts), and the beacon's caps and the diagnostics probe's authentication (tests/integration/api/meta.test.ts)."
 }
