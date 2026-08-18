@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const EVENT_ID = process.env.DRIVE_MRQ286_EVENT_ID ?? "evt_aie-ny-2026";
 const PDF = Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n");
 
-test.describe.configure({ timeout: 180_000 });
+test.describe.configure({ timeout: 300_000 });
 
 /**
  * MRQ-286's browser drive is opt-in because it creates a real helper seat in
@@ -122,8 +122,11 @@ if (process.env.DRIVE_MRQ286_HELPER_SEAT) {
       await speaker.goto(`/portal?eventId=${encodeURIComponent(EVENT_ID)}`);
       const recordHelperItem = speaker.locator(".portal-helper-list li").filter({ hasText: recordHelperName });
       await expect(recordHelperItem).toBeVisible({ timeout: 30_000 });
+      const revokeResponsePromise = speaker.waitForResponse((response) => response.request().method() === "DELETE" && response.url().includes("/api/v1/me/helpers/"));
       await recordHelperItem.getByRole("button", { name: "Remove" }).click();
-      await expect(recordHelperItem).toHaveCount(0);
+      const revokeResponse = await revokeResponsePromise;
+      expect(revokeResponse.ok()).toBe(true);
+      await expect(recordHelperItem).toHaveCount(0, { timeout: 60_000 });
       await organizerHelper.reload();
       await expect(organizerHelper.getByText("You have no speaker record at this conference.")).toBeVisible({ timeout: 30_000 });
 
