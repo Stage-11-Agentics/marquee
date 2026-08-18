@@ -34,6 +34,18 @@ export interface MintedMagicLink {
 }
 
 /**
+ * Optional single-statement admission for a credential mint.
+ *
+ * The caller's quota belongs in the INSERT ... SELECT, not in a preceding
+ * COUNT query: D1 serializes the write statement, so two requests cannot both
+ * pass the same count and then mint over the cap.
+ */
+export type MagicLinkAdmission = {
+  maxRows: number;
+  createdAfter: number;
+};
+
+/**
  * Same-origin paths only: a magic link must never redirect the browser to an
  * attacker-supplied origin.
  */
@@ -53,6 +65,8 @@ type MintMagicLinkInput = {
   invite?: { role: MembershipRole; eventId: Id | null; orgId: Id };
   /** The speakable second credential (ruling O4). Stored hashed; the raw value is the caller's to return once. */
   shortCode?: string;
+  /** An optional atomic quota applied to rows for this person and purpose. */
+  admission?: MagicLinkAdmission;
 };
 
 /**
@@ -74,6 +88,15 @@ async function mintLink(
   db: D1Database,
   input: MintMagicLinkInput,
 ): Promise<MintedMagicLink> {
+  const minted = await mintLinkWithAdmission(db, input);
+  if (!minted) throw new Error("magic link admission denied");
+  return minted;
+}
+
+async function mintLinkWithAdmission(
+  db: D1Database,
+  input: MintMagicLinkInput,
+): Promise<MintedMagicLink | null> {
   const now = input.now ?? Date.now();
   const redirectTo = input.redirectTo ?? "/";
   if (!isSafeRedirectTarget(redirectTo)) {
@@ -94,34 +117,75 @@ async function mintLink(
   if (input.shortCode !== undefined && codeHash === null) {
     throw new Error("magic link short code is not a well-formed code");
   }
-  await db
-    .prepare(
-      `INSERT INTO magic_links
-        (id, token_hash, short_code_hash, person_id, event_id, purpose, redirect_to, expires_at, used_at,
-         invite_role, invite_event_id, invite_org_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      id,
-      tokenHash,
-      codeHash,
-      input.personId,
-      input.eventId ?? null,
-      input.purpose,
-      redirectTo,
-      now + TTL_BY_PURPOSE[input.purpose],
-      input.invite?.role ?? null,
-      input.invite?.eventId ?? null,
-      input.invite?.orgId ?? null,
-      now,
-      now,
-    )
-    .run();
+  const insert = input.admission
+    ? db
+      .prepare(
+        `INSERT INTO magic_links
+          (id, token_hash, short_code_hash, person_id, event_id, purpose, redirect_to, expires_at, used_at,
+           invite_role, invite_event_id, invite_org_id, created_at, updated_at)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?
+         WHERE (
+           SELECT COUNT(*) FROM magic_links
+           WHERE person_id = ? AND purpose = ? AND created_at > ?
+         ) < ?`,
+      )
+      .bind(
+        id,
+        tokenHash,
+        codeHash,
+        input.personId,
+        input.eventId ?? null,
+        input.purpose,
+        redirectTo,
+        now + TTL_BY_PURPOSE[input.purpose],
+        input.invite?.role ?? null,
+        input.invite?.eventId ?? null,
+        input.invite?.orgId ?? null,
+        now,
+        now,
+        input.personId,
+        input.purpose,
+        input.admission.createdAfter,
+        input.admission.maxRows,
+      )
+    : db
+      .prepare(
+        `INSERT INTO magic_links
+          (id, token_hash, short_code_hash, person_id, event_id, purpose, redirect_to, expires_at, used_at,
+           invite_role, invite_event_id, invite_org_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        id,
+        tokenHash,
+        codeHash,
+        input.personId,
+        input.eventId ?? null,
+        input.purpose,
+        redirectTo,
+        now + TTL_BY_PURPOSE[input.purpose],
+        input.invite?.role ?? null,
+        input.invite?.eventId ?? null,
+        input.invite?.orgId ?? null,
+        now,
+        now,
+      );
+  const result = await insert.run();
+  if (input.admission && Number(result.meta.changes ?? 0) !== 1) return null;
   return { id, token, redirectTo };
 }
 
-export function mintMagicLink(db: D1Database, input: MintMagicLinkInput): Promise<MintedMagicLink> {
-  return mintLink(db, input);
+/** The ordinary mint is non-null; an admitted mint returns null when its quota is full. */
+export function mintMagicLink(
+  db: D1Database,
+  input: MintMagicLinkInput & { admission: MagicLinkAdmission },
+): Promise<MintedMagicLink | null>;
+export function mintMagicLink(db: D1Database, input: MintMagicLinkInput): Promise<MintedMagicLink>;
+export function mintMagicLink(
+  db: D1Database,
+  input: MintMagicLinkInput,
+): Promise<MintedMagicLink | null> {
+  return input.admission ? mintLinkWithAdmission(db, input) : mintLink(db, input);
 }
 
 /** Organizer-only speaker invitations share the auth token writer without adding another route-local writer. */

@@ -359,7 +359,7 @@ test("AC-422 · a slug belonging to another organization never resolves", async 
 
 test("AC-417 · one address cannot be used as a mail cannon", async () => {
   const before = await loginMailCount();
-  for (let attempt = 0; attempt < 9; attempt += 1) await askForLink(SUBMITTER, SLUG_A);
+  await Promise.all(Array.from({ length: 9 }, () => askForLink(SUBMITTER, SLUG_A)));
   const sent = (await loginMailCount()) - before;
   expect(sent).toBeGreaterThan(0);
   expect(sent).toBeLessThanOrEqual(6);

@@ -964,6 +964,7 @@ async function submitterSnapshot(db: D1Database, auth: SessionAuth, event: Event
            SELECT 1 FROM outbox announced
             WHERE announced.event_id = s.event_id
               AND (announced.id = decision.outbox_id OR announced.entity_id = decision.id)
+              AND announced.status IN ('queued', 'sent', 'suppressed')
          ) AS decision_announced,
          (SELECT p.role FROM participations p
            WHERE p.submission_id = s.id AND p.person_id = ?

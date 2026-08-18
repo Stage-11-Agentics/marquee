@@ -64,38 +64,14 @@ const responseSchema = z.object({ ok: z.literal(true), message: z.string() });
  * 30/60s, which bounds a client but not a mailbox — one caller can point that
  * whole allowance at a single address.
  *
- * It counts rows in `magic_links` rather than a KV tally, and that is the point.
- * KV is eventually consistent and non-transactional, so a read-compare-write
- * counter under concurrent posts has every request read the same value and every
- * request mail — the ceiling reads as enforcement and is not. D1 is strongly
- * consistent and serialises its writes, and the rows counted are the very
- * artefacts that cause the mail, so the count cannot drift from reality.
- *
- * **This is a ceiling, not a mutex.** Two requests interleaving between the
- * count and the mint can still both pass at the boundary, so the true bound is
- * six plus in-flight concurrency rather than exactly six. Said plainly here
- * because a limit documented as exact and implemented as approximate is how a
- * gap survives review. Bounding it exactly needs a Durable Object; the abuse
- * this route can carry — a resend loop aimed at one mailbox — is bounded well
- * enough by a strongly consistent count that never runs away.
+ * It counts rows in `magic_links` rather than a KV tally, and the count is part
+ * of the same D1 INSERT that mints the link. KV is eventually consistent and
+ * non-transactional, so a read-compare-write counter under concurrent posts
+ * has every request read the same value and every request mail. The single
+ * conditional write gives the documented ceiling real admission semantics.
  */
 const LINK_LIMIT = 6;
 const LINK_WINDOW_MS = 3600_000;
-
-async function withinLinkLimit(
-  database: D1Database,
-  personId: string,
-  now: number,
-): Promise<boolean> {
-  const row = await database
-    .prepare(
-      `SELECT COUNT(*) AS n FROM magic_links
-        WHERE person_id = ? AND purpose = 'login' AND created_at > ?`,
-    )
-    .bind(personId, now - LINK_WINDOW_MS)
-    .first<{ n: number }>();
-  return Number(row?.n ?? 0) < LINK_LIMIT;
-}
 
 /**
  * The person this address names at this conference, and only if they actually
@@ -153,19 +129,21 @@ export async function resolveProposalsEvent(
   slug: string | null | undefined,
 ): Promise<{ id: string; name: string; slug: string } | null> {
   const live = await loadPublicEvent(database, null);
-  const scope = live
-    ? await database.prepare("SELECT org_id FROM events WHERE id = ? LIMIT 1").bind(live.id).first<{ org_id: string }>()
-    : null;
 
   if (slug) {
-    // A fresh instance with no live conference at all has no organization to
-    // scope to; the open-form condition below is then the whole guard.
-    const orgPredicate = scope ? "AND org_id = ?" : "";
-    const bindings = scope ? [slug, scope.org_id] : [slug];
+    // A named event is only safe to resolve when the public-site resolver can
+    // establish this deployment's organization. Without that anchor, an open
+    // form in any tenant would become an unauthenticated cross-org oracle.
+    if (!live) return null;
+    const scope = await database
+      .prepare("SELECT org_id FROM events WHERE id = ? LIMIT 1")
+      .bind(live.id)
+      .first<{ org_id: string }>();
+    if (!scope) return null;
     const named = await database
       .prepare(
         `SELECT id, name, slug FROM events
-          WHERE slug = ? ${orgPredicate}
+          WHERE slug = ? AND org_id = ?
             AND (
               status = 'live'
               OR EXISTS (
@@ -178,7 +156,7 @@ export async function resolveProposalsEvent(
           ORDER BY CASE WHEN status = 'live' THEN 0 ELSE 1 END, demo_mode DESC, created_at ASC, id ASC
           LIMIT 1`,
       )
-      .bind(...bindings)
+      .bind(slug, scope.org_id)
       .first<{ id: string; name: string; slug: string }>();
     // A NAMED conference that does not resolve returns nothing rather than
     // falling back to the live one. The fallback exists for a caller who named
@@ -236,7 +214,7 @@ const requestProposalsLink = defineApiRoute(
       }
 
       const person = await submitterAtEvent(context.env.DB, event.id, body.email);
-      if (person && (await withinLinkLimit(context.env.DB, person.id, now))) {
+      if (person) {
         // The conference is named in the redirect rather than left to a later
         // fallback ordering, so a submitter at two conferences lands on the one
         // they asked about.
@@ -246,29 +224,35 @@ const requestProposalsLink = defineApiRoute(
           purpose: "login",
           redirectTo: `/portal?eventId=${encodeURIComponent(event.id)}`,
           now,
+          admission: {
+            maxRows: LINK_LIMIT,
+            createdAfter: now - LINK_WINDOW_MS,
+          },
         });
-        const origin = new URL(context.req.url).origin;
-        const mail = renderProposalsLinkMail({
-          eventName: event.name,
-          link: `${origin}/api/v1/auth/exchange?token=${link.token}`,
-        });
-        const outboxId = await enqueueAuthMail(context.env.DB, {
-          eventId: event.id,
-          personId: person.id,
-          entityId: IDEMPOTENCY_REGISTRY.authLink(link.id),
-          // The address on the RECORD we matched, never the string the caller
-          // typed. Matching is case-insensitive, so the two differ in ordinary
-          // use — and an outbox row is not the place for caller-controlled text
-          // in a recipient field. This is what the sign-in door does too.
-          toEmail: person.email,
-          templateKey: "magic_link_login",
-          ...mail,
-        });
-        // Writing the outbox row is not sending: the consumer only ever acts on
-        // an explicit queue message. Without this the mail sits in D1 forever
-        // and the endpoint still answers 200 — a submitter waiting on a link
-        // that was never going to arrive.
-        await enqueueMailMessage(context.env.MAIL_QUEUE, outboxId);
+        if (link) {
+          const origin = new URL(context.req.url).origin;
+          const mail = renderProposalsLinkMail({
+            eventName: event.name,
+            link: `${origin}/api/v1/auth/exchange?token=${link.token}`,
+          });
+          const outboxId = await enqueueAuthMail(context.env.DB, {
+            eventId: event.id,
+            personId: person.id,
+            entityId: IDEMPOTENCY_REGISTRY.authLink(link.id),
+            // The address on the RECORD we matched, never the string the caller
+            // typed. Matching is case-insensitive, so the two differ in ordinary
+            // use — and an outbox row is not the place for caller-controlled text
+            // in a recipient field. This is what the sign-in door does too.
+            toEmail: person.email,
+            templateKey: "magic_link_login",
+            ...mail,
+          });
+          // Writing the outbox row is not sending: the consumer only ever acts on
+          // an explicit queue message. Without this the mail sits in D1 forever
+          // and the endpoint still answers 200 — a submitter waiting on a link
+          // that was never going to arrive.
+          await enqueueMailMessage(context.env.MAIL_QUEUE, outboxId);
+        }
       }
     }
 
