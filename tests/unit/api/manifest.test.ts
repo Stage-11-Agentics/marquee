@@ -124,9 +124,9 @@ test("AC-105 · the registry's signature set equals the document's operation set
     ),
     "./two.routes.ts": fixtureModule(fixtureRoute("get", "/api/v1/gizmos/{gizmoId}", "getGizmo")),
   });
-  const { document } = await createApiRouter(entries);
+  const bundle = await (await createApiRouter(entries)).document();
   const documented = Object.entries(
-    (document.document.paths ?? {}) as Record<string, Record<string, { operationId: string }>>,
+    (bundle.document.paths ?? {}) as Record<string, Record<string, { operationId: string }>>,
   )
     .flatMap(([path, operations]) =>
       Object.entries(operations).map(
@@ -134,7 +134,7 @@ test("AC-105 · the registry's signature set equals the document's operation set
       ),
     )
     .sort();
-  expect(documented).toEqual(document.signatures);
+  expect(documented).toEqual(bundle.signatures);
 });
 
 test("AC-105 · no central registration list and no handwritten OpenAPI document exist", () => {

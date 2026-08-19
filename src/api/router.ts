@@ -213,8 +213,14 @@ function routeMiddleware(
 
 export interface ApiApp {
   app: OpenAPIHono<ApiEnv>;
-  /** Assembled once at construction, from the routes this app registered. */
-  document: ApiDocumentBundle;
+  /**
+   * Assembled from the routes this app registered, on the first call and once
+   * per app. Deferred rather than eager: the document is read by two meta
+   * routes, and building it dominates construction, so an eager assembly made
+   * every cold isolate's first request — whatever it was — pay for a document
+   * it would not read.
+   */
+  document: () => Promise<ApiDocumentBundle>;
   entries: readonly ApiRouteEntry[];
 }
 
@@ -254,7 +260,7 @@ export async function createApiRouter(
   entries: readonly ApiRouteEntry[],
   runtime: ApiRuntime = {},
 ): Promise<ApiApp> {
-  let assembled: ApiDocumentBundle | undefined;
+  let assembled: Promise<ApiDocumentBundle> | undefined;
   const app = new OpenAPIHono<ApiEnv>({
     // 5 — validation failures use the one envelope, with a safe field path.
     defaultHook: (result, context) => {
@@ -274,6 +280,20 @@ export async function createApiRouter(
     },
   });
 
+  /**
+   * The document, built on demand and then held. Every route below is
+   * registered before any request can arrive, so the first caller always sees
+   * the complete app — deferring assembly changes when the work happens, not
+   * what it produces.
+   *
+   * Memoizing the promise rather than the value is what makes concurrent first
+   * callers share one assembly instead of racing into several.
+   */
+  const document = (): Promise<ApiDocumentBundle> => {
+    assembled ??= assembleApiDocument(app, entries);
+    return assembled;
+  };
+
   // 1 — request ID, the request-scoped logger, and the error boundary, ahead of
   // everything else. One `http_request` line per completed request; the same
   // correlation id the caller is handed in the envelope and the `X-Request-Id`
@@ -284,10 +304,7 @@ export async function createApiRouter(
     const requestId = readRequestMeter(context.env)?.requestId ?? resolveRequestId(context.req.raw);
     context.set("requestId", requestId);
     context.set("logger", loggerForEnv(context.env, { requestId }));
-    context.set("apiDocument", () => {
-      if (!assembled) throw new Error("api document requested before assembly");
-      return assembled;
-    });
+    context.set("apiDocument", document);
     context.header(REQUEST_ID_HEADER, requestId);
     const startedAt = Date.now();
     try {
@@ -339,7 +356,5 @@ export async function createApiRouter(
     }
   }
 
-  const document = await assembleApiDocument(app, entries);
-  assembled = document;
   return { app, document, entries };
 }
